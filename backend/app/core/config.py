@@ -1,0 +1,331 @@
+"""
+app/core/config.py
+==================
+Centralised, environment-driven configuration for BanglaFactGuard.
+
+All values can be overridden via environment variables or a `.env` file.
+Pydantic-Settings handles type coercion, validation, and documentation.
+
+Design decisions:
+- Single `Settings` class keeps all config in one place (no scattered os.getenv calls).
+- `lru_cache` on `get_settings()` ensures the Settings object is created once
+  and reused across the entire application (singleton pattern).
+- Nested classes (DatabaseSettings, RedisSettings, etc.) improve readability
+  and allow prefix-based env var grouping (e.g. DB__HOST).
+- Threshold values are fully externalised so they can be tuned without code changes.
+"""
+
+from __future__ import annotations
+
+import os
+from functools import lru_cache
+from typing import Literal
+
+from dotenv import load_dotenv
+from pydantic import AnyUrl, Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Load environment variables from .env file at the very start
+load_dotenv()
+
+
+# ---------------------------------------------------------------------------
+# Sub-settings (grouped by concern)
+# ---------------------------------------------------------------------------
+
+
+class DatabaseSettings(BaseSettings):
+    """PostgreSQL connection settings."""
+
+    model_config = SettingsConfigDict(env_prefix="DB_")
+
+    host: str = Field(default="localhost", description="PostgreSQL host")
+    port: int = Field(default=5432, description="PostgreSQL port")
+    name: str = Field(default="bangla_fact_guard", description="Database name")
+    user: str = Field(default="postgres", description="Database user")
+    password: str = Field(default="postgres", description="Database password")
+    pool_size: int = Field(default=10, description="SQLAlchemy connection pool size")
+    max_overflow: int = Field(default=20, description="SQLAlchemy max overflow connections")
+    pool_timeout: int = Field(default=30, description="Connection pool checkout timeout (s)")
+    echo_sql: bool = Field(default=False, description="Log all SQL statements (dev only)")
+
+    @property
+    def async_url(self) -> str:
+        """Async DSN for asyncpg driver."""
+        return (
+            f"postgresql+asyncpg://{self.user}:{self.password}"
+            f"@{self.host}:{self.port}/{self.name}"
+        )
+
+    @property
+    def sync_url(self) -> str:
+        """Sync DSN for Alembic (psycopg2)."""
+        return (
+            f"postgresql+psycopg2://{self.user}:{self.password}"
+            f"@{self.host}:{self.port}/{self.name}"
+        )
+
+
+class RedisSettings(BaseSettings):
+    """Redis connection and caching settings."""
+
+    model_config = SettingsConfigDict(env_prefix="REDIS_")
+
+    host: str = Field(default="localhost")
+    port: int = Field(default=6379)
+    db: int = Field(default=0)
+    password: str | None = Field(default=None)
+    decode_responses: bool = Field(default=False, description="Keep bytes for msgpack support")
+    max_connections: int = Field(default=50)
+
+    # TTL values (seconds)
+    ttl_claim_result: int = Field(default=86_400, description="24 h — full VerificationResponse")
+    ttl_search_result: int = Field(default=21_600, description="6 h — raw search URL lists")
+    ttl_article_content: int = Field(default=43_200, description="12 h — extracted article body")
+    ttl_embedding: int = Field(default=172_800, description="48 h — LaBSE embedding vectors")
+    ttl_nli_output: int = Field(default=172_800, description="48 h — NLI score triples")
+    ttl_source_lookup: int = Field(default=604_800, description="7 d — resolved canonical domain")
+
+    @property
+    def url(self) -> str:
+        """Redis connection URL."""
+        auth = f":{self.password}@" if self.password else ""
+        return f"redis://{auth}{self.host}:{self.port}/{self.db}"
+
+
+class MLSettings(BaseSettings):
+    """Machine-learning model configuration."""
+
+    model_config = SettingsConfigDict(env_prefix="ML_")
+
+    # Sentence embedding
+    embedding_model_name: str = Field(
+        default="paraphrase-multilingual-mpnet-base-v2",
+        description="HuggingFace model name for semantic similarity",
+    )
+    embedding_batch_size: int = Field(default=32)
+    embedding_max_seq_length: int = Field(default=512)
+    embedding_thread_workers: int = Field(default=4, description="Thread pool workers for embedding encoding")
+
+    # NLI / cross-encoder
+    nli_model_name: str = Field(
+        default="cross-encoder/nli-deberta-v3-base",
+        description="HuggingFace model name for NLI-based contradiction detection",
+    )
+    nli_thread_workers: int = Field(default=2, description="Thread pool workers for NLI prediction")
+
+    # Named Entity Recognition
+    ner_model_name: str = Field(
+        default="csebuetnlp/banglabert",
+        description="BanglaBERT-based NER model",
+    )
+    ner_thread_workers: int = Field(default=2, description="Thread pool workers for NER extraction")
+
+    # Evidence ranking
+    max_ranked_articles: int = Field(
+        default=5,
+        description="Maximum number of ranked evidence articles to keep",
+    )
+    min_rank_score: float = Field(
+        default=0.05,
+        description="Minimum composite rank score required to keep an article",
+    )
+
+    # Device placement
+    device: str = Field(
+        default="cpu",
+        description="Compute device: 'cpu', 'cuda', or 'cuda:0'",
+    )
+    use_fp16: bool = Field(default=False, description="Use float16 inference (GPU only)")
+
+    # Model cache directory
+    cache_dir: str = Field(
+        default=os.path.join(os.path.expanduser("~"), ".cache", "bangla_fact_guard", "models"),
+        description="Local directory for downloaded HuggingFace models",
+    )
+    load_models_on_startup: bool = Field(
+        default=True,
+        description="Whether to load ML models into memory on application startup",
+    )
+
+    @property
+    def max_text_chars_for_embedding(self) -> int:
+        """Backward-compatible alias used by the embedding service."""
+        return self.embedding_max_seq_length
+
+
+class SearchSettings(BaseSettings):
+    """External search API configuration."""
+
+    model_config = SettingsConfigDict(env_prefix="SEARCH_")
+
+    # Brave Search
+    brave_api_key: str = Field(default="", description="Brave Search API key")
+    brave_base_url: str = Field(
+        default="https://api.search.brave.com/res/v1/web/search",
+        description="Brave Search API endpoint",
+    )
+    brave_results_per_query: int = Field(default=5)
+    brave_timeout_seconds: int = Field(default=10)
+
+    # Google News RSS
+    google_rss_base_url: str = Field(
+        default="https://news.google.com/rss/search",
+        description="Google News RSS search endpoint",
+    )
+    google_rss_timeout_seconds: int = Field(default=10)
+
+    # DuckDuckGo (fallback)
+    ddg_timeout_seconds: int = Field(default=15)
+    ddg_max_results: int = Field(default=5)
+
+    # General retrieval
+    top_k_candidates: int = Field(
+        default=5,
+        description="Maximum number of candidate articles to retrieve per claim",
+    )
+    min_body_length_chars: int = Field(
+        default=100,
+        description="Minimum extracted body length to consider an article valid",
+    )
+
+
+class ClassificationThresholds(BaseSettings):
+    """
+    Evidence score thresholds for the final classification stage (S11).
+
+    All values are in [0.0, 1.0]. Externalised to allow threshold tuning
+    via environment variables without any code changes.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="THRESHOLD_")
+
+    # Legacy evidence-score thresholds used by Stage 11.
+    true_threshold: float = Field(default=0.75)
+    partial_threshold: float = Field(default=0.55)
+    false_threshold: float = Field(default=0.35)
+
+    # Legacy manipulation thresholds used by Stage 10.
+    contradiction_override_threshold: float = Field(default=0.70)
+    headline_sim_threshold: float = Field(default=0.60)
+    body_sim_high: float = Field(default=0.80)
+    body_altered_threshold: float = Field(default=0.55)
+    entity_replaced_threshold: float = Field(default=0.50)
+
+    # TRUE label
+    true_min_semantic_similarity: float = Field(default=0.85)
+    true_min_entity_match: float = Field(default=0.80)
+    true_max_contradiction: float = Field(default=0.15)
+
+    # FALSE label
+    false_min_contradiction: float = Field(default=0.70)
+
+    # PARTIALLY_TRUE label
+    partial_min_semantic_similarity: float = Field(default=0.50)
+
+    # NOT_FOUND gate
+    not_found_max_semantic_similarity: float = Field(
+        default=0.40,
+        description="If best candidate semantic similarity is below this, verdict is NOT_FOUND",
+    )
+
+    # Minimum evidence gate (applied before classification)
+    min_evidence_threshold: float = Field(
+        default=0.40,
+        description="Articles below this semantic similarity are discarded as evidence",
+    )
+
+    @property
+    def contradiction_threshold(self) -> float:
+        """Backward-compatible alias for the hard contradiction override threshold."""
+        return self.contradiction_override_threshold
+
+
+class AppSettings(BaseSettings):
+    """Top-level application settings."""
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    # Application identity
+    app_name: str = Field(default="BanglaFactGuard")
+    app_version: str = Field(default="0.1.0")
+    environment: Literal["development", "staging", "production"] = Field(
+        default="development",
+        description="Deployment environment",
+    )
+    debug: bool = Field(default=False)
+    api_v1_prefix: str = Field(default="/api/v1")
+    cors_origins: list[str] = Field(
+        default=["*"],
+        description="List of origins allowed to make CORS requests",
+    )
+
+    # API security (future)
+    api_key_header: str = Field(default="X-API-Key")
+    secret_key: str = Field(
+        default="CHANGE_ME_IN_PRODUCTION_USE_STRONG_RANDOM_SECRET",
+        description="Used for signing tokens (future auth)",
+    )
+
+    # Logging
+    log_level: str = Field(default="INFO", description="Root log level")
+    log_format: Literal["json", "console"] = Field(
+        default="json",
+        description="'json' for production, 'console' for local dev",
+    )
+
+    # Request handling
+    request_timeout_seconds: int = Field(default=120)
+    max_headline_length: int = Field(default=2000)
+    max_body_length: int = Field(default=50_000)
+
+    # Sub-settings — instantiated once alongside AppSettings
+    db: DatabaseSettings = Field(default_factory=DatabaseSettings)
+    redis: RedisSettings = Field(default_factory=RedisSettings)
+    ml: MLSettings = Field(default_factory=MLSettings)
+    search: SearchSettings = Field(default_factory=SearchSettings)
+    thresholds: ClassificationThresholds = Field(
+        default_factory=ClassificationThresholds
+    )
+
+    @property
+    def classification(self) -> ClassificationThresholds:
+        """Backward-compatible alias for the classification thresholds group."""
+        return self.thresholds
+
+    @field_validator("log_level")
+    @classmethod
+    def _validate_log_level(cls, v: str) -> str:
+        valid = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+        upper = v.upper()
+        if upper not in valid:
+            raise ValueError(f"log_level must be one of {valid}, got {v!r}")
+        return upper
+
+
+# ---------------------------------------------------------------------------
+# Singleton accessor
+# ---------------------------------------------------------------------------
+
+
+@lru_cache(maxsize=1)
+def get_settings() -> AppSettings:
+    """
+    Return the cached application settings singleton.
+
+    Use this everywhere instead of instantiating AppSettings directly, so
+    that the .env file is read exactly once and settings are shared across
+    the entire process.
+
+    Example::
+
+        from app.core.config import get_settings
+        settings = get_settings()
+        print(settings.db.async_url)
+    """
+    return AppSettings()
