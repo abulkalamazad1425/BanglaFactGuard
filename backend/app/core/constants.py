@@ -66,12 +66,18 @@ class ClaimStatus(str, Enum):
 class SearchProvider(str, Enum):
     """
     External search providers used in Stage 4 (Source-Constrained Search).
-    Order implies priority: Brave > Google RSS > DuckDuckGo.
+    Order implies priority: NewsData.io > Google Custom Search > PyGoogleNews.
     """
 
-    BRAVE = "brave"
+    NEWSDATA = "newsdata"
+    GOOGLE_CUSTOM_SEARCH = "google_custom_search"
+    PY_GOOGLE_NEWS = "py_google_news"
+    
+    # Legacy providers (kept for backward compatibility with DB records)
+    SEARXNG = "searxng"
     GOOGLE_RSS = "google_rss"
     DDG = "ddg"
+    BRAVE = "brave"
 
 
 # ---------------------------------------------------------------------------

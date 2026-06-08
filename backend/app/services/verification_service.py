@@ -29,9 +29,9 @@ from datetime import date, datetime
 
 import structlog
 
-from app.clients.brave_client import BraveSearchClient
-from app.clients.ddg_client import DDGClient
-from app.clients.google_rss_client import GoogleRSSClient
+from app.clients.newsdata_client import NewsDataClient
+from app.clients.google_cse_client import GoogleCSEClient
+from app.clients.pygooglenews_client import PyGoogleNewsClient
 from app.core.exceptions import PipelineError
 from app.pipelines.context import PipelineContext, build_context
 from app.pipelines.orchestrator import PipelineOrchestrator
@@ -193,9 +193,9 @@ class VerificationService:
 
     def _build_stages(self) -> list:
         """Construct all 12 stage instances with injected dependencies."""
-        brave = BraveSearchClient(self.http_client)
-        google_rss = GoogleRSSClient(self.http_client)
-        ddg = DDGClient(self.http_client)
+        newsdata = NewsDataClient(self.http_client)
+        google_cse = GoogleCSEClient(self.http_client)
+        pygooglenews = PyGoogleNewsClient()
 
         return [
             InputNormalizerStage(source_repo=self.source_repo),
@@ -206,11 +206,10 @@ class VerificationService:
             ),
             QueryGeneratorStage(),
             SourceSearchStage(
-                brave_client=brave,
-                google_rss_client=google_rss,
-                ddg_client=ddg,
+                newsdata_client=newsdata,
+                google_cse_client=google_cse,
+                pygooglenews_client=pygooglenews,
                 cache_service=self.cache_service,
-                http_client=self.http_client,
             ),
             EvidenceRetrievalStage(http_client=self.http_client),
             ArticleExtractorStage(cache_service=self.cache_service),

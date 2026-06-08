@@ -33,7 +33,7 @@ Exception hierarchy:
     │   └── DuplicateRecordError
     ├── CacheBackendError
     ├── ExternalAPIError
-    │   ├── BraveAPIError
+    │   ├── SearXNGError
     │   ├── GoogleRSSError
     │   └── DDGError
     └── MLModelError
@@ -273,6 +273,13 @@ class ExternalAPIError(BanglaFactGuardError):
             self.details["upstream_status_code"] = status_code
 
 
+class SearXNGError(ExternalAPIError):
+    """Raised when the SearXNG meta-search request fails."""
+
+    def __init__(self, message: str, status_code: int | None = None) -> None:
+        super().__init__(provider="searxng", message=message, status_code=status_code)
+
+
 class BraveAPIError(ExternalAPIError):
     """Raised when the Brave Search API request fails."""
 
@@ -292,6 +299,27 @@ class DDGError(ExternalAPIError):
 
     def __init__(self, message: str, status_code: int | None = None) -> None:
         super().__init__(provider="ddg", message=message, status_code=status_code)
+
+
+class NewsDataError(ExternalAPIError):
+    """Raised when the NewsData.io API request fails."""
+
+    def __init__(self, message: str, status_code: int | None = None) -> None:
+        super().__init__(provider="newsdata", message=message, status_code=status_code)
+
+
+class GoogleCSEError(ExternalAPIError):
+    """Raised when the Google Custom Search API request fails."""
+
+    def __init__(self, message: str, status_code: int | None = None) -> None:
+        super().__init__(provider="google_custom_search", message=message, status_code=status_code)
+
+
+class PyGoogleNewsError(ExternalAPIError):
+    """Raised when PyGoogleNews client fails."""
+
+    def __init__(self, message: str, status_code: int | None = None) -> None:
+        super().__init__(provider="py_google_news", message=message, status_code=status_code)
 
 
 # ---------------------------------------------------------------------------

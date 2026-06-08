@@ -159,25 +159,37 @@ class SearchSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="SEARCH_")
 
-    # Brave Search
-    brave_api_key: str = Field(default="", description="Brave Search API key")
-    brave_base_url: str = Field(
-        default="https://api.search.brave.com/res/v1/web/search",
-        description="Brave Search API endpoint",
+    # NewsData.io (Primary provider)
+    newsdata_api_key: str = Field(
+        default="",
+        description="API key for NewsData.io",
     )
-    brave_results_per_query: int = Field(default=5)
-    brave_timeout_seconds: int = Field(default=10)
-
-    # Google News RSS
-    google_rss_base_url: str = Field(
-        default="https://news.google.com/rss/search",
-        description="Google News RSS search endpoint",
+    newsdata_base_url: str = Field(
+        default="https://newsdata.io/api/1/latest",
+        description="NewsData.io latest news API endpoint",
     )
-    google_rss_timeout_seconds: int = Field(default=10)
+    newsdata_timeout_seconds: int = Field(default=15)
+    newsdata_max_results: int = Field(default=10)
 
-    # DuckDuckGo (fallback)
-    ddg_timeout_seconds: int = Field(default=15)
-    ddg_max_results: int = Field(default=5)
+    # Google Custom Search API (Secondary provider)
+    google_cse_api_key: str = Field(
+        default="",
+        description="API key for Google Custom Search",
+    )
+    google_cse_cx: str = Field(
+        default="",
+        description="Search Engine ID (cx) for Google Custom Search",
+    )
+    google_cse_base_url: str = Field(
+        default="https://customsearch.googleapis.com/customsearch/v1",
+        description="Google Custom Search JSON API endpoint",
+    )
+    google_cse_timeout_seconds: int = Field(default=15)
+    google_cse_max_results: int = Field(default=10)
+
+    # PyGoogleNews (Tertiary fallback)
+    pygooglenews_timeout_seconds: int = Field(default=15)
+    pygooglenews_max_results: int = Field(default=10)
 
     # General retrieval
     top_k_candidates: int = Field(

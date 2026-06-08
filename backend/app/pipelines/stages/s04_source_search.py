@@ -6,14 +6,14 @@ Stage 4: Source-Constrained Search
 ## Responsibility
 
 Execute the generated queries (from Stage 3) against the claimed source domain
-using the provider chain: Brave → Google RSS → DuckDuckGo.
+using the provider chain: NewsData.io -> Google Custom Search -> PyGoogleNews.
 
 ## Provider chain strategy
 
 For each query variant, providers are tried in priority order:
-1. **Brave** (best quality, structured JSON, requires API key)
-2. **Google RSS** (no key required, good Bangla coverage)
-3. **DuckDuckGo** (last resort, HTML scraping, aggressive rate-limiting)
+1. **NewsData.io** (Primary, local BD news coverage, API key required)
+2. **Google Custom Search API** (Secondary, high quality JSON API, API key required)
+3. **PyGoogleNews** (Tertiary fallback, RSS feed scraping, no key required)
 
 A provider is tried for the current query only if:
 - All higher-priority providers returned zero results for that query, OR
@@ -26,7 +26,7 @@ a shared `seen` set. The final `context.candidate_urls` list is ordered
 by first appearance (highest-priority provider, highest-priority query).
 
 ## Criticality: NON-CRITICAL
-Zero results from all providers across all queries → context.candidate_urls
+Zero results from all providers across all queries -> context.candidate_urls
 is empty. Stage 5 will then produce zero articles, which Stage 11 will
 classify as NOT_FOUND_IN_CLAIMED_SOURCE. The pipeline continues.
 
@@ -40,16 +40,15 @@ redundant API calls when the same claim is re-verified within the TTL window.
 from __future__ import annotations
 
 import asyncio
-
 import structlog
 
 from app.core.constants import PipelineStageID, QueryType, SearchProvider
 from app.core.exceptions import SearchError
 from app.pipelines.context import PipelineContext
 from app.schemas.article import CandidateArticleSchema
-from app.clients.brave_client import BraveSearchClient
-from app.clients.google_rss_client import GoogleRSSClient
-from app.clients.ddg_client import DDGClient
+from app.clients.newsdata_client import NewsDataClient
+from app.clients.google_cse_client import GoogleCSEClient
+from app.clients.pygooglenews_client import PyGoogleNewsClient
 from app.services.cache_service import CacheService
 from app.utils.hashing import compute_search_query_hash
 
@@ -58,27 +57,27 @@ logger = structlog.get_logger(__name__)
 
 class SourceSearchStage:
     """
-    Stage 4: Execute source-constrained searches via Brave → Google RSS → DDG.
+    Stage 4: Execute source-constrained searches via NewsData -> Google CSE -> PyGoogleNews.
 
     Dependencies (injected via constructor):
-        brave_client:      Brave Search API client.
-        google_rss_client: Google News RSS client.
-        ddg_client:        DuckDuckGo HTML client (last resort).
-        cache_service:     For search result caching.
+        newsdata_client:     NewsData.io client (primary).
+        google_cse_client:   Google Custom Search client (secondary).
+        pygooglenews_client: PyGoogleNews RSS wrapper (fallback).
+        cache_service:       For search result caching.
     """
 
     stage_id = PipelineStageID.S04_SOURCE_SEARCH
 
     def __init__(
         self,
-        brave_client: BraveSearchClient,
-        google_rss_client: GoogleRSSClient,
-        ddg_client: DDGClient,
+        newsdata_client: NewsDataClient,
+        google_cse_client: GoogleCSEClient,
+        pygooglenews_client: PyGoogleNewsClient,
         cache_service: CacheService,
     ) -> None:
-        self.brave_client = brave_client
-        self.google_rss_client = google_rss_client
-        self.ddg_client = ddg_client
+        self.newsdata_client = newsdata_client
+        self.google_cse_client = google_cse_client
+        self.pygooglenews_client = pygooglenews_client
         self.cache_service = cache_service
 
     async def execute(self, context: PipelineContext) -> PipelineContext:
@@ -144,7 +143,7 @@ class SourceSearchStage:
         log: structlog.BoundLogger,
     ) -> list[CandidateArticleSchema]:
         """
-        Try Brave → Google RSS → DDG for a single query, returning URLs.
+        Try NewsData -> Google CSE -> PyGoogleNews for a single query, returning URLs.
 
         Args:
             query:      The search query string.
@@ -158,9 +157,9 @@ class SourceSearchStage:
             List of new (not previously seen) article URLs.
         """
         providers = [
-            (SearchProvider.BRAVE, self.brave_client),
-            (SearchProvider.GOOGLE_RSS, self.google_rss_client),
-            (SearchProvider.DDG, self.ddg_client),
+            (SearchProvider.NEWSDATA, self.newsdata_client),
+            (SearchProvider.GOOGLE_CUSTOM_SEARCH, self.google_cse_client),
+            (SearchProvider.PY_GOOGLE_NEWS, self.pygooglenews_client),
         ]
 
         for provider_enum, client in providers:
@@ -193,39 +192,24 @@ class SourceSearchStage:
 
             # Call provider
             try:
-                if provider_enum == SearchProvider.GOOGLE_RSS and hasattr(client, "search_entries"):
-                    entries = await client.search_entries(  # type: ignore[attr-defined]
-                        query,
-                        domain=domain,
-                        published_date=context.published_date,
+                # All 3 new providers implement search_entries which returns (url, title)
+                entries = await client.search_entries(
+                    query,
+                    domain=domain,
+                    published_date=context.published_date,
+                )
+                
+                urls = [url for url, _ in entries]
+                candidates = [
+                    CandidateArticleSchema(
+                        url=url,
+                        title_snippet=title,
+                        search_provider=provider_enum,
+                        query_type=query_type,
+                        position=index + 1,
                     )
-                    urls = [url for url, _ in entries]
-                    candidates = [
-                        CandidateArticleSchema(
-                            url=url,
-                            title_snippet=title,
-                            search_provider=provider_enum,
-                            query_type=query_type,
-                            position=index + 1,
-                        )
-                        for index, (url, title) in enumerate(entries)
-                    ]
-                else:
-                    urls = await client.search(
-                        query,
-                        domain=domain,
-                        published_date=context.published_date,
-                    )
-                    candidates = [
-                        CandidateArticleSchema(
-                            url=url,
-                            title_snippet=None,
-                            search_provider=provider_enum,
-                            query_type=query_type,
-                            position=index + 1,
-                        )
-                        for index, url in enumerate(urls)
-                    ]
+                    for index, (url, title) in enumerate(entries)
+                ]
 
                 if urls:
                     # Cache successful results
@@ -244,7 +228,7 @@ class SourceSearchStage:
                     provider=provider_name,
                     query_type=query_type,
                 )
-                # Zero results → try next provider
+                # Zero results -> try next provider
 
             except Exception as exc:  # noqa: BLE001
                 log.warning(

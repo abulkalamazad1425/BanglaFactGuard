@@ -215,7 +215,6 @@ class PersistenceStage:
                 published_date=article.published_date,
                 rank_score=article.rank_score,
                 extraction_success=article.has_body,
-                search_provider=article.search_provider.value if article.search_provider else None,
             )
             article_models.append(model)
 
@@ -242,7 +241,7 @@ class PersistenceStage:
                 claim_id=claim_id,
                 query_text=qtext[:1000],
                 query_type=qtype,
-                search_provider=context.search_provider_used or SearchProvider.BRAVE,
+                search_provider=context.search_provider_used or SearchProvider.SEARXNG,
                 results_count=0,  # Aggregate count not tracked per query
             )
             for qtext, qtype in context.search_queries
