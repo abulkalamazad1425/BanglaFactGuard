@@ -1,0 +1,18 @@
+﻿"""
+app/features/notifications/models.py
+Stores notification records sent to users.
+"""
+from sqlalchemy import Boolean, ForeignKey, String, Text
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column
+from app.shared.base_model import Base, TimestampMixin, UUIDMixin
+import uuid
+
+class Notification(UUIDMixin, TimestampMixin, Base):
+    __tablename__ = "notifications"
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    notification_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    is_read: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
+

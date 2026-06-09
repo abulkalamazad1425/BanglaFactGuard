@@ -61,7 +61,7 @@ logger = logging.getLogger("alembic.env")
 # ---------------------------------------------------------------------------
 # Import settings AFTER fileConfig so logging is initialised first
 from app.core.config import get_settings  # noqa: E402
-from app.models import Base  # noqa: E402, F401 — populates Base.metadata
+from app.shared.models_registry import Base  # noqa: E402, F401 — populates Base.metadata
 
 _settings = get_settings()
 config.set_main_option("sqlalchemy.url", _settings.db.sync_url)

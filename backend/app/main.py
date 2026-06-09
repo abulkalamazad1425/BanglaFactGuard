@@ -40,10 +40,10 @@ from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.exceptions import BanglaFactGuardError
 from app.core.logging import setup_logging
-from app.services.cache_service import CacheService
-from app.services.embedding_service import EmbeddingService
-from app.services.ner_service import NERService
-from app.services.nli_service import NLIService
+from app.features.cache.cache_service import CacheService
+from app.features.nlp.embedding_service import EmbeddingService
+from app.features.nlp.ner_service import NERService
+from app.features.nlp.nli_service import NLIService
 
 _SETTINGS = get_settings()
 logger = structlog.get_logger(__name__)
