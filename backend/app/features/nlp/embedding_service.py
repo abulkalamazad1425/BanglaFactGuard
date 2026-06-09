@@ -1,4 +1,4 @@
-"""
+﻿"""
 app/services/embedding_service.py
 ====================================
 LaBSE sentence embedding service for semantic similarity computation (Stage 8).
@@ -46,9 +46,9 @@ import structlog
 from sentence_transformers import SentenceTransformer
 
 from app.core.config import get_settings
-from app.services.cache_service import CacheService
-from app.utils.hashing import compute_text_hash
-from app.utils.text_cleaner import truncate_for_nli
+from app.features.cache.cache_service import CacheService
+from app.shared.utils.hashing import compute_text_hash
+from app.shared.utils.text_cleaner import truncate_for_nli
 
 logger = structlog.get_logger(__name__)
 _SETTINGS = get_settings()
@@ -221,3 +221,5 @@ class EmbeddingService:
             await self._cache.set_raw(key, payload, ttl=_CACHE_TTL_SECONDS)
         except Exception:  # noqa: BLE001
             pass  # Cache write failure is non-fatal
+
+

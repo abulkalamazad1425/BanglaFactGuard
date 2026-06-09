@@ -1,4 +1,4 @@
-"""
+﻿"""
 app/core/config.py
 ==================
 Centralised, environment-driven configuration for BanglaFactGuard.
@@ -341,3 +341,4 @@ def get_settings() -> AppSettings:
         print(settings.db.async_url)
     """
     return AppSettings()
+

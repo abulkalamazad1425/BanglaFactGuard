@@ -155,7 +155,7 @@ class ArticleExtractorStage:
             RankedArticleSchema with extracted content (rank_score=0.0).
         """
         candidate = url_to_candidate.get(url)
-        provider = candidate.search_provider if candidate else SearchProvider.BRAVE
+        provider = candidate.search_provider if candidate else SearchProvider.GOOGLE_RSS
 
         # ── Attempt 1: trafilatura ─────────────────────────────────────
         title, body, author, pub_date, method = self._extract_trafilatura(url, html)
@@ -347,4 +347,5 @@ class ArticleExtractorStage:
             )
 
         return title, body or None, author, pub_date
+
 

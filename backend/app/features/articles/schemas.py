@@ -1,4 +1,4 @@
-"""
+﻿"""
 app/features/articles/schemas.py
 =================================
 Pydantic schemas for the articles feature.
@@ -69,7 +69,7 @@ class CandidateArticleSchema(BaseModel):
             "example": {
                 "url": "https://www.prothomalo.com/bangladesh/article/12345",
                 "title_snippet": "বাংলাদেশে নতুন আইন পাস - প্রথম আলো",
-                "search_provider": "brave",
+                "search_provider": "google_rss",
                 "query_type": "headline",
                 "position": 1,
             }
@@ -103,7 +103,7 @@ class RankedArticleSchema(BaseModel):
                 "author": "নিজস্ব প্রতিবেদক",
                 "published_date": "2024-03-15",
                 "rank_score": 0.87,
-                "search_provider": "brave",
+                "search_provider": "google_rss",
                 "extraction_method": "trafilatura",
             }
         }
@@ -136,3 +136,4 @@ class ArticleExtractionResult(BaseModel):
             }
         }
     }
+

@@ -1,4 +1,4 @@
-"""
+﻿"""
 tests/integration/test_verification_pipeline.py
 =================================================
 Integration tests for the 12-stage fact-verification pipeline orchestrator.
@@ -9,13 +9,13 @@ import uuid
 import json
 from unittest.mock import AsyncMock, patch
 
-from app.schemas.verification import VerificationRequest
+from app.features.verification.schemas import VerificationRequest
 from app.services.verification_service import VerificationService
 from app.core.constants import VerificationLabel, ClaimStatus
-from app.repositories.claim_repository import ClaimRepository
-from app.repositories.result_repository import ResultRepository
-from app.repositories.article_repository import ArticleRepository
-from app.repositories.source_repository import SourceRepository
+from app.features.verification.repository import ClaimRepository
+from app.features.verification.repository import ResultRepository
+from app.features.articles.repository import ArticleRepository
+from app.features.sources.repository import SourceRepository
 
 @pytest.mark.asyncio
 async def test_full_pipeline_execution(
@@ -32,9 +32,9 @@ async def test_full_pipeline_execution(
     source_repo = SourceRepository(db_session)
     
     # Mock search client methods inside stages
-    from app.clients.brave_client import BraveSearchClient
-    from app.clients.google_rss_client import GoogleRSSClient
-    from app.clients.ddg_client import DDGClient
+    from app.features.search.brave_client import BraveSearchClient
+    from app.features.search.google_rss_client import GoogleRSSClient
+    from app.features.search.ddg_client import DDGClient
     import httpx
 
     # Instantiate HTTP client
@@ -72,7 +72,7 @@ async def test_full_pipeline_execution(
             
             # Mock extractor to append a retrieved article
             async def dummy_extract_exec(context):
-                from app.schemas.article import RankedArticleSchema
+                from app.features.articles.schemas import RankedArticleSchema
                 from app.core.constants import SearchProvider
                 context.ranked_articles = [
                     RankedArticleSchema(
@@ -169,3 +169,4 @@ async def test_pipeline_cache_hit(
                 assert response.cached is True
                 # Ensure downstream stages were skipped
                 mock_s03.assert_not_called()
+

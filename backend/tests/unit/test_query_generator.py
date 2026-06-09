@@ -1,4 +1,4 @@
-"""
+﻿"""
 tests/unit/test_query_generator.py
 ====================================
 Unit tests for Stage 3: Search Query Generator (`QueryGeneratorStage`).
@@ -6,8 +6,8 @@ Unit tests for Stage 3: Search Query Generator (`QueryGeneratorStage`).
 
 import pytest
 from datetime import date
-from app.pipelines.stages.s03_query_generator import QueryGeneratorStage
-from app.pipelines.context import PipelineContext, build_context
+from app.features.verification.pipeline.stages.s03_query_generator import QueryGeneratorStage
+from app.features.verification.pipeline.context import PipelineContext, build_context
 from app.core.constants import QueryType
 
 @pytest.mark.asyncio
@@ -81,3 +81,4 @@ async def test_query_generation_max_limit():
     context = await stage.execute(context)
 
     assert len(context.search_queries) <= 5
+

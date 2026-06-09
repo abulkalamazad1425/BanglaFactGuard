@@ -1,4 +1,4 @@
-"""
+﻿"""
 tests/unit/test_classifier.py
 ==============================
 Unit tests for Stage 11: Verdict Classifier (`ClassifierStage`).
@@ -6,11 +6,11 @@ Unit tests for Stage 11: Verdict Classifier (`ClassifierStage`).
 
 import pytest
 from datetime import date
-from app.pipelines.stages.s11_classifier import ClassifierStage
-from app.pipelines.context import PipelineContext, build_context
+from app.features.verification.pipeline.stages.s11_classifier import ClassifierStage
+from app.features.verification.pipeline.context import PipelineContext, build_context
 from app.core.constants import VerificationLabel, SearchProvider, ExtractionMethod
-from app.schemas.article import RankedArticleSchema
-from app.schemas.scores import VerificationScoresSchema, ManipulationFlagsSchema
+from app.features.articles.schemas import RankedArticleSchema
+from app.features.verification.schemas import VerificationScoresSchema, ManipulationFlagsSchema
 
 @pytest.fixture
 def base_context() -> PipelineContext:
@@ -125,3 +125,4 @@ async def test_classifier_partially_true_manipulation(base_context, dummy_articl
 
     assert context.label == VerificationLabel.PARTIALLY_TRUE
     assert "Headline appears to have been manipulated" in context.reasoning
+

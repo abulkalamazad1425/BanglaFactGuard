@@ -17,7 +17,7 @@ concurrently and within resource limits, ready for extraction in Stage 6.
 - **Deduplication check** via ArticleRepository before fetching — if a URL
   was already retrieved for this claim (url_hash exists in DB), skip it.
 - **Top-K enforcement**: only the first `top_k_candidates` URLs are fetched,
-  ordered by search provider priority (Brave first, then RSS, then DDG).
+  ordered by search provider priority (RSS first, then DDG).
 - **Raw HTML is not stored** — only the URL and fetch success/failure are
   tracked here. Actual content extraction happens in Stage 6.
 - The fetched HTML is stored in a transient dict keyed by URL, passed via
@@ -165,4 +165,5 @@ class EvidenceRetrievalStage:
                 return exc
             except Exception as exc:  # noqa: BLE001
                 return exc
+
 

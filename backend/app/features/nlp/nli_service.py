@@ -1,4 +1,4 @@
-"""
+﻿"""
 app/services/nli_service.py
 =============================
 Natural Language Inference (NLI) service for contradiction detection (Stage 9).
@@ -39,8 +39,8 @@ import structlog
 from transformers import pipeline as hf_pipeline
 
 from app.core.config import get_settings
-from app.schemas.scores import NLIScoresSchema
-from app.utils.text_cleaner import truncate_for_nli
+from app.features.verification.schemas import NLIScoresSchema
+from app.shared.utils.text_cleaner import truncate_for_nli
 
 logger = structlog.get_logger(__name__)
 _SETTINGS = get_settings()
@@ -158,3 +158,5 @@ class NLIService:
         except (KeyError, ValueError, TypeError) as exc:
             logger.warning("nli_output_parse_failed", error=str(exc))
             return None
+
+

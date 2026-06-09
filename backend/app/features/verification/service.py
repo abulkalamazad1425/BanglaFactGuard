@@ -29,24 +29,24 @@ from datetime import date, datetime
 
 import structlog
 
-from app.clients.newsdata_client import NewsDataClient
-from app.clients.google_cse_client import GoogleCSEClient
-from app.clients.pygooglenews_client import PyGoogleNewsClient
+from app.features.search.newsdata_client import NewsDataClient
+from app.features.search.google_cse_client import GoogleCSEClient
+from app.features.search.pygooglenews_client import PyGoogleNewsClient
 from app.core.exceptions import PipelineError
 from app.features.verification.pipeline.context import PipelineContext, build_context
 from app.features.verification.pipeline.orchestrator import PipelineOrchestrator
-from app.pipelines.stages.s01_normalizer import InputNormalizerStage
-from app.pipelines.stages.s02_cache_lookup import CacheLookupStage
-from app.pipelines.stages.s03_query_generator import QueryGeneratorStage
-from app.pipelines.stages.s04_source_search import SourceSearchStage
-from app.pipelines.stages.s05_evidence_retrieval import EvidenceRetrievalStage
-from app.pipelines.stages.s06_article_extractor import ArticleExtractorStage
-from app.pipelines.stages.s07_evidence_ranker import EvidenceRankerStage
-from app.pipelines.stages.s08_similarity_analyzer import SimilarityAnalyzerStage
-from app.pipelines.stages.s09_contradiction_detector import ContradictionDetectorStage
-from app.pipelines.stages.s10_manipulation_detector import ManipulationDetectorStage
-from app.pipelines.stages.s11_classifier import ClassifierStage
-from app.pipelines.stages.s12_persistence import PersistenceStage
+from app.features.verification.pipeline.stages.s01_normalizer import InputNormalizerStage
+from app.features.verification.pipeline.stages.s02_cache_lookup import CacheLookupStage
+from app.features.verification.pipeline.stages.s03_query_generator import QueryGeneratorStage
+from app.features.verification.pipeline.stages.s04_source_search import SourceSearchStage
+from app.features.verification.pipeline.stages.s05_evidence_retrieval import EvidenceRetrievalStage
+from app.features.verification.pipeline.stages.s06_article_extractor import ArticleExtractorStage
+from app.features.verification.pipeline.stages.s07_evidence_ranker import EvidenceRankerStage
+from app.features.verification.pipeline.stages.s08_similarity_analyzer import SimilarityAnalyzerStage
+from app.features.verification.pipeline.stages.s09_contradiction_detector import ContradictionDetectorStage
+from app.features.verification.pipeline.stages.s10_manipulation_detector import ManipulationDetectorStage
+from app.features.verification.pipeline.stages.s11_classifier import ClassifierStage
+from app.features.verification.pipeline.stages.s12_persistence import PersistenceStage
 from app.features.articles.repository import ArticleRepository
 from app.features.verification.repository import ClaimRepository
 from app.features.verification.repository import ResultRepository
@@ -266,4 +266,6 @@ class VerificationService:
             processing_time_ms=context.elapsed_ms,
             created_at=datetime.utcnow(),
         )
+
+
 

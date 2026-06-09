@@ -1,4 +1,4 @@
-"""
+﻿"""
 app/features/articles/models.py
 ================================
 ORM models for the articles feature.
@@ -186,7 +186,7 @@ class SearchQuery(UUIDMixin, ReprMixin, Base):
         Enum(SearchProvider, name="search_provider_enum", create_type=True),
         nullable=False,
         index=True,
-        comment="Which search provider executed this query: brave | google_rss | ddg",
+        comment="Which search provider executed this query: google_rss | ddg",
     )
 
     results_count: Mapped[int] = mapped_column(
@@ -214,3 +214,4 @@ class SearchQuery(UUIDMixin, ReprMixin, Base):
         Index("ix_search_queries_claim_provider", claim_id, search_provider),
         Index("ix_search_queries_claim_type", claim_id, query_type),
     )
+

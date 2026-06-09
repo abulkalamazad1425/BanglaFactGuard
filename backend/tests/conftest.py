@@ -1,4 +1,4 @@
-"""
+﻿"""
 tests/conftest.py
 ==================
 Shared pytest fixtures for unit and integration tests.
@@ -35,16 +35,16 @@ os.environ["DB_PASSWORD"] = "postgres"
 os.environ["REDIS_HOST"] = "localhost"
 os.environ["REDIS_PORT"] = "6379"
 
-from app.api.dependencies import get_async_session
+from app.shared.dependencies import get_async_session
 from app.core.config import get_settings
-from app.models.base import Base
+from app.features.base import Base
 from app.main import create_app
-from app.models.source_registry import SourceRegistry
-from app.schemas.scores import NLIScoresSchema
-from app.services.cache_service import CacheService
-from app.services.embedding_service import EmbeddingService
-from app.services.ner_service import NERService
-from app.services.nli_service import NLIService
+from app.features.source_registry import SourceRegistry
+from app.features.verification.schemas import NLIScoresSchema
+from app.features.cache.cache_service import CacheService
+from app.features.nlp.embedding_service import EmbeddingService
+from app.features.nlp.ner_service import NERService
+from app.features.nlp.nli_service import NLIService
 
 # In-memory SQLite for test isolation
 SQLITE_URL = "sqlite+aiosqlite:///:memory:"
@@ -150,9 +150,9 @@ def mock_nli_service() -> MagicMock:
 @pytest.fixture
 def mock_search_clients() -> dict[str, MagicMock]:
     """Mock all search providers to return a predefined domain search result."""
-    from app.clients.brave_client import BraveSearchClient
-    from app.clients.google_rss_client import GoogleRSSClient
-    from app.clients.ddg_client import DDGClient
+    from app.features.search.brave_client import BraveSearchClient
+    from app.features.search.google_rss_client import GoogleRSSClient
+    from app.features.search.ddg_client import DDGClient
 
     brave = MagicMock(spec=BraveSearchClient)
     brave.search = AsyncMock(return_value=["https://prothomalo.com/article/123"])
@@ -210,3 +210,4 @@ async def client(app) -> AsyncGenerator[httpx.AsyncClient, None]:
     import httpx
     async with httpx.AsyncClient(app=app, base_url="http://testserver") as async_client:
         yield async_client
+

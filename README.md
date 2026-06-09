@@ -6,28 +6,26 @@ BanglaFactGuard is a production-grade, async pipeline designed to verify news cl
 
 ## Project Structure
 
-```
+```text
 BanglaFactGuard/
 ├── backend/
-│   ├── app/                    # FastAPI Application Core
+│   ├── app/
 │   │   ├── main.py             # App Lifespan and Factory
-│   │   ├── api/                # API Endpoints & Dependencies
 │   │   ├── core/               # Configuration & Logging
 │   │   ├── db/                 # Database Session & Migrations
-│   │   ├── models/             # SQLAlchemy ORM Models
-│   │   ├── repositories/       # DB CRUD Repositories
-│   │   ├── schemas/            # Pydantic Schemas
-│   │   ├── services/           # ML and Registry Services
-│   │   ├── pipelines/          # 12-stage Verification Orchestration
-│   │   └── utils/              # Text processing & sanitization utilities
+│   │   ├── features/           # Package-by-Feature Modules
+│   │   │   ├── verification/   # Core 12-stage fact-check pipeline
+│   │   │   ├── articles/       # Retrieved articles & models
+│   │   │   ├── sources/        # Source registry CRUD
+│   │   │   ├── auth/           # User authentication
+│   │   │   ├── nlp/            # ML models (LaBSE, DeBERTa, BanglaBERT)
+│   │   │   ├── search/         # Web search clients
+│   │   │   └── ...             # Users, Expert Review, Admin, etc.
+│   │   └── shared/             # Cross-cutting concerns & base classes
 │   ├── tests/                  # Pytest Unit & Integration Test Suite
-│   │   ├── conftest.py         # Test fixtures and ML mocks
-│   │   ├── unit/               # Normalization, query gen, classification tests
-│   │   └── integration/        # End-to-end pipeline and endpoint tests
 │   ├── pyproject.toml          # Project metadata and dependencies
 │   ├── requirements.txt        # Backend dependencies
-│   ├── .env.example            # Environment variables template
-│   └── docker-compose.yml      # Containerized Postgres + Redis config
+│   └── .env.example            # Environment variables template
 └── frontend/
     └── index.html              # Stunning AngularJS Client App with Glassmorphism
 ```
@@ -38,7 +36,8 @@ BanglaFactGuard/
 
 ### 1. Prerequisites
 - Python 3.11 or higher installed on your system.
-- Docker installed (optional, for Postgres/Redis).
+- PostgreSQL database installed locally on port 5432.
+- Redis server installed locally on port 6379 (for caching).
 
 ### 2. Install Dependencies
 Change to the backend directory and install the required Python packages:
@@ -48,20 +47,16 @@ python -m pip install -r requirements.txt
 ```
 
 ### 3. Setup Databases (PostgreSQL & Redis)
-You can run the required databases using Docker Compose:
-```bash
-docker-compose up -d
-```
-This launches:
-- **PostgreSQL** on `localhost:5432` (user: `postgres`, password: `postgres`, DB: `bangla_fact_guard`)
-- **Redis** on `localhost:6379` (no password)
+Ensure you have local instances of PostgreSQL and Redis running.
+- **PostgreSQL**: Listening on `localhost:5432`. Create a database named `bangla_fact_guard` (default user: `postgres`, password: `user`).
+- **Redis**: Listening on `localhost:6379` (no password by default).
 
 ### 4. Configure Environment Variables
 Copy `.env.example` to `.env` and configure your settings:
 ```bash
 copy .env.example .env
 ```
-Fill in the `SEARCH_BRAVE_API_KEY` in the `.env` file if you plan to use Brave Search. (If not configured, the pipeline will fallback to Google News RSS and DuckDuckGo scrapers).
+*(The system automatically uses Google News RSS and DuckDuckGo scrapers for news searches).*
 
 ### 5. Running the Backend Server
 Start the Uvicorn ASGI server:

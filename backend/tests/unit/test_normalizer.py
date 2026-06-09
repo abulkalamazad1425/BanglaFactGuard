@@ -1,15 +1,15 @@
-"""
+﻿"""
 tests/unit/test_normalizer.py
 ==============================
 Unit tests for Stage 1: Input Normalizer (`InputNormalizerStage`).
 """
 
 import pytest
-from app.pipelines.stages.s01_normalizer import InputNormalizerStage
-from app.pipelines.context import PipelineContext, build_context
+from app.features.verification.pipeline.stages.s01_normalizer import InputNormalizerStage
+from app.features.verification.pipeline.context import PipelineContext, build_context
 from app.core.exceptions import NormalizationError
-from app.repositories.source_repository import SourceRepository
-from app.models.source_registry import SourceRegistry
+from app.features.sources.repository import SourceRepository
+from app.features.source_registry import SourceRegistry
 
 @pytest.mark.asyncio
 async def test_normalize_text_basic():
@@ -109,3 +109,4 @@ async def test_resolve_source_unresolved_falls_back():
     assert context.normalized_source is None
     # Verify hash is still computed using raw_claimed_source
     assert context.claim_hash is not None
+

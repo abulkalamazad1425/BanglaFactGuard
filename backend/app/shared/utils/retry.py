@@ -1,4 +1,4 @@
-"""
+﻿"""
 app/utils/retry.py
 ===================
 Tenacity-based retry decorators and helpers for external I/O operations.
@@ -91,7 +91,6 @@ def async_retry(
 
     Does NOT retry on:
     - HTTP 4xx (except 429) — these indicate client errors
-    - Domain exceptions (BraveAPIError, etc.) — already handled at source
     - asyncio.CancelledError — propagated immediately
 
     Args:
@@ -169,3 +168,4 @@ def sync_retry(
         return wrapper  # type: ignore[return-value]
 
     return decorator
+
