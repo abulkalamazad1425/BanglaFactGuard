@@ -1,4 +1,4 @@
-﻿"""
+"""
 app/pipelines/stages/s12_persistence.py
 =========================================
 Stage 12: Persistence (CRITICAL)
@@ -35,10 +35,8 @@ import structlog
 
 from app.core.constants import ClaimStatus, PipelineStageID, SearchProvider
 from app.core.exceptions import PersistenceError
-from app.features.retrieved_article import RetrievedArticle
-from app.features.search_query import SearchQuery
-from app.features.verification_log import VerificationLog
-from app.features.verified_claim import VerifiedClaim
+from app.features.articles.models import RetrievedArticle, SearchQuery
+from app.features.verification.models import VerificationLog, VerifiedClaim, VerificationResult
 from app.features.verification.pipeline.context import PipelineContext
 from app.features.articles.repository import ArticleRepository
 from app.features.verification.repository import ClaimRepository
@@ -235,7 +233,6 @@ class PersistenceStage:
         if not context.search_queries:
             return
 
-        from app.features.search_query import SearchQuery
         queries = [
             SearchQuery(
                 claim_id=claim_id,

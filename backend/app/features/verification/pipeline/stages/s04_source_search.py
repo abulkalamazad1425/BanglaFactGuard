@@ -1,4 +1,4 @@
-﻿"""
+"""
 app/pipelines/stages/s04_source_search.py
 ==========================================
 Stage 4: Source-Constrained Search
@@ -49,6 +49,7 @@ from app.features.articles.schemas import CandidateArticleSchema
 from app.features.search.newsdata_client import NewsDataClient
 from app.features.search.google_cse_client import GoogleCSEClient
 from app.features.search.pygooglenews_client import PyGoogleNewsClient
+from app.features.search.duckduckgo_client import DuckDuckGoClient
 from app.features.cache.cache_service import CacheService
 from app.shared.utils.hashing import compute_search_query_hash
 
@@ -73,11 +74,13 @@ class SourceSearchStage:
         newsdata_client: NewsDataClient,
         google_cse_client: GoogleCSEClient,
         pygooglenews_client: PyGoogleNewsClient,
+        duckduckgo_client: DuckDuckGoClient,
         cache_service: CacheService,
     ) -> None:
         self.newsdata_client = newsdata_client
         self.google_cse_client = google_cse_client
         self.pygooglenews_client = pygooglenews_client
+        self.duckduckgo_client = duckduckgo_client
         self.cache_service = cache_service
 
     async def execute(self, context: PipelineContext) -> PipelineContext:
@@ -159,6 +162,7 @@ class SourceSearchStage:
         providers = [
             (SearchProvider.NEWSDATA, self.newsdata_client),
             (SearchProvider.GOOGLE_CUSTOM_SEARCH, self.google_cse_client),
+            (SearchProvider.DDG, self.duckduckgo_client),
             (SearchProvider.PY_GOOGLE_NEWS, self.pygooglenews_client),
         ]
 
@@ -237,10 +241,11 @@ class SourceSearchStage:
                     query_type=query_type,
                     error=str(exc),
                 )
-                context.record_stage_error(
-                    self.stage_id,
-                    f"{provider_name} failed for query '{query[:40]}': {exc}",
-                )
+                if "not configured" not in str(exc).lower():
+                    context.record_stage_error(
+                        self.stage_id,
+                        f"{provider_name} failed for query '{query[:40]}': {exc}",
+                    )
                 # Try next provider
 
         log.debug(

@@ -61,7 +61,7 @@ async def test_verify_claim_endpoint(client):
     }
 
     # Mock the VerificationService.verify method
-    with patch("app.services.verification_service.VerificationService.verify", new_callable=AsyncMock) as mock_verify:
+    with patch("app.features.verification.service.VerificationService.verify", new_callable=AsyncMock) as mock_verify:
         mock_verify.return_value = mock_response_payload
 
         payload = {
@@ -108,7 +108,7 @@ async def test_get_verification_result_endpoint(client):
     }
 
     claim_id = uuid.uuid4()
-    with patch("app.services.verification_service.VerificationService.get_result", new_callable=AsyncMock) as mock_get_result:
+    with patch("app.features.verification.service.VerificationService.get_result", new_callable=AsyncMock) as mock_get_result:
         mock_get_result.return_value = mock_response_payload
 
         response = await client.get(f"/api/v1/verify/{claim_id}")
@@ -136,7 +136,7 @@ async def test_sources_crud_endpoints(client):
     }
 
     # Test GET /api/v1/sources/{id}
-    with patch("app.services.source_service.SourceService.get_source", new_callable=AsyncMock) as mock_get:
+    with patch("app.features.sources.service.SourceService.get_source", new_callable=AsyncMock) as mock_get:
         mock_get.return_value = mock_source
         response = await client.get(f"/api/v1/sources/{source_id}")
         assert response.status_code == 200
@@ -145,7 +145,7 @@ async def test_sources_crud_endpoints(client):
         mock_get.assert_called_once_with(source_id)
 
     # Test POST /api/v1/sources
-    with patch("app.services.source_service.SourceService.create_source", new_callable=AsyncMock) as mock_create:
+    with patch("app.features.sources.service.SourceService.create_source", new_callable=AsyncMock) as mock_create:
         mock_create.return_value = mock_source
         create_payload = {
             "canonical_name": "dailystar.net",
@@ -160,7 +160,7 @@ async def test_sources_crud_endpoints(client):
         assert data["canonical_name"] == "dailystar.net"
 
     # Test PUT /api/v1/sources/{id}
-    with patch("app.services.source_service.SourceService.update_source", new_callable=AsyncMock) as mock_update:
+    with patch("app.features.sources.service.SourceService.update_source", new_callable=AsyncMock) as mock_update:
         mock_update.return_value = mock_source
         update_payload = {
             "display_name": "Daily Star Updated"
@@ -169,7 +169,7 @@ async def test_sources_crud_endpoints(client):
         assert response.status_code == 200
 
     # Test DELETE /api/v1/sources/{id}
-    with patch("app.services.source_service.SourceService.delete_source", new_callable=AsyncMock) as mock_delete:
+    with patch("app.features.sources.service.SourceService.delete_source", new_callable=AsyncMock) as mock_delete:
         mock_delete.return_value = None
         response = await client.delete(f"/api/v1/sources/{source_id}")
         assert response.status_code == 204

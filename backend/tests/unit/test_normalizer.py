@@ -1,4 +1,4 @@
-﻿"""
+"""
 tests/unit/test_normalizer.py
 ==============================
 Unit tests for Stage 1: Input Normalizer (`InputNormalizerStage`).
@@ -9,7 +9,7 @@ from app.features.verification.pipeline.stages.s01_normalizer import InputNormal
 from app.features.verification.pipeline.context import PipelineContext, build_context
 from app.core.exceptions import NormalizationError
 from app.features.sources.repository import SourceRepository
-from app.features.source_registry import SourceRegistry
+from app.features.sources.models import SourceRegistry
 
 @pytest.mark.asyncio
 async def test_normalize_text_basic():

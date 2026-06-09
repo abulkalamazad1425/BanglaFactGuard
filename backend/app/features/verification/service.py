@@ -1,4 +1,4 @@
-﻿"""
+"""
 app/services/verification_service.py
 =======================================
 VerificationService — top-level application service that wires the full
@@ -32,6 +32,7 @@ import structlog
 from app.features.search.newsdata_client import NewsDataClient
 from app.features.search.google_cse_client import GoogleCSEClient
 from app.features.search.pygooglenews_client import PyGoogleNewsClient
+from app.features.search.duckduckgo_client import DuckDuckGoClient
 from app.core.exceptions import PipelineError
 from app.features.verification.pipeline.context import PipelineContext, build_context
 from app.features.verification.pipeline.orchestrator import PipelineOrchestrator
@@ -196,6 +197,7 @@ class VerificationService:
         newsdata = NewsDataClient(self.http_client)
         google_cse = GoogleCSEClient(self.http_client)
         pygooglenews = PyGoogleNewsClient()
+        duckduckgo = DuckDuckGoClient()
 
         return [
             InputNormalizerStage(source_repo=self.source_repo),
@@ -209,6 +211,7 @@ class VerificationService:
                 newsdata_client=newsdata,
                 google_cse_client=google_cse,
                 pygooglenews_client=pygooglenews,
+                duckduckgo_client=duckduckgo,
                 cache_service=self.cache_service,
             ),
             EvidenceRetrievalStage(http_client=self.http_client),

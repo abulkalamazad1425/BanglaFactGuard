@@ -34,7 +34,7 @@ from __future__ import annotations
 
 import re
 
-from app.utils.bangla_normalizer import normalize_bangla_digits
+from app.shared.utils.bangla_normalizer import normalize_bangla_digits
 
 # ---------------------------------------------------------------------------
 # Compiled patterns

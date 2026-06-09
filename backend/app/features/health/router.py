@@ -12,8 +12,8 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
 from app.db.engine import AsyncSessionLocal
-from app.services.cache_service import CacheService
-from app.api.dependencies import get_cache_service
+from app.features.cache.cache_service import CacheService
+from app.shared.dependencies import get_cache_service
 
 router = APIRouter(tags=["Health"])
 

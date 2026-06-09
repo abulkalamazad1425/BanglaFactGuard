@@ -1,4 +1,4 @@
-﻿"""
+"""
 tests/integration/test_verification_pipeline.py
 =================================================
 Integration tests for the 12-stage fact-verification pipeline orchestrator.
@@ -10,7 +10,7 @@ import json
 from unittest.mock import AsyncMock, patch
 
 from app.features.verification.schemas import VerificationRequest
-from app.services.verification_service import VerificationService
+from app.features.verification.service import VerificationService
 from app.core.constants import VerificationLabel, ClaimStatus
 from app.features.verification.repository import ClaimRepository
 from app.features.verification.repository import ResultRepository
@@ -32,9 +32,9 @@ async def test_full_pipeline_execution(
     source_repo = SourceRepository(db_session)
     
     # Mock search client methods inside stages
-    from app.features.search.brave_client import BraveSearchClient
-    from app.features.search.google_rss_client import GoogleRSSClient
-    from app.features.search.ddg_client import DDGClient
+    from app.features.search.newsdata_client import NewsDataClient
+    from app.features.search.google_cse_client import GoogleCSEClient
+    from app.features.search.duckduckgo_client import DuckDuckGoClient
     import httpx
 
     # Instantiate HTTP client
@@ -59,14 +59,13 @@ async def test_full_pipeline_execution(
             force_refresh=True,  # Bypass cache
         )
 
-        # Mock Brave search client to return sample URL
         with (
-            patch("app.clients.brave_client.BraveSearchClient.search", new_callable=AsyncMock) as mock_brave,
-            patch("app.clients.google_rss_client.GoogleRSSClient.search", new_callable=AsyncMock) as mock_google,
-            patch("app.clients.ddg_client.DDGClient.search", new_callable=AsyncMock) as mock_ddg,
-            patch("app.pipelines.stages.s06_article_extractor.ArticleExtractorStage.execute") as mock_extract,
+            patch("app.features.search.newsdata_client.NewsDataClient.search_entries", new_callable=AsyncMock) as mock_newsdata,
+            patch("app.features.search.google_cse_client.GoogleCSEClient.search_entries", new_callable=AsyncMock) as mock_google,
+            patch("app.features.search.duckduckgo_client.DuckDuckGoClient.search_entries", new_callable=AsyncMock) as mock_ddg,
+            patch("app.features.verification.pipeline.stages.s06_article_extractor.ArticleExtractorStage.execute") as mock_extract,
         ):
-            mock_brave.return_value = ["https://prothomalo.com/article/456"]
+            mock_newsdata.return_value = [("https://prothomalo.com/article/456", "শেখ হাসিনা নতুন উড়ালসড়ক উদ্বোধন করলেন")]
             mock_google.return_value = []
             mock_ddg.return_value = []
             
@@ -80,7 +79,7 @@ async def test_full_pipeline_execution(
                         title="শেখ হাসিনা নতুন উড়ালসড়ক উদ্বোধন করলেন",
                         body="আজ নতুন উড়ালসড়ক উদ্বোধন করেন প্রধানমন্ত্রী।",
                         rank_score=0.95,
-                        search_provider=SearchProvider.BRAVE,
+                        search_provider=SearchProvider.NEWSDATA,
                     )
                 ]
                 return context
@@ -157,11 +156,11 @@ async def test_pipeline_cache_hit(
         )
 
         # Patch S01 normalizer to return the exact hash so cache hits
-        with patch("app.pipelines.stages.s01_normalizer.compute_claim_hash") as mock_hash:
+        with patch("app.features.verification.pipeline.stages.s01_normalizer.compute_claim_hash") as mock_hash:
             mock_hash.return_value = claim_hash
             
             # Set up mock search stages that shouldn't be executed
-            with patch("app.pipelines.stages.s03_query_generator.QueryGeneratorStage.execute") as mock_s03:
+            with patch("app.features.verification.pipeline.stages.s03_query_generator.QueryGeneratorStage.execute") as mock_s03:
                 response = await service.verify(request_payload)
                 
                 assert response.label == VerificationLabel.TRUE
