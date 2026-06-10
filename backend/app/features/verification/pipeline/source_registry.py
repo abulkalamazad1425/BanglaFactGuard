@@ -54,7 +54,7 @@ SOURCE_REGISTRY: dict[str, SourceConfig] = {
         "title_selectors": ["h1.title", "h1"],
         "date_selectors": [".date", "time"],
         "internal_search_url": "https://www.ittefaq.com.bd/search?q={query}",
-        "article_url_patterns": [r"/[a-z-]+/\d+/\d+"],
+        "article_url_patterns": [r"/\d+/", r"/[a-z-]+/\d+/\d+"],
     },
     "samakal.com": {
         "name": "সমকাল",
@@ -72,14 +72,6 @@ SOURCE_REGISTRY: dict[str, SourceConfig] = {
         "internal_search_url": "https://mzamin.com/search.php?q={query}",
         "article_url_patterns": [r"/article\.php\?mzamin=\d+", r"/news/\d+"],
     },
-    "dailyjanakantha.com": {
-        "name": "জনকণ্ঠ",
-        "body_selectors": ["article", ".details-content", ".news-body"],
-        "title_selectors": ["h1", "h1.title"],
-        "date_selectors": [".date", ".post-date"],
-        "internal_search_url": "https://www.dailyjanakantha.com/search?q={query}",
-        "article_url_patterns": [r"/news/\d+"],
-    },
     "dailyinqilab.com": {
         "name": "ইনকিলাব",
         "body_selectors": [".news-details", "article", ".content"],
@@ -94,6 +86,6 @@ SOURCE_REGISTRY: dict[str, SourceConfig] = {
         "title_selectors": ["h1", "h1.title"],
         "date_selectors": [".date", "time"],
         "internal_search_url": "https://www.dailynayadiganta.com/search?q={query}",
-        "article_url_patterns": [r"/[a-z-]+/\d+"],
+        "article_url_patterns": [r"/[a-z-]+/[a-zA-Z0-9]+/?$", r"/[a-z-]+/\d+"],
     },
 }

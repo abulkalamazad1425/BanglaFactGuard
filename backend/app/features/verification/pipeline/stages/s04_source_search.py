@@ -58,6 +58,7 @@ NON_ARTICLE_PATTERNS = [
     r"/video/", r"/gallery/", r"/photo/", r"/tag/", r"/tags/",
     r"/author/", r"/archive/", r"/category/", r"/feed",
     r"\.rss$", r"\.xml$", r"/amp/", r"\?s=", r"/page/\d+",
+    r"news\.google\.com", r"google\.com/search"
 ]
 
 def is_probable_article(url: str) -> bool:
@@ -73,12 +74,14 @@ logger = structlog.get_logger(__name__)
 
 class SourceSearchStage:
     """
-    Stage 4: Execute source-constrained searches via NewsData -> Google CSE -> PyGoogleNews.
+    Stage 4: Execute source-constrained searches via NewsData -> Google CSE -> DDG -> PyGoogleNews.
 
     Dependencies (injected via constructor):
         newsdata_client:     NewsData.io client (primary).
         google_cse_client:   Google Custom Search client (secondary).
-        pygooglenews_client: PyGoogleNews RSS wrapper (fallback).
+        duckduckgo_client:   DuckDuckGo client (fallback).
+        pygooglenews_client: PyGoogleNews RSS wrapper (last resort).
+        internal_site_client:Internal Site Search client (first priority).
         cache_service:       For search result caching.
     """
 
@@ -163,7 +166,7 @@ class SourceSearchStage:
         log: structlog.BoundLogger,
     ) -> list[CandidateArticleSchema]:
         """
-        Try NewsData -> Google CSE -> PyGoogleNews for a single query, returning URLs.
+        Try providers for a single query, returning URLs.
 
         Args:
             query:      The search query string.
@@ -180,8 +183,8 @@ class SourceSearchStage:
             (SearchProvider.INTERNAL_SITE, self.internal_site_client),
             (SearchProvider.NEWSDATA, self.newsdata_client),
             (SearchProvider.GOOGLE_CUSTOM_SEARCH, self.google_cse_client),
-            (SearchProvider.PY_GOOGLE_NEWS, self.pygooglenews_client),
             (SearchProvider.DDG, self.duckduckgo_client),
+            (SearchProvider.PY_GOOGLE_NEWS, self.pygooglenews_client),
         ]
 
         for provider_enum, client in providers:
