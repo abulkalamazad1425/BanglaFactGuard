@@ -1,6 +1,6 @@
 # BanglaFactGuard — Multimodal Source-Based Fact Verification Engine
 
-BanglaFactGuard is a production-grade, async pipeline designed to verify news claims in the Bangla language against declared publication sources. It checks whether a claimed source actually published the article using a 12-stage verification pipeline combining neural search, NLP keyword and entity extraction, and DeBERTa NLI textual entailment analysis.
+BanglaFactGuard is a production-grade, async pipeline designed to verify news claims in the Bangla language against declared publication sources. It checks whether a claimed source actually published the article using an enhanced 12-stage verification pipeline. Features include robust Internal Site Searching against 10 primary Bangla domains, a 6-tier fallback article extraction system (JSON-LD, Trafilatura, Readability, etc.), and LaBSE semantic similarity combined with an MMARCO Cross-Encoder re-ranker and DeBERTa NLI textual entailment analysis.
 
 ---
 
@@ -49,14 +49,17 @@ python -m pip install -r requirements.txt
 ### 3. Setup Databases (PostgreSQL & Redis)
 Ensure you have local instances of PostgreSQL and Redis running.
 - **PostgreSQL**: Listening on `localhost:5432`. Create a database named `bangla_fact_guard` (default user: `postgres`, password: `user`).
-- **Redis**: Listening on `localhost:6379` (no password by default).
+- **Redis**: We use Docker for the Redis cache. You can start the Redis container using the provided docker-compose file:
+  ```bash
+  docker-compose -f docker-compose.redis.yml up -d
+  ```
 
 ### 4. Configure Environment Variables
 Copy `.env.example` to `.env` and configure your settings:
 ```bash
 copy .env.example .env
 ```
-*(The system automatically uses Google News RSS and DuckDuckGo scrapers for news searches).*
+*(The system automatically uses Internal Site Search via the Source Registry, alongside Google Custom Search, DuckDuckGo, and NewsData APIs for article retrieval).*
 
 ### 5. Running the Backend Server
 Start the Uvicorn ASGI server:

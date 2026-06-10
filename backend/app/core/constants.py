@@ -69,6 +69,7 @@ class SearchProvider(str, Enum):
     Order implies priority: NewsData.io > Google Custom Search > PyGoogleNews.
     """
 
+    INTERNAL_SITE = "internal_site"
     NEWSDATA = "newsdata"
     GOOGLE_CUSTOM_SEARCH = "google_custom_search"
     PY_GOOGLE_NEWS = "py_google_news"
@@ -96,6 +97,7 @@ class QueryType(str, Enum):
     ENTITIES = "entities"                  # Headline + named entities
     DATE_BOUND = "date_bound"              # Headline + published_date constraint
     BODY_SUMMARY = "body_summary"          # Summarised body keywords
+    SITE_RESTRICTED = "site_restricted"    # Headline + site domain restriction
 
 
 # ---------------------------------------------------------------------------
@@ -106,7 +108,11 @@ class QueryType(str, Enum):
 class ExtractionMethod(str, Enum):
     """Article extraction backend used in Stage 6."""
 
+    JSON_LD = "json_ld"
+    OPENGRAPH = "opengraph"
+    SOURCE_SPECIFIC = "source_specific"
     TRAFILATURA = "trafilatura"
+    READABILITY = "readability"
     BEAUTIFULSOUP = "beautifulsoup"
 
 
@@ -241,7 +247,7 @@ KNOWN_SOURCE_ALIASES: dict[str, str] = {
 # ---------------------------------------------------------------------------
 
 # Maximum number of search queries generated per claim (Stage 3)
-MAX_SEARCH_QUERIES: int = 5
+MAX_SEARCH_QUERIES: int = 10
 
 # Maximum concurrent HTTP requests during evidence retrieval (Stage 5)
 MAX_CONCURRENT_FETCHES: int = 10

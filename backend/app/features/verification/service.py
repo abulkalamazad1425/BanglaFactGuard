@@ -33,6 +33,7 @@ from app.features.search.newsdata_client import NewsDataClient
 from app.features.search.google_cse_client import GoogleCSEClient
 from app.features.search.pygooglenews_client import PyGoogleNewsClient
 from app.features.search.duckduckgo_client import DuckDuckGoClient
+from app.features.search.internal_site_client import InternalSiteSearchClient
 from app.core.exceptions import PipelineError
 from app.features.verification.pipeline.context import PipelineContext, build_context
 from app.features.verification.pipeline.orchestrator import PipelineOrchestrator
@@ -212,6 +213,7 @@ class VerificationService:
                 google_cse_client=google_cse,
                 pygooglenews_client=pygooglenews,
                 duckduckgo_client=duckduckgo,
+                internal_site_client=InternalSiteSearchClient(self.http_client),
                 cache_service=self.cache_service,
             ),
             EvidenceRetrievalStage(http_client=self.http_client),

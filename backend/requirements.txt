@@ -28,6 +28,8 @@ yake>=0.4.8
 trafilatura>=1.10.0
 beautifulsoup4>=4.12.0
 lxml>=5.2.0
+readability-lxml>=0.8.1
+Levenshtein>=0.25.0
 feedparser>=6.0.11
 pygooglenews>=0.1.2
 

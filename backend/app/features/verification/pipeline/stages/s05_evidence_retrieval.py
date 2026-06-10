@@ -1,4 +1,4 @@
-﻿"""
+"""
 app/pipelines/stages/s05_evidence_retrieval.py
 ================================================
 Stage 5: Evidence Retrieval
@@ -47,7 +47,7 @@ logger = structlog.get_logger(__name__)
 _SETTINGS = get_settings()
 _MAX_CONCURRENT_FETCHES = 10
 _FETCH_TIMEOUT = 15.0  # seconds
-_USER_AGENT = "Mozilla/5.0 (compatible; BanglaFactGuard/1.0; +https://bangla.factguard.io)"
+_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
 
 class EvidenceRetrievalStage:
@@ -83,7 +83,17 @@ class EvidenceRetrievalStage:
         Returns:
             Context with `_raw_html_cache` populated.
         """
-        candidates = context.candidate_urls[: self._top_k]
+        # Filter out RSS/feed/XML URLs
+        filtered_candidates = []
+        for c in context.candidate_urls:
+            url_lower = c.url.lower()
+            if any(ext in url_lower for ext in [".rss", ".xml", ".atom", "format=rss", "format=xml"]):
+                continue
+            if "/feed" in url_lower or ("/rss" in url_lower and "news.google.com/rss/articles" not in url_lower):
+                continue
+            filtered_candidates.append(c)
+
+        candidates = filtered_candidates[: self._top_k]
 
         if not candidates:
             logger.debug(
@@ -148,9 +158,17 @@ class EvidenceRetrievalStage:
                     follow_redirects=True,
                     headers={
                         "User-Agent": _USER_AGENT,
-                        "Accept": "text/html,application/xhtml+xml,*/*;q=0.9",
-                        "Accept-Language": "bn-BD,bn;q=0.9,en;q=0.8",
-                        "Accept-Encoding": "gzip, deflate",
+                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+                        "Accept-Language": "bn-BD,bn;q=0.9,en-US;q=0.8,en;q=0.7",
+                        "Cache-Control": "max-age=0",
+                        "Upgrade-Insecure-Requests": "1",
+                        "Sec-Ch-Ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+                        "Sec-Ch-Ua-Mobile": "?0",
+                        "Sec-Ch-Ua-Platform": '"Windows"',
+                        "Sec-Fetch-Dest": "document",
+                        "Sec-Fetch-Mode": "navigate",
+                        "Sec-Fetch-Site": "none",
+                        "Sec-Fetch-User": "?1",
                     },
                 )
                 # Accept 2xx responses only

@@ -50,6 +50,21 @@ from app.features.search.newsdata_client import NewsDataClient
 from app.features.search.google_cse_client import GoogleCSEClient
 from app.features.search.pygooglenews_client import PyGoogleNewsClient
 from app.features.search.duckduckgo_client import DuckDuckGoClient
+from app.features.search.internal_site_client import InternalSiteSearchClient
+from app.features.cache.cache_service import CacheService
+import re
+
+NON_ARTICLE_PATTERNS = [
+    r"/video/", r"/gallery/", r"/photo/", r"/tag/", r"/tags/",
+    r"/author/", r"/archive/", r"/category/", r"/feed",
+    r"\.rss$", r"\.xml$", r"/amp/", r"\?s=", r"/page/\d+",
+]
+
+def is_probable_article(url: str) -> bool:
+    for pattern in NON_ARTICLE_PATTERNS:
+        if re.search(pattern, url):
+            return False
+    return True
 from app.features.cache.cache_service import CacheService
 from app.shared.utils.hashing import compute_search_query_hash
 
@@ -75,12 +90,14 @@ class SourceSearchStage:
         google_cse_client: GoogleCSEClient,
         pygooglenews_client: PyGoogleNewsClient,
         duckduckgo_client: DuckDuckGoClient,
+        internal_site_client: InternalSiteSearchClient,
         cache_service: CacheService,
     ) -> None:
         self.newsdata_client = newsdata_client
         self.google_cse_client = google_cse_client
         self.pygooglenews_client = pygooglenews_client
         self.duckduckgo_client = duckduckgo_client
+        self.internal_site_client = internal_site_client
         self.cache_service = cache_service
 
     async def execute(self, context: PipelineContext) -> PipelineContext:
@@ -119,7 +136,7 @@ class SourceSearchStage:
             )
 
             for candidate in candidates:
-                if candidate.url not in seen_urls:
+                if candidate.url not in seen_urls and is_probable_article(candidate.url):
                     seen_urls.add(candidate.url)
                     all_candidates.append(candidate)
 
@@ -160,10 +177,11 @@ class SourceSearchStage:
             List of new (not previously seen) article URLs.
         """
         providers = [
+            (SearchProvider.INTERNAL_SITE, self.internal_site_client),
             (SearchProvider.NEWSDATA, self.newsdata_client),
             (SearchProvider.GOOGLE_CUSTOM_SEARCH, self.google_cse_client),
-            (SearchProvider.DDG, self.duckduckgo_client),
             (SearchProvider.PY_GOOGLE_NEWS, self.pygooglenews_client),
+            (SearchProvider.DDG, self.duckduckgo_client),
         ]
 
         for provider_enum, client in providers:

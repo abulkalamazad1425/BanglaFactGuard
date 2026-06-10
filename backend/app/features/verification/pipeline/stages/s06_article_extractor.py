@@ -1,4 +1,4 @@
-﻿"""
+"""
 app/pipelines/stages/s06_article_extractor.py
 ================================================
 Stage 6: Article Content Extraction
@@ -48,11 +48,13 @@ from urllib.parse import urlparse
 
 import trafilatura
 from bs4 import BeautifulSoup
+from readability import Document
 import structlog
 
 from app.core.config import get_settings
 from app.core.constants import ExtractionMethod, PipelineStageID, SearchProvider
 from app.features.verification.pipeline.context import PipelineContext
+from app.features.verification.pipeline.source_registry import SOURCE_REGISTRY
 from app.features.articles.schemas import RankedArticleSchema
 from app.features.cache.cache_service import CacheService
 from app.shared.utils.hashing import compute_url_hash
@@ -157,10 +159,109 @@ class ArticleExtractorStage:
         candidate = url_to_candidate.get(url)
         provider = candidate.search_provider if candidate else SearchProvider.GOOGLE_RSS
 
-        # ── Attempt 1: trafilatura ─────────────────────────────────────
-        title, body, author, pub_date, method = self._extract_trafilatura(url, html)
+        title, body, author, pub_date = None, None, None, None
+        method = ExtractionMethod.BEAUTIFULSOUP
 
-        # ── Attempt 2: BeautifulSoup fallback ─────────────────────────
+        try:
+            soup = BeautifulSoup(html, "lxml")
+        except Exception:
+            soup = BeautifulSoup(html, "html.parser")
+
+        # ── Priority 1: JSON-LD ─────────────────────────────────────────
+        for script in soup.find_all("script", type="application/ld+json"):
+            try:
+                data = json.loads(script.string)
+                if isinstance(data, dict):
+                    data = [data]
+                for item in data:
+                    if isinstance(item, dict) and item.get("@type") in ("NewsArticle", "Article"):
+                        title = item.get("headline", title)
+                        ld_body = item.get("articleBody")
+                        if ld_body and len(ld_body) > self._min_body_length:
+                            body = ld_body
+                            author_data = item.get("author")
+                            if isinstance(author_data, dict):
+                                author = author_data.get("name", author)
+                            elif isinstance(author_data, list) and author_data:
+                                author = author_data[0].get("name", author)
+                            pub_date_str = item.get("datePublished")
+                            if pub_date_str:
+                                try:
+                                    pub_date = datetime.fromisoformat(pub_date_str.replace("Z", "+00:00")[:19]).date()
+                                except Exception:
+                                    pass
+                            method = ExtractionMethod.JSON_LD
+                            break
+            except Exception:
+                continue
+            if body and len(body) > self._min_body_length:
+                break
+
+        # ── Priority 2: OpenGraph ───────────────────────────────────────
+        if not body or len(body) < self._min_body_length:
+            og_title = soup.find("meta", property="og:title")
+            if og_title:
+                title = title or og_title.get("content")
+            
+            og_desc = soup.find("meta", property="og:description")
+            if og_desc and og_desc.get("content") and len(og_desc["content"]) > self._min_body_length:
+                body = og_desc["content"]
+                method = ExtractionMethod.OPENGRAPH
+
+            pub_time = soup.find("meta", property="article:published_time")
+            if pub_time and pub_time.get("content"):
+                try:
+                    pub_date = pub_date or datetime.fromisoformat(pub_time["content"].replace("Z", "+00:00")[:19]).date()
+                except Exception:
+                    pass
+
+        # ── Priority 3: Source-Specific CSS ─────────────────────────────
+        if not body or len(body) < self._min_body_length:
+            domain = urlparse(url).netloc.replace("www.", "")
+            config = SOURCE_REGISTRY.get(domain)
+            if config:
+                for sel in config["title_selectors"]:
+                    el = soup.select_one(sel)
+                    if el:
+                        title = title or el.get_text(strip=True)
+                        break
+                for sel in config["body_selectors"]:
+                    el = soup.select_one(sel)
+                    if el:
+                        p_tags = el.find_all("p")
+                        if p_tags:
+                            ss_body = "\n".join(p.get_text(strip=True) for p in p_tags)
+                        else:
+                            ss_body = el.get_text(separator="\n", strip=True)
+                        if ss_body and len(ss_body) > self._min_body_length:
+                            body = ss_body
+                            method = ExtractionMethod.SOURCE_SPECIFIC
+                            break
+
+        # ── Priority 4: Trafilatura ─────────────────────────────────────
+        if not body or len(body) < self._min_body_length:
+            t_title, t_body, t_author, t_pub_date, t_method = self._extract_trafilatura(url, html)
+            if t_body and len(t_body) > self._min_body_length:
+                title = title or t_title
+                body = t_body
+                author = author or t_author
+                pub_date = pub_date or t_pub_date
+                method = ExtractionMethod.TRAFILATURA
+
+        # ── Priority 5: Readability ─────────────────────────────────────
+        if not body or len(body) < self._min_body_length:
+            try:
+                doc = Document(html)
+                summary = doc.summary()
+                r_body = BeautifulSoup(summary, "html.parser").get_text(separator="\n", strip=True)
+                if r_body and len(r_body) > self._min_body_length:
+                    title = title or doc.title()
+                    body = r_body
+                    method = ExtractionMethod.READABILITY
+            except Exception:
+                pass
+
+        # ── Priority 6: BS4 fallback ────────────────────────────────────
         if not body or len(body) < self._min_body_length:
             bs_title, bs_body, bs_author, bs_date = self._extract_bs4(url, html)
             if bs_body and len(bs_body) > (len(body or "")):

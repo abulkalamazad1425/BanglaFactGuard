@@ -1,4 +1,4 @@
-﻿"""
+"""
 app/pipelines/stages/s07_evidence_ranker.py
 =============================================
 Stage 7: Evidence Ranking
@@ -45,19 +45,25 @@ from __future__ import annotations
 
 import structlog
 
+from urllib.parse import urlparse
+from Levenshtein import ratio
+
 from app.core.config import get_settings
 from app.core.constants import PipelineStageID
 from app.features.verification.pipeline.context import PipelineContext
+from app.features.verification.pipeline.stages.cross_encoder_reranker import CrossEncoderReranker
 from app.features.articles.schemas import RankedArticleSchema
 from app.features.nlp.embedding_service import EmbeddingService
 from app.shared.utils.keyword_extractor import compute_keyword_overlap, extract_headline_keywords
+from app.shared.utils.bangla_normalizer import normalize_bangla_text
 
 logger = structlog.get_logger(__name__)
 _SETTINGS = get_settings()
 
-_W_SEM = 0.60
-_W_KW = 0.25
-_W_DATE = 0.15
+_W_SEM = 0.50
+_W_KW = 0.20
+_W_DATE = 0.10
+_W_DOMAIN = 0.20
 
 
 class EvidenceRankerStage:
@@ -74,6 +80,7 @@ class EvidenceRankerStage:
         self._embedder = embedding_service
         self._max_ranked = _SETTINGS.ml.max_ranked_articles
         self._min_score = _SETTINGS.ml.min_rank_score
+        self._reranker = CrossEncoderReranker()
 
     async def execute(self, context: PipelineContext) -> PipelineContext:
         """
@@ -104,6 +111,7 @@ class EvidenceRankerStage:
                 claim_headline=claim_headline,
                 claim_keywords=claim_keywords,
                 claim_date=context.published_date,
+                context=context,
             )
             scored.append((score, article))
 
@@ -139,6 +147,11 @@ class EvidenceRankerStage:
                 )
             ]
 
+        # ── Cross-Encoder Re-ranking ──────────────────────────────────────
+        if len(ranked) > 3:
+            logger.info("s07_reranking_articles", count=len(ranked))
+            ranked = self._reranker.rerank(claim_headline, ranked, top_k=self._max_ranked)
+
         context.ranked_articles = ranked
         context.top_article = ranked[0] if ranked else None
 
@@ -156,6 +169,7 @@ class EvidenceRankerStage:
         claim_headline: str,
         claim_keywords: list[str],
         claim_date,
+        context: PipelineContext,
     ) -> float:
         """
         Compute the composite rank score for a single article.
@@ -165,6 +179,7 @@ class EvidenceRankerStage:
             claim_headline:  Normalised claim headline.
             claim_keywords:  Pre-extracted claim keywords.
             claim_date:      Claimed publication date (may be None).
+            context:         PipelineContext to access claim_source.
 
         Returns:
             Composite rank score in [0.0, 1.0].
@@ -201,10 +216,41 @@ class EvidenceRankerStage:
             delta = abs((claim_date - article.published_date).days)
             date_bonus = max(0.0, 1.0 - (delta / 7.0))
 
+        # ── Source domain match bonus ─────────────────────────────────────
+        domain_bonus = self._source_domain_bonus(context, article)
+
         composite = (
             _W_SEM * sem_sim
             + _W_KW * kw_overlap
             + _W_DATE * date_bonus
+            + _W_DOMAIN * domain_bonus
         )
+
+        # ── Levenshtein headline bonus ────────────────────────────────────
+        if article_title:
+            sim = ratio(normalize_bangla_text(claim_headline), normalize_bangla_text(article_title))
+            if sim > 0.85:
+                composite += 0.15
+            elif sim > 0.70:
+                composite += 0.08
+
         return max(0.0, min(1.0, composite))
+
+    def _source_domain_bonus(self, context: PipelineContext, article: RankedArticleSchema) -> float:
+        if not context.normalized_source:
+            return 0.0
+        
+        def extract_domain(url: str) -> str:
+            if not url: return ""
+            # Handle source strings that might not be valid URLs initially
+            if not url.startswith(('http://', 'https://')):
+                url = 'https://' + url
+            parsed = urlparse(url)
+            return parsed.netloc.replace("www.", "")
+
+        claim_domain = extract_domain(context.normalized_source)
+        article_domain = extract_domain(article.url)
+        if claim_domain == article_domain:
+            return 1.0
+        return 0.0
 
