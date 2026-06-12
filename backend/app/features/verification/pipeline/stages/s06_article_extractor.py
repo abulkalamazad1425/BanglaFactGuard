@@ -118,15 +118,37 @@ class ArticleExtractorStage:
         ]
         results = await asyncio.gather(*extraction_tasks, return_exceptions=True)
 
+        from pathlib import Path
+        project_root = Path(__file__).resolve().parents[6]
+        dump_file = project_root / "extraction_debug_dump.txt"
+        dump_lines = []
+
         extracted: list[RankedArticleSchema] = []
-        for result in results:
+        for (url, html), result in zip(raw_html_cache.items(), results):
             if isinstance(result, RankedArticleSchema):
                 if result.has_body or result.title:
                     extracted.append(result)
                 else:
                     context.failed_extraction_urls.append(result.url)
+
+                dump_lines.append("="*80)
+                dump_lines.append(f"URL: {url}")
+                dump_lines.append(f"Title: {result.title}")
+                dump_lines.append("Body:")
+                dump_lines.append(str(result.body))
+                dump_lines.append("-" * 80)
+                dump_lines.append("Raw HTML:")
+                dump_lines.append(str(html))
+                dump_lines.append("="*80 + "\n")
             elif isinstance(result, Exception):
                 logger.warning("s06_extraction_exception", error=str(result))
+
+        if dump_lines:
+            try:
+                with open(dump_file, "a", encoding="utf-8") as f:
+                    f.write("\n".join(dump_lines) + "\n")
+            except Exception as e:
+                logger.error("failed_to_write_extraction_dump", error=str(e))
 
         context.extracted_articles = extracted
         logger.info(
@@ -167,55 +189,7 @@ class ArticleExtractorStage:
         except Exception:
             soup = BeautifulSoup(html, "html.parser")
 
-        # ── Priority 1: JSON-LD ─────────────────────────────────────────
-        for script in soup.find_all("script", type="application/ld+json"):
-            try:
-                data = json.loads(script.string)
-                if isinstance(data, dict):
-                    data = [data]
-                for item in data:
-                    if isinstance(item, dict) and item.get("@type") in ("NewsArticle", "Article"):
-                        title = item.get("headline", title)
-                        ld_body = item.get("articleBody")
-                        if ld_body and len(ld_body) > self._min_body_length:
-                            body = ld_body
-                            author_data = item.get("author")
-                            if isinstance(author_data, dict):
-                                author = author_data.get("name", author)
-                            elif isinstance(author_data, list) and author_data:
-                                author = author_data[0].get("name", author)
-                            pub_date_str = item.get("datePublished")
-                            if pub_date_str:
-                                try:
-                                    pub_date = datetime.fromisoformat(pub_date_str.replace("Z", "+00:00")[:19]).date()
-                                except Exception:
-                                    pass
-                            method = ExtractionMethod.JSON_LD
-                            break
-            except Exception:
-                continue
-            if body and len(body) > self._min_body_length:
-                break
-
-        # ── Priority 2: OpenGraph ───────────────────────────────────────
-        if not body or len(body) < self._min_body_length:
-            og_title = soup.find("meta", property="og:title")
-            if og_title:
-                title = title or og_title.get("content")
-            
-            og_desc = soup.find("meta", property="og:description")
-            if og_desc and og_desc.get("content") and len(og_desc["content"]) > self._min_body_length:
-                body = og_desc["content"]
-                method = ExtractionMethod.OPENGRAPH
-
-            pub_time = soup.find("meta", property="article:published_time")
-            if pub_time and pub_time.get("content"):
-                try:
-                    pub_date = pub_date or datetime.fromisoformat(pub_time["content"].replace("Z", "+00:00")[:19]).date()
-                except Exception:
-                    pass
-
-        # ── Priority 3: Source-Specific CSS ─────────────────────────────
+        # ── Priority 1: Source-Specific CSS ─────────────────────────────
         if not body or len(body) < self._min_body_length:
             domain = urlparse(url).netloc.replace("www.", "")
             config = SOURCE_REGISTRY.get(domain)
@@ -238,7 +212,38 @@ class ArticleExtractorStage:
                             method = ExtractionMethod.SOURCE_SPECIFIC
                             break
 
-        # ── Priority 4: Trafilatura ─────────────────────────────────────
+        # ── Priority 2: JSON-LD ─────────────────────────────────────────
+        if not body or len(body) < self._min_body_length:
+            for script in soup.find_all("script", type="application/ld+json"):
+                try:
+                    data = json.loads(script.string)
+                    if isinstance(data, dict):
+                        data = [data]
+                    for item in data:
+                        if isinstance(item, dict) and item.get("@type") in ("NewsArticle", "Article"):
+                            title = item.get("headline", title)
+                            ld_body = item.get("articleBody")
+                            if ld_body and len(ld_body) > self._min_body_length:
+                                body = ld_body
+                                author_data = item.get("author")
+                                if isinstance(author_data, dict):
+                                    author = author_data.get("name", author)
+                                elif isinstance(author_data, list) and author_data:
+                                    author = author_data[0].get("name", author)
+                                pub_date_str = item.get("datePublished")
+                                if pub_date_str:
+                                    try:
+                                        pub_date = datetime.fromisoformat(pub_date_str.replace("Z", "+00:00")[:19]).date()
+                                    except Exception:
+                                        pass
+                                method = ExtractionMethod.JSON_LD
+                                break
+                except Exception:
+                    continue
+                if body and len(body) > self._min_body_length:
+                    break
+
+        # ── Priority 3: Trafilatura ─────────────────────────────────────
         if not body or len(body) < self._min_body_length:
             t_title, t_body, t_author, t_pub_date, t_method = self._extract_trafilatura(url, html)
             if t_body and len(t_body) > self._min_body_length:
@@ -248,7 +253,7 @@ class ArticleExtractorStage:
                 pub_date = pub_date or t_pub_date
                 method = ExtractionMethod.TRAFILATURA
 
-        # ── Priority 5: Readability ─────────────────────────────────────
+        # ── Priority 4: Readability ─────────────────────────────────────
         if not body or len(body) < self._min_body_length:
             try:
                 doc = Document(html)
@@ -261,7 +266,7 @@ class ArticleExtractorStage:
             except Exception:
                 pass
 
-        # ── Priority 6: BS4 fallback ────────────────────────────────────
+        # ── Priority 5: BS4 fallback ────────────────────────────────────
         if not body or len(body) < self._min_body_length:
             bs_title, bs_body, bs_author, bs_date = self._extract_bs4(url, html)
             if bs_body and len(bs_body) > (len(body or "")):
@@ -270,6 +275,24 @@ class ArticleExtractorStage:
                 author = author or bs_author
                 pub_date = pub_date or bs_date
                 method = ExtractionMethod.BEAUTIFULSOUP
+
+        # ── Priority 6: OpenGraph ───────────────────────────────────────
+        if not body or len(body) < self._min_body_length:
+            og_title = soup.find("meta", property="og:title")
+            if og_title:
+                title = title or og_title.get("content")
+            
+            og_desc = soup.find("meta", property="og:description")
+            if og_desc and og_desc.get("content") and len(og_desc["content"]) > self._min_body_length:
+                body = og_desc["content"]
+                method = ExtractionMethod.OPENGRAPH
+
+            pub_time = soup.find("meta", property="article:published_time")
+            if pub_time and pub_time.get("content"):
+                try:
+                    pub_date = pub_date or datetime.fromisoformat(pub_time["content"].replace("Z", "+00:00")[:19]).date()
+                except Exception:
+                    pass
 
         if candidate and candidate.title_snippet and (not title or title.strip().lower() == "google news"):
             title = candidate.title_snippet

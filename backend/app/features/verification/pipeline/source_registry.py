@@ -50,7 +50,7 @@ SOURCE_REGISTRY: dict[str, SourceConfig] = {
     },
     "ittefaq.com.bd": {
         "name": "ইত্তেফাক",
-        "body_selectors": ["div.dtl_content_block", ".content-details", ".details-content", "article"],
+        "body_selectors": ["div.dtl_content_block", ".content-details", ".details-content", "article", ".jw_article_body"],
         "title_selectors": ["h1.title", "h1"],
         "date_selectors": [".date", "time"],
         "internal_search_url": "https://www.ittefaq.com.bd/search?q={query}",

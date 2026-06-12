@@ -139,6 +139,8 @@ class SourceSearchStage:
             )
 
             for candidate in candidates:
+                if domain and domain.replace("www.", "") not in candidate.url:
+                    continue
                 if candidate.url not in seen_urls and is_probable_article(candidate.url):
                     seen_urls.add(candidate.url)
                     all_candidates.append(candidate)
