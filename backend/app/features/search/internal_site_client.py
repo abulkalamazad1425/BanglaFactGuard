@@ -12,8 +12,6 @@ import structlog
 from urllib.parse import urljoin
 from datetime import date
 
-from app.features.verification.pipeline.source_registry import SOURCE_REGISTRY
-
 logger = structlog.get_logger(__name__)
 
 class InternalSiteSearchClient:
@@ -29,6 +27,7 @@ class InternalSiteSearchClient:
         query: str,
         domain: Optional[str] = None,
         published_date: Optional[date] = None,
+        source_config: Optional[dict] = None,
     ) -> list[tuple[str, str]]:
         """
         Fetch search results directly from the site's search page.
@@ -36,13 +35,12 @@ class InternalSiteSearchClient:
         Returns:
             List of (url, title_snippet) tuples.
         """
-        if not domain or domain not in SOURCE_REGISTRY:
+        if not domain or not source_config or not source_config.get("internal_search_url"):
             return []
 
-        config = SOURCE_REGISTRY[domain]
         clean_query = re.sub(r'site:\S+\s*', '', query).strip()
-        search_url = config["internal_search_url"].format(query=clean_query)
-        patterns = config["article_url_patterns"]
+        search_url = source_config["internal_search_url"].format(query=clean_query)
+        patterns = source_config.get("article_url_patterns", [])
 
         try:
             response = await self.client.get(

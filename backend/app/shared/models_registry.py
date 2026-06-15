@@ -32,7 +32,7 @@ from app.features.articles.models import (  # noqa: F401
 )
 
 # Sources feature
-from app.features.sources.models import SourceRegistry  # noqa: F401
+from app.features.sources.models import VerifiedSource  # noqa: F401
 
 # Auth feature
 from app.features.auth.models import (  # noqa: F401
@@ -70,7 +70,7 @@ __all__ = [
     "RetrievedArticle",
     "SearchQuery",
     # Sources
-    "SourceRegistry",
+    "VerifiedSource",
     # Auth
     "User",
     "RefreshToken",

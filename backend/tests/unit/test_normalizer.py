@@ -9,7 +9,7 @@ from app.features.verification.pipeline.stages.s01_normalizer import InputNormal
 from app.features.verification.pipeline.context import PipelineContext, build_context
 from app.core.exceptions import NormalizationError
 from app.features.sources.repository import SourceRepository
-from app.features.sources.models import SourceRegistry
+from app.features.sources.models import VerifiedSource
 
 @pytest.mark.asyncio
 async def test_normalize_text_basic():
@@ -70,7 +70,7 @@ async def test_resolve_source_via_db(db_session):
     source_repo = SourceRepository(db_session)
     
     # Insert a custom source in SQLite test DB
-    custom_source = SourceRegistry(
+    custom_source = VerifiedSource(
         canonical_name="customportal.com",
         display_name="Custom Portal",
         aliases=["কাস্টম পোর্টাল", "customportal"],

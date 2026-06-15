@@ -38,7 +38,6 @@ import structlog
 from app.core.constants import MAX_SEARCH_QUERIES, PipelineStageID, QueryType
 from app.core.exceptions import QueryGenerationError
 from app.features.verification.pipeline.context import PipelineContext
-from app.features.verification.pipeline.source_registry import SOURCE_REGISTRY
 from app.shared.utils.keyword_extractor import extract_body_keywords, extract_headline_keywords
 
 logger = structlog.get_logger(__name__)
@@ -88,7 +87,7 @@ class QueryGeneratorStage:
         # ------------------------------------------------------------------
         # Query 1: SITE_RESTRICTED - domain specific search
         # ------------------------------------------------------------------
-        if hasattr(context, "normalized_source") and context.normalized_source and context.normalized_source in SOURCE_REGISTRY:
+        if hasattr(context, "normalized_source") and context.normalized_source and getattr(context, "source_config", None):
             _add_query(f"site:{context.normalized_source} {headline}", QueryType.SITE_RESTRICTED)
         else:
             default_sources = ["prothomalo.com", "bd-pratidin.com", "kalerkantho.com"]

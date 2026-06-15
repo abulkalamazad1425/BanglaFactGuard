@@ -1,4 +1,4 @@
-﻿"""
+"""
 app/pipelines/context.py
 =========================
 PipelineContext dataclass and PipelineStage Protocol — the two foundational
@@ -180,6 +180,7 @@ class PipelineContext:
     normalized_headline: str = ""
     normalized_body: str | None = None
     normalized_source: str | None = None  # canonical domain, e.g. "prothomalo.com"
+    source_config: dict | None = None  # Scraping config from verified_sources DB
     claim_hash: str | None = None
 
     # -----------------------------------------------------------------------

@@ -219,11 +219,17 @@ class SourceSearchStage:
 
             # Call provider
             try:
-                # All 3 new providers implement search_entries which returns (url, title)
+                # All providers implement search_entries which returns (url, title)
+                # But InternalSiteSearchClient also needs source_config
+                kwargs = {}
+                if provider_enum == SearchProvider.INTERNAL_SITE:
+                    kwargs["source_config"] = getattr(context, "source_config", None)
+                    
                 entries = await client.search_entries(
                     query,
                     domain=domain,
                     published_date=context.published_date,
+                    **kwargs
                 )
                 
                 urls = [url for url, _ in entries]

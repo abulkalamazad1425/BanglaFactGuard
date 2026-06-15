@@ -54,7 +54,6 @@ import structlog
 from app.core.config import get_settings
 from app.core.constants import ExtractionMethod, PipelineStageID, SearchProvider
 from app.features.verification.pipeline.context import PipelineContext
-from app.features.verification.pipeline.source_registry import SOURCE_REGISTRY
 from app.features.articles.schemas import RankedArticleSchema
 from app.features.cache.cache_service import CacheService
 from app.shared.utils.hashing import compute_url_hash
@@ -113,7 +112,15 @@ class ArticleExtractorStage:
         # (trafilatura and BS4 are both synchronous/CPU-bound)
         loop = asyncio.get_event_loop()
         extraction_tasks = [
-            loop.run_in_executor(None, self._extract_one, url, html, url_to_candidate)
+            loop.run_in_executor(
+                None, 
+                self._extract_one, 
+                url, 
+                html, 
+                url_to_candidate,
+                getattr(context, "normalized_source", None),
+                getattr(context, "source_config", None)
+            )
             for url, html in raw_html_cache.items()
         ]
         results = await asyncio.gather(*extraction_tasks, return_exceptions=True)
@@ -164,6 +171,8 @@ class ArticleExtractorStage:
         url: str,
         html: str,
         url_to_candidate: dict[str, CandidateArticleSchema],
+        normalized_source: str | None = None,
+        source_config: dict | None = None,
     ) -> RankedArticleSchema:
         """
         Extract content from a single HTML page (runs in thread pool).
@@ -192,14 +201,15 @@ class ArticleExtractorStage:
         # ── Priority 1: Source-Specific CSS ─────────────────────────────
         if not body or len(body) < self._min_body_length:
             domain = urlparse(url).netloc.replace("www.", "")
-            config = SOURCE_REGISTRY.get(domain)
+            config = source_config if (normalized_source == domain and source_config) else None
+            
             if config:
-                for sel in config["title_selectors"]:
+                for sel in config.get("title_selectors", []):
                     el = soup.select_one(sel)
                     if el:
                         title = title or el.get_text(strip=True)
                         break
-                for sel in config["body_selectors"]:
+                for sel in config.get("body_selectors", []):
                     el = soup.select_one(sel)
                     if el:
                         p_tags = el.find_all("p")

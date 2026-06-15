@@ -39,7 +39,7 @@ from app.shared.dependencies import get_async_session
 from app.core.config import get_settings
 from app.shared.models_registry import Base
 from app.main import create_app
-from app.features.sources.models import SourceRegistry
+from app.features.sources.models import VerifiedSource
 from app.features.verification.schemas import NLIScoresSchema
 from app.features.cache.cache_service import CacheService
 from app.features.nlp.embedding_service import EmbeddingService

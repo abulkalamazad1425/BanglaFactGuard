@@ -1,4 +1,4 @@
-﻿"""
+"""
 app/pipelines/stages/s01_normalizer.py
 ========================================
 Stage 1: Input Normalization
@@ -118,6 +118,18 @@ class InputNormalizerStage:
         context.normalized_source = await self._resolve_source(
             context.raw_claimed_source, context, log
         )
+        
+        if context.normalized_source:
+            source_record = await self.source_repo.get_by_canonical_name(context.normalized_source)
+            if source_record:
+                context.source_config = {
+                    "name": source_record.display_name,
+                    "body_selectors": source_record.body_selectors or [],
+                    "title_selectors": source_record.title_selectors or [],
+                    "date_selectors": source_record.date_selectors or [],
+                    "internal_search_url": source_record.internal_search_url,
+                    "article_url_patterns": source_record.article_url_patterns or [],
+                }
 
         # ------------------------------------------------------------------
         # 4. Compute claim hash

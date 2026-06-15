@@ -42,7 +42,7 @@ from app.shared.base_model import Base, ReprMixin, TimestampMixin, UUIDMixin
 
 if TYPE_CHECKING:
     from app.features.articles.models import RetrievedArticle, SearchQuery
-    from app.features.sources.models import SourceRegistry
+    from app.features.sources.models import VerifiedSource
 
 
 # ---------------------------------------------------------------------------
@@ -97,10 +97,10 @@ class VerifiedClaim(UUIDMixin, TimestampMixin, ReprMixin, Base):
 
     source_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("source_registry.id", ondelete="SET NULL"),
+        ForeignKey("verified_sources.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
-        comment="FK to source_registry.id — set when source is successfully resolved",
+        comment="FK to verified_sources.id — set when source is successfully resolved",
     )
 
     published_date: Mapped[date | None] = mapped_column(
@@ -117,8 +117,8 @@ class VerifiedClaim(UUIDMixin, TimestampMixin, ReprMixin, Base):
         comment="Pipeline lifecycle state: pending → processing → completed/failed",
     )
 
-    source: Mapped["SourceRegistry | None"] = relationship(
-        "SourceRegistry",
+    source: Mapped["VerifiedSource | None"] = relationship(
+        "VerifiedSource",
         back_populates="claims",
         lazy="select",
     )

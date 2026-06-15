@@ -20,15 +20,16 @@ if TYPE_CHECKING:
     from app.features.verification.models import VerifiedClaim
 
 
-class SourceRegistry(UUIDMixin, TimestampMixin, ReprMixin, Base):
+class VerifiedSource(UUIDMixin, TimestampMixin, ReprMixin, Base):
     """
-    Registry of known news sources with canonical domain names and aliases.
+    Registry of verified news sources with canonical domain names, aliases, and scraping configurations.
 
     Used by Stage 1 (Normalizer) to resolve raw claimed source strings
     (e.g. "প্রথম আলো", "prothom alo") to canonical domains (e.g. "prothomalo.com").
+    Also used by Stage 6 (Article Extractor) to fetch article scraping configurations.
     """
 
-    __tablename__ = "source_registry"
+    __tablename__ = "verified_sources"
 
     canonical_name: Mapped[str] = mapped_column(
         String(255),
@@ -84,6 +85,40 @@ class SourceRegistry(UUIDMixin, TimestampMixin, ReprMixin, Base):
         comment="Optional editorial description of the news outlet",
     )
 
+    body_selectors: Mapped[list[str] | None] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        nullable=True,
+        default=list,
+        comment="CSS selectors for extracting article body",
+    )
+
+    title_selectors: Mapped[list[str] | None] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        nullable=True,
+        default=list,
+        comment="CSS selectors for extracting article title",
+    )
+
+    date_selectors: Mapped[list[str] | None] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        nullable=True,
+        default=list,
+        comment="CSS selectors for extracting published date",
+    )
+
+    internal_search_url: Mapped[str | None] = mapped_column(
+        String(512),
+        nullable=True,
+        comment="URL template for internal site search (e.g. .../search?q={query})",
+    )
+
+    article_url_patterns: Mapped[list[str] | None] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        nullable=True,
+        default=list,
+        comment="Regex patterns to match valid article URLs",
+    )
+
     claims: Mapped[list["VerifiedClaim"]] = relationship(
         "VerifiedClaim",
         back_populates="source",
@@ -93,9 +128,9 @@ class SourceRegistry(UUIDMixin, TimestampMixin, ReprMixin, Base):
 
     __table_args__ = (
         Index(
-            "ix_source_registry_aliases_gin",
+            "ix_verified_sources_aliases_gin",
             aliases,
             postgresql_using="gin",
         ),
-        Index("ix_source_registry_language_active", language, is_active),
+        Index("ix_verified_sources_language_active", language, is_active),
     )

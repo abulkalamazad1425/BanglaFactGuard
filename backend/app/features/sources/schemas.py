@@ -36,6 +36,11 @@ class SourceCreateSchema(BaseModel):
     rss_url: str | None = Field(default=None, max_length=512)
     language: str = Field(default="bn", min_length=2, max_length=10, examples=["bn", "en"])
     description: str | None = Field(default=None, max_length=2000)
+    body_selectors: list[str] = Field(default_factory=list)
+    title_selectors: list[str] = Field(default_factory=list)
+    date_selectors: list[str] = Field(default_factory=list)
+    internal_search_url: str | None = Field(default=None, max_length=512)
+    article_url_patterns: list[str] = Field(default_factory=list)
 
     @field_validator("canonical_name")
     @classmethod
@@ -100,6 +105,11 @@ class SourceUpdateSchema(BaseModel):
     language: str | None = Field(default=None, min_length=2, max_length=10)
     description: str | None = Field(default=None, max_length=2000)
     is_active: bool | None = Field(default=None)
+    body_selectors: list[str] | None = Field(default=None)
+    title_selectors: list[str] | None = Field(default=None)
+    date_selectors: list[str] | None = Field(default=None)
+    internal_search_url: str | None = Field(default=None, max_length=512)
+    article_url_patterns: list[str] | None = Field(default=None)
 
     @field_validator("aliases")
     @classmethod
@@ -147,6 +157,11 @@ class SourceResponseSchema(BaseModel):
     language: str
     is_active: bool
     description: str | None = None
+    body_selectors: list[str] = Field(default_factory=list)
+    title_selectors: list[str] = Field(default_factory=list)
+    date_selectors: list[str] = Field(default_factory=list)
+    internal_search_url: str | None = None
+    article_url_patterns: list[str] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
