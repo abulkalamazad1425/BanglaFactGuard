@@ -1,4 +1,4 @@
-﻿"""
+"""
 app/pipelines/stages/s11_classifier.py
 ========================================
 Stage 11: Verdict Classification (CRITICAL)
@@ -110,6 +110,34 @@ class ClassifierStage:
                     label=context.label.value,
                     confidence=context.confidence,
                     reason="no_evidence",
+                )
+                return context
+
+            # ------------------------------------------------------------------
+            # Step 1b: NOT_FOUND gate on semantic similarity
+            # If the best article we found is semantically very far from the claim,
+            # it means we found the wrong article (e.g. a different news from the
+            # same site). Treat this as NOT_FOUND rather than a misleading verdict.
+            # ------------------------------------------------------------------
+            sem_sim = context.scores.semantic_similarity
+            if (
+                sem_sim is not None
+                and sem_sim < thresholds.not_found_max_semantic_similarity
+            ):
+                context.label = VerificationLabel.NOT_FOUND_IN_CLAIMED_SOURCE
+                context.confidence = round(min(0.90, 0.5 + (thresholds.not_found_max_semantic_similarity - sem_sim) * 2), 3)
+                context.reasoning = (
+                    f"An article was retrieved from {context.normalized_source or 'the claimed source'}, "
+                    f"but its semantic similarity to the claim is too low ({sem_sim:.2f}), "
+                    "indicating the retrieved article is unrelated to the claim. "
+                    "Verdict: NOT FOUND IN CLAIMED SOURCE."
+                )
+                logger.info(
+                    "s11_verdict",
+                    label=context.label.value,
+                    confidence=context.confidence,
+                    reason="sem_sim_below_not_found_gate",
+                    sem_sim=round(sem_sim, 3),
                 )
                 return context
 

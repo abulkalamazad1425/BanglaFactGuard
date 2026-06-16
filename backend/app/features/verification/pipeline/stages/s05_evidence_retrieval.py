@@ -33,6 +33,7 @@ returns NOT_FOUND_IN_CLAIMED_SOURCE.
 from __future__ import annotations
 
 import asyncio
+import re
 
 import httpx
 import structlog
@@ -83,13 +84,21 @@ class EvidenceRetrievalStage:
         Returns:
             Context with `_raw_html_cache` populated.
         """
-        # Filter out RSS/feed/XML URLs
+        # Filter out RSS/feed/XML URLs — these are not article pages
         filtered_candidates = []
         for c in context.candidate_urls:
             url_lower = c.url.lower()
+            # Skip feed/sitemap/XML endpoints
             if any(ext in url_lower for ext in [".rss", ".xml", ".atom", "format=rss", "format=xml"]):
                 continue
-            if "/feed" in url_lower or ("/rss" in url_lower and "news.google.com/rss/articles" not in url_lower):
+            # Skip feed paths but allow Google News article redirects
+            if "/feed" in url_lower or (
+                "/rss" in url_lower
+                and "news.google.com/rss/articles" not in url_lower
+            ):
+                continue
+            # Skip bare Google/Bing search result pages (not article URLs)
+            if re.search(r"(google\.com|bing\.com)/search\?", url_lower):
                 continue
             filtered_candidates.append(c)
 

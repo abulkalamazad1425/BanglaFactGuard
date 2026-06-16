@@ -59,6 +59,12 @@ class GoogleCSEClient:
             "num": min(self.settings.google_cse_max_results, 10)  # max 10 per request
         }
 
+        if published_date:
+            from datetime import timedelta
+            start_date = (published_date - timedelta(days=7)).strftime("%Y%m%d")
+            end_date = (published_date + timedelta(days=7)).strftime("%Y%m%d")
+            params["sort"] = f"date:r:{start_date}:{end_date}"
+
         try:
             response = await self.client.get(
                 self.settings.google_cse_base_url,

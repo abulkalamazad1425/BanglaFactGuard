@@ -201,6 +201,11 @@ KNOWN_SOURCE_ALIASES: dict[str, str] = {
     "prothom alo": "prothomalo.com",
     "prothomalo": "prothomalo.com",
     "prothom-alo": "prothomalo.com",
+    # Bangladesh Pratidin
+    "বাংলাদেশ প্রতিদিন": "bd-pratidin.com",
+    "bangladesh pratidin": "bd-pratidin.com",
+    "bd pratidin": "bd-pratidin.com",
+    "bd-pratidin": "bd-pratidin.com",
     # The Daily Star
     "the daily star": "thedailystar.net",
     "daily star": "thedailystar.net",
@@ -221,7 +226,18 @@ KNOWN_SOURCE_ALIASES: dict[str, str] = {
     # Manab Zamin
     "মানবজমিন": "mzamin.com",
     "manab zamin": "mzamin.com",
+    "manabzamin": "mzamin.com",
     "mzamin": "mzamin.com",
+    # Daily Inqilab
+    "ইনকিলাব": "dailyinqilab.com",
+    "inqilab": "dailyinqilab.com",
+    "daily inqilab": "dailyinqilab.com",
+    "dailyinqilab": "dailyinqilab.com",
+    # Naya Diganta
+    "নয়া দিগন্ত": "dailynayadiganta.com",
+    "naya diganta": "dailynayadiganta.com",
+    "nayadiganta": "dailynayadiganta.com",
+    "daily nayadiganta": "dailynayadiganta.com",
     # Bangla Tribune
     "বাংলা ট্রিবিউন": "banglatribune.com",
     "bangla tribune": "banglatribune.com",

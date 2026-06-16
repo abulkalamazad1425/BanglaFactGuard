@@ -184,7 +184,7 @@ class EvidenceRankerStage:
         Returns:
             Composite rank score in [0.0, 1.0].
         """
-        # ── Semantic similarity: claim headline vs article title ─────────
+        # ── Semantic similarity: claim headline vs article title (or body) ────
         article_title = article.title or ""
         try:
             if article_title:
@@ -192,11 +192,15 @@ class EvidenceRankerStage:
                     claim_headline, article_title
                 )
             else:
-                # No title: compare claim headline vs first 200 chars of body
-                body_prefix = (article.body or "")[:200]
-                sem_sim = await self._embedder.compute_similarity(
-                    claim_headline, body_prefix
-                ) * 0.7  # Penalty for no title
+                # No title extracted — compare claim against first 400 chars of body.
+                # No penalty: extraction failure is not the article's fault.
+                body_prefix = (article.body or "")[:400]
+                if body_prefix:
+                    sem_sim = await self._embedder.compute_similarity(
+                        claim_headline, body_prefix
+                    )
+                else:
+                    sem_sim = 0.0
         except Exception as exc:  # noqa: BLE001
             logger.debug("s07_sem_similarity_failed", error=str(exc))
             sem_sim = 0.0

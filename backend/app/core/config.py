@@ -1,4 +1,4 @@
-﻿"""
+"""
 app/core/config.py
 ==================
 Centralised, environment-driven configuration for BanglaFactGuard.
@@ -193,8 +193,8 @@ class SearchSettings(BaseSettings):
 
     # General retrieval
     top_k_candidates: int = Field(
-        default=5,
-        description="Maximum number of candidate articles to retrieve per claim",
+        default=15,
+        description="Maximum number of candidate article URLs to fetch per claim (increased for parallel search)",
     )
     min_body_length_chars: int = Field(
         default=100,
@@ -213,37 +213,41 @@ class ClassificationThresholds(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="THRESHOLD_")
 
     # Legacy evidence-score thresholds used by Stage 11.
-    true_threshold: float = Field(default=0.75)
-    partial_threshold: float = Field(default=0.55)
-    false_threshold: float = Field(default=0.35)
+    # These are tuned for multilingual Bangla NLP (paraphrase-multilingual-mpnet)
+    # which typically scores lower than English-only models.
+    true_threshold: float = Field(default=0.65)
+    partial_threshold: float = Field(default=0.45)
+    false_threshold: float = Field(default=0.25)
 
     # Legacy manipulation thresholds used by Stage 10.
     contradiction_override_threshold: float = Field(default=0.70)
-    headline_sim_threshold: float = Field(default=0.60)
-    body_sim_high: float = Field(default=0.80)
-    body_altered_threshold: float = Field(default=0.55)
-    entity_replaced_threshold: float = Field(default=0.50)
+    headline_sim_threshold: float = Field(default=0.55)
+    body_sim_high: float = Field(default=0.75)
+    body_altered_threshold: float = Field(default=0.50)
+    entity_replaced_threshold: float = Field(default=0.45)
 
     # TRUE label
-    true_min_semantic_similarity: float = Field(default=0.85)
-    true_min_entity_match: float = Field(default=0.80)
-    true_max_contradiction: float = Field(default=0.15)
+    true_min_semantic_similarity: float = Field(default=0.70)
+    true_min_entity_match: float = Field(default=0.65)
+    true_max_contradiction: float = Field(default=0.20)
 
     # FALSE label
     false_min_contradiction: float = Field(default=0.70)
 
     # PARTIALLY_TRUE label
-    partial_min_semantic_similarity: float = Field(default=0.50)
+    partial_min_semantic_similarity: float = Field(default=0.40)
 
-    # NOT_FOUND gate
+    # NOT_FOUND gate: if the best article's semantic similarity is below this,
+    # treat as NOT_FOUND even if some articles were retrieved.
     not_found_max_semantic_similarity: float = Field(
-        default=0.40,
+        default=0.30,
         description="If best candidate semantic similarity is below this, verdict is NOT_FOUND",
     )
 
-    # Minimum evidence gate (applied before classification)
+    # Minimum evidence gate (applied before classification).
+    # Lowered so articles are not incorrectly discarded for Bangla content.
     min_evidence_threshold: float = Field(
-        default=0.40,
+        default=0.25,
         description="Articles below this semantic similarity are discarded as evidence",
     )
 
