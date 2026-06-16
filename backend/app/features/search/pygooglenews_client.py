@@ -112,6 +112,68 @@ class PyGoogleNewsClient:
         Returns:
             List of (URL, title) tuples.
         """
-        return await asyncio.to_thread(
+        entries = await asyncio.to_thread(
             self._sync_search, query, domain, published_date
         )
+
+        # Resolve Google News wrapper URLs using Playwright
+        wrapped_urls = [u for u, _ in entries if "news.google.com" in u]
+        if wrapped_urls:
+            resolved_map = await self._resolve_with_playwright(wrapped_urls)
+            final_entries = []
+            for url, title in entries:
+                final_url = resolved_map.get(url, url)
+                final_entries.append((final_url, title))
+            return final_entries
+
+        return entries
+
+    async def _resolve_with_playwright(self, urls: list[str]) -> dict[str, str]:
+        """Resolve Google News JS redirects to get the real article URLs."""
+        resolved: dict[str, str] = {}
+        try:
+            from playwright.async_api import async_playwright
+        except ImportError:
+            logger.warning("pygooglenews_playwright_not_installed")
+            return {}
+
+        async with async_playwright() as pw:
+            try:
+                browser = await pw.chromium.launch(
+                    headless=True,
+                    args=[
+                        "--no-sandbox",
+                        "--disable-dev-shm-usage",
+                        "--disable-blink-features=AutomationControlled",
+                    ],
+                )
+                context = await browser.new_context(
+                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                )
+                await context.route("**/*.{png,jpg,jpeg,gif,webp,svg,ico,woff,woff2,ttf,mp4,mp3}", lambda route: route.abort())
+
+                async def resolve_one(url: str) -> tuple[str, str]:
+                    page = await context.new_page()
+                    try:
+                        await page.goto(url, wait_until="domcontentloaded", timeout=12000)
+                        await page.wait_for_timeout(2000)  # Wait for JS redirect
+                        final_url = page.url
+                        logger.debug("pgn_resolved_url", orig=url[:60], final=final_url[:60])
+                        return url, final_url
+                    except Exception as exc:
+                        logger.warning("pgn_resolve_failed", url=url[:60], error=str(exc))
+                        return url, url
+                    finally:
+                        await page.close()
+
+                tasks = [resolve_one(u) for u in urls]
+                results = await asyncio.gather(*tasks)
+                for orig, final in results:
+                    resolved[orig] = final
+
+                await context.close()
+                await browser.close()
+            except Exception as exc:
+                logger.error("pgn_playwright_error", error=str(exc))
+
+        return resolved

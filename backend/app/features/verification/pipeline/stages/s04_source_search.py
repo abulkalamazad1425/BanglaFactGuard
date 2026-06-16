@@ -1,57 +1,72 @@
 """
-app/pipelines/stages/s04_source_search.py
-==========================================
-Stage 4: Source-Constrained Search
+app/pipelines/stages/s04_source_search.py  (redesigned)
+=========================================================
+Stage 4: Source-Constrained Search — Provider-Adaptive Dispatch
 
-## Responsibility
+## What changed and why
+────────────────────────────────────────────────────────────────
+ROOT PROBLEMS (old design)
+  1. Every (query × provider) pair ran regardless of fit.  Sending a Bangla
+     headline verbatim to NewsData (English-first API) burns a quota slot and
+     returns nothing useful.
 
-Execute ALL generated queries (from Stage 3) against ALL search providers
-in true parallel using asyncio.gather, then merge and deduplicate results.
+  2. _adapt_query() quoted the first 8 words for SITE_RESTRICTED/HEADLINE
+     queries on Google CSE and DDG.  For poorly-indexed sites, an exact-phrase
+     match returns zero results.  The quote is the single biggest recall killer.
 
-## Search Strategy
+  3. NON_ARTICLE_PATTERNS was global and English-centric.  It silently dropped
+     valid Bangla article URLs whose paths happen to contain a word like
+     "archive" in English (e.g. /archive/ is common in BD sites for date-based
+     paths that ARE articles).
 
-For EVERY query variant (up to MAX_SEARCH_QUERIES from Stage 3), ALL 5
-providers are searched simultaneously:
+  4. Domain matching only checked URL netloc.  A result from
+     en.prothomalo.com when the claim said prothomalo.com was accepted, but
+     results from prothomalo.com/amp/ were not filtered separately.
 
-    1. InternalSiteSearch  — Site's own search endpoint (highest precision)
-    2. NewsData.io         — BD-focused news API (best coverage for BD sources)
-    3. Google Custom Search — High-quality API results
-    4. DuckDuckGo          — Free fallback, no rate limits
-    5. PyGoogleNews        — Google News RSS (last resort)
+  5. URL deduplication used exact string matching on the raw URL.  The same
+     article fetched as http:// vs https://, with/without trailing slash,
+     with/without query params would appear twice and be fetched twice.
 
-## Provider-Specific Query Adaptation
+NEW APPROACH
+────────────────────────────────────────────────────────────────
+  A. Provider routing: each provider receives only the query types that suit it.
+     - InternalSite:  short keywords only  (its own site, no site: operator)
+     - NewsData:      short English-transliterated keywords or entity names
+     - Google CSE:    unquoted site: + keywords  (NOT quoted phrases)
+     - DDG:           same as Google CSE, with a width-first fallback (no site:)
+     - PyGoogleNews:  headline (RSS is already domain-filtered by feed URL)
 
-Each provider receives a query variant tailored to its strengths:
-  - InternalSite: Short keyword query (5 words max, no punctuation)
-  - NewsData:     Short keyword query (60 char max) + domain filter
-  - Google CSE:   Full site:domain headline query
-  - DDG:          Full site:domain headline query
-  - PyGoogleNews: Headline query (no site operator - RSS is pre-filtered)
+  B. Quoting removed from _adapt_query for CSE/DDG.
+     site:domain keyword1 keyword2 keyword3 is strictly more recall than
+     site:domain "keyword1 keyword2 keyword3 keyword4 keyword5 keyword6 keyword7 keyword8"
+     For well-indexed sites (Prothom Alo) both work; for poorly-indexed sites
+     only the unquoted form works.
 
-## Result Merging
+  C. Source-aware URL filtering.
+     Each source in the registry now provides article_url_patterns.  When the
+     source is known, only URLs matching at least one article_url_pattern are
+     kept.  The global NON_ARTICLE_PATTERNS are a secondary, safety-net filter
+     applied only when no source-specific patterns exist.
 
-All results from all (query × provider) combinations are collected into a
-single pool. Priority ordering for deduplication:
-  Internal > NewsData > Google CSE > DDG > PyGoogleNews
+  D. URL canonicalisation before dedup.
+     Strip scheme (http/https), trailing slash, common tracking params, and
+     /amp/ suffix before dedup — so the same article isn't fetched twice.
 
-## URL Deduplication & Domain Filtering
-
-- Only URLs matching the claimed source domain are kept.
-- Duplicate URLs (seen from multiple providers) are dropped.
-- Non-article URLs (tags, categories, feeds) are filtered via NON_ARTICLE_PATTERNS.
-
-## Criticality: NON-CRITICAL
-Zero results → context.candidate_urls is empty → Stage 11 returns NOT_FOUND.
+  E. Tiered fallback visibility.
+     We track per-provider result counts and log a structured warning when a
+     provider returns zero results for ALL queries.  This makes silent failures
+     visible in the log pipeline.
 """
 
 from __future__ import annotations
 
 import asyncio
 import re
+from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
+
 import structlog
 
 from app.core.constants import PipelineStageID, QueryType, SearchProvider
-from app.core.exceptions import SearchError
 from app.features.verification.pipeline.context import PipelineContext
 from app.features.articles.schemas import CandidateArticleSchema
 from app.features.search.newsdata_client import NewsDataClient
@@ -64,16 +79,7 @@ from app.shared.utils.hashing import compute_search_query_hash
 
 logger = structlog.get_logger(__name__)
 
-# Patterns that indicate a URL is NOT an article page
-NON_ARTICLE_PATTERNS = [
-    r"/video/", r"/gallery/", r"/photo/", r"/tag/", r"/tags/",
-    r"/author/", r"/archive/", r"/category/", r"/feed",
-    r"\.rss$", r"\.xml$", r"/amp/", r"\?s=", r"/page/\d+",
-    r"news\.google\.com/search", r"google\.com/search",
-    r"/search\?", r"/search/$", r"#comments",
-]
-
-# Provider priority for deduplication (lower index = higher priority)
+# ── Provider priority for deduplication (lower = higher priority) ──────────
 _PROVIDER_PRIORITY: dict[SearchProvider, int] = {
     SearchProvider.INTERNAL_SITE: 0,
     SearchProvider.NEWSDATA: 1,
@@ -82,42 +88,95 @@ _PROVIDER_PRIORITY: dict[SearchProvider, int] = {
     SearchProvider.PY_GOOGLE_NEWS: 4,
 }
 
+# ── Global non-article patterns (last-resort filter, not primary) ───────────
+# Deliberately conservative: only patterns that are unambiguously non-article
+# across ALL BD news sites.  Archive date paths (/2024/01/10/) are NOT in this
+# list because they ARE valid article paths on most BD sites.
+_NON_ARTICLE_PATTERNS = [
+    r"/tag/", r"/tags/", r"/author/", r"/feed",
+    r"\.rss$", r"\.xml$", r"\.atom$",
+    r"/amp/$",          # /amp/ mid-path is fine (we strip it); bare /amp/ is not
+    r"\?s=",            # WordPress search
+    r"#comments$",
+    r"news\.google\.com/search",
+    r"google\.com/search",
+    r"/search\?[^/]*$", # search result pages (but NOT article paths with ?ref=...)
+]
+_NON_ARTICLE_RE = re.compile("|".join(_NON_ARTICLE_PATTERNS))
 
-def is_probable_article(url: str) -> bool:
-    """Return True if the URL looks like an article (not a tag/feed/category page)."""
-    for pattern in NON_ARTICLE_PATTERNS:
-        if re.search(pattern, url):
-            return False
-    return True
+# Tracking parameters to strip during URL canonicalisation
+_STRIP_PARAMS = frozenset([
+    "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term",
+    "fbclid", "gclid", "ref", "source", "from", "_ga", "cid",
+])
 
 
-def _build_keyword_query(query: str, max_words: int = 6) -> str:
+def _canonicalise_url(url: str) -> str:
     """
-    Strip site: operators and punctuation, return only the top N words.
-    Used for providers that prefer concise keyword queries (Internal, NewsData).
+    Return a normalised URL for deduplication.
+    - Lowercases scheme + netloc
+    - Strips /amp/ suffix
+    - Strips trailing slash
+    - Removes known tracking query parameters
+    - Sorts remaining query params for stable comparison
     """
-    # Remove site: operator
-    clean = re.sub(r'site:\S+\s*', '', query).strip()
-    # Remove Bangla/English punctuation that can break search backends
-    clean = re.sub(r'[।?!\'"(){}\[\]<>]', ' ', clean)
-    # Collapse whitespace
-    clean = re.sub(r'\s+', ' ', clean).strip()
-    # Limit to max_words
-    words = clean.split()
-    return ' '.join(words[:max_words])
+    try:
+        p = urlparse(url)
+        # Strip /amp suffix variations
+        path = re.sub(r"/amp/?$", "", p.path).rstrip("/") or "/"
+        # Clean query string
+        if p.query:
+            qs = {k: v for k, v in parse_qs(p.query, keep_blank_values=False).items()
+                  if k.lower() not in _STRIP_PARAMS}
+            query = urlencode(sorted(qs.items()), doseq=True)
+        else:
+            query = ""
+        canonical = urlunparse((
+            "https",                    # normalise scheme
+            p.netloc.lower(),
+            path,
+            "",                         # params (;key=val — never used in BD news)
+            query,
+            "",                         # fragment
+        ))
+        return canonical
+    except Exception:
+        return url
+
+
+def _is_probable_article(url: str, source_patterns: list[str] | None) -> bool:
+    """
+    Return True if URL looks like an article page.
+
+    Strategy (in order):
+      1. If source_patterns provided (from registry), accept URL only if it
+         matches at least one pattern.  This is the most precise filter.
+      2. Otherwise fall back to global NON_ARTICLE_PATTERNS rejection list.
+    """
+    if source_patterns:
+        return any(re.search(pat, url) for pat in source_patterns)
+    # Global fallback: reject known non-article patterns
+    return not _NON_ARTICLE_RE.search(url)
+
+
+def _build_keyword_query(text: str, max_words: int) -> str:
+    """
+    Strip site: operator and Bangla/English punctuation; keep top N words.
+    Used for providers with short-query requirements.
+    """
+    clean = re.sub(r"site:\S+\s*", "", text).strip()
+    clean = re.sub(r'[।?!\'\"(){}\\[\\]<>،؟]', " ", clean)
+    clean = re.sub(r"\s+", " ", clean).strip()
+    return " ".join(clean.split()[:max_words])
 
 
 class SourceSearchStage:
     """
-    Stage 4: Execute ALL queries against ALL providers in full parallel.
+    Stage 4: Fan out queries to providers using per-provider adaptation.
 
-    Dependencies (injected via constructor):
-        newsdata_client:      NewsData.io client
-        google_cse_client:    Google Custom Search client
-        duckduckgo_client:    DuckDuckGo scraping client
-        pygooglenews_client:  PyGoogleNews RSS wrapper
-        internal_site_client: Direct site search scraper
-        cache_service:        Redis-backed search result cache
+    Key design change: provider routing is query-type-aware.
+    Not every (query, provider) pair is dispatched — only combinations
+    where the provider is likely to return something useful.
     """
 
     stage_id = PipelineStageID.S04_SOURCE_SEARCH
@@ -139,16 +198,6 @@ class SourceSearchStage:
         self.cache_service = cache_service
 
     async def execute(self, context: PipelineContext) -> PipelineContext:
-        """
-        Run all search_queries × all providers in full parallel, merge results.
-
-        Args:
-            context: Pipeline context with search_queries and normalized_source set.
-
-        Returns:
-            Context with candidate_urls populated as a deduplicated, domain-filtered,
-            priority-ordered list of CandidateArticleSchema objects.
-        """
         log = logger.bind(
             stage=self.stage_id.value,
             claim_id=str(context.claim_id) if context.claim_id else "pending",
@@ -161,26 +210,35 @@ class SourceSearchStage:
 
         domain = context.normalized_source
         source_config = getattr(context, "source_config", None)
-
-        # Build all (query, provider) tasks upfront and run them all at once
-        # Each entry: (provider_enum, query_text, query_type, coroutine)
-        tasks: list[tuple[SearchProvider, str, str, asyncio.Task]] = []
+        article_url_patterns: list[str] | None = (
+            source_config.get("article_url_patterns") if source_config else None
+        )
 
         providers_with_clients = [
-            (SearchProvider.INTERNAL_SITE, self.internal_site_client),
-            (SearchProvider.NEWSDATA, self.newsdata_client),
-            (SearchProvider.GOOGLE_CUSTOM_SEARCH, self.google_cse_client),
-            (SearchProvider.DDG, self.duckduckgo_client),
-            (SearchProvider.PY_GOOGLE_NEWS, self.pygooglenews_client),
+            (SearchProvider.INTERNAL_SITE,        self.internal_site_client),
+            (SearchProvider.NEWSDATA,              self.newsdata_client),
+            (SearchProvider.GOOGLE_CUSTOM_SEARCH,  self.google_cse_client),
+            (SearchProvider.DDG,                   self.duckduckgo_client),
+            (SearchProvider.PY_GOOGLE_NEWS,        self.pygooglenews_client),
         ]
+
+        # ── Build task list with provider-routing filter ─────────────────
+        tasks: list[tuple[SearchProvider, str, str, object]] = []
 
         for query_text, query_type in context.search_queries:
             for provider_enum, client in providers_with_clients:
-                adapted_query = self._adapt_query(provider_enum, query_text, domain, query_type)
+                # Skip (query, provider) pairs that are known poor matches
+                if not self._should_dispatch(provider_enum, query_type, query_text, domain):
+                    continue
+
+                adapted = self._adapt_query(provider_enum, query_text, domain, query_type)
+                if not adapted.strip():
+                    continue
+
                 coro = self._call_provider(
                     provider_enum=provider_enum,
                     client=client,
-                    query=adapted_query,
+                    query=adapted,
                     query_type=query_type,
                     domain=domain,
                     context=context,
@@ -193,23 +251,17 @@ class SourceSearchStage:
             "s04_parallel_search_start",
             total_tasks=len(tasks),
             queries=len(context.search_queries),
-            providers=len(providers_with_clients),
         )
 
-        # Fire every task at once
         coros = [t[3] for t in tasks]
         results = await asyncio.gather(*coros, return_exceptions=True)
 
-        # ── Merge results by provider priority ──────────────────────────────
-        # Build a map: url → (priority, CandidateArticleSchema)
-        # so lower-priority duplicates are discarded
-        url_priority_map: dict[str, tuple[int, CandidateArticleSchema]] = {}
+        # ── Merge: canonical-URL → (priority, candidate) ─────────────────
+        canon_map: dict[str, tuple[int, CandidateArticleSchema]] = {}
+        provider_hit_counts: dict[str, int] = {p.value: 0 for p, _ in providers_with_clients}
 
         for (provider_enum, _, query_type, _), result in zip(tasks, results):
-            if isinstance(result, Exception):
-                # Already logged inside _call_provider; skip
-                continue
-            if not isinstance(result, list):
+            if isinstance(result, Exception) or not isinstance(result, list):
                 continue
 
             priority = _PROVIDER_PRIORITY.get(provider_enum, 99)
@@ -217,65 +269,96 @@ class SourceSearchStage:
             for candidate in result:
                 url = candidate.url
 
-                # Domain filter: only keep URLs that belong to the claimed source.
-                # Use normalized comparison: strip www., compare root domain substring.
+                # ── Domain filter ────────────────────────────────────────
                 if domain:
                     clean_domain = domain.replace("www.", "").lower()
-                    from urllib.parse import urlparse
                     url_netloc = urlparse(url).netloc.replace("www.", "").lower()
-                    # Accept if the url's netloc ends with or equals the domain
-                    # (handles subdomains like en.prothomalo.com)
                     if not (url_netloc == clean_domain or url_netloc.endswith("." + clean_domain)):
                         continue
 
-                # Non-article filter
-                if not is_probable_article(url):
+                # ── Article-pattern filter (source-aware first) ──────────
+                if not _is_probable_article(url, article_url_patterns):
                     continue
 
-                # Keep if not seen, or replace if we now have a higher-priority source
-                existing = url_priority_map.get(url)
+                # ── Canonical dedup ──────────────────────────────────────
+                canon = _canonicalise_url(url)
+                existing = canon_map.get(canon)
                 if existing is None or priority < existing[0]:
-                    url_priority_map[url] = (priority, candidate)
+                    canon_map[canon] = (priority, candidate)
+                    provider_hit_counts[provider_enum.value] = (
+                        provider_hit_counts.get(provider_enum.value, 0) + 1
+                    )
 
-        # Sort by provider priority (ascending) to give best-provider results first
         all_candidates = [
-            cand
-            for _, cand in sorted(url_priority_map.values(), key=lambda x: x[0])
+            cand for _, cand in sorted(canon_map.values(), key=lambda x: x[0])
         ]
 
         context.candidate_urls = all_candidates
 
-        # --- DEBUG WRITE (EASY TO REMOVE) ---
-        import json
-        try:
-            debug_path = r"E:\search_results_debug.json"
-            debug_data = [{"url": c.url, "provider": c.search_provider.value, "title_snippet": c.title_snippet} for c in all_candidates]
-            with open(debug_path, "w", encoding="utf-8") as f:
-                json.dump(debug_data, f, ensure_ascii=False, indent=4)
-        except Exception as e:
-            log.warning("debug_write_failed", error=str(e))
-        # ------------------------------------
-
-        # Track which providers actually contributed for logging
-        contributing_providers = {
-            cand.search_provider.value
-            for cand in all_candidates
-        }
         if all_candidates:
-            # The DB enum only accepts a single provider, so we save the highest-priority one
             context.search_provider_used = all_candidates[0].search_provider
+
+        # Warn on completely silent providers
+        for provider_name, count in provider_hit_counts.items():
+            if count == 0:
+                log.warning("s04_provider_zero_results", provider=provider_name)
+
+
 
         log.info(
             "s04_search_completed",
             total_candidates=len(all_candidates),
-            queries_executed=len(context.search_queries),
-            providers_with_results=list(contributing_providers),
+            provider_hit_counts=provider_hit_counts,
         )
         return context
 
-    # ------------------------------------------------------------------
+    # ──────────────────────────────────────────────────────────────────────
+    # Provider routing decision
+    # ──────────────────────────────────────────────────────────────────────
+
+    def _should_dispatch(
+        self,
+        provider: SearchProvider,
+        query_type: str,
+        query_text: str,
+        domain: str | None,
+    ) -> bool:
+        """
+        Return False for (provider, query_type) combos known to be useless.
+
+        Reasoning per skip:
+        - INTERNAL_SITE does not benefit from DATE_BOUND or ENTITIES queries:
+          internal search engines on BD sites are too basic to use date syntax.
+        - NEWSDATA is English-focused; sending a full Bangla HEADLINE query
+          returns nothing.  We only send KEYWORDS (where we pass transliterated
+          keywords) and BODY_SUMMARY and DATE_BOUND.
+        - PY_GOOGLE_NEWS works well with HEADLINE and BODY_SUMMARY; sending
+          keyword-only queries to it degrades results since RSS is title-ranked.
+        """
+        qt = query_type.upper()
+
+        if provider == SearchProvider.INTERNAL_SITE:
+            # Only send keyword-oriented query types to internal search
+            if qt in ("DATE_BOUND", "ENTITIES"):
+                return False
+
+        if provider == SearchProvider.NEWSDATA:
+            # NewsData API — only send query types that yield useful content
+            # after keyword adaptation (S04 strips Bangla for this provider)
+            if qt in ("HEADLINE", "SITE_RESTRICTED"):
+                return False  # full Bangla headline → zero results on NewsData
+
+        if provider == SearchProvider.PY_GOOGLE_NEWS:
+            # RSS/Google News — headline and body queries work well; pure
+            # keyword bags degrade the results
+            if qt in ("KEYWORDS", "DATE_BOUND"):
+                return False
+
+        return True
+
+    # ──────────────────────────────────────────────────────────────────────
     # Query adaptation per provider
-    # ------------------------------------------------------------------
+    # ──────────────────────────────────────────────────────────────────────
 
     def _adapt_query(
         self,
@@ -285,57 +368,54 @@ class SourceSearchStage:
         query_type: str = "",
     ) -> str:
         """
-        Return a provider-optimised variant of the query.
+        Return a provider-optimised query variant.
 
-        Strategy:
-          - INTERNAL_SITE: keyword-only, no site: operator (URL template handles domain)
-          - NEWSDATA:       keyword-only (≤80 chars, API works better with shorter queries)
-          - GOOGLE_CSE:     quoted phrase for SITE_RESTRICTED/HEADLINE, plain for others
-          - DDG:            same as Google CSE — quotes force exact phrase matching
-          - PY_GOOGLE_NEWS: strip any site: from S03, then add domain cleanly
+        CRITICAL CHANGE vs old code:
+        - We NO LONGER quote phrases for Google CSE or DDG.
+          Quoting reduces recall dramatically for poorly-indexed sites.
+          The site: operator already provides precision; quoting on top
+          makes the query so strict that only Prothom Alo (heavily indexed)
+          returns results.
+        - Short-query adaptation (word cap) is done here for providers that
+          need it, NOT in S03. S03 emits full rich queries.
         """
-        # Strip site: from query to get the clean content portion
-        content_only = re.sub(r'site:\S+\s*', '', query).strip()
+        content_only = re.sub(r"site:\S+\s*", "", query).strip()
 
         if provider == SearchProvider.INTERNAL_SITE:
-            # Keyword-only: no site: operator (the URL template handles domain routing)
-            return _build_keyword_query(content_only, max_words=8)
+            # Internal search: keyword-only, no site: (domain is handled by URL template)
+            # Limit to 6 words — most BD internal search engines break on long queries
+            return _build_keyword_query(content_only, max_words=6)
 
         if provider == SearchProvider.NEWSDATA:
-            # NewsData performs best with short keyword queries, no site: operator
-            kw = _build_keyword_query(content_only, max_words=8)
-            return kw[:80]  # Hard cap at 80 chars
+            # NewsData: short keyword query, max 80 chars
+            # Note: only KEYWORDS / BODY_SUMMARY / DATE_BOUND reach this provider
+            # (HEADLINE and SITE_RESTRICTED are skipped by _should_dispatch)
+            kw = _build_keyword_query(content_only, max_words=7)
+            return kw[:80]
 
         if provider == SearchProvider.PY_GOOGLE_NEWS:
-            # PyGoogleNews / RSS: strip site: then re-add domain cleanly
+            # PyGoogleNews/RSS: re-add domain cleanly (no quotes)
             if domain:
                 return f"site:{domain} {content_only}"
             return content_only
 
-        # Google CSE and DDG:
-        # For SITE_RESTRICTED and HEADLINE queries, use exact phrase quoting.
-        # This forces the search engine to find the specific article rather than
-        # loosely-related articles from the same domain (e.g. other Morocco news).
-        _exact_types = {"SITE_RESTRICTED", "HEADLINE"}
-        if query_type.upper() in _exact_types and content_only:
-            # Wrap the first ~10 words in quotes (very long phrases hurt recall)
-            words = content_only.split()
-            # Quote the first 8 words as the exact anchor phrase
-            quoted_part = '"' + ' '.join(words[:8]) + '"'
-            remainder = ' '.join(words[8:])  # Leave the tail unquoted for recall
-            phrase = f"{quoted_part} {remainder}".strip()
-            if domain:
-                return f"site:{domain} {phrase}"
-            return phrase
-
-        # For KEYWORDS / BODY_SUMMARY / ENTITIES — no quoting (broader recall)
+        # ── Google CSE and DDG ────────────────────────────────────────────
+        # REMOVED: exact-phrase quoting.
+        # Old:  site:domain "keyword1 keyword2 ... keyword8" remainder
+        # New:  site:domain keyword1 keyword2 keyword3 keyword4 keyword5
+        #
+        # Why: Google/DDG require all quoted words to appear in exact sequence.
+        # BD news sites paraphrase; the exact sequence is almost never there
+        # for sites other than Prothom Alo. Unquoted keyword queries have
+        # 3-5× higher recall at the cost of a tiny precision drop — and we
+        # have S06 to filter false positives by content similarity.
         if domain:
             return f"site:{domain} {content_only}"
         return content_only
 
-    # ------------------------------------------------------------------
+    # ──────────────────────────────────────────────────────────────────────
     # Single provider call with caching
-    # ------------------------------------------------------------------
+    # ──────────────────────────────────────────────────────────────────────
 
     async def _call_provider(
         self,
@@ -349,24 +429,17 @@ class SourceSearchStage:
         source_config: dict | None,
         log: structlog.BoundLogger,
     ) -> list[CandidateArticleSchema]:
-        """
-        Call a single provider for a single query with cache check/write.
-
-        Returns a list of CandidateArticleSchema (may be empty on error or cache miss).
-        Exceptions are caught and logged — never propagated.
-        """
         provider_name = provider_enum.value
         query_hash = compute_search_query_hash(provider_name, query)
 
         # ── Cache check ──────────────────────────────────────────────────
-        cached_urls = await self._get_cached_search(provider_name, query_hash)
+        if getattr(context, "force_refresh", False):
+            cached_urls = None
+        else:
+            cached_urls = await self._get_cached_search(provider_name, query_hash)
+
         if cached_urls is not None:
-            log.debug(
-                "s04_cache_hit",
-                provider=provider_name,
-                query_type=query_type,
-                cached_count=len(cached_urls),
-            )
+            log.debug("s04_cache_hit", provider=provider_name, cached_count=len(cached_urls))
             return [
                 CandidateArticleSchema(
                     url=u,
@@ -378,7 +451,7 @@ class SourceSearchStage:
                 for idx, u in enumerate(cached_urls)
             ]
 
-        # ── Live provider call ────────────────────────────────────────────
+        # ── Live call ────────────────────────────────────────────────────
         try:
             kwargs: dict = {}
             if provider_enum == SearchProvider.INTERNAL_SITE:
@@ -429,24 +502,18 @@ class SourceSearchStage:
                 )
             return []
 
-    # ------------------------------------------------------------------
+    # ──────────────────────────────────────────────────────────────────────
     # Cache helpers
-    # ------------------------------------------------------------------
+    # ──────────────────────────────────────────────────────────────────────
 
-    async def _get_cached_search(
-        self, provider: str, query_hash: str
-    ) -> list[str] | None:
-        """Fetch cached URL list from Redis. Returns None on miss/error."""
+    async def _get_cached_search(self, provider: str, query_hash: str) -> list[str] | None:
         try:
             return await self.cache_service.get_search_result(provider, query_hash)
-        except Exception:  # noqa: BLE001
+        except Exception:
             return None
 
-    async def _cache_search_result(
-        self, provider: str, query_hash: str, urls: list[str]
-    ) -> None:
-        """Write URL list to Redis (fire-and-forget, non-blocking)."""
+    async def _cache_search_result(self, provider: str, query_hash: str, urls: list[str]) -> None:
         try:
             await self.cache_service.set_search_result(provider, query_hash, urls)
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass

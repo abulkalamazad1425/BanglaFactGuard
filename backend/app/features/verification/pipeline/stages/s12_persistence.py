@@ -162,15 +162,19 @@ class PersistenceStage:
 
     async def _upsert_claim(self, context: PipelineContext) -> VerifiedClaim:
         """Fetch existing claim by ID or create a new one."""
+        existing = None
         if context.claim_id:
             existing = await self.claim_repo.get_by_id_or_none(context.claim_id)
-            if existing:
-                return await self.claim_repo.update(
-                    existing,
-                    status=ClaimStatus.PROCESSING,
-                    claim_hash=context.claim_hash,
-                    normalized_source=context.normalized_source,
-                )
+        if not existing and context.claim_hash:
+            existing = await self.claim_repo.get_by_claim_hash(context.claim_hash)
+            
+        if existing:
+            return await self.claim_repo.update(
+                existing,
+                status=ClaimStatus.PROCESSING,
+                claim_hash=context.claim_hash,
+                normalized_source=context.normalized_source,
+            )
 
         # Create new claim record
         claim = VerifiedClaim(
