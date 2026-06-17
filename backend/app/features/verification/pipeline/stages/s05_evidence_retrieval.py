@@ -242,6 +242,24 @@ class EvidenceRetrievalStage:
     # ──────────────────────────────────────────────────────────────────────
 
     async def _fetch_playwright_batch(self, urls: list[str]) -> dict[str, str | None]:
+        import sys
+        if sys.platform == "win32":
+            return await asyncio.to_thread(self._run_playwright_sync, urls)
+        return await self._run_playwright_async(urls)
+
+    def _run_playwright_sync(self, urls: list[str]) -> dict[str, str | None]:
+        import asyncio
+        import sys
+        if sys.platform == "win32":
+            asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(self._run_playwright_async(urls))
+        finally:
+            loop.close()
+
+    async def _run_playwright_async(self, urls: list[str]) -> dict[str, str | None]:
         """
         Launch a single Playwright browser, open one tab per URL (sequentially
         to avoid hammering the same site), and return {url: html}.

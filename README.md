@@ -62,9 +62,9 @@ copy .env.example .env
 *(The system automatically uses Internal Site Search via the Source Registry, alongside Google Custom Search, DuckDuckGo, and NewsData APIs for article retrieval).*
 
 ### 5. Running the Backend Server
-Start the Uvicorn ASGI server:
+Start the backend server using the custom `run.py` entry point (which automatically applies Windows `asyncio` fixes):
 ```bash
-python -m uvicorn app.main:app --reload --port 8000
+python run.py
 ```
 - The backend API will be available at: **`http://localhost:8000`**
 - Interactive Swagger documentation will be available at: **`http://localhost:8000/docs`**

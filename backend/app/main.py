@@ -26,7 +26,12 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import sys
+import asyncio
 from collections.abc import AsyncGenerator
+
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 import httpx
 import redis.asyncio as aioredis
