@@ -46,6 +46,8 @@ from app.core.config import get_settings
 from app.core.exceptions import BanglaFactGuardError
 from app.core.logging import setup_logging
 from app.features.cache.cache_service import CacheService
+from app.features.multimodal.pipeline.model_loader import MultimodalModelLoader
+from app.features.multimodal.storage_service import MultimodalStorageService
 from app.features.nlp.embedding_service import EmbeddingService
 from app.features.nlp.ner_service import NERService
 from app.features.nlp.nli_service import NLIService
@@ -106,6 +108,33 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.embedding_service = embedding_service
     app.state.ner_service = ner_service
     app.state.nli_service = nli_service
+
+    # ── Multimodal model (BanglaBERT + EfficientNet-B4) ──────────────────
+    multimodal_loader = MultimodalModelLoader()
+    if _SETTINGS.multimodal.load_on_startup:
+        log.info("loading_multimodal_model", model_dir=_SETTINGS.multimodal.model_dir)
+        try:
+            await multimodal_loader.load()
+            log.info("multimodal_model_loaded")
+        except Exception as exc:
+            log.error(
+                "multimodal_model_load_failed",
+                error=str(exc),
+                hint="Set MULTIMODAL_LOAD_ON_STARTUP=false to start without model weights",
+            )
+            # Do NOT raise — allow the server to start; endpoints will return 503
+    else:
+        log.warning("multimodal_model_load_skipped")
+    app.state.multimodal_loader = multimodal_loader
+
+    # ── MinIO storage service ────────────────────────────────────────────
+    multimodal_storage = MultimodalStorageService()
+    try:
+        await multimodal_storage.ensure_bucket()
+    except Exception as exc:
+        log.warning("minio_bucket_ensure_failed", error=str(exc))
+        # Non-fatal: endpoints will fail at upload time with a 502 error
+    app.state.multimodal_storage = multimodal_storage
 
     log.info("bangla_fact_guard_ready")
 

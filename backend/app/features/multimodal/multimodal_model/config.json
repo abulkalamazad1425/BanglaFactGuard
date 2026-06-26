@@ -1,0 +1,17 @@
+{
+  "text_model_name": "csebuetnlp/banglabert",
+  "image_model_name": "efficientnet_b4",
+  "max_seq_length": 128,
+  "img_size": 380,
+  "batch_size": 6,
+  "num_epochs": 35,
+  "learning_rate": 0.0002,
+  "weight_decay": 0.01,
+  "num_classes": 2,
+  "dropout": 0.4,
+  "label_smoothing": 0.1,
+  "warmup_epochs": 3,
+  "checkpoint_dir": "/content/drive/MyDrive/MultiBanFake_BanglaBERT_EfficientNetB4/checkpoints",
+  "model_dir": "/content/drive/MyDrive/MultiBanFake_BanglaBERT_EfficientNetB4/models",
+  "log_dir": "/content/drive/MyDrive/MultiBanFake_BanglaBERT_EfficientNetB4/logs"
+}

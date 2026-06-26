@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BanglaFactGuard - Multimodal Verification</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --surface-color: rgba(30, 41, 59, 0.7);
+            --border-color: rgba(255, 255, 255, 0.1);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --primary: #0ea5e9;
+            --primary-hover: #0284c7;
+            --danger: #ef4444;
+            --success: #22c55e;
+            --font-heading: 'Outfit', sans-serif;
+            --font-body: 'Inter', sans-serif;
+            --gradient: linear-gradient(135deg, #38bdf8, #818cf8);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: var(--font-body);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(56, 189, 248, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(129, 140, 248, 0.15) 0px, transparent 50%);
+            padding: 2rem;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1000px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .glass-panel {
+            background: var(--surface-color);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            border-radius: 1.5rem;
+            padding: 2rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        h1, h2, h3 {
+            font-family: var(--font-heading);
+            font-weight: 700;
+        }
+
+        h1 {
+            font-size: 2rem;
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+
+        p.subtitle {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        label {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        input[type="text"], textarea {
+            width: 100%;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            border-radius: 0.75rem;
+            padding: 0.75rem 1rem;
+            font-family: var(--font-body);
+            font-size: 1rem;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        input[type="text"]:focus, textarea:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.2);
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 120px;
+        }
+
+        .file-upload {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            background: rgba(15, 23, 42, 0.6);
+            border: 2px dashed var(--border-color);
+            border-radius: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            overflow: hidden;
+        }
+
+        .file-upload:hover {
+            border-color: var(--primary);
+            background: rgba(14, 165, 233, 0.05);
+        }
+
+        .file-upload input[type="file"] {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .file-preview {
+            width: 100%;
+            max-height: 200px;
+            object-fit: contain;
+            display: none;
+            border-radius: 0.5rem;
+        }
+
+        .file-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+            opacity: 0.5;
+        }
+
+        button {
+            background: var(--gradient);
+            color: white;
+            border: none;
+            border-radius: 0.75rem;
+            padding: 1rem;
+            font-family: var(--font-heading);
+            font-weight: 600;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(14, 165, 233, 0.3);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .spinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Results Panel */
+        .results-panel {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            opacity: 0.5;
+            transition: opacity 0.3s ease;
+        }
+
+        .results-panel.active {
+            opacity: 1;
+        }
+
+        .result-empty {
+            text-align: center;
+            color: var(--text-muted);
+        }
+
+        .result-content {
+            display: none;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .prediction-badge {
+            display: inline-block;
+            padding: 0.5rem 1.5rem;
+            border-radius: 2rem;
+            font-family: var(--font-heading);
+            font-weight: 700;
+            font-size: 1.5rem;
+            text-align: center;
+            letter-spacing: 0.05em;
+        }
+
+        .badge-fake {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .badge-real {
+            background: rgba(34, 197, 94, 0.1);
+            color: var(--success);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+        }
+
+        .confidence-bar-container {
+            width: 100%;
+            background: rgba(15, 23, 42, 0.6);
+            border-radius: 1rem;
+            height: 1.5rem;
+            overflow: hidden;
+            position: relative;
+            display: flex;
+        }
+
+        .confidence-fake {
+            height: 100%;
+            background: var(--danger);
+            transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .confidence-real {
+            height: 100%;
+            background: var(--success);
+            transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .confidence-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.875rem;
+            font-weight: 500;
+            margin-top: 0.5rem;
+        }
+
+        .metadata-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            background: rgba(0,0,0,0.2);
+            padding: 1.5rem;
+            border-radius: 1rem;
+            font-size: 0.9rem;
+        }
+
+        .meta-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .meta-label {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .meta-value {
+            font-weight: 500;
+            word-break: break-all;
+        }
+
+        .cache-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.25rem 0.75rem;
+            background: rgba(14, 165, 233, 0.15);
+            color: var(--primary);
+            border-radius: 1rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+        
+        .error-message {
+            display: none;
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            padding: 1rem;
+            border-radius: 0.75rem;
+            font-size: 0.9rem;
+            margin-top: 1rem;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- Left Panel: Input Form -->
+        <div class="glass-panel">
+            <div>
+                <h1>BanglaFactGuard</h1>
+                <p class="subtitle">Multimodal Preliminary Fake News Verification via BanglaBERT + EfficientNet-B4</p>
+            </div>
+
+            <form id="verifyForm">
+                <div class="form-group">
+                    <label for="headline">Headline</label>
+                    <input type="text" id="headline" name="headline" placeholder="Enter news headline..." required>
+                </div>
+
+                <div class="form-group">
+                    <label for="body_text">Article Body Text</label>
+                    <textarea id="body_text" name="body_text" placeholder="Paste the full article text here..." required minlength="10"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Article Image</label>
+                    <div class="file-upload" id="dropZone">
+                        <div class="file-icon" id="fileIcon">📸</div>
+                        <span id="fileLabel">Click to upload or drag & drop</span>
+                        <span style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">JPEG, PNG up to 10MB</span>
+                        <input type="file" id="image" name="image" accept="image/jpeg, image/png, image/webp" required>
+                        <img id="imagePreview" class="file-preview" alt="Preview">
+                    </div>
+                </div>
+
+                <button type="submit" id="submitBtn">
+                    <span>Verify Content</span>
+                    <div class="spinner" id="spinner"></div>
+                </button>
+            </form>
+            <div id="errorMessage" class="error-message"></div>
+        </div>
+
+        <!-- Right Panel: Results -->
+        <div class="glass-panel results-panel" id="resultsPanel">
+            <div class="result-empty" id="resultEmpty">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="opacity: 0.5; margin-bottom: 1rem;">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="17 8 12 3 7 8"></polyline>
+                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+                <p>Submit a news article to see the multimodal analysis results.</p>
+            </div>
+
+            <div class="result-content" id="resultContent">
+                <div id="cacheBadge" class="cache-badge" style="display: none;">
+                    ⚡ Served from Cache (Deduplicated)
+                </div>
+
+                <div>
+                    <h2 class="meta-label" style="margin-bottom: 0.5rem;">Prediction</h2>
+                    <div id="predictionBadge" class="prediction-badge">FAKE</div>
+                </div>
+
+                <div>
+                    <h2 class="meta-label" style="margin-bottom: 0.5rem;">Confidence Scores</h2>
+                    <div class="confidence-bar-container">
+                        <div id="barFake" class="confidence-fake" style="width: 50%;"></div>
+                        <div id="barReal" class="confidence-real" style="width: 50%;"></div>
+                    </div>
+                    <div class="confidence-labels">
+                        <span style="color: var(--danger)">Fake: <span id="confFakeText">50%</span></span>
+                        <span style="color: var(--success)">Real: <span id="confRealText">50%</span></span>
+                    </div>
+                </div>
+
+                <div class="metadata-grid">
+                    <div class="meta-item">
+                        <span class="meta-label">Prediction ID</span>
+                        <span class="meta-value" id="metaId" style="font-family: monospace; font-size: 0.8rem;">-</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Model Version</span>
+                        <span class="meta-value" id="metaModel">-</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">MinIO Key</span>
+                        <span class="meta-value" id="metaKey" style="font-size: 0.8rem; color: var(--primary);">-</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Processed At</span>
+                        <span class="meta-value" id="metaTime">-</span>
+                    </div>
+                </div>
+
+                <div id="similarityScores" class="metadata-grid" style="display: none; background: rgba(14, 165, 233, 0.05); border: 1px solid rgba(14, 165, 233, 0.2);">
+                    <div style="grid-column: span 2; font-weight: 600; color: var(--primary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: -0.5rem;">Duplicate Similarity Scores</div>
+                    <div class="meta-item">
+                        <span class="meta-label">Text (BanglaBERT)</span>
+                        <span class="meta-value" id="simText">-</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Image (EfficientNet)</span>
+                        <span class="meta-value" id="simImg">-</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Combined</span>
+                        <span class="meta-value" id="simCombined">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // API Configuration (Change if running on a different port)
+        const API_URL = 'http://localhost:8000/api/v1/multimodal/predict';
+
+        // Elements
+        const form = document.getElementById('verifyForm');
+        const imageInput = document.getElementById('image');
+        const imagePreview = document.getElementById('imagePreview');
+        const fileLabel = document.getElementById('fileLabel');
+        const fileIcon = document.getElementById('fileIcon');
+        const submitBtn = document.getElementById('submitBtn');
+        const btnText = submitBtn.querySelector('span');
+        const spinner = document.getElementById('spinner');
+        const errorMsg = document.getElementById('errorMessage');
+
+        const resultsPanel = document.getElementById('resultsPanel');
+        const resultEmpty = document.getElementById('resultEmpty');
+        const resultContent = document.getElementById('resultContent');
+        
+        // Image Preview Logic
+        imageInput.addEventListener('change', function(e) {
+            const file = this.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    imagePreview.src = e.target.result;
+                    imagePreview.style.display = 'block';
+                    fileLabel.style.display = 'none';
+                    fileIcon.style.display = 'none';
+                }
+                reader.readAsDataURL(file);
+            } else {
+                imagePreview.style.display = 'none';
+                fileLabel.style.display = 'block';
+                fileIcon.style.display = 'block';
+            }
+        });
+
+        // Form Submission
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            // Reset UI
+            errorMsg.style.display = 'none';
+            submitBtn.disabled = true;
+            btnText.textContent = 'Processing...';
+            spinner.style.display = 'block';
+            
+            resultsPanel.classList.remove('active');
+            
+            try {
+                const formData = new FormData(form);
+                
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.detail || data.message || 'An error occurred processing the request');
+                }
+                
+                renderResult(data);
+                
+            } catch (error) {
+                errorMsg.textContent = `Error: ${error.message}`;
+                errorMsg.style.display = 'block';
+            } finally {
+                submitBtn.disabled = false;
+                btnText.textContent = 'Verify Content';
+                spinner.style.display = 'none';
+            }
+        });
+
+        function renderResult(data) {
+            // Hide empty state, show content
+            resultEmpty.style.display = 'none';
+            resultContent.style.display = 'flex';
+            
+            // Update Badge
+            const badge = document.getElementById('predictionBadge');
+            badge.textContent = data.prediction;
+            if (data.prediction === 'FAKE') {
+                badge.className = 'prediction-badge badge-fake';
+            } else {
+                badge.className = 'prediction-badge badge-real';
+            }
+
+            // Update Confidence Bars
+            const fakePct = (data.confidence_fake * 100).toFixed(1);
+            const realPct = (data.confidence_real * 100).toFixed(1);
+            
+            // We use setTimeout to trigger CSS transition
+            setTimeout(() => {
+                document.getElementById('barFake').style.width = `${fakePct}%`;
+                document.getElementById('barReal').style.width = `${realPct}%`;
+            }, 50);
+
+            document.getElementById('confFakeText').textContent = `${fakePct}%`;
+            document.getElementById('confRealText').textContent = `${realPct}%`;
+
+            // Update Metadata
+            document.getElementById('metaId').textContent = data.prediction_id.split('-')[0] + '...';
+            document.getElementById('metaId').title = data.prediction_id;
+            document.getElementById('metaModel').textContent = data.model_version;
+            document.getElementById('metaKey').textContent = data.minio_object_key.split('/').pop();
+            document.getElementById('metaKey').title = data.minio_object_key;
+            
+            const date = new Date(data.created_at);
+            document.getElementById('metaTime').textContent = date.toLocaleTimeString() + ' ' + date.toLocaleDateString();
+
+            // Handle Cache state
+            const cacheBadge = document.getElementById('cacheBadge');
+            const simPanel = document.getElementById('similarityScores');
+            
+            if (data.is_cached) {
+                cacheBadge.style.display = 'inline-flex';
+                if (data.similarity_scores) {
+                    simPanel.style.display = 'grid';
+                    document.getElementById('simText').textContent = (data.similarity_scores.text_similarity * 100).toFixed(2) + '%';
+                    document.getElementById('simImg').textContent = (data.similarity_scores.image_similarity * 100).toFixed(2) + '%';
+                    document.getElementById('simCombined').textContent = (data.similarity_scores.combined_similarity * 100).toFixed(2) + '%';
+                }
+            } else {
+                cacheBadge.style.display = 'none';
+                simPanel.style.display = 'none';
+            }
+
+            // Show panel
+            resultsPanel.classList.add('active');
+        }
+    </script>
+</body>
+</html>

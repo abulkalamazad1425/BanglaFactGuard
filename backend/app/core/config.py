@@ -154,6 +154,111 @@ class MLSettings(BaseSettings):
         return self.embedding_max_seq_length
 
 
+class MultimodalSettings(BaseSettings):
+    """
+    Configuration for the multimodal fake-news detection model.
+
+    The model is a BanglaBERT + EfficientNet-B4 early-fusion classifier
+    trained on the MultiBanFake dataset. Weights are stored locally as
+    three separate .pt files plus a saved tokenizer directory.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="MULTIMODAL_")
+
+    # Paths
+    model_dir: str = Field(
+        default=os.path.join(os.path.expanduser("~"), ".cache", "bangla_fact_guard", "multimodal_model"),
+        description="Directory containing img_backbone.pt, text_backbone.pt, classifier.pt, and tokenizer/",
+    )
+
+    # Model architecture (must match training config exactly)
+    text_model_name: str = Field(
+        default="csebuetnlp/banglabert",
+        description="HuggingFace model ID used as BanglaBERT backbone",
+    )
+    image_model_name: str = Field(
+        default="efficientnet_b4",
+        description="timm model name for the EfficientNet backbone",
+    )
+    max_seq_length: int = Field(
+        default=128,
+        description="Max tokenizer length; must match training max_seq_length",
+    )
+    img_size: int = Field(
+        default=380,
+        description="Image resize target; must match training img_size",
+    )
+    num_classes: int = Field(default=2)
+    dropout: float = Field(default=0.4)
+
+    # Runtime
+    device: str = Field(
+        default="cpu",
+        description="Compute device for inference: 'cpu' or 'cuda'",
+    )
+    load_on_startup: bool = Field(
+        default=True,
+        description="Load model weights during FastAPI lifespan startup",
+    )
+    inference_thread_workers: int = Field(
+        default=2,
+        description="ThreadPoolExecutor workers for CPU-bound inference calls",
+    )
+    model_version: str = Field(
+        default="banglabert_efficientnetb4_v1",
+        description="Version tag stored with each prediction for traceability",
+    )
+
+    # Duplicate-detection thresholds — all three must pass for a cache hit
+    text_sim_threshold: float = Field(
+        default=0.92,
+        description="Min BanglaBERT [CLS] cosine similarity to consider texts identical",
+    )
+    image_sim_threshold: float = Field(
+        default=0.85,
+        description="Min EfficientNet feature cosine similarity to consider images identical",
+    )
+    combined_sim_threshold: float = Field(
+        default=0.90,
+        description="Min combined-embedding cosine similarity (primary pre-filter)",
+    )
+    dedup_candidate_limit: int = Field(
+        default=100,
+        description="Max recent predictions to fetch from DB for similarity search",
+    )
+
+
+class MinioSettings(BaseSettings):
+    """MinIO object storage settings for uploaded news images."""
+
+    model_config = SettingsConfigDict(env_prefix="MINIO_")
+
+    endpoint: str = Field(
+        default="localhost:9000",
+        description="MinIO server host:port (no http/https prefix)",
+    )
+    access_key: str = Field(
+        default="minioadmin",
+        description="MinIO access key (root user)",
+    )
+    secret_key: str = Field(
+        default="minioadmin",
+        description="MinIO secret key (root password)",
+    )
+    bucket_name: str = Field(
+        default="bangla-fact-guard",
+        description="Bucket where multimodal submission images are stored",
+    )
+    secure: bool = Field(
+        default=False,
+        description="Use HTTPS when connecting to MinIO",
+    )
+    presigned_url_expiry_seconds: int = Field(
+        default=3600,
+        description="Pre-signed URL validity period in seconds (default: 1 hour)",
+    )
+
+
 class SearchSettings(BaseSettings):
     """External search API configuration."""
 
@@ -308,6 +413,8 @@ class AppSettings(BaseSettings):
     thresholds: ClassificationThresholds = Field(
         default_factory=ClassificationThresholds
     )
+    multimodal: MultimodalSettings = Field(default_factory=MultimodalSettings)
+    minio: MinioSettings = Field(default_factory=MinioSettings)
 
     @property
     def classification(self) -> ClassificationThresholds:

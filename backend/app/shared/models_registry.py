@@ -49,8 +49,7 @@ from app.features.expert_review.models import ExpertReview  # noqa: F401
 
 # Multimodal feature
 from app.features.multimodal.models import (  # noqa: F401
-    MultimodalSubmission,
-    MediaAnalysisResult,
+    MultimodalPrediction,
 )
 
 # Notifications feature
@@ -80,9 +79,9 @@ __all__ = [
     # Expert review
     "ExpertReview",
     # Multimodal
-    "MultimodalSubmission",
-    "MediaAnalysisResult",
+    "MultimodalPrediction",
     # Notifications
+
     "Notification",
     # Feedback
     "UserFeedback",
