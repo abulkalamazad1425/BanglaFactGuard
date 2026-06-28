@@ -140,6 +140,56 @@ def extract_keywords_yake(
         return _fallback_frequency_keywords(text, top_n=num_keywords)
 
 
+def extract_keywords_with_scores(
+    text: str,
+    *,
+    language: str = "bn",
+    max_ngram_size: int = 2,
+    dedup_threshold: float = 0.9,
+    num_keywords: int = 10,
+) -> list[tuple[str, float]]:
+    """
+    Extract keywords from text with their YAKE relevance scores.
+
+    Unlike `extract_keywords_yake` which returns only strings, this returns
+    (keyword, relevance_weight) tuples where relevance_weight is inverted
+    from the raw YAKE score: weight = 1 / (1 + yake_score).
+
+    This inversion maps YAKE's counter-intuitive scoring (lower = more
+    relevant) to a natural weight (higher = more relevant) bounded in (0, 1].
+
+    Used by `compute_weighted_keyword_overlap()` for YAKE-weighted similarity.
+
+    Args:
+        text:             Input text (Bangla or mixed).
+        language:         Language hint for YAKE.
+        max_ngram_size:   Maximum n-gram length.
+        dedup_threshold:  Deduplication threshold.
+        num_keywords:     Number of keyphrases to return.
+
+    Returns:
+        List of (keyword, relevance_weight) tuples sorted by weight descending.
+        Returns empty list if extraction fails.
+    """
+    if not text or len(text.strip()) < 10:
+        return []
+
+    try:
+        extractor = _get_yake_extractor(
+            language, max_ngram_size, dedup_threshold, num_keywords
+        )
+        raw = extractor.extract_keywords(text)
+        # Invert YAKE score: lower yake_score → higher relevance weight
+        weighted = [(kw, 1.0 / (1.0 + score)) for kw, score in raw]
+        # Sort by weight descending (most relevant first)
+        weighted.sort(key=lambda x: x[1], reverse=True)
+        return weighted
+    except Exception:  # noqa: BLE001
+        # Fallback: assign uniform weight
+        fallback_kws = _fallback_frequency_keywords(text, top_n=num_keywords)
+        return [(kw, 1.0) for kw in fallback_kws]
+
+
 def extract_keywords_simple(
     text: str,
     *,
@@ -242,6 +292,67 @@ def compute_keyword_overlap(
     intersection = len(set_a & set_b)
     union = len(set_a | set_b)
     return intersection / union
+
+
+def compute_weighted_keyword_overlap(
+    keywords_a: list[tuple[str, float]],
+    keywords_b: list[tuple[str, float]],
+) -> float:
+    """
+    Compute YAKE-weighted keyword overlap between two keyword sets.
+
+    Unlike plain Jaccard which treats all keywords equally, this weights
+    each keyword by its YAKE relevance score. Matching on a highly-relevant
+    keyword (e.g. a named entity) contributes more than matching on a
+    low-relevance keyword (e.g. a common verb).
+
+    Formula:
+        For each keyword in the union, take the max weight from whichever
+        set(s) it appears in. The score is:
+        sum(weight of matched keywords) / sum(weight of all keywords)
+
+    This is equivalent to a weighted Jaccard similarity.
+
+    Args:
+        keywords_a: (keyword, weight) tuples from the claim.
+        keywords_b: (keyword, weight) tuples from the article.
+
+    Returns:
+        Float in [0.0, 1.0]. Returns 0.0 if both lists are empty.
+    """
+    if not keywords_a and not keywords_b:
+        return 0.0
+
+    # Build weight maps (take max weight if a keyword appears multiple times)
+    weights_a: dict[str, float] = {}
+    for kw, w in keywords_a:
+        key = kw.strip().lower()
+        if key:
+            weights_a[key] = max(weights_a.get(key, 0.0), w)
+
+    weights_b: dict[str, float] = {}
+    for kw, w in keywords_b:
+        key = kw.strip().lower()
+        if key:
+            weights_b[key] = max(weights_b.get(key, 0.0), w)
+
+    if not weights_a or not weights_b:
+        return 0.0
+
+    all_keywords = set(weights_a.keys()) | set(weights_b.keys())
+    matched_weight = 0.0
+    total_weight = 0.0
+
+    for kw in all_keywords:
+        w = max(weights_a.get(kw, 0.0), weights_b.get(kw, 0.0))
+        total_weight += w
+        if kw in weights_a and kw in weights_b:
+            matched_weight += w
+
+    if total_weight == 0.0:
+        return 0.0
+
+    return matched_weight / total_weight
 
 
 # ---------------------------------------------------------------------------

@@ -47,6 +47,16 @@ class VerificationScoresSchema(BaseModel):
     numerical_consistency: float | None = Field(default=None, ge=0.0, le=1.0)
     contradiction_score: float | None = Field(default=None, ge=0.0, le=1.0)
 
+    # Pre-computed sub-dimensions exposed for S10 and S11
+    headline_similarity: float | None = Field(
+        default=None, ge=0.0, le=1.0,
+        description="LaBSE cosine similarity between claim headline and article title only.",
+    )
+    body_similarity: float | None = Field(
+        default=None, ge=0.0, le=1.0,
+        description="LaBSE cosine similarity between claim full text and article body only.",
+    )
+
     model_config = {
         "json_schema_extra": {
             "example": {

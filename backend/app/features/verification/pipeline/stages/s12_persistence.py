@@ -23,12 +23,30 @@ A PipelineError is raised so the FastAPI exception handler can return 500.
 All DB writes are executed within a single SQLAlchemy session managed by
 the caller (VerificationService). The session commits only after this stage
 succeeds — guaranteeing atomicity across all five writes.
+
+## Improvement notes (v2)
+
+1. **Update failed-extraction articles on retry**: Previously, if an article
+   was retrieved with `extraction_success=False`, it would be silently
+   skipped on retry even if extraction now succeeded. Now updates the
+   existing record with the new data.
+
+2. **Populate search query results_count**: Uses `context.candidate_urls`
+   to count results per query type, providing meaningful audit data instead
+   of hardcoded 0.
+
+3. **Documented fire-and-forget Redis cache**: Added explicit comment
+   explaining the intentional trade-off of using `asyncio.create_task` for
+   Redis cache updates (L1 cache; DB is L2 source of truth; eventual
+   consistency is acceptable; Redis failure must not block the critical
+   persistence path).
 """
 
 from __future__ import annotations
 
 import json
 import uuid
+from collections import Counter
 from datetime import datetime
 
 import structlog
@@ -137,6 +155,24 @@ class PersistenceStage:
 
             # ------------------------------------------------------------------
             # 7. Write result to Redis (fire-and-forget)
+            #
+            #    INTENTIONAL DESIGN: Redis is L1 (fast cache); PostgreSQL is L2
+            #    (source of truth). Cache updates are fire-and-forget via
+            #    asyncio.create_task because:
+            #
+            #    a) Redis failure must NOT block the critical persistence path.
+            #       The DB write above is the authoritative record. If Redis is
+            #       down, the next request will simply miss the L1 cache and
+            #       hit the DB (L2), which is slightly slower but correct.
+            #
+            #    b) Eventual consistency is acceptable here. The cache is
+            #       populated optimistically — a brief window where the cache
+            #       is stale or absent is tolerable because cache misses fall
+            #       through to the DB automatically (Stage 2 checks both).
+            #
+            #    c) Logging the failure as a warning (not error) is sufficient.
+            #       Cache issues are operational concerns, not data integrity
+            #       issues. Monitoring can alert on warning spikes.
             # ------------------------------------------------------------------
             import asyncio
             asyncio.create_task(self._update_redis_cache(context))
@@ -193,6 +229,12 @@ class PersistenceStage:
     ) -> uuid.UUID | None:
         """
         Bulk-insert all ranked articles. Returns DB UUID of top article.
+
+        If an article was previously retrieved with extraction_success=False
+        and the current run has successfully extracted its content, update
+        the existing record instead of silently skipping. This handles the
+        case where extraction failed on the first attempt (e.g. network
+        timeout) but succeeded on a retry (force_refresh=True).
         """
         if not context.ranked_articles:
             return None
@@ -203,8 +245,29 @@ class PersistenceStage:
 
         for article in context.ranked_articles:
             url_hash = compute_url_hash(article.url)
-            # Skip if already exists for this claim
-            if await self.article_repo.url_already_retrieved(claim_id, url_hash):
+
+            # Check if already exists for this claim
+            existing = await self.article_repo.get_by_url_hash(claim_id, url_hash)
+            if existing:
+                # If previously failed extraction but now succeeded, update
+                # the existing record with the new content instead of skipping.
+                if not existing.extraction_success and article.has_body:
+                    existing.title = article.title[:500] if article.title else existing.title
+                    existing.body = article.body
+                    existing.author = article.author[:255] if article.author else existing.author
+                    existing.published_date = article.published_date or existing.published_date
+                    existing.rank_score = article.rank_score
+                    existing.extraction_success = True
+                    await self.claim_repo.session.flush()
+                    logger.debug(
+                        "s12_updated_failed_article",
+                        url_hash=url_hash,
+                        url=article.url[:80],
+                    )
+
+                # Track top article DB ID from existing record
+                if article.url == top_article_url:
+                    top_article_db_id = existing.id
                 continue
 
             model = RetrievedArticle(
@@ -233,9 +296,22 @@ class PersistenceStage:
     async def _persist_search_queries(
         self, context: PipelineContext, claim_id: uuid.UUID
     ) -> None:
-        """Bulk-insert SearchQuery records for audit trail."""
+        """
+        Bulk-insert SearchQuery records for audit trail.
+
+        Uses context.candidate_urls to compute results_count per query type.
+        Each CandidateArticleSchema has a query_type field, so we count how
+        many candidate URLs were returned for each query type and populate
+        the results_count field accordingly. This provides meaningful audit
+        data instead of the previous hardcoded 0.
+        """
         if not context.search_queries:
             return
+
+        # Count candidate URLs per query type for results_count
+        results_per_query_type: Counter[str] = Counter()
+        for candidate in context.candidate_urls:
+            results_per_query_type[candidate.query_type] += 1
 
         queries = [
             SearchQuery(
@@ -243,11 +319,10 @@ class PersistenceStage:
                 query_text=qtext[:1000],
                 query_type=qtype,
                 search_provider=context.search_provider_used or SearchProvider.SEARXNG,
-                results_count=0,  # Aggregate count not tracked per query
+                results_count=results_per_query_type.get(qtype, 0),
             )
             for qtext, qtype in context.search_queries
         ]
-        from sqlalchemy.ext.asyncio import AsyncSession
         # Use the session via claim_repo
         self.claim_repo.session.add_all(queries)
         await self.claim_repo.session.flush()
@@ -285,7 +360,13 @@ class PersistenceStage:
             await self.result_repo.bulk_log(log_entries)
 
     async def _update_redis_cache(self, context: PipelineContext) -> None:
-        """Write the final result to Redis for future L1 cache hits."""
+        """
+        Write the final result to Redis for future L1 cache hits.
+
+        This method is called via asyncio.create_task (fire-and-forget).
+        See the detailed comment in execute() explaining why cache failures
+        are intentionally swallowed after logging a warning.
+        """
         if not context.claim_hash or not context.label:
             return
         try:
@@ -307,4 +388,3 @@ class PersistenceStage:
             )
         except Exception as exc:  # noqa: BLE001
             logger.warning("s12_redis_cache_update_failed", error=str(exc))
-

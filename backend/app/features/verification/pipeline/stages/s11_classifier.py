@@ -13,6 +13,10 @@ confidence score, with a human-readable reasoning explanation.
 ### Step 1: Evidence presence check
 If no ranked articles exist → NOT_FOUND_IN_CLAIMED_SOURCE (confidence=0.95).
 
+### Step 1b: NOT_FOUND semantic similarity gate
+If the best article is semantically very far from the claim, treat as
+NOT_FOUND rather than issuing a misleading verdict.
+
 ### Step 2: Score aggregation
 Compute a weighted evidence score from available dimensions:
 
@@ -24,33 +28,49 @@ Compute a weighted evidence score from available dimensions:
     ) — adjusted for contradiction
 
     Weights: W_SEM=0.45, W_ENT=0.25, W_KW=0.15, W_NUM=0.15
+    Invariant: sum = 1.0
 
-Contradiction penalty: if contradiction_score > 0.5, subtract
-(contradiction_score - 0.5) * 0.4 from the evidence score.
+When dimensions are missing (None), their weight is redistributed
+proportionally across available dimensions (implicit normalisation).
+A per-dimension effective weight cap prevents any single dimension from
+dominating when only 2/4 dimensions are available.
 
 ### Step 3: Label assignment (runtime-configurable thresholds)
 
-    evidence_score ≥ TRUE_THRESHOLD   → TRUE
-    evidence_score ≥ PARTIAL_THRESHOLD AND any_manipulation → PARTIALLY_TRUE
-    evidence_score ≥ PARTIAL_THRESHOLD → TRUE (high body sim, minor difference)
-    evidence_score ≥ FALSE_THRESHOLD  → PARTIALLY_TRUE
-    else                               → FALSE
+    evidence_score ≥ TRUE_THRESHOLD                 → TRUE (if no manipulation)
+    evidence_score ≥ TRUE_THRESHOLD & manipulation  → PARTIALLY_TRUE
+    evidence_score ≥ SOFT_TRUE & no manipulation    → TRUE
+    evidence_score ≥ PARTIAL_THRESHOLD & manipulation → PARTIALLY_TRUE
+    evidence_score ≥ PARTIAL_THRESHOLD               → PARTIALLY_TRUE
+    else                                             → FALSE
 
     Override: contradiction_score > CONTRADICTION_THRESHOLD → FALSE
 
 ### Step 4: Confidence calculation
-Confidence is derived from |evidence_score - decision_boundary| so the model
-expresses lower confidence near thresholds.
+Sigmoid function of distance from nearest decision boundary — non-linear
+so confidence rises quickly away from thresholds but plateaus near extremes.
 
 ### Step 5: Reasoning generation
 A structured natural-language reasoning string is assembled from available
-evidence scores and manipulation flags.
+evidence scores and manipulation flags. Now includes keyword_overlap.
+
+## Improvement notes (v2)
+
+1. Weight invariant assertion + documentation of implicit re-weighting.
+2. Per-dimension weight cap to prevent single-dimension dominance.
+3. Fixed NOT_FOUND confidence clamping to [0.55, 0.90].
+4. Fixed _assign_label dead branch — split partial_threshold zone into
+   manipulation-aware paths with a "soft true" midpoint.
+5. Sigmoid confidence function replacing linear scaler.
+6. keyword_overlap included in reasoning output.
 
 ## Criticality: CRITICAL
 If classification fails, the orchestrator aborts and marks the claim as FAILED.
 """
 
 from __future__ import annotations
+
+import math
 
 import structlog
 
@@ -62,11 +82,17 @@ from app.features.verification.pipeline.context import PipelineContext
 logger = structlog.get_logger(__name__)
 _SETTINGS = get_settings()
 
-# Score aggregation weights
-_W_SEM = 0.45
-_W_ENT = 0.25
-_W_KW = 0.15
-_W_NUM = 0.15
+# Score aggregation weights — MUST sum to 1.0
+_W_SEM = 0.45   # Semantic similarity (LaBSE) — primary signal
+_W_ENT = 0.25   # Entity match (BanglaBERT NER) — named-entity alignment
+_W_KW = 0.15    # Keyword overlap (YAKE-weighted) — topical alignment
+_W_NUM = 0.15   # Numerical consistency — factual precision
+
+# Invariant: weights must sum to 1.0 so evidence_score is in [0, 1].
+# If this assertion fails, the weight constants above were edited incorrectly.
+assert abs((_W_SEM + _W_ENT + _W_KW + _W_NUM) - 1.0) < 1e-9, (
+    f"Score aggregation weights must sum to 1.0, got {_W_SEM + _W_ENT + _W_KW + _W_NUM}"
+)
 
 
 class ClassifierStage:
@@ -124,8 +150,12 @@ class ClassifierStage:
                 sem_sim is not None
                 and sem_sim < thresholds.not_found_max_semantic_similarity
             ):
+                # Confidence formula: higher when sem_sim is very low (clearly
+                # unrelated), lower when sem_sim is just below the threshold
+                # (borderline). Clamped to [0.55, 0.90] to avoid extremes.
+                raw_conf = 0.5 + (thresholds.not_found_max_semantic_similarity - sem_sim) * 2
                 context.label = VerificationLabel.NOT_FOUND_IN_CLAIMED_SOURCE
-                context.confidence = round(min(0.90, 0.5 + (thresholds.not_found_max_semantic_similarity - sem_sim) * 2), 3)
+                context.confidence = round(max(0.55, min(0.90, raw_conf)), 3)
                 context.reasoning = (
                     f"An article was retrieved from {context.normalized_source or 'the claimed source'}, "
                     f"but its semantic similarity to the claim is too low ({sem_sim:.2f}), "
@@ -145,7 +175,7 @@ class ClassifierStage:
             # Step 2: Compute weighted evidence score
             # ------------------------------------------------------------------
             scores = context.scores
-            evidence_score = _compute_weighted_score(scores)
+            evidence_score = _compute_weighted_score(scores, thresholds)
 
             # Apply contradiction penalty
             contradiction = scores.contradiction_score or 0.0
@@ -244,6 +274,24 @@ class ClassifierStage:
             )
         if scores.entity_match is not None:
             parts.append(f"Entity match: {scores.entity_match:.2f}.")
+
+        # Include keyword overlap — especially when it diverges from
+        # semantic similarity, which signals topic match without semantic
+        # match (rewritten content) or vice versa (similar language, different topic).
+        if scores.keyword_overlap is not None:
+            kw_note = f"Keyword overlap: {scores.keyword_overlap:.2f}"
+            # Highlight divergence from semantic similarity
+            if (
+                scores.semantic_similarity is not None
+                and abs(scores.keyword_overlap - scores.semantic_similarity) > 0.25
+            ):
+                if scores.keyword_overlap > scores.semantic_similarity:
+                    kw_note += " (topic matches but content differs significantly)"
+                else:
+                    kw_note += " (similar language but different topic focus)"
+            kw_note += "."
+            parts.append(kw_note)
+
         if scores.numerical_consistency is not None and scores.numerical_consistency < 1.0:
             parts.append(
                 f"Numerical consistency: {scores.numerical_consistency:.2f} "
@@ -291,32 +339,113 @@ class ClassifierStage:
 # ---------------------------------------------------------------------------
 
 
-def _compute_weighted_score(scores) -> float:
-    """Compute weighted aggregation of available score dimensions."""
-    total_weight = 0.0
-    weighted_sum = 0.0
+def _compute_weighted_score(scores, thresholds) -> float:
+    """
+    Compute weighted aggregation of available score dimensions.
 
-    dim_weights = [
+    When dimensions are missing (None), their weight is redistributed
+    proportionally across remaining dimensions via the `/ total_weight`
+    normalisation. This means:
+    - If all 4 dimensions are present: effective weights = natural weights.
+    - If only sem_sim + entity_match: effective W_SEM = 0.45/0.70 = 0.643,
+      effective W_ENT = 0.25/0.70 = 0.357.
+
+    To prevent a single dimension from dominating when multiple dimensions
+    fail, each dimension's effective weight is capped at
+    `max_single_dimension_weight` (default 0.65). Excess weight is
+    redistributed to the remaining dimensions.
+
+    Args:
+        scores:     VerificationScoresSchema with dimension values.
+        thresholds: ClassificationThresholds with max_single_dimension_weight.
+
+    Returns:
+        Float in [0.0, 1.0].
+    """
+    max_dim_weight = thresholds.max_single_dimension_weight
+
+    dim_weights: list[tuple[float | None, float]] = [
         (scores.semantic_similarity, _W_SEM),
         (scores.entity_match, _W_ENT),
         (scores.keyword_overlap, _W_KW),
         (scores.numerical_consistency, _W_NUM),
     ]
 
-    for value, weight in dim_weights:
-        if value is not None:
-            weighted_sum += value * weight
-            total_weight += weight
+    # Filter to available dimensions
+    available: list[tuple[float, float]] = [
+        (val, wt) for val, wt in dim_weights if val is not None
+    ]
 
+    if not available:
+        return 0.0
+
+    total_weight = sum(wt for _, wt in available)
     if total_weight == 0:
         return 0.0
 
-    # Normalise by actual total weight (handles missing dimensions)
-    return weighted_sum / total_weight
+    # Apply per-dimension weight cap
+    # First pass: identify dimensions that exceed the cap after normalisation
+    capped_available: list[tuple[float, float]] = []
+    excess = 0.0
+    uncapped_weight = 0.0
+
+    for val, wt in available:
+        effective = wt / total_weight
+        if effective > max_dim_weight:
+            excess += effective - max_dim_weight
+            capped_available.append((val, max_dim_weight))
+        else:
+            capped_available.append((val, effective))
+            uncapped_weight += effective
+
+    # Redistribute excess to uncapped dimensions proportionally
+    if excess > 0 and uncapped_weight > 0:
+        final: list[tuple[float, float]] = []
+        for val, eff_wt in capped_available:
+            if eff_wt < max_dim_weight and uncapped_weight > 0:
+                redistribution = excess * (eff_wt / uncapped_weight)
+                final.append((val, eff_wt + redistribution))
+            else:
+                final.append((val, eff_wt))
+    else:
+        final = capped_available
+
+    # Compute weighted sum (effective weights already normalised to ~1.0)
+    result = sum(val * eff_wt for val, eff_wt in final)
+
+    # Log effective weights for debugging when dimensions are missing
+    if len(available) < 4:
+        logger.debug(
+            "s11_weight_redistribution",
+            available_dims=len(available),
+            effective_weights={
+                f"dim_{i}": round(eff_wt, 3) for i, (_, eff_wt) in enumerate(final)
+            },
+        )
+
+    return max(0.0, min(1.0, result))
 
 
 def _assign_label(evidence_score: float, manipulation, thresholds) -> VerificationLabel:
-    """Assign a VerificationLabel based on evidence score and manipulation flags."""
+    """
+    Assign a VerificationLabel based on evidence score and manipulation flags.
+
+    Decision tree:
+        1. evidence_score ≥ true_threshold:
+           - With manipulation → PARTIALLY_TRUE (evidence is good but altered)
+           - Without manipulation → TRUE
+        2. evidence_score ≥ soft_true (midpoint of partial and true):
+           - Without manipulation → TRUE (generous promotion for high-ish evidence)
+           - With manipulation → PARTIALLY_TRUE
+        3. evidence_score ≥ partial_threshold:
+           → PARTIALLY_TRUE (moderate evidence, regardless of manipulation)
+        4. Below partial_threshold:
+           → FALSE
+
+    The "soft true" midpoint was introduced to fix a dead branch where
+    the partial_threshold zone always returned PARTIALLY_TRUE, even when
+    there was no manipulation and the evidence score was reasonably high.
+    """
     any_manip = manipulation.any_manipulation_detected
 
     if evidence_score >= thresholds.true_threshold:
@@ -324,11 +453,19 @@ def _assign_label(evidence_score: float, manipulation, thresholds) -> Verificati
             return VerificationLabel.PARTIALLY_TRUE
         return VerificationLabel.TRUE
 
+    # Soft-true midpoint: promote to TRUE if evidence is above the midpoint
+    # of (partial, true) thresholds and no manipulation is detected. This
+    # avoids the previous dead branch where everything in [partial, true)
+    # was indiscriminately labelled PARTIALLY_TRUE.
+    soft_true_threshold = (thresholds.partial_threshold + thresholds.true_threshold) / 2.0
+
+    if evidence_score >= soft_true_threshold:
+        if any_manip:
+            return VerificationLabel.PARTIALLY_TRUE
+        return VerificationLabel.TRUE
+
     if evidence_score >= thresholds.partial_threshold:
         return VerificationLabel.PARTIALLY_TRUE
-
-    if evidence_score >= thresholds.false_threshold:
-        return VerificationLabel.FALSE
 
     return VerificationLabel.FALSE
 
@@ -337,9 +474,23 @@ def _compute_confidence(
     evidence_score: float, label: VerificationLabel, thresholds
 ) -> float:
     """
-    Compute confidence as a function of distance from the nearest threshold.
+    Compute confidence using a sigmoid function of distance from the
+    nearest decision boundary.
 
-    Near a threshold → low confidence. Far from all thresholds → high confidence.
+    Why sigmoid instead of linear: Confidence near a decision boundary
+    should change slowly (small changes in evidence → small changes in
+    confidence), while confidence far from all boundaries should plateau
+    (you're very sure regardless of small score shifts). The old linear
+    function `0.5 + distance * 1.5` didn't express this non-linearity —
+    it could produce arbitrarily high confidence for small distances and
+    didn't plateau properly.
+
+    Formula: 0.5 + 0.47 * (1 - exp(-15 * min_distance))
+    - At distance=0: confidence = 0.50 (maximum uncertainty)
+    - At distance=0.05: confidence ≈ 0.75
+    - At distance=0.10: confidence ≈ 0.87
+    - At distance=0.15: confidence ≈ 0.92
+    - At distance=0.20: confidence ≈ 0.95
     """
     # Decision boundaries
     boundaries = [
@@ -349,8 +500,9 @@ def _compute_confidence(
     ]
     min_distance = min(abs(evidence_score - b) for b in boundaries)
 
-    # Base confidence: higher when far from any boundary
-    base = 0.5 + min_distance * 1.5
+    # Sigmoid confidence: rises quickly near boundaries, plateaus far away.
+    # The 15.0 steepness factor controls how quickly confidence rises.
+    # The 0.47 amplitude ensures the range is [0.50, 0.97].
+    base = 0.5 + 0.47 * (1.0 - math.exp(-15.0 * min_distance))
     confidence = round(min(0.97, max(0.50, base)), 3)
     return confidence
-

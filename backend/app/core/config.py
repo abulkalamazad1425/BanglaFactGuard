@@ -356,6 +356,44 @@ class ClassificationThresholds(BaseSettings):
         description="Articles below this semantic similarity are discarded as evidence",
     )
 
+    # --- New thresholds added for S08-S11 accuracy improvements ---
+
+    body_altered_min_keyword_overlap: float = Field(
+        default=0.30,
+        description=(
+            "Minimum keyword overlap required alongside low semantic similarity "
+            "to trigger body_altered flag. Distinguishes 'wrong article retrieved' "
+            "(low keyword overlap) from 'article body was altered' (topic matches "
+            "but content differs)."
+        ),
+    )
+    nli_temperature: float = Field(
+        default=1.5,
+        description=(
+            "Temperature scaling factor for NLI probability calibration. "
+            "Values > 1.0 flatten overconfident DeBERTa outputs, reducing "
+            "false-positive contradiction triggers at the 0.5 soft-penalty "
+            "threshold in S11. Set to 1.0 to disable calibration."
+        ),
+    )
+    nli_title_only_attenuation: float = Field(
+        default=0.6,
+        description=(
+            "Multiplier applied to NLI scores when the premise is title-only "
+            "(article body absent). Attenuates the signal because title-only "
+            "NLI is far less reliable than body-based NLI."
+        ),
+    )
+    max_single_dimension_weight: float = Field(
+        default=0.65,
+        description=(
+            "Maximum effective weight any single score dimension can receive "
+            "after re-normalisation when other dimensions are missing. Prevents "
+            "a single dimension (e.g. semantic_similarity at 0.45/0.45 = 1.0 "
+            "effective weight) from unilaterally driving the verdict."
+        ),
+    )
+
     @property
     def contradiction_threshold(self) -> float:
         """Backward-compatible alias for the hard contradiction override threshold."""

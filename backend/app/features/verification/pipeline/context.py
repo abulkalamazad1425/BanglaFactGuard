@@ -231,6 +231,10 @@ class PipelineContext:
     claim_numerals: list[str] = field(default_factory=list)
     article_entities: list[str] = field(default_factory=list)
     article_numerals: list[str] = field(default_factory=list)
+    # Typed entity pairs: list of (entity_span, entity_type) — e.g. ("ঢাকা", "LOC")
+    # Used by S10 for entity-type-aware substitution detection.
+    claim_entity_types: list[tuple[str, str]] = field(default_factory=list)
+    article_entity_types: list[tuple[str, str]] = field(default_factory=list)
 
     # -----------------------------------------------------------------------
     # Stage 9 — Contradiction Detection

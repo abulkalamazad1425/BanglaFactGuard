@@ -418,29 +418,91 @@
             background: #ec4899;
         }
 
-        /* Manipulation warnings */
-        .manipulation-warnings {
+        /* Verification Checks Grid */
+        .verification-checks-section {
             margin-bottom: 2rem;
-            display: flex;
-            flex-direction: column;
-            gap: 0.75rem;
         }
 
-        .warning-badge {
+        .verification-checks-section h4 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
             display: flex;
             align-items: center;
-            gap: 0.75rem;
-            padding: 0.75rem 1.25rem;
-            background: rgba(239, 68, 68, 0.1);
-            border: 1px solid rgba(239, 68, 68, 0.2);
-            border-radius: 10px;
-            color: #fca5a5;
-            font-size: 0.9rem;
-            font-weight: 500;
+            gap: 0.5rem;
         }
 
-        .warning-badge i {
+        .checks-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        @media (max-width: 600px) {
+            .checks-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .check-card {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            padding: 1rem;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            background: rgba(15, 23, 42, 0.4);
+            transition: all 0.2s ease;
+        }
+
+        .check-card.passed {
+            border-color: rgba(16, 185, 129, 0.2);
+            background: rgba(16, 185, 129, 0.05);
+        }
+
+        .check-card.failed {
+            border-color: rgba(239, 68, 68, 0.3);
+            background: rgba(239, 68, 68, 0.1);
+        }
+
+        .check-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            flex-shrink: 0;
+            font-size: 1.1rem;
+        }
+
+        .check-card.passed .check-icon {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--verdict-true);
+        }
+
+        .check-card.failed .check-icon {
+            background: rgba(239, 68, 68, 0.2);
             color: var(--verdict-false);
+        }
+
+        .check-content {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .check-title {
+            font-weight: 600;
+            font-size: 0.95rem;
+            color: var(--text-primary);
+        }
+
+        .check-desc {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            line-height: 1.4;
         }
 
         /* Matched Articles List */
@@ -735,22 +797,25 @@
                     <!-- Score Progress bars -->
                     <div class="scores-grid" ng-if="result.scores">
                         <!-- Semantic similarity -->
-                        <div class="score-item" ng-if="result.scores.semantic_similarity !== null">
+                        <div class="score-item" ng-if="result.scores.semantic_similarity !== null" title="Blended score (30% headline, 70% body) measuring overall semantic meaning match.">
                             <div class="score-info">
-                                <span class="score-label">Semantic Similarity</span>
-                                <span class="score-value">{{(result.scores.semantic_similarity * 100) |
-                                    number:1}}%</span>
+                                <span class="score-label">Semantic Similarity <i class="fa-solid fa-circle-info" style="font-size: 0.75rem; margin-left: 0.25rem; opacity: 0.7;"></i></span>
+                                <span class="score-value">{{(result.scores.semantic_similarity * 100) | number:1}}%</span>
                             </div>
                             <div class="progress-bar-container">
                                 <div class="progress-bar blue"
                                     ng-style="{'width': (result.scores.semantic_similarity * 100) + '%'}"></div>
                             </div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.35rem; display: flex; justify-content: space-between;" ng-if="result.scores.headline_similarity !== null && result.scores.body_similarity !== null">
+                                <span>Headline: {{(result.scores.headline_similarity * 100) | number:1}}%</span>
+                                <span>Body: {{(result.scores.body_similarity * 100) | number:1}}%</span>
+                            </div>
                         </div>
 
                         <!-- Entity match -->
-                        <div class="score-item" ng-if="result.scores.entity_match !== null">
+                        <div class="score-item" ng-if="result.scores.entity_match !== null" title="Directional overlap of named entities (persons, places, organizations) with penalty for extra article entities.">
                             <div class="score-info">
-                                <span class="score-label">Entity Match</span>
+                                <span class="score-label">Entity Match <i class="fa-solid fa-circle-info" style="font-size: 0.75rem; margin-left: 0.25rem; opacity: 0.7;"></i></span>
                                 <span class="score-value">{{(result.scores.entity_match * 100) | number:1}}%</span>
                             </div>
                             <div class="progress-bar-container">
@@ -760,9 +825,9 @@
                         </div>
 
                         <!-- Keyword overlap -->
-                        <div class="score-item" ng-if="result.scores.keyword_overlap !== null">
+                        <div class="score-item" ng-if="result.scores.keyword_overlap !== null" title="YAKE-weighted topical alignment giving more weight to highly relevant keywords.">
                             <div class="score-info">
-                                <span class="score-label">Keyword Overlap</span>
+                                <span class="score-label">Keyword Overlap <i class="fa-solid fa-circle-info" style="font-size: 0.75rem; margin-left: 0.25rem; opacity: 0.7;"></i></span>
                                 <span class="score-value">{{(result.scores.keyword_overlap * 100) | number:1}}%</span>
                             </div>
                             <div class="progress-bar-container">
@@ -772,11 +837,10 @@
                         </div>
 
                         <!-- Numerical consistency -->
-                        <div class="score-item" ng-if="result.scores.numerical_consistency !== null">
+                        <div class="score-item" ng-if="result.scores.numerical_consistency !== null" title="Asymmetric numeral matching. Checks if claim numerals are present in the article, with partial credit for near-matches.">
                             <div class="score-info">
-                                <span class="score-label">Numerical Consistency</span>
-                                <span class="score-value">{{(result.scores.numerical_consistency * 100) |
-                                    number:1}}%</span>
+                                <span class="score-label">Numerical Consistency <i class="fa-solid fa-circle-info" style="font-size: 0.75rem; margin-left: 0.25rem; opacity: 0.7;"></i></span>
+                                <span class="score-value">{{(result.scores.numerical_consistency * 100) | number:1}}%</span>
                             </div>
                             <div class="progress-bar-container">
                                 <div class="progress-bar cyan"
@@ -785,11 +849,10 @@
                         </div>
 
                         <!-- Contradiction score -->
-                        <div class="score-item" ng-if="result.scores.contradiction_score !== null">
+                        <div class="score-item" ng-if="result.scores.contradiction_score !== null" title="NLI probability that the article contradicts the claim (temperature-calibrated).">
                             <div class="score-info">
-                                <span class="score-label">Contradiction Score</span>
-                                <span class="score-value">{{(result.scores.contradiction_score * 100) |
-                                    number:1}}%</span>
+                                <span class="score-label">Contradiction Risk <i class="fa-solid fa-circle-info" style="font-size: 0.75rem; margin-left: 0.25rem; opacity: 0.7;"></i></span>
+                                <span class="score-value">{{(result.scores.contradiction_score * 100) | number:1}}%</span>
                             </div>
                             <div class="progress-bar-container">
                                 <div class="progress-bar pink"
@@ -798,25 +861,61 @@
                         </div>
                     </div>
 
-                    <!-- Manipulation warnings -->
-                    <div class="manipulation-warnings" ng-if="hasManipulation(result.manipulation_flags)">
-                        <div class="warning-badge" ng-if="result.manipulation_flags.headline_manipulated">
-                            <i class="fa-solid fa-triangle-exclamation"></i>
-                            <span>Headline manipulation detected: Headline alters original news title meaning.</span>
-                        </div>
-                        <div class="warning-badge" ng-if="result.manipulation_flags.body_altered">
-                            <i class="fa-solid fa-triangle-exclamation"></i>
-                            <span>Body alteration detected: Submitted body text diverges significantly from original
-                                source content.</span>
-                        </div>
-                        <div class="warning-badge" ng-if="result.manipulation_flags.numbers_altered">
-                            <i class="fa-solid fa-triangle-exclamation"></i>
-                            <span>Numeral discrepancy detected: Statistics, numbers or dates altered relative to
-                                original source.</span>
-                        </div>
-                        <div class="warning-badge" ng-if="result.manipulation_flags.entities_replaced">
-                            <i class="fa-solid fa-triangle-exclamation"></i>
-                            <span>Entity replacement detected: Names, places, or organization details altered.</span>
+                    <!-- Verification Checks Grid -->
+                    <div class="verification-checks-section" ng-if="result.manipulation_flags">
+                        <h4><i class="fa-solid fa-list-check"></i> Verification Checks</h4>
+                        <div class="checks-grid">
+                            <!-- Headline Integrity -->
+                            <div class="check-card" ng-class="{'passed': !result.manipulation_flags.headline_manipulated, 'failed': result.manipulation_flags.headline_manipulated}">
+                                <div class="check-icon">
+                                    <i class="fa-solid fa-check" ng-if="!result.manipulation_flags.headline_manipulated"></i>
+                                    <i class="fa-solid fa-xmark" ng-if="result.manipulation_flags.headline_manipulated"></i>
+                                </div>
+                                <div class="check-content">
+                                    <div class="check-title">Headline Integrity</div>
+                                    <div class="check-desc" ng-if="!result.manipulation_flags.headline_manipulated">Headline meaning matches article body.</div>
+                                    <div class="check-desc" ng-if="result.manipulation_flags.headline_manipulated">Headline altered or sensationalized relative to original body.</div>
+                                </div>
+                            </div>
+
+                            <!-- Content Authenticity -->
+                            <div class="check-card" ng-class="{'passed': !result.manipulation_flags.body_altered, 'failed': result.manipulation_flags.body_altered}">
+                                <div class="check-icon">
+                                    <i class="fa-solid fa-check" ng-if="!result.manipulation_flags.body_altered"></i>
+                                    <i class="fa-solid fa-xmark" ng-if="result.manipulation_flags.body_altered"></i>
+                                </div>
+                                <div class="check-content">
+                                    <div class="check-title">Content Authenticity</div>
+                                    <div class="check-desc" ng-if="!result.manipulation_flags.body_altered">Submitted text matches the original source.</div>
+                                    <div class="check-desc" ng-if="result.manipulation_flags.body_altered">Submitted text diverges significantly or is fabricated.</div>
+                                </div>
+                            </div>
+
+                            <!-- Numerical Consistency -->
+                            <div class="check-card" ng-class="{'passed': !result.manipulation_flags.numbers_altered, 'failed': result.manipulation_flags.numbers_altered}">
+                                <div class="check-icon">
+                                    <i class="fa-solid fa-check" ng-if="!result.manipulation_flags.numbers_altered"></i>
+                                    <i class="fa-solid fa-xmark" ng-if="result.manipulation_flags.numbers_altered"></i>
+                                </div>
+                                <div class="check-content">
+                                    <div class="check-title">Numerical Consistency</div>
+                                    <div class="check-desc" ng-if="!result.manipulation_flags.numbers_altered">Statistics and dates are consistent.</div>
+                                    <div class="check-desc" ng-if="result.manipulation_flags.numbers_altered">Numbers or dates altered or inflated.</div>
+                                </div>
+                            </div>
+
+                            <!-- Entity Authenticity -->
+                            <div class="check-card" ng-class="{'passed': !result.manipulation_flags.entities_replaced, 'failed': result.manipulation_flags.entities_replaced}">
+                                <div class="check-icon">
+                                    <i class="fa-solid fa-check" ng-if="!result.manipulation_flags.entities_replaced"></i>
+                                    <i class="fa-solid fa-xmark" ng-if="result.manipulation_flags.entities_replaced"></i>
+                                </div>
+                                <div class="check-content">
+                                    <div class="check-title">Entity Authenticity</div>
+                                    <div class="check-desc" ng-if="!result.manipulation_flags.entities_replaced">Names, places, organizations match.</div>
+                                    <div class="check-desc" ng-if="result.manipulation_flags.entities_replaced">Named entities were swapped or replaced.</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 

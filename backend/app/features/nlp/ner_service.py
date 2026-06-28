@@ -155,3 +155,104 @@ class NERService:
 
         matched = len(claim_set & article_set)
         return matched / len(claim_set)
+
+    async def extract_entities_with_types(self, text: str) -> list[tuple[str, str]]:
+        """
+        Extract named entities with their type labels from text.
+
+        Unlike `extract_entities` which returns only span strings, this returns
+        (entity_span, entity_type) tuples. Entity types are normalised to the
+        base category: PER, LOC, or ORG.
+
+        Used by S10 for entity-type-aware substitution detection — checking
+        whether claim PER entities were replaced with different PER entities
+        (deliberate substitution) vs. completely different entity types
+        (topic mismatch).
+
+        Args:
+            text: Input Bangla or mixed text.
+
+        Returns:
+            List of (entity_span, entity_type) tuples, deduplicated.
+            Returns empty list if NER is not loaded or extraction fails.
+        """
+        if not NERService._loaded or NERService._pipeline is None:
+            return []
+
+        if not text or len(text.strip()) < 5:
+            return []
+
+        truncated = text[:1000]
+        loop = asyncio.get_event_loop()
+        try:
+            raw_entities = await loop.run_in_executor(
+                _NER_POOL,
+                lambda: NERService._pipeline(truncated),
+            )
+        except Exception:  # noqa: BLE001
+            return []
+
+        # Normalise entity group labels to base types (PER, LOC, ORG)
+        _TYPE_MAP = {
+            "PER": "PER", "B-PER": "PER", "I-PER": "PER",
+            "LOC": "LOC", "B-LOC": "LOC", "I-LOC": "LOC",
+            "ORG": "ORG", "B-ORG": "ORG", "I-ORG": "ORG",
+        }
+
+        seen: set[str] = set()
+        typed_entities: list[tuple[str, str]] = []
+        for ent in (raw_entities or []):
+            entity_group = ent.get("entity_group", ent.get("entity", ""))
+            word = ent.get("word", "").strip().lower()
+            base_type = _TYPE_MAP.get(entity_group)
+            if base_type and word and word not in seen:
+                seen.add(word)
+                typed_entities.append((word, base_type))
+
+        return typed_entities
+
+    @staticmethod
+    def compute_typed_entity_substitution(
+        claim_typed: list[tuple[str, str]],
+        article_typed: list[tuple[str, str]],
+    ) -> bool:
+        """
+        Detect whether entities were substituted with same-type replacements.
+
+        This is a stronger signal of deliberate manipulation than raw entity
+        overlap: if the claim mentions person A but the article mentions
+        person B (both PER), the entity was likely deliberately replaced.
+
+        Returns True if:
+        - The claim has entities of a given type (e.g. PER)
+        - The article also has entities of the same type
+        - But the specific entities differ (substitution, not absence)
+
+        Args:
+            claim_typed:   (entity_span, type) pairs from the claim.
+            article_typed: (entity_span, type) pairs from the article.
+
+        Returns:
+            True if same-type entity substitution is detected.
+        """
+        if not claim_typed or not article_typed:
+            return False
+
+        # Group entities by type
+        claim_by_type: dict[str, set[str]] = {}
+        for span, etype in claim_typed:
+            claim_by_type.setdefault(etype, set()).add(span)
+
+        article_by_type: dict[str, set[str]] = {}
+        for span, etype in article_typed:
+            article_by_type.setdefault(etype, set()).add(span)
+
+        # Check each type: if both sides have entities of this type but
+        # the overlap is zero, it's a same-type substitution.
+        for etype, claim_ents in claim_by_type.items():
+            article_ents = article_by_type.get(etype, set())
+            if article_ents and not (claim_ents & article_ents):
+                # Both sides have this entity type but zero overlap → substitution
+                return True
+
+        return False
