@@ -1,38 +1,135 @@
-backend/.env
-backend/.env.example
-backend/node_modules/
-backend/.venv
-# Python
+# ============================================================
+# BanglaFactGuard — Root .gitignore
+# ============================================================
+
+# ── Python / Backend ────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *$py.class
+*.pyo
+*.pyd
+.Python
 
-# Virtual Environment
+# Virtual environments
 .venv/
 venv/
 env/
+ENV/
+.env.bak
 
-# Environment Variables
+# Environment variables (sensitive)
+backend/.env
 .env
+!.env.example
+!backend/.env.example
 
-# Pytest
+# Pytest / Coverage
 .pytest_cache/
-
-# Coverage
 .coverage
+.coverage.*
 htmlcov/
+coverage.xml
+*.lcov
 
-# IDE
-.vscode/
-.idea/
+# MyPy / Type checkers
+.mypy_cache/
+.dmypy.json
+dmypy.json
 
-# OS
-.DS_Store
-Thumbs.db
-
-# Logs
-*.log
-
-# Build
+# Build artifacts
 dist/
-build/*.pt
+build/
+*.egg-info/
+*.egg
+MANIFEST
+
+# ML model weights & caches
+*.pt
+*.pth
+*.bin
+*.onnx
+*.safetensors
+backend/models/
+~/.cache/bangla_fact_guard/
+
+# Alembic
+# (keep alembic.ini and versions/ — exclude only generated migration leftovers)
+
+# ── Node / Frontend ─────────────────────────────────────────
+node_modules/
+frontend/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+package-lock.json
+
+# Angular build output
+frontend/dist/
+/dist/
+/tmp/
+/out-tsc/
+/bazel-out/
+
+# Angular cache
+frontend/.angular/cache
+.angular/cache
+
+# SCSS cache
+.sass-cache/
+
+# Test coverage
+/coverage/
+
+# ── IDEs & Editors ──────────────────────────────────────────
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*.sublime-workspace
+*.sublime-project
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+.history/
+
+# ── OS ──────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V500
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ── Logs ────────────────────────────────────────────────────
+*.log
+logs/
+/connect.lock
+/libpeerconnection.log
+testem.log
+
+# ── Docker ──────────────────────────────────────────────────
+# (keep docker-compose.yml)
+.dockerignore
+
+# ── Secrets & Credentials ───────────────────────────────────
+*.pem
+*.key
+*.crt
+secrets/
+credentials/
+
+# ── Miscellaneous ───────────────────────────────────────────
+*.bak
+*.tmp
+*.temp
+/typings
