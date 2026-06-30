@@ -1,0 +1,91 @@
+import { Component, OnInit, inject, signal } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { RouterLink } from '@angular/router';
+import { ApiService } from '../../../core/services/api.service';
+import { ExpertHistoryItem } from '../../../core/models/expert.model';
+import { VerdictBadgeComponent } from '../../../shared/components/verdict-badge/verdict-badge.component';
+import { API_ENDPOINTS } from '../../../core/constants/api-endpoints.constant';
+
+@Component({
+  selector: 'app-expert-history',
+  standalone: true,
+  imports: [CommonModule, RouterLink, VerdictBadgeComponent],
+  template: `
+    <div class="history-page">
+      <div class="container" style="padding-top:48px; padding-bottom:80px;">
+        <div class="page-header animate-in">
+          <h1>My Review History</h1>
+          <p>Your past expert votes and their outcomes</p>
+        </div>
+
+        @if (loading()) { <div class="loading-overlay"><div class="spinner"></div></div> }
+
+        @if (!loading() && history().length === 0) {
+          <div class="empty-state card text-center">
+            <div style="font-size:64px;margin-bottom:16px;">📋</div>
+            <h3>No reviews yet</h3>
+            <p>Start reviewing claims from the expert queue.</p>
+            <a routerLink="/expert/queue" class="btn btn-primary mt-4">Go to Queue</a>
+          </div>
+        }
+
+        @if (!loading() && history().length > 0) {
+          <div class="table-card card animate-in">
+            <table class="data-table">
+              <thead><tr>
+                <th>Headline</th>
+                <th>Your Vote</th>
+                <th>AI Vote</th>
+                <th>Final</th>
+                <th>Match</th>
+                <th>Date</th>
+              </tr></thead>
+              <tbody>
+                @for (h of history(); track h.review_id) {
+                  <tr>
+                    <td class="headline-cell">{{ h.headline || h.claim_id | slice:0:70 }}...</td>
+                    <td><app-verdict-badge [label]="h.expert_label" /></td>
+                    <td><app-verdict-badge [label]="h.ai_label" /></td>
+                    <td>
+                      @if (h.final_label) { <app-verdict-badge [label]="h.final_label" /> }
+                      @else { <span class="text-muted">Pending</span> }
+                    </td>
+                    <td>
+                      @if (h.matched !== null) {
+                        <span [class]="h.matched ? 'text-success' : 'text-error'">
+                          {{ h.matched ? '✓ Match' : '✗ Differ' }}
+                        </span>
+                      } @else { <span class="text-muted">—</span> }
+                    </td>
+                    <td class="text-muted text-sm">{{ h.voted_at | date:'MMM d, y' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+    </div>
+  `,
+  styles: [`
+    .history-page { background: var(--bg-base); min-height: 100%; }
+    .page-header { margin-bottom: 32px; h1 { margin-bottom: 8px; } p { color: var(--text-secondary); } }
+    .table-card { padding: 0; overflow: hidden; }
+    .headline-cell { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .empty-state { max-width: 400px; margin: 80px auto; }
+    .loading-overlay { display: flex; justify-content: center; padding: 80px; }
+  `]
+})
+export class ExpertHistoryComponent implements OnInit {
+  private readonly api = inject(ApiService);
+
+  readonly loading = signal(true);
+  readonly history = signal<ExpertHistoryItem[]>([]);
+
+  ngOnInit(): void {
+    this.api.get<ExpertHistoryItem[]>(API_ENDPOINTS.EXPERT_HISTORY, { limit: 50 }).subscribe({
+      next: h => { this.history.set(h); this.loading.set(false); },
+      error: () => this.loading.set(false),
+    });
+  }
+}
