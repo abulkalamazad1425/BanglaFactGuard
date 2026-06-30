@@ -357,3 +357,71 @@ class InferenceError(MLModelError):
             details={"model_name": model_name, "cause": cause},
         )
         self.model_name = model_name
+
+
+# ---------------------------------------------------------------------------
+# Authentication & Authorisation
+# ---------------------------------------------------------------------------
+
+
+class AuthError(BanglaFactGuardError):
+    """Base class for authentication and authorisation errors."""
+
+    http_status_code = 401
+
+
+class InvalidCredentialsError(AuthError):
+    """Raised when email/password do not match — generic to avoid oracle attacks."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            message="Invalid email or password.",
+            details={},
+        )
+
+
+class TokenExpiredError(AuthError):
+    """Raised when a JWT access token or refresh token has expired."""
+
+    def __init__(self) -> None:
+        super().__init__(message="Authentication token has expired.")
+
+
+class TokenInvalidError(AuthError):
+    """Raised when a JWT token cannot be decoded or its signature is invalid."""
+
+    def __init__(self) -> None:
+        super().__init__(message="Authentication token is invalid.")
+
+
+class InactiveAccountError(AuthError):
+    """Raised when a deactivated user attempts to log in."""
+
+    http_status_code = 403
+
+    def __init__(self) -> None:
+        super().__init__(message="This account has been deactivated.")
+
+
+class PermissionDeniedError(BanglaFactGuardError):
+    """Raised when an authenticated user lacks the required role."""
+
+    http_status_code = 403
+
+    def __init__(self, required_role: str | None = None) -> None:
+        msg = "You do not have permission to perform this action."
+        if required_role:
+            msg += f" Required role: {required_role}."
+        super().__init__(message=msg, details={"required_role": required_role})
+
+
+class WeakPasswordError(BanglaFactGuardError):
+    """Raised when a supplied password does not meet strength requirements."""
+
+    http_status_code = 422
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(
+            message=f"Password does not meet requirements: {reason}",
+            details={"reason": reason},
+        )

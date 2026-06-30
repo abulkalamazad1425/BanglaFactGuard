@@ -400,6 +400,38 @@ class ClassificationThresholds(BaseSettings):
         return self.contradiction_override_threshold
 
 
+class AuthSettings(BaseSettings):
+    """JWT authentication and security settings."""
+
+    model_config = SettingsConfigDict(env_prefix="AUTH_")
+
+    secret_key: str = Field(
+        default="CHANGE_ME_IN_PRODUCTION_USE_STRONG_RANDOM_SECRET_32CHARS",
+        description="HS256 signing key for JWT tokens. Must be at least 32 characters in production.",
+    )
+    algorithm: str = Field(default="HS256", description="JWT signing algorithm")
+    access_token_ttl_seconds: int = Field(
+        default=900,  # 15 minutes
+        description="Access token time-to-live in seconds",
+    )
+    refresh_token_ttl_seconds: int = Field(
+        default=604_800,  # 7 days
+        description="Refresh token time-to-live in seconds",
+    )
+    bcrypt_rounds: int = Field(
+        default=12,
+        description="bcrypt work factor (cost). Higher = slower but more secure.",
+    )
+    initial_expert_credibility: float = Field(
+        default=0.5,
+        description="Credibility score assigned to new expert accounts",
+    )
+    min_expert_votes_to_finalize: int = Field(
+        default=3,
+        description="Minimum expert votes required before a claim can be finalized",
+    )
+
+
 class AppSettings(BaseSettings):
     """Top-level application settings."""
 
@@ -453,6 +485,7 @@ class AppSettings(BaseSettings):
     )
     multimodal: MultimodalSettings = Field(default_factory=MultimodalSettings)
     minio: MinioSettings = Field(default_factory=MinioSettings)
+    auth: AuthSettings = Field(default_factory=AuthSettings)
 
     @property
     def classification(self) -> ClassificationThresholds:

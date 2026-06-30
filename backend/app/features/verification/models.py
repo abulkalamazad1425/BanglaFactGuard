@@ -109,6 +109,14 @@ class VerifiedClaim(UUIDMixin, TimestampMixin, ReprMixin, Base):
         comment="Alleged publication date supplied in the request (optional)",
     )
 
+    submitter_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="FK to users.id — NULL for anonymous submissions",
+    )
+
     status: Mapped[ClaimStatus] = mapped_column(
         Enum(ClaimStatus, name="claim_status_enum", create_type=True),
         nullable=False,
@@ -116,6 +124,7 @@ class VerifiedClaim(UUIDMixin, TimestampMixin, ReprMixin, Base):
         index=True,
         comment="Pipeline lifecycle state: pending → processing → completed/failed",
     )
+
 
     source: Mapped["VerifiedSource | None"] = relationship(
         "VerifiedSource",

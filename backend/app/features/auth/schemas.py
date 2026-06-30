@@ -31,7 +31,7 @@ class TokenResponse(BaseModel):
 
 
 class RefreshRequest(BaseModel):
-    """Request body for POST /api/v1/auth/refresh."""
+    """Request body for POST /api/v1/auth/refresh and /logout."""
     refresh_token: str
 
 
@@ -46,13 +46,24 @@ class PasswordResetConfirm(BaseModel):
     new_password: str = Field(..., min_length=8, max_length=128)
 
 
+class ChangePasswordRequest(BaseModel):
+    """Request body for POST /api/v1/auth/change-password."""
+    current_password: str
+    new_password: str = Field(..., min_length=8, max_length=128)
+
+
 class UserMeResponse(BaseModel):
-    """Response for GET /api/v1/auth/me."""
+    """Response for GET /api/v1/auth/me and POST /api/v1/auth/register."""
     id: str
     email: str
     full_name: str | None
     role: str
     is_active: bool
     is_verified: bool
+    # Token fields are optional — only included on register/login responses
+    access_token: str | None = None
+    refresh_token: str | None = None
+    token_type: str | None = None
+    expires_in: int | None = None
 
     model_config = {"from_attributes": True}
