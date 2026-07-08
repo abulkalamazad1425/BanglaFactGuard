@@ -4,12 +4,15 @@ import { tap } from 'rxjs/operators';
 import { ApiService } from './api.service';
 import { API_ENDPOINTS } from '../core/constants/api-endpoints.constant';
 import { NotificationItem, UnreadCountResponse } from '../models/notification.model';
+import { AuthService } from './auth.service';
+import { of } from 'rxjs';
 
 // ── Notification Service ──────────────────────────────────────────────
 // Covers backend notifications/router.py endpoints
 @Injectable({ providedIn: 'root' })
 export class NotificationService {
   private readonly api = inject(ApiService);
+  private readonly auth = inject(AuthService);
 
   /** Reactive unread count — used by navbar and notification-list */
   readonly unreadCount = signal<number>(0);
@@ -30,6 +33,9 @@ export class NotificationService {
 
   /** GET /api/v1/notifications/count — also updates the unreadCount signal */
   getUnreadCount(): Observable<UnreadCountResponse> {
+    if (!this.auth.isLoggedIn()) {
+      return of({ unread_count: 0 });
+    }
     return this.api.get<UnreadCountResponse>(API_ENDPOINTS.NOTIFICATIONS_COUNT).pipe(
       tap(r => this.unreadCount.set(r.unread_count))
     );
