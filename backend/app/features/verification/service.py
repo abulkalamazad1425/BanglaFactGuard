@@ -103,12 +103,13 @@ class VerificationService:
         self.nli_service = nli_service
         self.http_client = http_client
 
-    async def verify(self, request: VerificationRequest) -> VerificationResponse:
+    async def verify(self, request: VerificationRequest, *, submitter_id: uuid.UUID | None = None) -> VerificationResponse:
         """
         Run the full verification pipeline for a claim.
 
         Args:
-            request: The validated VerificationRequest from the API.
+            request:      The validated VerificationRequest from the API.
+            submitter_id: UUID of the authenticated user submitting the claim (None = anonymous).
 
         Returns:
             VerificationResponse with verdict, confidence, reasoning, and scores.
@@ -125,6 +126,7 @@ class VerificationService:
             news_body=request.news_body,
             published_date=request.published_date,
             force_refresh=request.force_refresh,
+            submitter_id=submitter_id,
         )
 
         log.info(
@@ -151,12 +153,9 @@ class VerificationService:
     async def get_result(self, claim_id: uuid.UUID) -> VerificationResponse | None:
         """
         Retrieve a previously computed verification result by claim ID.
-
-        Args:
-            claim_id: UUID of the verified_claims record.
-
-        Returns:
-            VerificationResponse or None if the claim does not exist / not yet completed.
+        Fetches the top-ranked articles from the retrieved_articles table and
+        attempts to restore full scores (headline_similarity, body_similarity)
+        and manipulation_flags from the Redis cache.
         """
         result = await self.result_repo.get_by_claim_id(claim_id)
         if result is None:
@@ -167,22 +166,90 @@ class VerificationService:
             return None
 
         from app.core.constants import VerificationLabel
-        from app.features.verification.schemas import ManipulationFlagsSchema, VerificationScoresResponse
+        from app.features.verification.schemas import (
+            ManipulationFlagsSchema,
+            VerificationScoresResponse,
+        )
+        from app.features.articles.schemas import RankedArticleSchema
+        from sqlalchemy import select
+        from app.features.articles.models import RetrievedArticle
+
+        # -----------------------------------------------------------------
+        # Fetch top-3 retrieved articles from DB (async-safe explicit query)
+        # -----------------------------------------------------------------
+        art_stmt = (
+            select(RetrievedArticle)
+            .where(
+                RetrievedArticle.claim_id == claim_id,
+                RetrievedArticle.extraction_success.is_(True),
+            )
+            .order_by(RetrievedArticle.rank_score.desc())
+            .limit(3)
+        )
+        art_rows = list((await self.result_repo.session.execute(art_stmt)).scalars().all())
+        from app.core.constants import SearchProvider
+        matched_articles = [
+            RankedArticleSchema(
+                url=a.url,
+                title=a.title,
+                author=a.author,
+                published_date=a.published_date,
+                body=a.body,
+                rank_score=a.rank_score or 0.0,
+                search_provider=SearchProvider.INTERNAL_SITE,  # default — actual value not stored on article
+                extraction_method=a.extraction_method,
+            )
+            for a in art_rows
+        ]
+
+        # -----------------------------------------------------------------
+        # Try Redis cache for full scores + manipulation_flags
+        # -----------------------------------------------------------------
+        cached_scores = None
+        cached_flags = None
+        try:
+            import json
+            if claim.claim_hash:
+                raw = await self.cache_service.get_claim_result(claim.claim_hash)
+                if raw:
+                    cached_data = json.loads(raw)
+                    s = cached_data.get("scores", {})
+                    cached_scores = VerificationScoresResponse(
+                        semantic_similarity=s.get("semantic_similarity"),
+                        entity_match=s.get("entity_match"),
+                        keyword_overlap=s.get("keyword_overlap"),
+                        numerical_consistency=s.get("numerical_consistency"),
+                        contradiction_score=s.get("contradiction_score"),
+                        headline_similarity=s.get("headline_similarity"),
+                        body_similarity=s.get("body_similarity"),
+                    )
+                    f = cached_data.get("manipulation_flags", {})
+                    cached_flags = ManipulationFlagsSchema(
+                        headline_manipulated=f.get("headline_manipulated", False),
+                        body_altered=f.get("body_altered", False),
+                        numbers_altered=f.get("numbers_altered", False),
+                        entities_replaced=f.get("entities_replaced", False),
+                    )
+        except Exception:
+            pass  # Redis unavailable — fallback to DB scores below
+
+        scores = cached_scores or VerificationScoresResponse(
+            semantic_similarity=result.semantic_similarity,
+            entity_match=result.entity_match,
+            contradiction_score=result.contradiction_score,
+            keyword_overlap=result.keyword_overlap,
+            numerical_consistency=result.numerical_consistency,
+        )
+        flags = cached_flags or ManipulationFlagsSchema()
 
         return VerificationResponse(
             claim_id=claim_id,
             label=VerificationLabel(result.label),
             confidence=result.confidence,
             reasoning=result.reasoning or "",
-            matched_articles=[],
-            scores=VerificationScoresResponse(
-                semantic_similarity=result.semantic_similarity,
-                entity_match=result.entity_match,
-                contradiction_score=result.contradiction_score,
-                keyword_overlap=result.keyword_overlap,
-                numerical_consistency=result.numerical_consistency,
-            ),
-            manipulation_flags=ManipulationFlagsSchema(),
+            matched_articles=matched_articles,
+            scores=scores,
+            manipulation_flags=flags,
             normalized_source=claim.normalized_source,
             cached=True,
             processing_time_ms=None,
@@ -231,6 +298,7 @@ class VerificationService:
                 result_repo=self.result_repo,
                 article_repo=self.article_repo,
                 cache_service=self.cache_service,
+                session=self.claim_repo.session,
             ),
         ]
 

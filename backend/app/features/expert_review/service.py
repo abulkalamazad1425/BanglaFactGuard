@@ -35,7 +35,6 @@ from app.features.expert_review.schemas import (
     ExpertTopArticle,
 )
 from app.features.verification.repository import ClaimRepository, ResultRepository
-
 logger = structlog.get_logger(__name__)
 _SETTINGS = get_settings()
 _AUTH = _SETTINGS.auth
@@ -57,6 +56,30 @@ class ExpertReviewService:
         self._credibility = credibility_repo
         self._claims = claim_repo
         self._results = result_repo
+        # Session is accessible via any repo for explicit async queries
+        self._session = review_repo.session
+
+    async def _fetch_top_article(self, result) -> ExpertTopArticle | None:
+        """
+        Explicitly fetch the top article for a result using an async-safe query.
+        (Lazy loading is NOT safe in SQLAlchemy async — use explicit select instead.)
+        """
+        if result is None or result.top_article_id is None:
+            return None
+        from sqlalchemy import select
+        from app.features.articles.models import RetrievedArticle
+        stmt = select(RetrievedArticle).where(RetrievedArticle.id == result.top_article_id)
+        row = (await self._session.execute(stmt)).scalar_one_or_none()
+        if row is None:
+            return None
+        body = row.body
+        return ExpertTopArticle(
+            url=row.url,
+            title=row.title,
+            published_date=str(row.published_date) if row.published_date else None,
+            rank_score=row.rank_score,
+            body_snippet=(body[:400] + '…') if body and len(body) > 400 else body,
+        )
 
     # ------------------------------------------------------------------
     # Queue
@@ -71,23 +94,11 @@ class ExpertReviewService:
         claim = await self._claims.get_by_id(claim_id)
         if not claim:
             raise RecordNotFoundError("Claim not found.")
-            
+
         result = await self._results.get_by_claim_id(claim_id)
         vote_count = await self._reviews.count_votes_for_claim(claim_id)
+        top_article = await self._fetch_top_article(result)
 
-        # Build top article preview
-        top_article = None
-        if result and result.matched_articles:
-            arts = sorted(result.matched_articles, key=lambda a: a.rank_score or 0, reverse=True)
-            best = arts[0]
-            top_article = ExpertTopArticle(
-                url=best.url,
-                title=best.title,
-                published_date=str(best.published_date) if best.published_date else None,
-                rank_score=best.rank_score,
-                body_snippet=(best.body[:400] + '…') if best.body and len(best.body) > 400 else best.body,
-            )
-        
         return ExpertQueueItemResponse(
             claim_id=str(claim.id),
             headline=claim.headline,
@@ -126,19 +137,7 @@ class ExpertReviewService:
                 continue
             result = await self._results.get_by_claim_id(claim.id)
             vote_count = await self._reviews.count_votes_for_claim(claim.id)
-
-            # Build top article for queue card preview
-            top_article = None
-            if result and result.matched_articles:
-                arts = sorted(result.matched_articles, key=lambda a: a.rank_score or 0, reverse=True)
-                best = arts[0]
-                top_article = ExpertTopArticle(
-                    url=best.url,
-                    title=best.title,
-                    published_date=str(best.published_date) if best.published_date else None,
-                    rank_score=best.rank_score,
-                    body_snippet=(best.body[:400] + '…') if best.body and len(best.body) > 400 else best.body,
-                )
+            top_article = await self._fetch_top_article(result)
 
             queue_items.append(ExpertQueueItemResponse(
                 claim_id=str(claim.id),

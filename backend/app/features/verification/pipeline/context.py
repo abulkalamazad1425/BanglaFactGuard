@@ -168,6 +168,7 @@ class PipelineContext:
     # -----------------------------------------------------------------------
     request_id: uuid.UUID = field(default_factory=uuid.uuid4)
     claim_id: uuid.UUID | None = None
+    submitter_id: uuid.UUID | None = None   # set from authenticated user (None = anonymous)
     raw_headline: str = ""
     raw_news_body: str | None = None
     raw_claimed_source: str = ""
@@ -411,6 +412,7 @@ def build_context(
     published_date: date | None = None,
     force_refresh: bool = False,
     claim_id: uuid.UUID | None = None,
+    submitter_id: uuid.UUID | None = None,
 ) -> PipelineContext:
     """
     Construct a fully initialised PipelineContext from raw request inputs.
@@ -422,6 +424,7 @@ def build_context(
     return PipelineContext(
         request_id=uuid.uuid4(),
         claim_id=claim_id,
+        submitter_id=submitter_id,
         raw_headline=headline,
         raw_news_body=news_body,
         raw_claimed_source=claimed_source,

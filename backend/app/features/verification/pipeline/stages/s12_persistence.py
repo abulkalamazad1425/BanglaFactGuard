@@ -54,6 +54,7 @@ import structlog
 from app.core.constants import ClaimStatus, PipelineStageID, SearchProvider
 from app.core.exceptions import PersistenceError
 from app.features.articles.models import RetrievedArticle, SearchQuery
+from app.features.notifications.models import Notification
 from app.features.verification.models import VerificationLog, VerifiedClaim, VerificationResult
 from app.features.verification.pipeline.context import PipelineContext
 from app.features.articles.repository import ArticleRepository
@@ -61,6 +62,7 @@ from app.features.verification.repository import ClaimRepository
 from app.features.verification.repository import ResultRepository
 from app.features.cache.cache_service import CacheService
 from app.shared.utils.hashing import compute_url_hash
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = structlog.get_logger(__name__)
 
@@ -84,11 +86,13 @@ class PersistenceStage:
         result_repo: ResultRepository,
         article_repo: ArticleRepository,
         cache_service: CacheService,
+        session: AsyncSession | None = None,
     ) -> None:
         self.claim_repo = claim_repo
         self.result_repo = result_repo
         self.article_repo = article_repo
         self.cache_service = cache_service
+        self.session = session or claim_repo.session  # fall back to claim_repo's session
 
     async def execute(self, context: PipelineContext) -> PipelineContext:
         """
@@ -177,6 +181,11 @@ class PersistenceStage:
             import asyncio
             asyncio.create_task(self._update_redis_cache(context))
 
+            # ------------------------------------------------------------------
+            # 7b. Send notification to the submitter (fire-and-forget)
+            # ------------------------------------------------------------------
+            await self._send_notification(claim, context)
+
             context.persisted = True
             logger.info(
                 "s12_persistence_complete",
@@ -194,6 +203,40 @@ class PersistenceStage:
 
     # ------------------------------------------------------------------
     # Private helpers
+    # ------------------------------------------------------------------
+
+    async def _send_notification(self, claim: VerifiedClaim, context: PipelineContext) -> None:
+        """
+        Create a Notification record for the user who submitted the claim.
+        Silently swallowed if the claim has no submitter (anonymous) or on any error.
+        """
+        try:
+            if not claim.submitter_id or not context.label:
+                return
+            label_display = {
+                "TRUE": "✅ True",
+                "FALSE": "❌ False",
+                "PARTIALLY_TRUE": "⚠️ Partially True",
+                "NOT_FOUND_IN_CLAIMED_SOURCE": "🔍 Not Found in Source",
+            }.get(context.label.value, context.label.value)
+            confidence_pct = f"{(context.confidence or 0) * 100:.0f}%"
+            headline_preview = (context.raw_headline or "")[:80]
+            if len(context.raw_headline or "") > 80:
+                headline_preview += "…"
+            notif = Notification(
+                user_id=claim.submitter_id,
+                title=f"Verification Complete: {label_display} ({confidence_pct})",
+                body=f"Your claim \"{headline_preview}\" has been verified.",
+                notification_type="VERIFICATION_COMPLETE",
+                link_url=f"/verify/{claim.id}",
+                is_read=False,
+            )
+            self.session.add(notif)
+            await self.session.flush()
+            logger.info("s12_notification_sent", claim_id=str(claim.id), user_id=str(claim.submitter_id))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("s12_notification_failed", error=str(exc))
+
     # ------------------------------------------------------------------
 
     async def _upsert_claim(self, context: PipelineContext) -> VerifiedClaim:
@@ -220,6 +263,7 @@ class PersistenceStage:
             normalized_source=context.normalized_source,
             claim_hash=context.claim_hash,
             published_date=context.published_date,
+            submitter_id=context.submitter_id,
             status=ClaimStatus.PROCESSING,
         )
         return await self.claim_repo.create(claim)

@@ -90,6 +90,6 @@
     .article-title { font-size: 16px; font-weight: 500; color: #60a5fa; line-height: 1.4; text-decoration: none; &:hover { text-decoration: underline; } }
     .article-match { padding: 4px 10px; background: rgba(59, 130, 246, 0.15); color: #60a5fa; border-radius: var(--radius-full); font-size: 12px; font-weight: 600; white-space: nowrap; }
     .article-meta { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 12px; font-size: 13px; color: var(--text-muted); }
-    .article-snippet { font-size: 14px; color: var(--text-secondary); line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .article-snippet { font-size: 14px; color: var(--text-secondary); line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; transition: color 0.2s; &:hover { color: var(--text-primary); } }
 
     .loading-card, .not-found { max-width: 400px; margin: 80px auto; }

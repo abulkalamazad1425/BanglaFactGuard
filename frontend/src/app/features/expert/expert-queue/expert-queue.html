@@ -25,7 +25,8 @@
         @if (!loading() && queue().length > 0) {
           <div class="queue-list animate-in">
             @for (item of queue(); track item.claim_id) {
-              <div class="queue-card card hoverable">
+              <div class="queue-card card">
+                <!-- Card Header: Metadata + Verdict Badge -->
                 <div class="queue-header">
                   <div class="queue-meta">
                     <span class="text-muted text-xs">Submitted {{ item.submitted_at | date:'MMM d, y' }}</span>
@@ -34,20 +35,74 @@
                       {{ item.vote_count }} / 3 votes
                     </div>
                   </div>
-                  @if (item.ai_label) {
-                    <app-verdict-badge [label]="item.ai_label" />
-                  }
+                  <div style="display: flex; align-items: center; gap: 12px;">
+                    @if (item.ai_confidence !== null && item.ai_confidence !== undefined) {
+                      <span class="ai-conf text-sm">
+                        AI: <strong>{{ (item.ai_confidence! * 100).toFixed(1) }}%</strong>
+                      </span>
+                    }
+                    @if (item.ai_label) {
+                      <app-verdict-badge [label]="item.ai_label" />
+                    }
+                  </div>
                 </div>
-                <p class="queue-headline">{{ item.headline }}</p>
-                <div class="queue-footer">
+
+                <!-- Source -->
+                <div class="queue-source-row">
+                  <span class="source-icon">🌐</span>
                   <span class="queue-source text-muted text-sm">{{ item.claimed_source }}</span>
-                  @if (item.ai_confidence !== null) {
-                    <span class="ai-conf text-sm">
-                      AI: <strong>{{ (item.ai_confidence! * 100).toFixed(1) }}%</strong>
-                    </span>
-                  }
-                  <a [routerLink]="['/expert/queue', item.claim_id]" class="btn btn-primary btn-sm">
-                    Review →
+                </div>
+
+                <!-- Submitted Headline -->
+                <div class="claim-section">
+                  <div class="section-label">📰 Submitted Headline</div>
+                  <p class="queue-headline">{{ item.headline }}</p>
+                </div>
+
+                <!-- Submitted News Body (if available) -->
+                @if (item.news_body) {
+                  <div class="claim-section">
+                    <div class="section-label">📄 Submitted News Body</div>
+                    <p class="queue-body-snippet">{{ item.news_body }}</p>
+                  </div>
+                }
+
+                <!-- Top Supporting Evidence -->
+                @if (item.top_article) {
+                  <div class="evidence-section">
+                    <div class="section-label" style="margin-bottom: 10px;">🔍 Top Matching Evidence from Source</div>
+                    <div class="evidence-card">
+                      <div class="evidence-header">
+                        <div style="flex: 1;">
+                          <a [href]="item.top_article.url" target="_blank" class="evidence-title">
+                            {{ item.top_article.title || 'View Source Article' }}
+                          </a>
+                        </div>
+                        @if (item.top_article.rank_score != null) {
+                          <span class="evidence-score">
+                            {{ (item.top_article.rank_score * 100).toFixed(1) }}% match
+                          </span>
+                        }
+                      </div>
+                      <div class="evidence-meta">
+                        @if (item.top_article.published_date) {
+                          <span>📅 {{ item.top_article.published_date }}</span>
+                        }
+                        <span>🌐 {{ getHost(item.top_article.url) }}</span>
+                      </div>
+                      @if (item.top_article.body_snippet) {
+                        <a [href]="item.top_article.url" target="_blank" style="text-decoration: none; color: inherit; display: block;">
+                          <p class="evidence-snippet">{{ item.top_article.body_snippet }}</p>
+                        </a>
+                      }
+                    </div>
+                  </div>
+                }
+
+                <!-- Footer Actions -->
+                <div class="queue-footer">
+                  <a [routerLink]="['/expert/queue', item.claim_id]" class="btn btn-primary btn-sm" style="margin-left: auto;">
+                    Review in Detail →
                   </a>
                 </div>
               </div>

@@ -8,7 +8,7 @@ import { ToastService } from '../../../shared/services/toast.service';
 @Component({
   selector: 'app-notification-list',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, RouterLink],
   templateUrl: './notification-list.html',
   styleUrls: ['./notification-list.scss']
 })

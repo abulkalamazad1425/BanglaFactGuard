@@ -35,7 +35,7 @@
               </div>
             </div>
             @if (n.link_url) {
-              <a [href]="n.link_url" class="btn btn-ghost btn-sm" target="_blank">View →</a>
+              <a [routerLink]="n.link_url" class="btn btn-ghost btn-sm">View →</a>
             }
           </div>
         }

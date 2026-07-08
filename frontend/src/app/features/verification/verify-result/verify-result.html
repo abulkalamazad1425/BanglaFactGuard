@@ -236,7 +236,9 @@
                           <span>🌐 {{ getHost(art.url) }}</span>
                         </div>
                         @if (art.body) {
-                          <p class="article-snippet" style="-webkit-line-clamp: 4; margin-top: 12px;">{{ art.body }}</p>
+                          <a [href]="art.url" target="_blank" style="text-decoration: none; color: inherit; display: block; cursor: pointer;">
+                            <p class="article-snippet" style="-webkit-line-clamp: 4; margin-top: 12px;">{{ art.body }}</p>
+                          </a>
                         }
                       </div>
                     }

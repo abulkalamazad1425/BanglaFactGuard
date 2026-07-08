@@ -5,9 +5,18 @@
 export type ExpertLabel = 'TRUE' | 'FALSE' | 'PARTIALLY_TRUE' | 'NOT_FOUND_IN_CLAIMED_SOURCE';
 
 // ── Queue item from GET /expert/queue ────────────────────────────────
+export interface ExpertTopArticle {
+  url: string;
+  title?: string | null;
+  published_date?: string | null;
+  rank_score?: number | null;
+  body_snippet?: string | null;
+}
+
 export interface ExpertQueueItem {
   claim_id: string;
   headline: string;
+  news_body?: string | null;
   claimed_source: string;
   normalized_source?: string | null;
   ai_label?: string | null;
@@ -15,6 +24,7 @@ export interface ExpertQueueItem {
   submitted_at: string;
   has_voted: boolean;
   vote_count: number;
+  top_article?: ExpertTopArticle | null;
 }
 
 // ── Review detail from GET /expert/queue/{claim_id} ─────────────────

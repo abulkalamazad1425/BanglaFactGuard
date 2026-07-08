@@ -31,4 +31,8 @@ export class ExpertQueueComponent implements OnInit {
 
   prev(): void { this.offset.update(o => Math.max(0, o - this.limit)); this.load(); }
   next(): void { this.offset.update(o => o + this.limit); this.load(); }
+
+  getHost(url: string): string {
+    try { return new URL(url).hostname.replace('www.', ''); } catch { return ''; }
+  }
 }

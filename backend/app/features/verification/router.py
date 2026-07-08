@@ -25,6 +25,8 @@ from app.features.verification.schemas import (
     VerificationStatusResponse,
 )
 from app.features.verification.service import VerificationService
+from app.features.auth.security import get_current_user_optional
+from app.features.auth.models import User
 from app.shared.dependencies import get_claim_repo, get_verification_service
 
 router = APIRouter(prefix="/verify", tags=["Verification"])
@@ -50,10 +52,12 @@ router = APIRouter(prefix="/verify", tags=["Verification"])
 async def verify_claim(
     request: VerificationRequest,
     service: VerificationService = Depends(get_verification_service),
+    current_user: User | None = Depends(get_current_user_optional),
 ) -> VerificationResponse:
     """Run the 12-stage source-based verification pipeline."""
     try:
-        return await service.verify(request)
+        submitter_id = current_user.id if current_user else None
+        return await service.verify(request, submitter_id=submitter_id)
     except PipelineError as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

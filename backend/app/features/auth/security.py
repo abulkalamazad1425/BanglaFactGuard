@@ -210,3 +210,25 @@ def require_role(*roles: str):
         return user
 
     return _check_role
+
+
+async def get_current_user_optional(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
+) -> "User | None":
+    """
+    FastAPI dependency: like get_current_user but returns None when no valid
+    token is present instead of raising an exception.
+    Allows endpoints to support both anonymous and authenticated callers.
+    """
+    if credentials is None:
+        return None
+    try:
+        payload = decode_access_token(credentials.credentials)
+        user_id = uuid.UUID(payload["sub"])
+        async with AsyncSessionLocal() as session:
+            user: User | None = await session.get(User, user_id)
+        if user is None or not user.is_active:
+            return None
+        return user
+    except Exception:  # noqa: BLE001
+        return None
