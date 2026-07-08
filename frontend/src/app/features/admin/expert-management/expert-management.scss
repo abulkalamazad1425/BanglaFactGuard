@@ -1,0 +1,10 @@
+.mgmt-page { background: var(--bg-base); min-height: 100%; }
+.page-header { margin-bottom: 32px; }
+.header-content { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px; h1 { margin-bottom: 8px; } p { color: var(--text-secondary); } }
+.table-card { padding: 0; overflow: hidden; }
+.action-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.modal-card { max-width: 420px; width: 100%; h3 { font-size: 1.1rem; } }
+.form-group { margin-bottom: 20px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 12px; }
+.loading-overlay { display: flex; justify-content: center; padding: 80px; }

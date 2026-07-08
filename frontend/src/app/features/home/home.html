@@ -1,0 +1,111 @@
+    <div class="home">
+      <!-- Hero -->
+      <section class="hero">
+        <div class="hero-bg">
+          <div class="hero-blob hero-blob-1"></div>
+          <div class="hero-blob hero-blob-2"></div>
+          <div class="hero-grid"></div>
+        </div>
+        <div class="container hero-content animate-in">
+          <div class="hero-badge">
+            <span class="badge badge-primary">🔬 AI-Powered Fact Verification</span>
+          </div>
+          <h1 class="hero-title">
+            Verify Bangla News<br>
+            <span class="gradient-text">With Confidence</span>
+          </h1>
+          <p class="hero-subtitle">
+            BanglaFactGuard uses a 12-stage AI pipeline combining BanglaBERT, EfficientNet, semantic search,
+            and expert review to verify Bangla news claims against their claimed sources.
+          </p>
+          <div class="hero-actions">
+            <a routerLink="/verify" class="btn btn-primary btn-lg">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              Verify a Claim
+            </a>
+            <a routerLink="/multimodal" class="btn btn-secondary btn-lg">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h.01M15 9h.01M9 15h.01M15 15h.01M12 12h.01"/></svg>
+              Multimodal Check
+            </a>
+          </div>
+
+          <!-- Stats bar -->
+          @if (stats()) {
+            <div class="hero-stats animate-in">
+              <div class="stat-item">
+                <span class="stat-num">{{ stats()!.total_submissions | number }}</span>
+                <span class="stat-lbl">Total Claims</span>
+              </div>
+              <div class="stat-divider"></div>
+              <div class="stat-item">
+                <span class="stat-num text-success">{{ stats()!.true_count | number }}</span>
+                <span class="stat-lbl">Verified True</span>
+              </div>
+              <div class="stat-divider"></div>
+              <div class="stat-item">
+                <span class="stat-num text-error">{{ stats()!.false_count | number }}</span>
+                <span class="stat-lbl">Found False</span>
+              </div>
+              <div class="stat-divider"></div>
+              <div class="stat-item">
+                <span class="stat-num text-warning">{{ stats()!.partially_true_count | number }}</span>
+                <span class="stat-lbl">Partially True</span>
+              </div>
+            </div>
+          }
+        </div>
+      </section>
+
+      <!-- Features -->
+      <section class="section features">
+        <div class="container">
+          <div class="section-header">
+            <h2>How It Works</h2>
+            <p>A comprehensive 12-stage pipeline for accurate fact verification</p>
+          </div>
+          <div class="grid-3">
+            @for (feat of features; track feat.icon) {
+              <div class="feature-card glass-card">
+                <div class="feature-icon">{{ feat.icon }}</div>
+                <h3>{{ feat.title }}</h3>
+                <p>{{ feat.desc }}</p>
+              </div>
+            }
+          </div>
+        </div>
+      </section>
+
+      <!-- Verdict Types -->
+      <section class="section section-sm verdicts">
+        <div class="container">
+          <div class="section-header">
+            <h2>Verdict Types</h2>
+            <p>BanglaFactGuard returns one of four possible verdicts</p>
+          </div>
+          <div class="grid-2">
+            @for (v of verdicts; track v.label) {
+              <div class="verdict-card card">
+                <div class="verdict-badge" [ngClass]="v.cls">{{ v.icon }} {{ v.label }}</div>
+                <p>{{ v.desc }}</p>
+              </div>
+            }
+          </div>
+        </div>
+      </section>
+
+      <!-- CTA -->
+      <section class="section section-sm cta">
+        <div class="container container-sm">
+          <div class="cta-card glass-card">
+            <h2>Ready to fact-check?</h2>
+            <p>Submit your first claim and get a detailed AI analysis in seconds.</p>
+            <div class="cta-actions">
+              <a routerLink="/verify" class="btn btn-primary btn-lg">Start Verifying</a>
+              @if (!isLoggedIn()) {
+                <a routerLink="/auth/register" class="btn btn-ghost btn-lg">Create Free Account</a>
+              }
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>

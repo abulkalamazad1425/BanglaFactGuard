@@ -1,12 +1,12 @@
 import { Component, Input } from '@angular/core';
 import { NgClass } from '@angular/common';
-import { VerificationLabel } from '../../../core/models/verification.model';
+import { VerificationLabel } from '../../../models/verification.model';
 
 const LABEL_CONFIG: Record<string, { text: string; cls: string; icon: string }> = {
-  'TRUE':                         { text: 'True',            cls: 'badge-true',      icon: '✓' },
-  'FALSE':                        { text: 'False',           cls: 'badge-false',     icon: '✗' },
-  'PARTIALLY_TRUE':               { text: 'Partially True',  cls: 'badge-partial',   icon: '◑' },
-  'NOT_FOUND_IN_CLAIMED_SOURCE':  { text: 'Not Found',       cls: 'badge-not-found', icon: '?' },
+  'TRUE': { text: 'True', cls: 'badge-true', icon: '✓' },
+  'FALSE': { text: 'False', cls: 'badge-false', icon: '✗' },
+  'PARTIALLY_TRUE': { text: 'Partially True', cls: 'badge-partial', icon: '◑' },
+  'NOT_FOUND_IN_CLAIMED_SOURCE': { text: 'Not Found', cls: 'badge-not-found', icon: '?' },
 };
 
 @Component({

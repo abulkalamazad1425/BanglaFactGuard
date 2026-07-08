@@ -32,6 +32,7 @@ from app.features.expert_review.schemas import (
     ExpertQueueItemResponse,
     ExpertReviewResponse,
     ExpertStatsResponse,
+    ExpertTopArticle,
 )
 from app.features.verification.repository import ClaimRepository, ResultRepository
 
@@ -61,6 +62,44 @@ class ExpertReviewService:
     # Queue
     # ------------------------------------------------------------------
 
+    async def get_queue_item(
+        self,
+        claim_id: uuid.UUID,
+    ) -> ExpertQueueItemResponse:
+        """Fetch a single claim for expert review."""
+        from app.core.exceptions import RecordNotFoundError
+        claim = await self._claims.get_by_id(claim_id)
+        if not claim:
+            raise RecordNotFoundError("Claim not found.")
+            
+        result = await self._results.get_by_claim_id(claim_id)
+        vote_count = await self._reviews.count_votes_for_claim(claim_id)
+
+        # Build top article preview
+        top_article = None
+        if result and result.matched_articles:
+            arts = sorted(result.matched_articles, key=lambda a: a.rank_score or 0, reverse=True)
+            best = arts[0]
+            top_article = ExpertTopArticle(
+                url=best.url,
+                title=best.title,
+                published_date=str(best.published_date) if best.published_date else None,
+                rank_score=best.rank_score,
+                body_snippet=(best.body[:400] + '…') if best.body and len(best.body) > 400 else best.body,
+            )
+        
+        return ExpertQueueItemResponse(
+            claim_id=str(claim.id),
+            headline=claim.headline,
+            news_body=(claim.news_body[:600] + '…') if claim.news_body and len(claim.news_body) > 600 else claim.news_body,
+            claimed_source=claim.claimed_source,
+            ai_label=result.label.value if result else None,
+            ai_confidence=result.confidence if result else None,
+            submitted_at=claim.created_at,
+            vote_count=vote_count,
+            top_article=top_article,
+        )
+
     async def get_queue(
         self,
         expert_id: uuid.UUID,
@@ -87,14 +126,30 @@ class ExpertReviewService:
                 continue
             result = await self._results.get_by_claim_id(claim.id)
             vote_count = await self._reviews.count_votes_for_claim(claim.id)
+
+            # Build top article for queue card preview
+            top_article = None
+            if result and result.matched_articles:
+                arts = sorted(result.matched_articles, key=lambda a: a.rank_score or 0, reverse=True)
+                best = arts[0]
+                top_article = ExpertTopArticle(
+                    url=best.url,
+                    title=best.title,
+                    published_date=str(best.published_date) if best.published_date else None,
+                    rank_score=best.rank_score,
+                    body_snippet=(best.body[:400] + '…') if best.body and len(best.body) > 400 else best.body,
+                )
+
             queue_items.append(ExpertQueueItemResponse(
                 claim_id=str(claim.id),
                 headline=claim.headline,
+                news_body=(claim.news_body[:400] + '…') if claim.news_body and len(claim.news_body) > 400 else claim.news_body,
                 claimed_source=claim.claimed_source,
                 ai_label=result.label.value if result else None,
                 ai_confidence=result.confidence if result else None,
                 submitted_at=claim.created_at,
                 vote_count=vote_count,
+                top_article=top_article,
             ))
 
         # Apply pagination

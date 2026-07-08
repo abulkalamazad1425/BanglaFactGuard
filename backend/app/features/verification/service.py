@@ -167,7 +167,7 @@ class VerificationService:
             return None
 
         from app.core.constants import VerificationLabel
-        from app.features.verification.schemas import ManipulationFlagsSchema, VerificationScoresSchema
+        from app.features.verification.schemas import ManipulationFlagsSchema, VerificationScoresResponse
 
         return VerificationResponse(
             claim_id=claim_id,
@@ -175,7 +175,7 @@ class VerificationService:
             confidence=result.confidence,
             reasoning=result.reasoning or "",
             matched_articles=[],
-            scores=VerificationScoresSchema(
+            scores=VerificationScoresResponse(
                 semantic_similarity=result.semantic_similarity,
                 entity_match=result.entity_match,
                 contradiction_score=result.contradiction_score,

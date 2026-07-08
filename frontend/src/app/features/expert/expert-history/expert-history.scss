@@ -1,0 +1,6 @@
+    .history-page { background: var(--bg-base); min-height: 100%; }
+    .page-header { margin-bottom: 32px; h1 { margin-bottom: 8px; } p { color: var(--text-secondary); } }
+    .table-card { padding: 0; overflow: hidden; }
+    .headline-cell { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .empty-state { max-width: 400px; margin: 80px auto; }
+    .loading-overlay { display: flex; justify-content: center; padding: 80px; }

@@ -1,7 +1,7 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
-import { NotificationService } from './core/services/notification.service';
-import { AuthService } from './core/services/auth.service';
+import { NotificationService } from './services/notification.service';
+import { AuthService } from './services/auth.service';
 
 @Component({
   selector: 'app-root',
@@ -16,7 +16,7 @@ export class AppComponent implements OnInit {
   ngOnInit(): void {
     // Load current user if tokens are present
     if (this.auth.user() && localStorage.getItem('bfg_access_token')) {
-      this.auth.loadCurrentUser().subscribe({ error: () => {} });
+      this.auth.loadCurrentUser().subscribe({ error: () => { } });
     }
     // Start notification polling
     this.notificationSvc.startPolling();

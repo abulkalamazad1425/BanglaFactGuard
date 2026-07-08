@@ -1,0 +1,317 @@
+<div class="verify-page">
+  <div class="container">
+
+    <!-- Header -->
+    <div class="page-header text-center animate-in">
+      <div class="page-icon">🔍</div>
+      <h1>Verify a News Claim</h1>
+      <p>Submit a headline and its claimed source. Our 12-stage AI pipeline will verify it against the source.</p>
+    </div>
+
+    <div class="workspace animate-in" style="animation-delay: 0.1s">
+
+      <!-- Left: Input Form -->
+      <div class="card input-panel">
+        <h3 class="panel-title">
+          <span class="panel-icon">🛡️</span>
+          Verify News Claim
+        </h3>
+
+        <form [formGroup]="form" (ngSubmit)="onSubmit()">
+          <div class="form-group">
+            <label class="form-label">News Headline (in Bangla) <span class="required">*</span></label>
+            <textarea formControlName="headline" class="form-control"
+                      [class.is-invalid]="headlineInvalid"
+                      rows="3"
+                      placeholder="যেমন: প্রধানমন্ত্রী নতুন উড়ালসড়ক উদ্বোধন করলেন..."></textarea>
+            @if (headlineInvalid) {
+              <span class="form-error">Headline is required (min 10 characters)</span>
+            }
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Claimed Source <span class="required">*</span></label>
+            <input type="text" formControlName="claimed_source" class="form-control"
+                   [class.is-invalid]="sourceInvalid"
+                   placeholder="যেমন: prothomalo.com বা প্রথম আলো" />
+            @if (sourceInvalid) {
+              <span class="form-error">Source is required</span>
+            }
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">News Body Text <span class="optional">(optional)</span></label>
+            <textarea formControlName="news_body" class="form-control" rows="4"
+                      placeholder="নিউজ বডি এখানে পেস্ট করুন..."></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Publication Date <span class="optional">(optional)</span></label>
+            <input type="date" formControlName="published_date" class="form-control" />
+          </div>
+
+          <div class="form-group checkbox-group">
+            <label class="checkbox-label">
+              <input type="checkbox" formControlName="force_refresh" />
+              <span>Bypass cache (Force fresh verification)</span>
+            </label>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-full btn-lg" [disabled]="loading">
+            @if (loading) {
+              <span class="btn-spinner"></span>
+              Verifying... (up to 60s)
+            } @else {
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+              Verify Claim
+            }
+          </button>
+        </form>
+      </div>
+
+      <!-- Right: Result Panel -->
+      <div class="card result-panel">
+
+        <!-- Empty State -->
+        @if (!loading && !result && !error) {
+          <div class="empty-state">
+            <div class="empty-icon">📋</div>
+            <h3>No Verification Yet</h3>
+            <p>Enter the news headline and claimed source on the left, then click "Verify Claim" to start the 12-stage pipeline.</p>
+          </div>
+        }
+
+        <!-- Loading State -->
+        @if (loading) {
+          <div class="empty-state loading-state">
+            <div class="spinner-lg"></div>
+            <h3>Verifying News Claim</h3>
+            <p>Executing 12-stage pipeline: normalizing inputs, searching target source, extracting body text, running semantic similarity and NLI contradiction analysis...</p>
+          </div>
+        }
+
+        <!-- Error State -->
+        @if (!loading && error) {
+          <div class="empty-state error-state">
+            <div class="empty-icon">⚠️</div>
+            <h3>Verification Failed</h3>
+            <p>{{ error }}</p>
+            <button class="btn btn-secondary mt-4" (click)="reset()">Try Again</button>
+          </div>
+        }
+
+        <!-- Result State -->
+        @if (!loading && result && !error) {
+          <div class="result-content animate-in">
+
+            <!-- Verdict Header -->
+            <div class="verdict-header">
+              <div class="verdict-left">
+                <div class="verdict-badge" [ngClass]="getBadgeClass(result.label)">
+                  <span class="badge-icon">{{ getBadgeIcon(result.label) }}</span>
+                  {{ formatVerdict(result.label) }}
+                </div>
+                <div class="source-info">
+                  Source: <strong>{{ result.normalized_source || '' }}</strong>
+                  @if (result.cached) {
+                    <span class="cache-tag">⚡ Cached</span>
+                  }
+                </div>
+              </div>
+
+              <!-- Confidence Meter -->
+              <div class="confidence-meter">
+                <svg class="confidence-svg" viewBox="0 0 100 100">
+                  <circle class="bg-ring" cx="50" cy="50" r="45"></circle>
+                  <circle class="progress-ring" cx="50" cy="50" r="45"
+                          [style.stroke-dashoffset]="getDashOffset(result.confidence)"
+                          [style.stroke]="verdictColor(result.label)"></circle>
+                </svg>
+                <div class="confidence-text">
+                  <span class="confidence-val">{{ (result.confidence * 100).toFixed(0) }}%</span>
+                  <span class="confidence-lbl">Confidence</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Reasoning Box -->
+            @if (result.reasoning) {
+              <div class="reasoning-box">
+                <h4>💬 Analysis Reasoning</h4>
+                <p>{{ result.reasoning }}</p>
+              </div>
+            }
+
+            <!-- Score Bars -->
+            @if (result.scores) {
+              <div class="scores-grid">
+                @if (result.scores.semantic_similarity != null) {
+                  <div class="score-item">
+                    <div class="score-info">
+                      <span class="score-label" title="Blended score (30% headline, 70% body)">Semantic Similarity ℹ</span>
+                      <span class="score-value">{{ (result.scores.semantic_similarity * 100).toFixed(1) }}%</span>
+                    </div>
+                    <div class="progress-bar-wrap">
+                      <div class="progress-bar blue" [style.width.%]="result.scores.semantic_similarity * 100"></div>
+                    </div>
+                    @if (result.scores.headline_similarity != null && result.scores.body_similarity != null) {
+                      <div class="score-sub">
+                        <span>Headline: {{ (result.scores.headline_similarity! * 100).toFixed(1) }}%</span>
+                        <span>Body: {{ (result.scores.body_similarity! * 100).toFixed(1) }}%</span>
+                      </div>
+                    }
+                  </div>
+                }
+                @if (result.scores.entity_match != null) {
+                  <div class="score-item">
+                    <div class="score-info">
+                      <span class="score-label" title="Named entity overlap">Entity Match ℹ</span>
+                      <span class="score-value">{{ (result.scores.entity_match * 100).toFixed(1) }}%</span>
+                    </div>
+                    <div class="progress-bar-wrap">
+                      <div class="progress-bar purple" [style.width.%]="result.scores.entity_match * 100"></div>
+                    </div>
+                  </div>
+                }
+                @if (result.scores.keyword_overlap != null) {
+                  <div class="score-item">
+                    <div class="score-info">
+                      <span class="score-label">Keyword Overlap ℹ</span>
+                      <span class="score-value">{{ (result.scores.keyword_overlap * 100).toFixed(1) }}%</span>
+                    </div>
+                    <div class="progress-bar-wrap">
+                      <div class="progress-bar indigo" [style.width.%]="result.scores.keyword_overlap * 100"></div>
+                    </div>
+                  </div>
+                }
+                @if (result.scores.numerical_consistency != null) {
+                  <div class="score-item">
+                    <div class="score-info">
+                      <span class="score-label">Numerical Consistency ℹ</span>
+                      <span class="score-value">{{ (result.scores.numerical_consistency * 100).toFixed(1) }}%</span>
+                    </div>
+                    <div class="progress-bar-wrap">
+                      <div class="progress-bar cyan" [style.width.%]="result.scores.numerical_consistency * 100"></div>
+                    </div>
+                  </div>
+                }
+                @if (result.scores.contradiction_score != null) {
+                  <div class="score-item">
+                    <div class="score-info">
+                      <span class="score-label" title="NLI contradiction probability">Contradiction Risk ℹ</span>
+                      <span class="score-value">{{ (result.scores.contradiction_score * 100).toFixed(1) }}%</span>
+                    </div>
+                    <div class="progress-bar-wrap">
+                      <div class="progress-bar pink" [style.width.%]="result.scores.contradiction_score * 100"></div>
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+
+            <!-- Manipulation Flags -->
+            @if (result.manipulation_flags) {
+              <div class="checks-section">
+                <h4>✅ Verification Checks</h4>
+                <div class="checks-grid">
+                  <div class="check-card" [class.passed]="!result.manipulation_flags.headline_manipulated"
+                       [class.failed]="result.manipulation_flags.headline_manipulated">
+                    <div class="check-icon-wrap">
+                      {{ result.manipulation_flags.headline_manipulated ? '✗' : '✓' }}
+                    </div>
+                    <div class="check-body">
+                      <span class="check-title">Headline Integrity</span>
+                      <span class="check-desc">
+                        {{ result.manipulation_flags.headline_manipulated
+                            ? 'Headline altered or sensationalized relative to body.'
+                            : 'Headline meaning matches article body.' }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div class="check-card" [class.passed]="!result.manipulation_flags.body_altered"
+                       [class.failed]="result.manipulation_flags.body_altered">
+                    <div class="check-icon-wrap">
+                      {{ result.manipulation_flags.body_altered ? '✗' : '✓' }}
+                    </div>
+                    <div class="check-body">
+                      <span class="check-title">Content Authenticity</span>
+                      <span class="check-desc">
+                        {{ result.manipulation_flags.body_altered
+                            ? 'Submitted text diverges significantly or is fabricated.'
+                            : 'Submitted text matches the original source.' }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div class="check-card" [class.passed]="!result.manipulation_flags.numbers_altered"
+                       [class.failed]="result.manipulation_flags.numbers_altered">
+                    <div class="check-icon-wrap">
+                      {{ result.manipulation_flags.numbers_altered ? '✗' : '✓' }}
+                    </div>
+                    <div class="check-body">
+                      <span class="check-title">Numerical Consistency</span>
+                      <span class="check-desc">
+                        {{ result.manipulation_flags.numbers_altered
+                            ? 'Numbers or dates altered or inflated.'
+                            : 'Statistics and dates are consistent.' }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div class="check-card" [class.passed]="!result.manipulation_flags.entities_replaced"
+                       [class.failed]="result.manipulation_flags.entities_replaced">
+                    <div class="check-icon-wrap">
+                      {{ result.manipulation_flags.entities_replaced ? '✗' : '✓' }}
+                    </div>
+                    <div class="check-body">
+                      <span class="check-title">Entity Authenticity</span>
+                      <span class="check-desc">
+                        {{ result.manipulation_flags.entities_replaced
+                            ? 'Named entities were swapped or replaced.'
+                            : 'Names, places, organizations match.' }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            }
+
+            <!-- Matched Articles -->
+            @if (result.matched_articles && result.matched_articles.length) {
+              <div class="articles-section">
+                <h4>📰 Supporting Evidence from Source</h4>
+                <div class="articles-list">
+                  @for (art of result.matched_articles!; track art.url) {
+                    <div class="article-card">
+                      <div class="article-header">
+                        <a [href]="art.url" target="_blank" class="article-title">
+                          {{ art.title || art.url }}
+                        </a>
+                        @if (art.rank_score != null) {
+                          <span class="article-match">Match: {{ (art.rank_score * 100).toFixed(0) }}%</span>
+                        }
+                      </div>
+                      <div class="article-meta">
+                        @if (art.author) { <span>👤 {{ art.author }}</span> }
+                        @if (art.published_date) { <span>📅 {{ art.published_date }}</span> }
+                        <span>🌐 {{ getHost(art.url) }}</span>
+                      </div>
+                      @if (art.body) {
+                        <p class="article-snippet">{{ art.body }}</p>
+                      }
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+
+          </div>
+        }
+      </div>
+    </div>
+
+  </div>
+</div>

@@ -1,0 +1,177 @@
+<div class="mm-page">
+  <div class="container">
+    <div class="workspace animate-in">
+
+      <!-- Left Panel: Input Form -->
+      <div class="glass-panel">
+        <div class="panel-header">
+          <h1>BanglaFactGuard</h1>
+          <p class="subtitle">Multimodal Preliminary Fake News Verification via BanglaBERT + EfficientNet-B4</p>
+        </div>
+
+        <form (ngSubmit)="onSubmit()">
+          <div class="form-group">
+            <label for="mm-headline">Headline</label>
+            <input type="text" id="mm-headline" [(ngModel)]="headline" name="headline"
+                   placeholder="Enter news headline..." required />
+            @if (submitted && !headline.trim()) {
+              <span class="form-error">Headline is required</span>
+            }
+          </div>
+
+          <div class="form-group">
+            <label for="mm-body">Article Body Text</label>
+            <textarea id="mm-body" [(ngModel)]="bodyText" name="body_text"
+                      placeholder="Paste the full article text here..."
+                      required minlength="10"></textarea>
+            @if (submitted && bodyText.trim().length < 10) {
+              <span class="form-error">Body text must be at least 10 characters</span>
+            }
+          </div>
+
+          <div class="form-group">
+            <label>Article Image</label>
+            <div class="file-upload" id="dropZone"
+                 (click)="fileInput.click()"
+                 (dragover)="$event.preventDefault()"
+                 (drop)="onDrop($event)">
+              @if (previewUrl) {
+                <img [src]="previewUrl" class="file-preview" alt="Preview" />
+                <div class="preview-overlay">Click to change image</div>
+              } @else {
+                <div class="file-icon">📸</div>
+                <span class="file-label">Click to upload or drag & drop</span>
+                <span class="file-hint">JPEG, PNG up to 10MB</span>
+              }
+              <input #fileInput type="file" id="image" accept="image/jpeg,image/png,image/webp"
+                     class="sr-only" (change)="onFileChange($event)" />
+            </div>
+            @if (submitted && !selectedFile) {
+              <span class="form-error">Image is required</span>
+            }
+          </div>
+
+          <button type="submit" class="btn-submit" [disabled]="loading">
+            @if (loading) {
+              <div class="spinner"></div>
+              Processing...
+            } @else {
+              Verify Content
+            }
+          </button>
+
+          @if (errorMsg) {
+            <div class="error-message">{{ errorMsg }}</div>
+          }
+        </form>
+      </div>
+
+      <!-- Right Panel: Results -->
+      <div class="glass-panel results-panel" [class.active]="!!result || loading">
+
+        <!-- Empty State -->
+        @if (!result && !loading) {
+          <div class="result-empty">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="17 8 12 3 7 8"></polyline>
+              <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+            <p>Submit a news article to see the multimodal analysis results.</p>
+          </div>
+        }
+
+        <!-- Loading State -->
+        @if (loading) {
+          <div class="result-empty">
+            <div class="spinner-lg"></div>
+            <p>Analyzing with BanglaBERT + EfficientNet-B4...</p>
+          </div>
+        }
+
+        <!-- Result Content -->
+        @if (result && !loading) {
+          <div class="result-content animate-in">
+
+            @if (result.is_cached) {
+              <div class="cache-badge">⚡ Served from Cache (Deduplicated)</div>
+            }
+
+            <!-- Prediction Badge -->
+            <div>
+              <h2 class="meta-label" style="margin-bottom: 0.5rem;">Prediction</h2>
+              <div class="prediction-badge"
+                   [class.badge-fake]="result.prediction === 'FAKE'"
+                   [class.badge-real]="result.prediction !== 'FAKE'">
+                {{ result.prediction === 'FAKE' ? 'FAKE NEWS' : 'REAL NEWS' }}
+              </div>
+            </div>
+
+            <!-- Confidence Bars -->
+            <div>
+              <h2 class="meta-label" style="margin-bottom: 0.5rem;">Confidence Scores</h2>
+              <div class="confidence-bar-container">
+                <div class="confidence-fake" [style.width.%]="(result.confidence_fake || 0) * 100"></div>
+                <div class="confidence-real" [style.width.%]="(result.confidence_real || 0) * 100"></div>
+              </div>
+              <div class="confidence-labels">
+                <span class="label-fake">Fake: {{ ((result.confidence_fake || 0) * 100).toFixed(1) }}%</span>
+                <span class="label-real">Real: {{ ((result.confidence_real || 0) * 100).toFixed(1) }}%</span>
+              </div>
+            </div>
+
+            <!-- Metadata Grid -->
+            <div class="metadata-grid">
+              <div class="meta-item">
+                <span class="meta-label">Prediction ID</span>
+                <span class="meta-value mono" [title]="result.prediction_id">
+                  {{ result.prediction_id.split('-')[0] }}...
+                </span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">Model Version</span>
+                <span class="meta-value">{{ result.model_version }}</span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">MinIO Key</span>
+                <span class="meta-value minio-key" [title]="result.minio_object_key">
+                  {{ result.minio_object_key.split('/').pop() }}
+                </span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">Processed At</span>
+                <span class="meta-value">{{ formatDate(result.created_at) }}</span>
+              </div>
+            </div>
+
+            <!-- Duplicate Similarity Scores -->
+            @if (result.is_cached && result.similarity_scores) {
+              <div class="similarity-grid">
+                <div class="sim-title">Duplicate Similarity Scores</div>
+                <div class="meta-item">
+                  <span class="meta-label">Text (BanglaBERT)</span>
+                  <span class="meta-value">
+                    {{ (result.similarity_scores['text_similarity'] * 100).toFixed(2) }}%
+                  </span>
+                </div>
+                <div class="meta-item">
+                  <span class="meta-label">Image (EfficientNet)</span>
+                  <span class="meta-value">
+                    {{ (result.similarity_scores['image_similarity'] * 100).toFixed(2) }}%
+                  </span>
+                </div>
+                <div class="meta-item">
+                  <span class="meta-label">Combined</span>
+                  <span class="meta-value">
+                    {{ (result.similarity_scores['combined_similarity'] * 100).toFixed(2) }}%
+                  </span>
+                </div>
+              </div>
+            }
+
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+</div>

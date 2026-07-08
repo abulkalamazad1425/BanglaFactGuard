@@ -1,0 +1,51 @@
+<div class="create-page">
+  <div class="container container-sm" style="padding-top:48px; padding-bottom:80px;">
+    <div class="topbar animate-in">
+      <a routerLink="/admin/experts" class="btn btn-ghost btn-sm">← Back to Experts</a>
+    </div>
+
+    <div class="card animate-in" style="margin-top:16px; padding:40px;">
+      <h1 style="font-size:1.5rem; margin-bottom:8px;">Create Expert Account</h1>
+      <p class="text-muted" style="margin-bottom:32px;">The expert will receive credentials you provide. Encourage them to change their password upon first login.</p>
+
+      <form [formGroup]="form" (ngSubmit)="onSubmit()">
+        <div class="form-group">
+          <label class="form-label">Full Name <span style="color:var(--error)">*</span></label>
+          <input type="text" formControlName="full_name" class="form-control"
+                 [class.is-invalid]="nameInvalid" placeholder="Dr. Example Name" />
+          @if (nameInvalid) { <span class="form-error">Full name is required</span> }
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email Address <span style="color:var(--error)">*</span></label>
+          <input type="email" formControlName="email" class="form-control"
+                 [class.is-invalid]="emailInvalid" placeholder="expert@institution.edu" />
+          @if (emailInvalid) { <span class="form-error">Valid email is required</span> }
+        </div>
+        <div class="form-group">
+          <label class="form-label">Initial Password <span style="color:var(--error)">*</span></label>
+          <input type="password" formControlName="password" class="form-control"
+                 [class.is-invalid]="pwInvalid" placeholder="Min 8 chars, 1 uppercase, 1 digit" />
+          @if (pwInvalid) { <span class="form-error">Strong password required (8+ chars, 1 uppercase, 1 digit)</span> }
+        </div>
+        <div class="form-group">
+          <label class="form-label">Expertise Area <span style="color:var(--error)">*</span></label>
+          <input type="text" formControlName="expertise_area" class="form-control"
+                 [class.is-invalid]="areaInvalid" placeholder="e.g., Political Journalism, Health & Science" />
+          @if (areaInvalid) { <span class="form-error">Expertise area is required</span> }
+        </div>
+
+        @if (errorMsg) {
+          <div class="alert-error" style="margin-bottom:16px;">{{ errorMsg }}</div>
+        }
+
+        <div style="display:flex; gap:12px;">
+          <a routerLink="/admin/experts" class="btn btn-ghost">Cancel</a>
+          <button type="submit" class="btn btn-primary flex-1" [disabled]="loading">
+            @if (loading) { <span class="btn-spinner"></span> Creating... }
+            @else { ✅ Create Expert Account }
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

@@ -69,6 +69,20 @@ async def get_queue(
     return await svc.get_queue(current_user.id, limit=limit, offset=offset)
 
 
+@router.get(
+    "/queue/{claim_id}",
+    response_model=ExpertQueueItemResponse,
+    summary="Get a single claim for review",
+)
+async def get_queue_item(
+    claim_id: uuid.UUID,
+    current_user: User = Depends(_EXPERT_OR_ADMIN),
+    svc: ExpertReviewService = Depends(_get_service),
+) -> ExpertQueueItemResponse:
+    """Return a specific claim for expert review."""
+    return await svc.get_queue_item(claim_id)
+
+
 @router.post(
     "/queue/{claim_id}/vote",
     response_model=ExpertReviewResponse,

@@ -1,0 +1,86 @@
+<div class="settings-page">
+  <div class="container container-sm" style="padding-top:48px; padding-bottom:80px;">
+    <div class="page-header animate-in">
+      <h1>Account Settings</h1>
+      <p>Manage your profile and security settings</p>
+    </div>
+
+    <!-- Profile Section -->
+    <div class="card settings-card animate-in">
+      <h2 class="section-title">Profile Information</h2>
+      <div class="profile-avatar">
+        <div class="avatar-lg">{{ initial() }}</div>
+        <div>
+          <p class="font-semibold">{{ auth.user()?.full_name || 'No name set' }}</p>
+          <p class="text-muted text-sm">{{ auth.user()?.email }}</p>
+          <span class="badge badge-primary">{{ auth.user()?.role }}</span>
+        </div>
+      </div>
+
+      <form [formGroup]="profileForm" (ngSubmit)="saveProfile()" style="margin-top:24px;">
+        <div class="form-group">
+          <label class="form-label">Full Name</label>
+          <input type="text" formControlName="full_name" class="form-control" placeholder="Your full name" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Bio <span class="text-muted text-xs">(optional)</span></label>
+          <textarea formControlName="bio" class="form-control" rows="3" placeholder="Tell us about yourself..."></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary" [disabled]="savingProfile()">
+          @if (savingProfile()) { <span class="btn-spinner"></span> }
+          {{ savingProfile() ? 'Saving...' : 'Save Profile' }}
+        </button>
+      </form>
+    </div>
+
+    <!-- Change Password Section -->
+    <div class="card settings-card animate-in" style="margin-top:24px; animation-delay:0.1s;">
+      <h2 class="section-title">Change Password</h2>
+      <form [formGroup]="pwForm" (ngSubmit)="changePassword()">
+        <div class="form-group">
+          <label class="form-label">Current Password</label>
+          <input type="password" formControlName="current_password" class="form-control"
+                 [class.is-invalid]="pwForm.get('current_password')?.invalid && pwForm.get('current_password')?.touched"
+                 placeholder="Your current password" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">New Password</label>
+          <input type="password" formControlName="new_password" class="form-control"
+                 [class.is-invalid]="pwForm.get('new_password')?.invalid && pwForm.get('new_password')?.touched"
+                 placeholder="Min 8 chars, 1 uppercase, 1 digit" />
+        </div>
+        <button type="submit" class="btn btn-secondary" [disabled]="changingPw()">
+          @if (changingPw()) { <span class="btn-spinner"></span> }
+          {{ changingPw() ? 'Changing...' : 'Change Password' }}
+        </button>
+      </form>
+    </div>
+
+    <!-- Account Info -->
+    <div class="card settings-card animate-in" style="margin-top:24px; animation-delay:0.2s;">
+      <h2 class="section-title">Account Information</h2>
+      <div class="info-list-items">
+        <div class="info-row">
+          <span class="info-key">Account ID</span>
+          <span class="info-val font-medium" style="font-family:monospace; font-size:13px;">{{ auth.user()?.id }}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-key">Role</span>
+          <span class="badge badge-primary">{{ auth.user()?.role }}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-key">Verification Status</span>
+          <span class="badge" [class]="auth.user()?.is_verified ? 'badge-true' : 'badge-not-found'">
+            {{ auth.user()?.is_verified ? 'Verified' : 'Unverified' }}
+          </span>
+        </div>
+        <div class="info-row">
+          <span class="info-key">Account Status</span>
+          <span class="badge" [class]="auth.user()?.is_active ? 'badge-true' : 'badge-false'">
+            {{ auth.user()?.is_active ? 'Active' : 'Inactive' }}
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

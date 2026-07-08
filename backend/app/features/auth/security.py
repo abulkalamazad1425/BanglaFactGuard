@@ -28,7 +28,7 @@ from typing import Any
 from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import ExpiredSignatureError, JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -48,21 +48,22 @@ _AUTH = _SETTINGS.auth
 # Password hashing
 # ---------------------------------------------------------------------------
 
-_pwd_context = CryptContext(
-    schemes=["bcrypt"],
-    deprecated="auto",
-    bcrypt__rounds=_AUTH.bcrypt_rounds,
-)
-
-
 def hash_password(plain: str) -> str:
     """Return a bcrypt hash of *plain* using the configured work factor."""
-    return _pwd_context.hash(plain)
+    # Truncate to 72 bytes to match passlib's historical behavior and avoid ValueError
+    plain_bytes = plain.encode("utf-8")[:72]
+    salt = bcrypt.gensalt(rounds=_AUTH.bcrypt_rounds)
+    hashed = bcrypt.hashpw(plain_bytes, salt)
+    return hashed.decode("utf-8")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
     """Return True if *plain* matches the bcrypt *hashed* value."""
-    return _pwd_context.verify(plain, hashed)
+    plain_bytes = plain.encode("utf-8")[:72]
+    try:
+        return bcrypt.checkpw(plain_bytes, hashed.encode("utf-8"))
+    except ValueError:
+        return False
 
 
 # ---------------------------------------------------------------------------

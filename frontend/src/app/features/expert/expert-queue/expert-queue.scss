@@ -1,0 +1,18 @@
+    .queue-page { background: var(--bg-base); min-height: 100%; }
+    .page-header { margin-bottom: 32px; }
+    .header-content { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px; }
+    .header-actions { display: flex; align-items: center; gap: 12px; }
+    .page-header h1 { margin-bottom: 8px; }
+    .page-header p { color: var(--text-secondary); }
+    .queue-list { display: flex; flex-direction: column; gap: 16px; margin-bottom: 24px; }
+    .queue-card { padding: 24px; }
+    .queue-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
+    .queue-meta { display: flex; align-items: center; gap: 12px; }
+    .vote-count { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-muted); background: var(--bg-surface-2); padding: 3px 8px; border-radius: var(--radius-full); }
+    .queue-headline { font-size: 16px; font-weight: 500; color: var(--text-primary); line-height: 1.5; margin-bottom: 16px; }
+    .queue-footer { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .queue-source { flex: 1; }
+    .ai-conf { color: var(--text-secondary); }
+    .empty-state { max-width: 400px; margin: 80px auto; }
+    .pagination { display: flex; align-items: center; justify-content: center; gap: 16px; }
+    .loading-overlay { display: flex; justify-content: center; padding: 80px; }

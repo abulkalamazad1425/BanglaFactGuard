@@ -1,0 +1,83 @@
+    <div class="history-page">
+      <div class="container" style="padding-top:48px; padding-bottom:80px;">
+        <div class="page-header animate-in">
+          <h1>My Submissions</h1>
+          <p>Your fact-checking history</p>
+        </div>
+
+        @if (stats()) {
+          <div class="stats-grid animate-in">
+            <div class="stat-card card">
+              <span class="stat-num">{{ stats()!.total }}</span>
+              <span class="stat-lbl">Total</span>
+            </div>
+            <div class="stat-card card text-success">
+              <span class="stat-num">{{ stats()!.finalized_true }}</span>
+              <span class="stat-lbl">True</span>
+            </div>
+            <div class="stat-card card text-error">
+              <span class="stat-num">{{ stats()!.finalized_false }}</span>
+              <span class="stat-lbl">False</span>
+            </div>
+            <div class="stat-card card text-warning">
+              <span class="stat-num">{{ stats()!.finalized_partially_true }}</span>
+              <span class="stat-lbl">Partially True</span>
+            </div>
+            <div class="stat-card card">
+              <span class="stat-num">{{ stats()!.pending }}</span>
+              <span class="stat-lbl">Pending</span>
+            </div>
+          </div>
+        }
+
+        @if (loading()) { <div class="loading-overlay"><div class="spinner"></div></div> }
+
+        @if (!loading() && submissions().length === 0) {
+          <div class="empty-state card text-center">
+            <div style="font-size:64px; margin-bottom:16px;">📭</div>
+            <h3>No submissions yet</h3>
+            <p>Start verifying news claims to see them here.</p>
+            <a routerLink="/verify" class="btn btn-primary mt-4">Verify a Claim</a>
+          </div>
+        }
+
+        @if (!loading() && submissions().length > 0) {
+          <div class="table-card card animate-in">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Headline</th>
+                  <th>Source</th>
+                  <th>Verdict</th>
+                  <th>Confidence</th>
+                  <th>Submitted</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (s of submissions(); track s.claim_id) {
+                  <tr>
+                    <td class="headline-cell">{{ s.headline | slice:0:80 }}{{ s.headline.length > 80 ? '...' : '' }}</td>
+                    <td class="source-cell text-muted text-sm">{{ s.claimed_source | slice:0:40 }}</td>
+                    <td><app-verdict-badge [label]="s.ai_label" /></td>
+                    <td>
+                      @if (s.ai_confidence !== null) {
+                        <span class="confidence">{{ (s.ai_confidence * 100).toFixed(1) }}%</span>
+                      } @else { <span class="text-muted">—</span> }
+                    </td>
+                    <td class="text-muted text-sm">{{ s.submitted_at | date:'MMM d, y' }}</td>
+                    <td><a [routerLink]="['/verify', s.claim_id]" class="btn btn-ghost btn-sm">View</a></td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+
+          <div class="pagination">
+            <button class="btn btn-ghost btn-sm" [disabled]="offset() === 0" (click)="prev()">← Prev</button>
+            <span class="text-muted text-sm">Page {{ page() }}</span>
+            <button class="btn btn-ghost btn-sm" [disabled]="submissions().length < limit" (click)="next()">Next →</button>
+          </div>
+        }
+      </div>
+    </div>

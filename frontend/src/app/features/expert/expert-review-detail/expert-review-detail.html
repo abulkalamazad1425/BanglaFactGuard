@@ -1,0 +1,279 @@
+    <div class="review-page">
+      <div class="container container-sm" style="padding-top:48px; padding-bottom:80px;">
+        <div class="topbar animate-in">
+          <a routerLink="/expert/queue" class="btn btn-ghost btn-sm">← Back to Queue</a>
+        </div>
+
+        @if (loading()) { <div class="loading-overlay"><div class="spinner"></div></div> }
+
+        @if (!loading() && claim()) {
+          <div class="animate-in">
+            <!-- Claim info -->
+            <div class="card claim-card">
+              <div class="claim-header">
+                <h2>Claim Details</h2>
+                <app-verdict-badge [label]="claim()!.ai_label" />
+              </div>
+              <p class="claim-headline">{{ claim()!.headline }}</p>
+              <div class="claim-meta">
+                <span class="text-muted text-sm">Source: <a [href]="claim()!.claimed_source" target="_blank">{{ claim()!.claimed_source }}</a></span>
+                <span class="text-muted text-sm">Submitted: {{ claim()!.submitted_at | date:'MMM d, y, HH:mm' }}</span>
+              </div>
+              @if (claim()!.ai_confidence !== null) {
+                <div style="max-width:300px; margin-top:16px;">
+                  <app-score-bar label="AI Confidence" [value]="claim()!.ai_confidence!" />
+                </div>
+              }
+              <div class="vote-status">
+                <span class="text-muted text-sm">{{ claim()!.vote_count }} / 3 expert votes submitted</span>
+                <div class="vote-progress">
+                  <div class="vote-fill" [style.width.%]="(claim()!.vote_count / 3) * 100"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Detailed AI Preliminary Prediction -->
+            @if (aiResult()) {
+              <div class="card ai-prediction-card" style="margin-bottom: 24px; background: rgba(30, 41, 59, 0.4); border: 1px solid rgba(255,255,255,0.1);">
+                <h3 style="margin-bottom: 24px; font-size: 1.2rem; display: flex; align-items: center; gap: 8px;">
+                  <span>🤖</span> Preliminary AI Prediction Details
+                </h3>
+                
+                <!-- Score Bars Grid -->
+                @if (aiResult()!.scores) {
+                  <div class="scores-grid">
+                    @if (aiResult()!.scores.semantic_similarity != null) {
+                      <div class="score-item" style="grid-column: 1 / -1; background: rgba(0,0,0,0.15); padding: 16px; border-radius: 8px;">
+                        <div class="score-info">
+                          <span class="score-label" title="Blended score (30% headline, 70% body)">Semantic Similarity ℹ</span>
+                          <span class="score-value" style="font-size: 24px;">{{ (aiResult()!.scores.semantic_similarity! * 100).toFixed(1) }}%</span>
+                        </div>
+                        <div class="progress-bar-wrap" style="height: 12px; margin-top: 8px; margin-bottom: 12px;">
+                          <div class="progress-bar blue" [style.width.%]="aiResult()!.scores.semantic_similarity! * 100"></div>
+                        </div>
+                        @if (aiResult()!.scores.headline_similarity != null && aiResult()!.scores.body_similarity != null) {
+                          <div class="score-sub" style="display: flex; gap: 24px; justify-content: flex-start; font-size: 14px;">
+                            <span style="background: rgba(59, 130, 246, 0.1); padding: 4px 12px; border-radius: 4px;">
+                              Headline Match: <strong style="color: #93c5fd">{{ (aiResult()!.scores.headline_similarity! * 100).toFixed(1) }}%</strong>
+                            </span>
+                            <span style="background: rgba(59, 130, 246, 0.1); padding: 4px 12px; border-radius: 4px;">
+                              Body Match: <strong style="color: #93c5fd">{{ (aiResult()!.scores.body_similarity! * 100).toFixed(1) }}%</strong>
+                            </span>
+                          </div>
+                        }
+                      </div>
+                    }
+                    
+                    @if (aiResult()!.scores.entity_match != null) {
+                      <div class="score-item">
+                        <div class="score-info">
+                          <span class="score-label" title="Named entity overlap">Entity Match ℹ</span>
+                          <span class="score-value">{{ (aiResult()!.scores.entity_match! * 100).toFixed(1) }}%</span>
+                        </div>
+                        <div class="progress-bar-wrap">
+                          <div class="progress-bar purple" [style.width.%]="aiResult()!.scores.entity_match! * 100"></div>
+                        </div>
+                      </div>
+                    }
+                    
+                    @if (aiResult()!.scores.keyword_overlap != null) {
+                      <div class="score-item">
+                        <div class="score-info">
+                          <span class="score-label">Keyword Overlap ℹ</span>
+                          <span class="score-value">{{ (aiResult()!.scores.keyword_overlap! * 100).toFixed(1) }}%</span>
+                        </div>
+                        <div class="progress-bar-wrap">
+                          <div class="progress-bar indigo" [style.width.%]="aiResult()!.scores.keyword_overlap! * 100"></div>
+                        </div>
+                      </div>
+                    }
+                    
+                    @if (aiResult()!.scores.numerical_consistency != null) {
+                      <div class="score-item">
+                        <div class="score-info">
+                          <span class="score-label">Numerical Consistency ℹ</span>
+                          <span class="score-value">{{ (aiResult()!.scores.numerical_consistency! * 100).toFixed(1) }}%</span>
+                        </div>
+                        <div class="progress-bar-wrap">
+                          <div class="progress-bar cyan" [style.width.%]="aiResult()!.scores.numerical_consistency! * 100"></div>
+                        </div>
+                      </div>
+                    }
+                    
+                    @if (aiResult()!.scores.contradiction_score != null) {
+                      <div class="score-item">
+                        <div class="score-info">
+                          <span class="score-label" title="NLI contradiction probability">Contradiction Risk ℹ</span>
+                          <span class="score-value">{{ (aiResult()!.scores.contradiction_score! * 100).toFixed(1) }}%</span>
+                        </div>
+                        <div class="progress-bar-wrap">
+                          <div class="progress-bar pink" [style.width.%]="aiResult()!.scores.contradiction_score! * 100"></div>
+                        </div>
+                      </div>
+                    }
+                  </div>
+                }
+
+                <!-- Manipulation Flags -->
+                @if (aiResult()!.manipulation_flags) {
+                  <div class="checks-section">
+                    <h4>✅ Verification Checks</h4>
+                    <div class="checks-grid">
+                      <div class="check-card" [class.passed]="!aiResult()!.manipulation_flags.headline_manipulated"
+                           [class.failed]="aiResult()!.manipulation_flags.headline_manipulated">
+                        <div class="check-icon-wrap">
+                          {{ aiResult()!.manipulation_flags.headline_manipulated ? '✗' : '✓' }}
+                        </div>
+                        <div class="check-body">
+                          <span class="check-title">Headline Integrity</span>
+                          <span class="check-desc">
+                            {{ aiResult()!.manipulation_flags.headline_manipulated
+                                ? 'Headline altered or sensationalized relative to body.'
+                                : 'Headline meaning matches article body.' }}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div class="check-card" [class.passed]="!aiResult()!.manipulation_flags.body_altered"
+                           [class.failed]="aiResult()!.manipulation_flags.body_altered">
+                        <div class="check-icon-wrap">
+                          {{ aiResult()!.manipulation_flags.body_altered ? '✗' : '✓' }}
+                        </div>
+                        <div class="check-body">
+                          <span class="check-title">Content Authenticity</span>
+                          <span class="check-desc">
+                            {{ aiResult()!.manipulation_flags.body_altered
+                                ? 'Submitted text diverges significantly or is fabricated.'
+                                : 'Submitted text matches the original source.' }}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div class="check-card" [class.passed]="!aiResult()!.manipulation_flags.numbers_altered"
+                           [class.failed]="aiResult()!.manipulation_flags.numbers_altered">
+                        <div class="check-icon-wrap">
+                          {{ aiResult()!.manipulation_flags.numbers_altered ? '✗' : '✓' }}
+                        </div>
+                        <div class="check-body">
+                          <span class="check-title">Numerical Consistency</span>
+                          <span class="check-desc">
+                            {{ aiResult()!.manipulation_flags.numbers_altered
+                                ? 'Numbers or dates altered or inflated.'
+                                : 'Statistics and dates are consistent.' }}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div class="check-card" [class.passed]="!aiResult()!.manipulation_flags.entities_replaced"
+                           [class.failed]="aiResult()!.manipulation_flags.entities_replaced">
+                        <div class="check-icon-wrap">
+                          {{ aiResult()!.manipulation_flags.entities_replaced ? '✗' : '✓' }}
+                        </div>
+                        <div class="check-body">
+                          <span class="check-title">Entity Authenticity</span>
+                          <span class="check-desc">
+                            {{ aiResult()!.manipulation_flags.entities_replaced
+                                ? 'Named entities were swapped or replaced.'
+                                : 'Names, places, organizations match.' }}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                }
+
+                <!-- Matched Articles -->
+                @if (aiResult()!.matched_articles && aiResult()!.matched_articles.length) {
+                  <div class="articles-section" style="margin-top: 40px; padding-top: 32px; border-top: 1px solid rgba(255,255,255,0.1);">
+                    <h4 style="margin-bottom: 24px; font-size: 18px; display: flex; align-items: center; gap: 8px; color: var(--text-primary);">
+                      <span style="font-size: 24px;">📰</span> Top Supporting Evidence from Source
+                    </h4>
+                    <div class="articles-list">
+                      @for (art of aiResult()!.matched_articles!.slice(0, 3); track art.url; let i = $index) {
+                        <div class="article-card glass-card" style="border-left: 4px solid var(--primary-color); background: rgba(255,255,255,0.03);">
+                          <div class="article-header" style="align-items: flex-start;">
+                            <div style="display: flex; gap: 12px; align-items: flex-start; flex: 1;">
+                              <div class="article-badge" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; white-space: nowrap; margin-top: 2px;">
+                                #{{ i + 1 }} Match
+                              </div>
+                              <a [href]="art.url" target="_blank" class="article-title" style="margin: 0; font-size: 16px; line-height: 1.4;">
+                                {{ art.title || 'View Source Article' }}
+                              </a>
+                            </div>
+                            @if (art.rank_score != null) {
+                              <div class="article-match" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3);">
+                                Relevance: {{ (art.rank_score * 100).toFixed(1) }}%
+                              </div>
+                            }
+                          </div>
+                          <div class="article-meta" style="margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); margin-top: 8px;">
+                            @if (art.author) { <span>👤 {{ art.author }}</span> }
+                            @if (art.published_date) { <span>📅 {{ art.published_date }}</span> }
+                            <span>🌐 {{ getHost(art.url) }}</span>
+                          </div>
+                          @if (art.body) {
+                            <a [href]="art.url" target="_blank" style="text-decoration: none; color: inherit; display: block; cursor: pointer;">
+                              <p class="article-snippet" style="-webkit-line-clamp: 4; margin-top: 12px;">{{ art.body }}</p>
+                            </a>
+                          }
+                        </div>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+
+            <!-- Vote Form -->
+            @if (!submitted()) {
+              <div class="card vote-card">
+                <h3>Submit Your Assessment</h3>
+                <form [formGroup]="form" (ngSubmit)="onSubmit()">
+                  <div class="form-group">
+                    <label class="form-label">Your Verdict <span style="color:var(--error)">*</span></label>
+                    <div class="verdict-options">
+                      @for (lbl of labels; track lbl) {
+                        <button type="button" class="verdict-option"
+                                [class.selected]="selectedLabel() === lbl"
+                                [ngClass]="lbl === 'TRUE' ? 'option-true' : lbl === 'FALSE' ? 'option-false' : lbl === 'PARTIALLY_TRUE' ? 'option-partial' : 'option-notfound'"
+                                (click)="selectLabel(lbl)">
+                          {{ labelDisplay[lbl] }}
+                        </button>
+                      }
+                    </div>
+                    @if (!selectedLabel() && formSubmitted) {
+                      <span class="form-error">Please select a verdict</span>
+                    }
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">Justification <span style="color:var(--error)">*</span> <span class="text-muted text-xs">(min 50 characters)</span></label>
+                    <textarea formControlName="justification" class="form-control"
+                              [class.is-invalid]="justInvalid"
+                              rows="5"
+                              placeholder="Explain your reasoning (minimum 50 characters). What evidence supports your verdict?">
+                    </textarea>
+                    <div class="char-count" [class.valid]="charCount >= 50">{{ charCount }} / 50+</div>
+                    @if (justInvalid) {
+                      <span class="form-error">Justification must be at least 50 characters</span>
+                    }
+                  </div>
+
+                  <button type="submit" class="btn btn-primary btn-full btn-lg" [disabled]="voting()">
+                    @if (voting()) { <span class="btn-spinner"></span> Submitting... }
+                    @else { ⚖️ Submit Vote }
+                  </button>
+                </form>
+              </div>
+            } @else {
+              <div class="card success-card text-center">
+                <div style="font-size:56px; margin-bottom:16px;">✅</div>
+                <h3>Vote Submitted!</h3>
+                <p>Your assessment has been recorded. The final verdict will be determined once all minimum votes are in.</p>
+                <a routerLink="/expert/queue" class="btn btn-primary mt-4">Back to Queue</a>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    </div>

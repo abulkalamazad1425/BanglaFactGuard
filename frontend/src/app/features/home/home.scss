@@ -1,0 +1,52 @@
+    .home { overflow-x: hidden; }
+
+    /* Hero */
+    .hero {
+      position: relative; padding: 120px 0 80px; overflow: hidden;
+      min-height: 80vh; display: flex; align-items: center;
+    }
+    .hero-bg { position: absolute; inset: 0; pointer-events: none; }
+    .hero-blob {
+      position: absolute; border-radius: 50%; filter: blur(100px); opacity: 0.12;
+      &-1 { width: 800px; height: 800px; top: -300px; right: -200px; background: radial-gradient(#7c6af7, #a855f7); }
+      &-2 { width: 600px; height: 600px; bottom: -200px; left: -100px; background: radial-gradient(#a855f7, #ec4899); }
+    }
+    .hero-grid {
+      position: absolute; inset: 0;
+      background-image: linear-gradient(rgba(124,106,247,0.04) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(124,106,247,0.04) 1px, transparent 1px);
+      background-size: 48px 48px;
+    }
+    .hero-content { position: relative; z-index: 1; text-align: center; padding: 0 24px; }
+    .hero-badge { margin-bottom: 24px; }
+    .hero-title { font-size: clamp(2.5rem, 6vw, 4rem); margin-bottom: 24px; line-height: 1.15; }
+    .hero-subtitle { font-size: 18px; color: var(--text-secondary); max-width: 640px; margin: 0 auto 40px; }
+    .hero-actions { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+    .hero-stats {
+      display: flex; align-items: center; justify-content: center; gap: 32px;
+      margin-top: 56px; padding: 24px 32px; border-radius: var(--radius-xl);
+      background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+      backdrop-filter: blur(10px); flex-wrap: wrap; gap: 16px;
+    }
+    .stat-item { text-align: center; }
+    .stat-num { display: block; font-size: 2rem; font-weight: 800; font-family: var(--font-display); }
+    .stat-lbl { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .stat-divider { width: 1px; height: 40px; background: var(--border); }
+
+    /* Features */
+    .section-header { text-align: center; margin-bottom: 48px;
+      h2 { margin-bottom: 12px; }
+      p { color: var(--text-secondary); font-size: 16px; }
+    }
+    .feature-card { text-align: center; }
+    .feature-icon { font-size: 40px; margin-bottom: 16px; }
+    .feature-card h3 { font-size: 1.1rem; margin-bottom: 10px; }
+    .feature-card p { color: var(--text-secondary); font-size: 14px; }
+
+    /* Verdicts */
+    .verdict-card { display: flex; flex-direction: column; gap: 12px; }
+    .verdict-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: var(--radius-full); font-size: 14px; font-weight: 600; align-self: flex-start; }
+
+    /* CTA */
+    .cta-card { text-align: center; h2 { margin-bottom: 12px; } p { margin-bottom: 32px; } }
+    .cta-actions { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }

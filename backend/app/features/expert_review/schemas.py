@@ -47,15 +47,26 @@ class ExpertReviewResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ExpertTopArticle(BaseModel):
+    """Top matched article for queue preview."""
+    url: str
+    title: str | None = None
+    published_date: str | None = None
+    rank_score: float | None = None
+    body_snippet: str | None = None  # First 400 chars
+
+
 class ExpertQueueItemResponse(BaseModel):
     """Summary of a claim awaiting expert review."""
     claim_id: str
     headline: str | None
+    news_body: str | None = None       # Submitted news body (truncated preview)
     claimed_source: str | None
     ai_label: str | None
     ai_confidence: float | None
     submitted_at: datetime
     vote_count: int  # how many experts have voted so far
+    top_article: ExpertTopArticle | None = None  # Highest-ranked matched article
 
 
 class ExpertHistoryItemResponse(BaseModel):

@@ -1,0 +1,16 @@
+.admin-page { background: var(--bg-base); min-height: 100%; }
+.page-header { margin-bottom: 32px; }
+.header-content { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px; h1 { margin-bottom: 8px; } p { color: var(--text-secondary); } }
+.header-links { display: flex; gap: 12px; }
+.metric-card { padding: 24px; }
+.metric-icon { font-size: 28px; margin-bottom: 12px; }
+.metric-num { display: block; font-size: 2rem; font-weight: 800; font-family: var(--font-display); margin-bottom: 4px; }
+.metric-lbl { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.card-title { font-size: 15px; margin-bottom: 20px; }
+.breakdown-list { display: flex; flex-direction: column; gap: 16px; margin-bottom: 20px; }
+.breakdown-counts { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; font-weight: 600; padding-top: 16px; border-top: 1px solid var(--border); }
+.quick-actions { display: flex; flex-direction: column; gap: 8px; }
+.action-link { display: flex; align-items: center; gap: 16px; padding: 16px; border-radius: var(--radius-md); background: var(--bg-surface-2); text-decoration: none; color: var(--text-primary); border: 1px solid var(--border); transition: var(--transition); &:hover { border-color: var(--primary); background: rgba(124,106,247,0.05); } }
+.action-icon { font-size: 24px; flex-shrink: 0; }
+.action-title { font-weight: 600; font-size: 14px; margin-bottom: 2px; }
+.loading-overlay { display: flex; justify-content: center; padding: 80px; }

@@ -1,0 +1,16 @@
+    .history-page { background: var(--bg-base); min-height: 100%; }
+    .page-header { margin-bottom: 32px; h1 { margin-bottom: 8px; } p { color: var(--text-secondary); } }
+    .stats-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 32px;
+      @media (max-width: 768px) { grid-template-columns: repeat(3, 1fr); }
+      @media (max-width: 480px) { grid-template-columns: repeat(2, 1fr); }
+    }
+    .stat-card { text-align: center; padding: 20px 16px; }
+    .stat-num { display: block; font-size: 2rem; font-weight: 800; font-family: var(--font-display); }
+    .stat-lbl { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .table-card { padding: 0; overflow: hidden; margin-bottom: 24px; }
+    .headline-cell { max-width: 320px; }
+    .source-cell { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .confidence { font-weight: 600; color: var(--primary-light); }
+    .empty-state { max-width: 400px; margin: 80px auto; }
+    .pagination { display: flex; align-items: center; justify-content: center; gap: 16px; }
+    .loading-overlay { display: flex; justify-content: center; padding: 80px; }

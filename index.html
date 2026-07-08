@@ -1,0 +1,1063 @@
+<!DOCTYPE html>
+<html lang="en" ng-app="factGuardApp">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BanglaFactGuard — Source-Based Fact Verification Engine</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Noto+Sans+Bengali:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <!-- AngularJS CDN -->
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.8.2/angular.min.js"></script>
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        :root {
+            --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+            --panel-bg: rgba(30, 41, 59, 0.7);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --accent-color: #6366f1;
+            --accent-hover: #4f46e5;
+
+            --verdict-true: #10b981;
+            --verdict-false: #ef4444;
+            --verdict-partial: #f59e0b;
+            --verdict-notfound: #6b7280;
+
+            --shadow-glow: 0 0 25px rgba(99, 102, 241, 0.15);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Outfit', 'Noto Sans Bengali', sans-serif;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+        }
+
+        body {
+            background: var(--bg-gradient);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem 1rem;
+            overflow-x: hidden;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        /* Header Styling */
+        header {
+            text-align: center;
+            margin-bottom: 2.5rem;
+            animation: fadeInDown 0.8s ease-out;
+        }
+
+        header h1 {
+            font-size: 2.8rem;
+            font-weight: 800;
+            background: linear-gradient(to right, #818cf8, #e0e7ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+            letter-spacing: -0.025em;
+        }
+
+        header p {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            font-weight: 400;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        /* Main Workspace Grid */
+        .workspace {
+            display: grid;
+            grid-template-columns: 1.2fr 1.8fr;
+            gap: 2rem;
+            align-items: start;
+            animation: fadeInUp 0.8s ease-out;
+        }
+
+        @media (max-width: 900px) {
+            .workspace {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Glassmorphic Panel Base */
+        .panel {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 2rem;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .panel:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4);
+        }
+
+        .form-title {
+            font-size: 1.4rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.75rem;
+        }
+
+        .form-title i {
+            color: var(--accent-color);
+        }
+
+        /* Inputs */
+        .form-group {
+            margin-bottom: 1.25rem;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+
+        .input-control {
+            width: 100%;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 0.85rem 1rem;
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            transition: all 0.2s ease;
+        }
+
+        .input-control:focus {
+            outline: none;
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+            background: rgba(15, 23, 42, 0.8);
+        }
+
+        textarea.input-control {
+            resize: vertical;
+            min-height: 120px;
+        }
+
+        /* Buttons */
+        .btn-submit {
+            width: 100%;
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            padding: 1rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            box-shadow: var(--shadow-glow);
+        }
+
+        .btn-submit:hover:not(:disabled) {
+            background: var(--accent-hover);
+            transform: translateY(-2px);
+        }
+
+        .btn-submit:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .btn-submit:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        /* Output / Result Presentation styling */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--text-secondary);
+        }
+
+        .empty-state i {
+            font-size: 4rem;
+            color: rgba(255, 255, 255, 0.05);
+            margin-bottom: 1.5rem;
+        }
+
+        .empty-state h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .verdict-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 2rem;
+            gap: 1.5rem;
+        }
+
+        @media (max-width: 600px) {
+            .verdict-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+        }
+
+        .verdict-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1.5rem;
+            border-radius: 50px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+        }
+
+        .verdict-badge.true {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--verdict-true);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .verdict-badge.false {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--verdict-false);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .verdict-badge.partial {
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--verdict-partial);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+
+        .verdict-badge.notfound {
+            background: rgba(107, 114, 128, 0.15);
+            color: var(--verdict-notfound);
+            border: 1px solid rgba(107, 114, 128, 0.3);
+        }
+
+        /* Circular confidence meter */
+        .confidence-meter {
+            position: relative;
+            width: 100px;
+            height: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .confidence-circle {
+            width: 100%;
+            height: 100%;
+            transform: rotate(-90deg);
+        }
+
+        .confidence-circle circle {
+            fill: none;
+            stroke-width: 8;
+        }
+
+        .confidence-circle .bg-ring {
+            stroke: rgba(255, 255, 255, 0.05);
+        }
+
+        .confidence-circle .progress-ring {
+            stroke: var(--accent-color);
+            stroke-dasharray: 283;
+            transition: stroke-dashoffset 0.8s ease-in-out;
+        }
+
+        .confidence-text {
+            position: absolute;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .confidence-val {
+            font-size: 1.5rem;
+            font-weight: 800;
+        }
+
+        .confidence-label {
+            font-size: 0.6rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
+        }
+
+        /* Reasoning Block */
+        .reasoning-box {
+            background: rgba(15, 23, 42, 0.4);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.25rem;
+            margin-bottom: 2rem;
+            line-height: 1.6;
+            font-size: 1rem;
+        }
+
+        .reasoning-box h4 {
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Scores progress bars */
+        .scores-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        @media (max-width: 600px) {
+            .scores-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .score-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .score-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .score-label {
+            color: var(--text-secondary);
+        }
+
+        .score-value {
+            color: var(--text-primary);
+        }
+
+        .progress-bar-container {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .progress-bar.blue {
+            background: #3b82f6;
+        }
+
+        .progress-bar.purple {
+            background: #8b5cf6;
+        }
+
+        .progress-bar.indigo {
+            background: #6366f1;
+        }
+
+        .progress-bar.cyan {
+            background: #06b6d4;
+        }
+
+        .progress-bar.pink {
+            background: #ec4899;
+        }
+
+        /* Verification Checks Grid */
+        .verification-checks-section {
+            margin-bottom: 2rem;
+        }
+
+        .verification-checks-section h4 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .checks-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        @media (max-width: 600px) {
+            .checks-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .check-card {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            padding: 1rem;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            background: rgba(15, 23, 42, 0.4);
+            transition: all 0.2s ease;
+        }
+
+        .check-card.passed {
+            border-color: rgba(16, 185, 129, 0.2);
+            background: rgba(16, 185, 129, 0.05);
+        }
+
+        .check-card.failed {
+            border-color: rgba(239, 68, 68, 0.3);
+            background: rgba(239, 68, 68, 0.1);
+        }
+
+        .check-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            flex-shrink: 0;
+            font-size: 1.1rem;
+        }
+
+        .check-card.passed .check-icon {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--verdict-true);
+        }
+
+        .check-card.failed .check-icon {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--verdict-false);
+        }
+
+        .check-content {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .check-title {
+            font-weight: 600;
+            font-size: 0.95rem;
+            color: var(--text-primary);
+        }
+
+        .check-desc {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        /* Matched Articles List */
+        .articles-section h4 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .articles-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .article-card {
+            background: rgba(15, 23, 42, 0.3);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.25rem;
+            transition: all 0.2s ease;
+        }
+
+        .article-card:hover {
+            background: rgba(15, 23, 42, 0.5);
+            border-color: rgba(99, 102, 241, 0.2);
+            transform: scale(1.01);
+        }
+
+        .article-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .article-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            text-decoration: none;
+            line-height: 1.4;
+        }
+
+        .article-title:hover {
+            color: var(--accent-color);
+            text-decoration: underline;
+        }
+
+        .article-match {
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 0.25rem 0.6rem;
+            background: rgba(99, 102, 241, 0.1);
+            color: var(--accent-color);
+            border-radius: 4px;
+            white-space: nowrap;
+        }
+
+        .article-meta {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            display: flex;
+            gap: 1.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .article-meta span {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        .article-body-snippet {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        /* Loading spinner */
+        .spinner {
+            animation: rotate 2s linear infinite;
+            width: 20px;
+            height: 20px;
+        }
+
+        .spinner .path {
+            stroke: currentColor;
+            stroke-linecap: round;
+            animation: dash 1.5s ease-in-out infinite;
+        }
+
+        /* Keyframes Animations */
+        @keyframes rotate {
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes dash {
+            0% {
+                stroke-dasharray: 1, 150;
+                stroke-dashoffset: 0;
+            }
+
+            50% {
+                stroke-dasharray: 90, 150;
+                stroke-dashoffset: -35;
+            }
+
+            100% {
+                stroke-dasharray: 90, 150;
+                stroke-dashoffset: -124;
+            }
+        }
+
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Footer styling */
+        footer {
+            margin-top: auto;
+            padding-top: 3rem;
+            padding-bottom: 1rem;
+            text-align: center;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+    </style>
+</head>
+
+<body ng-controller="FactGuardController">
+
+    <div class="container">
+        <!-- Main Header -->
+        <header>
+            <h1>BanglaFactGuard</h1>
+            <p>Multimodal Source-Based Fact Verification Engine. Verify news headlines against their claimed publication
+                sources using neural search and natural language inference.</p>
+        </header>
+
+        <!-- Main Body Workspace -->
+        <div class="workspace">
+
+            <!-- Left Panel: Input form -->
+            <div class="panel">
+                <h3 class="form-title">
+                    <i class="fa-solid fa-shield-halved"></i>
+                    Verify news claim
+                </h3>
+
+                <form ng-submit="verifyClaim()">
+                    <div class="form-group">
+                        <label for="headline">News Headline (in Bangla)*</label>
+                        <textarea id="headline" class="input-control"
+                            placeholder="যেমন: প্রধানমন্ত্রী নতুন উড়ালসড়ক উদ্বোধন করলেন" ng-model="claim.headline"
+                            required></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="source">Claimed Source (Domain or Name)*</label>
+                        <input type="text" id="source" class="input-control"
+                            placeholder="যেমন: prothomalo.com বা প্রথম আলো" ng-model="claim.claimed_source" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="body">News Body Text (Optional)</label>
+                        <textarea id="body" class="input-control" placeholder="নিউজ বডি এখানে পেস্ট করুন..."
+                            ng-model="claim.news_body"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="pub_date">Publication Date (Optional)</label>
+                        <input type="date" id="pub_date" class="input-control" ng-model="claim.published_date">
+                    </div>
+
+                    <div class="form-group" style="display: flex; align-items: center; gap: 0.5rem; margin-top: 1rem;">
+                        <input type="checkbox" id="force_refresh" ng-model="claim.force_refresh">
+                        <label for="force_refresh" style="margin-bottom: 0; cursor: pointer;">Bypass cache (Force
+                            verification)</label>
+                    </div>
+
+                    <button type="submit" class="btn-submit" ng-disabled="loading">
+                        <span ng-if="!loading">
+                            <i class="fa-solid fa-circle-check"></i> Verify Claim
+                        </span>
+                        <span ng-if="loading" style="display: flex; align-items: center; gap: 0.5rem;">
+                            <svg class="spinner" viewBox="0 0 50 50">
+                                <circle class="path" cx="25" cy="25" r="20" fill="none" stroke-width="5"></circle>
+                            </svg>
+                            Verifying...
+                        </span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- Right Panel: Output & Result Presentation -->
+            <div class="panel">
+
+                <!-- State 1: Empty state (Initial) -->
+                <div class="empty-state" ng-if="!result && !loading && !error">
+                    <i class="fa-solid fa-rectangle-list"></i>
+                    <h3>No Verification Executed</h3>
+                    <p>Enter the news headline and claimed source details on the left, and click "Verify Claim" to start
+                        the process.</p>
+                </div>
+
+                <!-- State 2: Loading State -->
+                <div class="empty-state" ng-if="loading">
+                    <i class="fa-solid fa-gears fa-spin" style="color: var(--accent-color);"></i>
+                    <h3>Verifying News Claim</h3>
+                    <p>Executing 12-stage pipeline: Normalizing inputs, searching target source, extracting body text,
+                        running semantic similarity and contradiction NLI analysis...</p>
+                </div>
+
+                <!-- State 3: Error State -->
+                <div class="empty-state" ng-if="error" style="color: var(--verdict-false);">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <h3>Verification Failed</h3>
+                    <p>{{error}}</p>
+                </div>
+
+                <!-- State 4: Result state -->
+                <div ng-if="result && !loading && !error">
+
+                    <!-- Verdict header -->
+                    <div class="verdict-header">
+                        <div>
+                            <span class="verdict-badge" ng-class="getBadgeClass(result.label)">
+                                <i class="fa-solid" ng-class="getBadgeIcon(result.label)"></i>
+                                {{formatVerdict(result.label)}}
+                            </span>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem;">
+                                Source: <strong>{{result.normalized_source || claim.claimed_source}}</strong>
+                                <span ng-if="result.cached"
+                                    style="margin-left: 0.5rem; padding: 0.15rem 0.4rem; background: rgba(255,255,255,0.08); border-radius: 4px; font-size: 0.75rem;">
+                                    <i class="fa-solid fa-bolt"></i> Cached
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Confidence meter -->
+                        <div class="confidence-meter">
+                            <svg class="confidence-circle" viewBox="0 0 100 100">
+                                <circle class="bg-ring" cx="50" cy="50" r="45"></circle>
+                                <circle class="progress-ring" cx="50" cy="50" r="45"
+                                    ng-style="{'stroke-dashoffset': getDashOffset(result.confidence)}"></circle>
+                            </svg>
+                            <div class="confidence-text">
+                                <span class="confidence-val">{{(result.confidence * 100) | number:0}}%</span>
+                                <span class="confidence-label">Confidence</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Verdict reasoning -->
+                    <div class="reasoning-box">
+                        <h4><i class="fa-solid fa-comment-dots"></i> Analysis Reasoning</h4>
+                        <p>{{result.reasoning}}</p>
+                    </div>
+
+                    <!-- Score Progress bars -->
+                    <div class="scores-grid" ng-if="result.scores">
+                        <!-- Semantic similarity -->
+                        <div class="score-item" ng-if="result.scores.semantic_similarity !== null" title="Blended score (30% headline, 70% body) measuring overall semantic meaning match.">
+                            <div class="score-info">
+                                <span class="score-label">Semantic Similarity <i class="fa-solid fa-circle-info" style="font-size: 0.75rem; margin-left: 0.25rem; opacity: 0.7;"></i></span>
+                                <span class="score-value">{{(result.scores.semantic_similarity * 100) | number:1}}%</span>
+                            </div>
+                            <div class="progress-bar-container">
+                                <div class="progress-bar blue"
+                                    ng-style="{'width': (result.scores.semantic_similarity * 100) + '%'}"></div>
+                            </div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.35rem; display: flex; justify-content: space-between;" ng-if="result.scores.headline_similarity !== null && result.scores.body_similarity !== null">
+                                <span>Headline: {{(result.scores.headline_similarity * 100) | number:1}}%</span>
+                                <span>Body: {{(result.scores.body_similarity * 100) | number:1}}%</span>
+                            </div>
+                        </div>
+
+                        <!-- Entity match -->
+                        <div class="score-item" ng-if="result.scores.entity_match !== null" title="Directional overlap of named entities (persons, places, organizations) with penalty for extra article entities.">
+                            <div class="score-info">
+                                <span class="score-label">Entity Match <i class="fa-solid fa-circle-info" style="font-size: 0.75rem; margin-left: 0.25rem; opacity: 0.7;"></i></span>
+                                <span class="score-value">{{(result.scores.entity_match * 100) | number:1}}%</span>
+                            </div>
+                            <div class="progress-bar-container">
+                                <div class="progress-bar purple"
+                                    ng-style="{'width': (result.scores.entity_match * 100) + '%'}"></div>
+                            </div>
+                        </div>
+
+                        <!-- Keyword overlap -->
+                        <div class="score-item" ng-if="result.scores.keyword_overlap !== null" title="YAKE-weighted topical alignment giving more weight to highly relevant keywords.">
+                            <div class="score-info">
+                                <span class="score-label">Keyword Overlap <i class="fa-solid fa-circle-info" style="font-size: 0.75rem; margin-left: 0.25rem; opacity: 0.7;"></i></span>
+                                <span class="score-value">{{(result.scores.keyword_overlap * 100) | number:1}}%</span>
+                            </div>
+                            <div class="progress-bar-container">
+                                <div class="progress-bar indigo"
+                                    ng-style="{'width': (result.scores.keyword_overlap * 100) + '%'}"></div>
+                            </div>
+                        </div>
+
+                        <!-- Numerical consistency -->
+                        <div class="score-item" ng-if="result.scores.numerical_consistency !== null" title="Asymmetric numeral matching. Checks if claim numerals are present in the article, with partial credit for near-matches.">
+                            <div class="score-info">
+                                <span class="score-label">Numerical Consistency <i class="fa-solid fa-circle-info" style="font-size: 0.75rem; margin-left: 0.25rem; opacity: 0.7;"></i></span>
+                                <span class="score-value">{{(result.scores.numerical_consistency * 100) | number:1}}%</span>
+                            </div>
+                            <div class="progress-bar-container">
+                                <div class="progress-bar cyan"
+                                    ng-style="{'width': (result.scores.numerical_consistency * 100) + '%'}"></div>
+                            </div>
+                        </div>
+
+                        <!-- Contradiction score -->
+                        <div class="score-item" ng-if="result.scores.contradiction_score !== null" title="NLI probability that the article contradicts the claim (temperature-calibrated).">
+                            <div class="score-info">
+                                <span class="score-label">Contradiction Risk <i class="fa-solid fa-circle-info" style="font-size: 0.75rem; margin-left: 0.25rem; opacity: 0.7;"></i></span>
+                                <span class="score-value">{{(result.scores.contradiction_score * 100) | number:1}}%</span>
+                            </div>
+                            <div class="progress-bar-container">
+                                <div class="progress-bar pink"
+                                    ng-style="{'width': (result.scores.contradiction_score * 100) + '%'}"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Verification Checks Grid -->
+                    <div class="verification-checks-section" ng-if="result.manipulation_flags">
+                        <h4><i class="fa-solid fa-list-check"></i> Verification Checks</h4>
+                        <div class="checks-grid">
+                            <!-- Headline Integrity -->
+                            <div class="check-card" ng-class="{'passed': !result.manipulation_flags.headline_manipulated, 'failed': result.manipulation_flags.headline_manipulated}">
+                                <div class="check-icon">
+                                    <i class="fa-solid fa-check" ng-if="!result.manipulation_flags.headline_manipulated"></i>
+                                    <i class="fa-solid fa-xmark" ng-if="result.manipulation_flags.headline_manipulated"></i>
+                                </div>
+                                <div class="check-content">
+                                    <div class="check-title">Headline Integrity</div>
+                                    <div class="check-desc" ng-if="!result.manipulation_flags.headline_manipulated">Headline meaning matches article body.</div>
+                                    <div class="check-desc" ng-if="result.manipulation_flags.headline_manipulated">Headline altered or sensationalized relative to original body.</div>
+                                </div>
+                            </div>
+
+                            <!-- Content Authenticity -->
+                            <div class="check-card" ng-class="{'passed': !result.manipulation_flags.body_altered, 'failed': result.manipulation_flags.body_altered}">
+                                <div class="check-icon">
+                                    <i class="fa-solid fa-check" ng-if="!result.manipulation_flags.body_altered"></i>
+                                    <i class="fa-solid fa-xmark" ng-if="result.manipulation_flags.body_altered"></i>
+                                </div>
+                                <div class="check-content">
+                                    <div class="check-title">Content Authenticity</div>
+                                    <div class="check-desc" ng-if="!result.manipulation_flags.body_altered">Submitted text matches the original source.</div>
+                                    <div class="check-desc" ng-if="result.manipulation_flags.body_altered">Submitted text diverges significantly or is fabricated.</div>
+                                </div>
+                            </div>
+
+                            <!-- Numerical Consistency -->
+                            <div class="check-card" ng-class="{'passed': !result.manipulation_flags.numbers_altered, 'failed': result.manipulation_flags.numbers_altered}">
+                                <div class="check-icon">
+                                    <i class="fa-solid fa-check" ng-if="!result.manipulation_flags.numbers_altered"></i>
+                                    <i class="fa-solid fa-xmark" ng-if="result.manipulation_flags.numbers_altered"></i>
+                                </div>
+                                <div class="check-content">
+                                    <div class="check-title">Numerical Consistency</div>
+                                    <div class="check-desc" ng-if="!result.manipulation_flags.numbers_altered">Statistics and dates are consistent.</div>
+                                    <div class="check-desc" ng-if="result.manipulation_flags.numbers_altered">Numbers or dates altered or inflated.</div>
+                                </div>
+                            </div>
+
+                            <!-- Entity Authenticity -->
+                            <div class="check-card" ng-class="{'passed': !result.manipulation_flags.entities_replaced, 'failed': result.manipulation_flags.entities_replaced}">
+                                <div class="check-icon">
+                                    <i class="fa-solid fa-check" ng-if="!result.manipulation_flags.entities_replaced"></i>
+                                    <i class="fa-solid fa-xmark" ng-if="result.manipulation_flags.entities_replaced"></i>
+                                </div>
+                                <div class="check-content">
+                                    <div class="check-title">Entity Authenticity</div>
+                                    <div class="check-desc" ng-if="!result.manipulation_flags.entities_replaced">Names, places, organizations match.</div>
+                                    <div class="check-desc" ng-if="result.manipulation_flags.entities_replaced">Named entities were swapped or replaced.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Matched articles evidence -->
+                    <div class="articles-section" ng-if="result.matched_articles.length > 0">
+                        <h4><i class="fa-solid fa-scroll"></i> Supporting Evidence from Source</h4>
+                        <div class="articles-list">
+                            <div class="article-card" ng-repeat="art in result.matched_articles">
+                                <div class="article-header">
+                                    <a ng-href="{{art.url}}" target="_blank" class="article-title">{{art.title ||
+                                        art.url}}</a>
+                                    <span class="article-match">Match: {{(art.rank_score * 100) | number:0}}%</span>
+                                </div>
+                                <div class="article-meta">
+                                    <span ng-if="art.author"><i class="fa-solid fa-user"></i> {{art.author}}</span>
+                                    <span ng-if="art.published_date"><i class="fa-solid fa-calendar"></i>
+                                        {{art.published_date | date:'mediumDate'}}</span>
+                                    <span><i class="fa-solid fa-globe"></i> {{getHost(art.url)}}</span>
+                                </div>
+                                <div class="article-body-snippet" ng-if="art.body">
+                                    {{art.body}}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- Footer section -->
+        <footer>
+            <p>&copy; 2026 BanglaFactGuard &bull; Powered by Deep NLP Search &amp; Async Fact-Verification Pipeline</p>
+        </footer>
+    </div>
+
+    <!-- AngularJS Controller Script -->
+    <script>
+        const app = angular.module('factGuardApp', []);
+
+        app.controller('FactGuardController', ['$scope', '$http', function ($scope, $http) {
+            $scope.claim = {
+                headline: '',
+                claimed_source: '',
+                news_body: '',
+                published_date: null,
+                force_refresh: false
+            };
+
+            $scope.loading = false;
+            $scope.error = null;
+            $scope.result = null;
+
+            // API endpoint configuration (resolves to local backend process)
+            const API_BASE = 'http://localhost:8000/api/v1';
+
+            $scope.verifyClaim = function () {
+                $scope.loading = true;
+                $scope.error = null;
+                $scope.result = null;
+
+                // Format publication date to YYYY-MM-DD
+                let requestData = {
+                    headline: $scope.claim.headline,
+                    claimed_source: $scope.claim.claimed_source,
+                    news_body: $scope.claim.news_body || null,
+                    force_refresh: $scope.claim.force_refresh
+                };
+
+                if ($scope.claim.published_date) {
+                    const d = new Date($scope.claim.published_date);
+                    requestData.published_date = d.toISOString().split('T')[0];
+                } else {
+                    requestData.published_date = null;
+                }
+
+                $http.post(API_BASE + '/verify', requestData)
+                    .then(function (response) {
+                        $scope.result = response.data;
+                        $scope.loading = false;
+                    }, function (err) {
+                        $scope.loading = false;
+                        if (err.data && err.data.detail && err.data.detail.message) {
+                            $scope.error = err.data.detail.message;
+                        } else if (err.data && err.data.message) {
+                            $scope.error = err.data.message;
+                        } else {
+                            $scope.error = 'Failed to connect to backend engine. Ensure the FastAPI application is running on port 8000.';
+                        }
+                    });
+            };
+
+            // Formatting helper functions
+            $scope.formatVerdict = function (label) {
+                if (!label) return '';
+                return label.replace(/_/g, ' ');
+            };
+
+            $scope.getBadgeClass = function (label) {
+                if (!label) return '';
+                switch (label.toUpperCase()) {
+                    case 'TRUE': return 'true';
+                    case 'FALSE': return 'false';
+                    case 'PARTIALLY_TRUE': return 'partial';
+                    default: return 'notfound';
+                }
+            };
+
+            $scope.getBadgeIcon = function (label) {
+                if (!label) return '';
+                switch (label.toUpperCase()) {
+                    case 'TRUE': return 'fa-circle-check';
+                    case 'FALSE': return 'fa-circle-xmark';
+                    case 'PARTIALLY_TRUE': return 'fa-triangle-exclamation';
+                    default: return 'fa-question';
+                }
+            };
+
+            $scope.getDashOffset = function (confidence) {
+                // Circumference of a 45 radius circle is 2 * PI * 45 = ~282.7
+                const strokeDashOffset = 283 - (283 * (confidence || 0));
+                return strokeDashOffset;
+            };
+
+            $scope.hasManipulation = function (flags) {
+                if (!flags) return false;
+                return flags.headline_manipulated || flags.body_altered || flags.numbers_altered || flags.entities_replaced;
+            };
+
+            $scope.getHost = function (url) {
+                if (!url) return '';
+                try {
+                    const parsed = new URL(url);
+                    return parsed.hostname.replace('www.', '');
+                } catch (e) {
+                    return '';
+                }
+            };
+        }]);
+    </script>
+</body>
+
+</html>

@@ -82,13 +82,12 @@ async def register(
         full_name=body.full_name,
     )
     # Attach tokens to user response via extra fields
-    return UserMeResponse(
-        **user_data.model_dump(),
-        access_token=tokens.access_token,
-        refresh_token=tokens.refresh_token,
-        token_type=tokens.token_type,
-        expires_in=tokens.expires_in,
-    )
+    return user_data.model_copy(update={
+        "access_token": tokens.access_token,
+        "refresh_token": tokens.refresh_token,
+        "token_type": tokens.token_type,
+        "expires_in": tokens.expires_in,
+    })
 
 
 @router.post(

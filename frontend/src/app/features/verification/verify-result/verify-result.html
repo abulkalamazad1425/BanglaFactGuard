@@ -1,0 +1,264 @@
+    <div class="result-page">
+      <div class="container" style="padding-top:48px; padding-bottom:80px; max-width: 1000px;">
+
+        @if (loading()) {
+          <div class="loading-overlay">
+            <div class="loading-card card text-center">
+              <div class="spinner" style="margin: 0 auto 20px;"></div>
+              <h3>Loading result...</h3>
+              <p>Fetching verification details</p>
+            </div>
+          </div>
+        }
+
+        @if (!loading() && result()) {
+          <div class="animate-in">
+            <!-- Top bar -->
+            <div class="result-topbar">
+              <a routerLink="/verify" class="btn btn-ghost btn-sm">← New Verification</a>
+              <div class="share-actions">
+                <span class="claim-id">ID: {{ result()!.claim_id }}</span>
+                <button class="btn btn-secondary btn-sm" (click)="copyUrl()">{{ copied ? '✓ Copied' : '🔗 Copy Link' }}</button>
+              </div>
+            </div>
+
+            <!-- Modal-like Wide Card -->
+            <div class="result-modal card">
+              
+              <!-- Verdict Header -->
+              <div class="verdict-header">
+                <div class="verdict-left">
+                  <div class="verdict-badge" [ngClass]="getBadgeClass(result()!.label)">
+                    <span class="badge-icon">{{ getBadgeIcon(result()!.label) }}</span>
+                    {{ formatVerdict(result()!.label) }}
+                  </div>
+                  <div class="source-info">
+                    Source: <strong>{{ result()!.normalized_source || '' }}</strong>
+                    @if (result()!.cached) {
+                      <span class="cache-tag">⚡ Cached</span>
+                    }
+                  </div>
+                </div>
+
+                <!-- Confidence Meter -->
+                <div class="confidence-meter">
+                  <svg class="confidence-svg" viewBox="0 0 100 100">
+                    <circle class="bg-ring" cx="50" cy="50" r="45"></circle>
+                    <circle class="progress-ring" cx="50" cy="50" r="45"
+                            [style.stroke-dashoffset]="getDashOffset(result()!.confidence)"
+                            [style.stroke]="verdictColor()"></circle>
+                  </svg>
+                  <div class="confidence-text">
+                    <span class="confidence-val">{{ (result()!.confidence * 100).toFixed(0) }}%</span>
+                    <span class="confidence-lbl">Confidence</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Reasoning Box -->
+              @if (result()!.reasoning) {
+                <div class="reasoning-box">
+                  <h4>💬 Analysis Reasoning</h4>
+                  <p>{{ result()!.reasoning }}</p>
+                </div>
+              }
+
+              <!-- Score Bars Grid -->
+              @if (result()!.scores) {
+                <div class="scores-grid">
+                  @if (result()!.scores.semantic_similarity != null) {
+                    <div class="score-item" style="grid-column: 1 / -1; background: rgba(0,0,0,0.15); padding: 16px; border-radius: 8px;">
+                      <div class="score-info">
+                        <span class="score-label" title="Blended score (30% headline, 70% body)">Semantic Similarity ℹ</span>
+                        <span class="score-value" style="font-size: 24px;">{{ (result()!.scores.semantic_similarity! * 100).toFixed(1) }}%</span>
+                      </div>
+                      <div class="progress-bar-wrap" style="height: 12px; margin-top: 8px; margin-bottom: 12px;">
+                        <div class="progress-bar blue" [style.width.%]="result()!.scores.semantic_similarity! * 100"></div>
+                      </div>
+                      @if (result()!.scores.headline_similarity != null && result()!.scores.body_similarity != null) {
+                        <div class="score-sub" style="display: flex; gap: 24px; justify-content: flex-start; font-size: 14px;">
+                          <span style="background: rgba(59, 130, 246, 0.1); padding: 4px 12px; border-radius: 4px;">
+                            Headline Match: <strong style="color: #93c5fd">{{ (result()!.scores.headline_similarity! * 100).toFixed(1) }}%</strong>
+                          </span>
+                          <span style="background: rgba(59, 130, 246, 0.1); padding: 4px 12px; border-radius: 4px;">
+                            Body Match: <strong style="color: #93c5fd">{{ (result()!.scores.body_similarity! * 100).toFixed(1) }}%</strong>
+                          </span>
+                        </div>
+                      }
+                    </div>
+                  }
+                  
+                  @if (result()!.scores.entity_match != null) {
+                    <div class="score-item">
+                      <div class="score-info">
+                        <span class="score-label" title="Named entity overlap">Entity Match ℹ</span>
+                        <span class="score-value">{{ (result()!.scores.entity_match! * 100).toFixed(1) }}%</span>
+                      </div>
+                      <div class="progress-bar-wrap">
+                        <div class="progress-bar purple" [style.width.%]="result()!.scores.entity_match! * 100"></div>
+                      </div>
+                    </div>
+                  }
+                  
+                  @if (result()!.scores.keyword_overlap != null) {
+                    <div class="score-item">
+                      <div class="score-info">
+                        <span class="score-label">Keyword Overlap ℹ</span>
+                        <span class="score-value">{{ (result()!.scores.keyword_overlap! * 100).toFixed(1) }}%</span>
+                      </div>
+                      <div class="progress-bar-wrap">
+                        <div class="progress-bar indigo" [style.width.%]="result()!.scores.keyword_overlap! * 100"></div>
+                      </div>
+                    </div>
+                  }
+                  
+                  @if (result()!.scores.numerical_consistency != null) {
+                    <div class="score-item">
+                      <div class="score-info">
+                        <span class="score-label">Numerical Consistency ℹ</span>
+                        <span class="score-value">{{ (result()!.scores.numerical_consistency! * 100).toFixed(1) }}%</span>
+                      </div>
+                      <div class="progress-bar-wrap">
+                        <div class="progress-bar cyan" [style.width.%]="result()!.scores.numerical_consistency! * 100"></div>
+                      </div>
+                    </div>
+                  }
+                  
+                  @if (result()!.scores.contradiction_score != null) {
+                    <div class="score-item">
+                      <div class="score-info">
+                        <span class="score-label" title="NLI contradiction probability">Contradiction Risk ℹ</span>
+                        <span class="score-value">{{ (result()!.scores.contradiction_score! * 100).toFixed(1) }}%</span>
+                      </div>
+                      <div class="progress-bar-wrap">
+                        <div class="progress-bar pink" [style.width.%]="result()!.scores.contradiction_score! * 100"></div>
+                      </div>
+                    </div>
+                  }
+                </div>
+              }
+
+              <!-- Manipulation Flags -->
+              @if (result()!.manipulation_flags) {
+                <div class="checks-section">
+                  <h4>✅ Verification Checks</h4>
+                  <div class="checks-grid">
+                    <div class="check-card" [class.passed]="!result()!.manipulation_flags.headline_manipulated"
+                         [class.failed]="result()!.manipulation_flags.headline_manipulated">
+                      <div class="check-icon-wrap">
+                        {{ result()!.manipulation_flags.headline_manipulated ? '✗' : '✓' }}
+                      </div>
+                      <div class="check-body">
+                        <span class="check-title">Headline Integrity</span>
+                        <span class="check-desc">
+                          {{ result()!.manipulation_flags.headline_manipulated
+                              ? 'Headline altered or sensationalized relative to body.'
+                              : 'Headline meaning matches article body.' }}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div class="check-card" [class.passed]="!result()!.manipulation_flags.body_altered"
+                         [class.failed]="result()!.manipulation_flags.body_altered">
+                      <div class="check-icon-wrap">
+                        {{ result()!.manipulation_flags.body_altered ? '✗' : '✓' }}
+                      </div>
+                      <div class="check-body">
+                        <span class="check-title">Content Authenticity</span>
+                        <span class="check-desc">
+                          {{ result()!.manipulation_flags.body_altered
+                              ? 'Submitted text diverges significantly or is fabricated.'
+                              : 'Submitted text matches the original source.' }}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div class="check-card" [class.passed]="!result()!.manipulation_flags.numbers_altered"
+                         [class.failed]="result()!.manipulation_flags.numbers_altered">
+                      <div class="check-icon-wrap">
+                        {{ result()!.manipulation_flags.numbers_altered ? '✗' : '✓' }}
+                      </div>
+                      <div class="check-body">
+                        <span class="check-title">Numerical Consistency</span>
+                        <span class="check-desc">
+                          {{ result()!.manipulation_flags.numbers_altered
+                              ? 'Numbers or dates altered or inflated.'
+                              : 'Statistics and dates are consistent.' }}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div class="check-card" [class.passed]="!result()!.manipulation_flags.entities_replaced"
+                         [class.failed]="result()!.manipulation_flags.entities_replaced">
+                      <div class="check-icon-wrap">
+                        {{ result()!.manipulation_flags.entities_replaced ? '✗' : '✓' }}
+                      </div>
+                      <div class="check-body">
+                        <span class="check-title">Entity Authenticity</span>
+                        <span class="check-desc">
+                          {{ result()!.manipulation_flags.entities_replaced
+                              ? 'Named entities were swapped or replaced.'
+                              : 'Names, places, organizations match.' }}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              }
+
+              <!-- Matched Articles -->
+              @if (result()!.matched_articles && result()!.matched_articles.length) {
+                <div class="articles-section" style="margin-top: 48px;">
+                  <h4 style="margin-bottom: 24px; font-size: 18px; display: flex; align-items: center; gap: 8px; color: var(--text-primary);">
+                    <span style="font-size: 24px;">📰</span> Top Supporting Evidence from Source
+                  </h4>
+                  <div class="articles-list">
+                    @for (art of result()!.matched_articles!.slice(0, 3); track art.url; let i = $index) {
+                      <div class="article-card glass-card" style="border-left: 4px solid var(--primary-color); background: rgba(255,255,255,0.03);">
+                        <div class="article-header" style="align-items: flex-start;">
+                          <div style="display: flex; gap: 12px; align-items: flex-start; flex: 1;">
+                            <div class="article-badge" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; white-space: nowrap; margin-top: 2px;">
+                              #{{ i + 1 }} Match
+                            </div>
+                            <a [href]="art.url" target="_blank" class="article-title" style="margin: 0; font-size: 16px; line-height: 1.4;">
+                              {{ art.title || 'View Source Article' }}
+                            </a>
+                          </div>
+                          @if (art.rank_score != null) {
+                            <div class="article-match" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3);">
+                              Relevance: {{ (art.rank_score * 100).toFixed(1) }}%
+                            </div>
+                          }
+                        </div>
+                        <div class="article-meta" style="margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); margin-top: 8px;">
+                          @if (art.author) { <span>👤 {{ art.author }}</span> }
+                          @if (art.published_date) { <span>📅 {{ art.published_date }}</span> }
+                          <span>🌐 {{ getHost(art.url) }}</span>
+                        </div>
+                        @if (art.body) {
+                          <p class="article-snippet" style="-webkit-line-clamp: 4; margin-top: 12px;">{{ art.body }}</p>
+                        }
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+              
+              <div class="result-footer text-muted text-sm" style="margin-top: 32px; text-align: center;">
+                Verification processed in {{ (result()!.processing_time_ms! / 1000).toFixed(1) }}s 
+                on {{ result()!.created_at | date:'medium' }}
+              </div>
+            </div>
+          </div>
+        }
+
+        @if (!loading() && !result()) {
+          <div class="not-found card text-center">
+            <div style="font-size:64px; margin-bottom:20px;">🔎</div>
+            <h2>Result not found</h2>
+            <p>This claim ID doesn't exist or has been removed.</p>
+            <a routerLink="/verify" class="btn btn-primary mt-4">Submit New Claim</a>
+          </div>
+        }
+      </div>
+    </div>

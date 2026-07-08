@@ -163,7 +163,7 @@ class MultimodalSettings(BaseSettings):
     three separate .pt files plus a saved tokenizer directory.
     """
 
-    model_config = SettingsConfigDict(env_prefix="MULTIMODAL_")
+    model_config = SettingsConfigDict(env_prefix="MULTIMODAL_", protected_namespaces=("settings_",))
 
     # Paths
     model_dir: str = Field(
