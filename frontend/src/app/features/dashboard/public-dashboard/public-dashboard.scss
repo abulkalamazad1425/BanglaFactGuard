@@ -1,9 +1,22 @@
     .dashboard-page { background: var(--bg-base); min-height: 100%; }
-    .page-header { margin-bottom: 32px; h1 { margin-bottom: 8px; } p { color: var(--text-secondary); } }
+    .page-header { margin-bottom: 32px; }
+    .explorer-hero {
+      display: flex; align-items: flex-start; gap: 20px;
+      h1 { margin-bottom: 8px; }
+      p { color: var(--text-secondary); font-size: 15px; max-width: 640px; line-height: 1.7; }
+    }
+    .explorer-icon {
+      width: 56px; height: 56px; border-radius: 16px;
+      background: linear-gradient(135deg, rgba(124,106,247,0.2), rgba(168,85,247,0.2));
+      border: 1px solid rgba(124,106,247,0.3);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 28px; flex-shrink: 0;
+    }
     .stat-card { padding: 24px; }
     .stat-num { display: block; font-size: 2.5rem; font-weight: 800; font-family: var(--font-display); }
-    .stat-lbl { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
-    .card-title { font-size: 15px; margin-bottom: 20px; }
+    .stat-lbl { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px; }
+    .card-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+    .card-subtitle { font-size: 12px; color: var(--text-muted); margin-bottom: 16px; }
     .bar-list { display: flex; flex-direction: column; gap: 16px; }
     .sources-list { display: flex; flex-direction: column; gap: 10px; }
     .source-item { display: flex; align-items: center; gap: 12px; }

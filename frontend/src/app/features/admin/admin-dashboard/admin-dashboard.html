@@ -7,6 +7,7 @@
           <p>Platform overview and management</p>
         </div>
         <div class="header-links">
+          <a routerLink="/admin/sources" class="btn btn-secondary">Manage Sources</a>
           <a routerLink="/admin/experts" class="btn btn-secondary">Manage Experts</a>
           <a routerLink="/admin/stats" class="btn btn-primary">Full Stats</a>
         </div>
@@ -76,11 +77,18 @@
                   <div class="action-desc text-muted text-sm">View, edit, or deactivate experts</div>
                 </div>
               </a>
+              <a routerLink="/admin/sources" class="action-link">
+                <span class="action-icon">🌐</span>
+                <div>
+                  <div class="action-title">Manage Sources</div>
+                  <div class="action-desc text-muted text-sm">Register and edit verified news sources</div>
+                </div>
+              </a>
               <a routerLink="/dashboard" class="action-link">
                 <span class="action-icon">📈</span>
                 <div>
-                  <div class="action-title">Public Dashboard</div>
-                  <div class="action-desc text-muted text-sm">View public-facing statistics</div>
+                  <div class="action-title">Fact Explorer</div>
+                  <div class="action-desc text-muted text-sm">Browse public fact-check statistics</div>
                 </div>
               </a>
             </div>

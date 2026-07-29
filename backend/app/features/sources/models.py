@@ -45,6 +45,12 @@ class VerifiedSource(UUIDMixin, TimestampMixin, ReprMixin, Base):
         comment="Human-readable outlet name (e.g. Prothom Alo)",
     )
 
+    display_name_en: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        comment="English display name",
+    )
+
     aliases: Mapped[list | None] = mapped_column(
         JSON().with_variant(JSONB, "postgresql"),
         nullable=True,
@@ -69,6 +75,20 @@ class VerifiedSource(UUIDMixin, TimestampMixin, ReprMixin, Base):
         nullable=False,
         default="bn",
         comment="Primary language code: 'bn' (Bangla) or 'en' (English)",
+    )
+
+    search_language: Mapped[str] = mapped_column(
+        String(10),
+        nullable=False,
+        default="bn",
+        comment="Language for search queries: 'bn' or 'en'",
+    )
+
+    js_rendered: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        comment="Whether the site is JS-rendered (requires Playwright)",
     )
 
     is_active: Mapped[bool] = mapped_column(

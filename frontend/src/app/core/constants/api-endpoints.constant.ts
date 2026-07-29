@@ -42,4 +42,7 @@ export const API_ENDPOINTS = {
   // Dashboard (public)
   DASHBOARD_STATS: '/dashboard/stats',
   DASHBOARD_TOP_SOURCES: '/dashboard/top-sources',
+
+  // Sources
+  SOURCES: '/sources',
 } as const;

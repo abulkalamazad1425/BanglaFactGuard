@@ -57,10 +57,24 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     if _SETTINGS.ml.load_models_on_startup:
         log.info("loading_ml_models")
-        await embedding_service.load()     # LaBSE ~3-5 s
-        await ner_service.load()           # BanglaBERT NER ~2-3 s
-        await nli_service.load()           # DeBERTa NLI ~2 s
-        log.info("ml_models_loaded")
+        try:
+            await embedding_service.load()     # LaBSE ~3-5 s, ~1.5 GB RAM
+        except Exception as exc:
+            log.error(
+                "labse_load_failed",
+                error=str(exc),
+                hint="Increase Windows virtual memory (pagefile) or set ML_LOAD_MODELS_ON_STARTUP=false",
+            )
+            # Non-fatal: source-similarity stage will be skipped / return 503
+        try:
+            await ner_service.load()           # BanglaBERT NER ~2-3 s
+        except Exception as exc:
+            log.error("ner_load_failed", error=str(exc))
+        try:
+            await nli_service.load()           # DeBERTa NLI ~2 s
+        except Exception as exc:
+            log.error("nli_load_failed", error=str(exc))
+        log.info("ml_models_load_complete")
     else:
         log.warning("ml_models_skipped_load_on_startup_disabled")
 

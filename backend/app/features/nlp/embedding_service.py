@@ -1,4 +1,4 @@
-﻿"""
+"""
 app/services/embedding_service.py
 ====================================
 LaBSE sentence embedding service for semantic similarity computation (Stage 8).
@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache
 
@@ -92,23 +93,31 @@ class EmbeddingService:
         """
         Load the LaBSE model into memory (called once at application startup).
 
-        This is a blocking operation (~3–5 s) and must be called from the
-        FastAPI lifespan startup hook before handling any requests.
+        Uses ``low_cpu_mem_usage=True`` to stream model weights directly into
+        each parameter's storage without first allocating a full intermediate
+        tensor — this halves peak RAM and avoids Windows pagefile exhaustion
+        with large models (os error 1455).
         """
         if EmbeddingService._loaded:
             return
         loop = asyncio.get_event_loop()
         logger.info("loading_labse_model", model=_MODEL_NAME)
-        try:
-            EmbeddingService._model = await loop.run_in_executor(
-                _ENCODER_POOL,
-                lambda: SentenceTransformer(_MODEL_NAME),
+
+        def _load() -> SentenceTransformer:
+            # Pass model_kwargs to the underlying AutoModel so weights are
+            # loaded incrementally (no full RAM-mapped intermediate copy).
+            return SentenceTransformer(
+                _MODEL_NAME,
+                model_kwargs={"low_cpu_mem_usage": True},
             )
+
+        try:
+            EmbeddingService._model = await loop.run_in_executor(_ENCODER_POOL, _load)
             EmbeddingService._loaded = True
             logger.info("labse_model_loaded")
         except Exception as exc:
             logger.error("labse_model_load_failed", error=str(exc))
-            raise
+            raise  # Let lifespan handle gracefully
 
     async def encode(self, text: str) -> np.ndarray:
         """

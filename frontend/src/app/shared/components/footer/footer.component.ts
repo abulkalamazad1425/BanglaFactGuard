@@ -40,7 +40,7 @@ import { RouterLink } from '@angular/router';
             <h4>Platform</h4>
             <a routerLink="/verify">Verify a Claim</a>
             <a routerLink="/multimodal">Multimodal Check</a>
-            <a routerLink="/dashboard">Public Dashboard</a>
+            <a routerLink="/dashboard">Fact Explorer</a>
             <a routerLink="/auth/register">Create Account</a>
           </div>
 
@@ -49,7 +49,7 @@ import { RouterLink } from '@angular/router';
             <h4>Resources</h4>
             <a href="http://localhost:8000/docs" target="_blank">API Documentation</a>
             <a href="http://localhost:8000/redoc" target="_blank">ReDoc</a>
-            <a routerLink="/dashboard">Platform Stats</a>
+            <a routerLink="/dashboard">Fact Explorer Stats</a>
           </div>
 
           <!-- Account -->

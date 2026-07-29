@@ -1,0 +1,302 @@
+<div class="sources-page">
+
+  <!-- ══════════ Page Header ══════════ -->
+  <div class="page-header">
+    <div class="header-text">
+      <h1>Verified Sources</h1>
+      <p>Manage trusted news outlets used by the fact-checking pipeline.</p>
+    </div>
+    <div class="header-actions">
+      <div class="stats-pill">
+        <span class="stat-dot active-dot"></span>
+        {{ sources().length }} sources
+      </div>
+      <button class="btn btn-primary register-btn" (click)="openRegisterDrawer()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Register New Source
+      </button>
+    </div>
+  </div>
+
+  <!-- ══════════ Source Cards Grid ══════════ -->
+  <div class="sources-grid">
+    <div *ngIf="sources().length === 0" class="empty-state">
+      <div class="empty-icon">🌐</div>
+      <h3>No Sources Registered</h3>
+      <p>Register your first verified news source to get started with fact-checking.</p>
+      <button class="btn btn-primary" (click)="openRegisterDrawer()">Register a Source</button>
+    </div>
+
+    <div *ngFor="let source of sources()" class="source-card" [class.inactive]="!source.is_active">
+      <!-- Card Top: Name + Status -->
+      <div class="card-header">
+        <div class="source-identity">
+          <div class="source-favicon">
+            <img [src]="'https://www.google.com/s2/favicons?domain=' + source.base_url + '&sz=32'" width="20" height="20" alt="" (error)="$any($event.target).style.display='none'">
+          </div>
+          <div class="source-name-block">
+            <span class="display-name">{{ source.display_name }}</span>
+            <span *ngIf="source.display_name_en" class="display-name-en">{{ source.display_name_en }}</span>
+          </div>
+        </div>
+        <span class="status-badge" [class.active]="source.is_active" [class.inactive]="!source.is_active">
+          {{ source.is_active ? 'Active' : 'Disabled' }}
+        </span>
+      </div>
+
+      <!-- Domain -->
+      <div class="card-domain">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        {{ source.canonical_name }}
+      </div>
+
+      <!-- Pills -->
+      <div class="card-pills">
+        <span class="pill pill-lang">{{ source.language | uppercase }}</span>
+        <span *ngIf="source.search_language !== source.language" class="pill pill-search">search: {{ source.search_language }}</span>
+        <span *ngIf="source.js_rendered" class="pill pill-js">⚡ JS Rendered</span>
+        <span *ngIf="source.rss_url" class="pill pill-rss">📡 RSS</span>
+      </div>
+
+      <!-- Selectors Count -->
+      <div class="card-meta">
+        <span>{{ source.body_selectors?.length || 0 }} body selectors</span>
+        <span class="meta-sep">·</span>
+        <span>{{ source.article_url_patterns?.length || 0 }} URL patterns</span>
+      </div>
+
+      <!-- Actions -->
+      <div class="card-actions">
+        <button class="action-btn" (click)="openEditDrawer(source)" title="Edit">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          Edit
+        </button>
+        <button class="action-btn" [class.danger]="source.is_active" [class.success]="!source.is_active" (click)="toggleActive(source)">
+          <svg *ngIf="source.is_active" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+          <svg *ngIf="!source.is_active" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+          {{ source.is_active ? 'Disable' : 'Enable' }}
+        </button>
+        <button class="action-btn danger" (click)="deleteSource(source)" title="Delete">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+          Delete
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pagination -->
+  <div class="pagination" *ngIf="total() > size">
+    <button class="btn btn-ghost btn-sm" [disabled]="page() === 1" (click)="prevPage()">← Previous</button>
+    <span class="page-info">Page {{ page() }} of {{ Math.ceil(total() / size) }}</span>
+    <button class="btn btn-ghost btn-sm" [disabled]="sources().length < size" (click)="nextPage()">Next →</button>
+  </div>
+</div>
+
+<!-- ══════════ Slide-over Drawer ══════════ -->
+<div class="drawer-overlay" [class.open]="drawerOpen()" (click)="closeDrawer()"></div>
+<div class="drawer" [class.open]="drawerOpen()">
+  <div class="drawer-header">
+    <div>
+      <h2>{{ isEditMode() ? 'Edit Source' : 'Register New Source' }}</h2>
+      <p>{{ isEditMode() ? 'Update the scraping configuration for this source.' : 'Add a trusted news outlet to the fact-checking pipeline.' }}</p>
+    </div>
+    <button class="drawer-close" (click)="closeDrawer()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+
+  <div class="drawer-body">
+    <form [formGroup]="form" class="drawer-form">
+
+      <!-- ── Basic Info ── -->
+      <div class="form-section">
+        <div class="section-title">
+          <span class="section-num">1</span>
+          Basic Information
+        </div>
+
+        <div class="form-group" [class.has-error]="form.get('canonical_name')?.invalid && form.get('canonical_name')?.touched">
+          <label>Canonical Domain <span class="required">*</span></label>
+          <input type="text" class="form-input" formControlName="canonical_name" placeholder="e.g. prothomalo.com">
+          <small *ngIf="isEditMode()" class="hint">Domain name cannot be changed after creation.</small>
+          <small *ngIf="form.get('canonical_name')?.hasError('pattern') && form.get('canonical_name')?.touched" class="error-msg">Must be a valid domain (e.g. prothomalo.com)</small>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group" [class.has-error]="form.get('display_name')?.invalid && form.get('display_name')?.touched">
+            <label>Display Name (Bangla) <span class="required">*</span></label>
+            <input type="text" class="form-input" formControlName="display_name" placeholder="e.g. প্রথম আলো">
+          </div>
+          <div class="form-group">
+            <label>Display Name (English)</label>
+            <input type="text" class="form-input" formControlName="display_name_en" placeholder="e.g. Prothom Alo">
+          </div>
+        </div>
+
+        <div class="form-group" [class.has-error]="form.get('base_url')?.invalid && form.get('base_url')?.touched">
+          <label>Base URL <span class="required">*</span></label>
+          <input type="url" class="form-input" formControlName="base_url" placeholder="e.g. https://www.prothomalo.com">
+        </div>
+
+        <div class="form-group">
+          <label>Description</label>
+          <textarea class="form-input" formControlName="description" rows="2" placeholder="Brief description of this outlet"></textarea>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Content Language</label>
+            <select class="form-input" formControlName="language">
+              <option value="bn">বাংলা (bn)</option>
+              <option value="en">English (en)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Search Language</label>
+            <select class="form-input" formControlName="search_language">
+              <option value="bn">বাংলা (bn)</option>
+              <option value="en">English (en)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="checkbox-row">
+          <label class="checkbox-label">
+            <input type="checkbox" formControlName="js_rendered" class="checkbox-input">
+            <span class="checkbox-custom"></span>
+            <span>
+              <strong>JavaScript Rendered</strong>
+              <small>Uses React/Next.js — Playwright will be used for scraping</small>
+            </span>
+          </label>
+        </div>
+      </div>
+
+      <!-- ── Search & Feed ── -->
+      <div class="form-section">
+        <div class="section-title">
+          <span class="section-num">2</span>
+          Search & Feed
+        </div>
+
+        <div class="form-group">
+          <label>Internal Search URL</label>
+          <input type="text" class="form-input" formControlName="internal_search_url" placeholder="https://...search?q={{ '{query}' }}">
+          <small class="hint">Use <code>{{ '{query}' }}</code> as the search placeholder.</small>
+        </div>
+
+        <div class="form-group">
+          <label>RSS Feed URL</label>
+          <input type="url" class="form-input" formControlName="rss_url" placeholder="https://...feed">
+        </div>
+
+        <div class="form-group">
+          <div class="array-label">
+            <label>Aliases</label>
+            <button type="button" class="add-item-btn" (click)="addArrayItem('aliases')">+ Add</button>
+          </div>
+          <small class="hint">Alternative names users might type (e.g. "প্রথম আলো", "prothom alo")</small>
+          <div formArrayName="aliases" class="array-list">
+            <div *ngFor="let c of aliases.controls; let i = index" class="array-item">
+              <input type="text" class="form-input" [formControlName]="i" placeholder="Alias name">
+              <button type="button" class="remove-btn" (click)="removeArrayItem('aliases', i)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+            <div *ngIf="aliases.length === 0" class="empty-array">No aliases added yet.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Extraction Rules ── -->
+      <div class="form-section">
+        <div class="section-title">
+          <span class="section-num">3</span>
+          Extraction Rules
+        </div>
+        <p class="section-desc">CSS selectors for extracting article content. Order from most specific to most generic.</p>
+
+        <div class="selectors-grid">
+          <!-- Body -->
+          <div class="form-group">
+            <div class="array-label">
+              <label>Body Selectors</label>
+              <button type="button" class="add-item-btn" (click)="addArrayItem('body_selectors')">+ Add</button>
+            </div>
+            <div formArrayName="body_selectors" class="array-list">
+              <div *ngFor="let c of bodySelectors.controls; let i = index" class="array-item">
+                <input type="text" class="form-input mono" [formControlName]="i" placeholder=".article p">
+                <button type="button" class="remove-btn" (click)="removeArrayItem('body_selectors', i)">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </div>
+              <div *ngIf="bodySelectors.length === 0" class="empty-array">No selectors.</div>
+            </div>
+          </div>
+
+          <!-- Title -->
+          <div class="form-group">
+            <div class="array-label">
+              <label>Title Selectors</label>
+              <button type="button" class="add-item-btn" (click)="addArrayItem('title_selectors')">+ Add</button>
+            </div>
+            <div formArrayName="title_selectors" class="array-list">
+              <div *ngFor="let c of titleSelectors.controls; let i = index" class="array-item">
+                <input type="text" class="form-input mono" [formControlName]="i" placeholder="h1.title">
+                <button type="button" class="remove-btn" (click)="removeArrayItem('title_selectors', i)">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </div>
+              <div *ngIf="titleSelectors.length === 0" class="empty-array">No selectors.</div>
+            </div>
+          </div>
+
+          <!-- Date -->
+          <div class="form-group">
+            <div class="array-label">
+              <label>Date Selectors</label>
+              <button type="button" class="add-item-btn" (click)="addArrayItem('date_selectors')">+ Add</button>
+            </div>
+            <div formArrayName="date_selectors" class="array-list">
+              <div *ngFor="let c of dateSelectors.controls; let i = index" class="array-item">
+                <input type="text" class="form-input mono" [formControlName]="i" placeholder="time[datetime]">
+                <button type="button" class="remove-btn" (click)="removeArrayItem('date_selectors', i)">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </div>
+              <div *ngIf="dateSelectors.length === 0" class="empty-array">No selectors.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- URL Patterns -->
+        <div class="form-group mt-4">
+          <div class="array-label">
+            <label>Article URL Patterns (Regex)</label>
+            <button type="button" class="add-item-btn" (click)="addArrayItem('article_url_patterns')">+ Add Pattern</button>
+          </div>
+          <small class="hint">Regex patterns to identify valid article URLs during search scraping.</small>
+          <div formArrayName="article_url_patterns" class="array-list">
+            <div *ngFor="let c of articleUrlPatterns.controls; let i = index" class="array-item">
+              <input type="text" class="form-input mono" [formControlName]="i" placeholder="prothomalo\.com/.*/article/[a-z0-9-]+">
+              <button type="button" class="remove-btn" (click)="removeArrayItem('article_url_patterns', i)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+            <div *ngIf="articleUrlPatterns.length === 0" class="empty-array">No patterns defined.</div>
+          </div>
+        </div>
+      </div>
+
+    </form>
+  </div>
+
+  <!-- Drawer Footer -->
+  <div class="drawer-footer">
+    <button class="btn btn-ghost" (click)="closeDrawer()">Cancel</button>
+    <button class="btn btn-primary" (click)="onSubmit()" [disabled]="form.invalid || saving()">
+      <span *ngIf="saving()">Saving...</span>
+      <span *ngIf="!saving()">{{ isEditMode() ? 'Save Changes' : 'Register Source' }}</span>
+    </button>
+  </div>
+</div>

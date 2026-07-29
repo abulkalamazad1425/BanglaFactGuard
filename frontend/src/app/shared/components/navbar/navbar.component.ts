@@ -33,7 +33,7 @@ import { NotificationService } from '../../../services/notification.service';
           <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">Home</a>
           <a routerLink="/verify" routerLinkActive="active" class="nav-link">Verify Claim</a>
           <a routerLink="/multimodal" routerLinkActive="active" class="nav-link">Multimodal</a>
-          <a routerLink="/dashboard" routerLinkActive="active" class="nav-link">Dashboard</a>
+          <a routerLink="/dashboard" routerLinkActive="active" class="nav-link">Fact Explorer</a>
           @if (isExpert()) {
             <a routerLink="/expert/queue" routerLinkActive="active" class="nav-link nav-link--expert">Expert Queue</a>
           }
@@ -101,7 +101,7 @@ import { NotificationService } from '../../../services/notification.service';
           <a routerLink="/" class="mobile-link" (click)="closeMobileMenu()">Home</a>
           <a routerLink="/verify" class="mobile-link" (click)="closeMobileMenu()">Verify Claim</a>
           <a routerLink="/multimodal" class="mobile-link" (click)="closeMobileMenu()">Multimodal</a>
-          <a routerLink="/dashboard" class="mobile-link" (click)="closeMobileMenu()">Dashboard</a>
+          <a routerLink="/dashboard" class="mobile-link" (click)="closeMobileMenu()">Fact Explorer</a>
           @if (isLoggedIn()) {
             <a routerLink="/history" class="mobile-link" (click)="closeMobileMenu()">My Submissions</a>
             <a routerLink="/notifications" class="mobile-link" (click)="closeMobileMenu()">Notifications</a>

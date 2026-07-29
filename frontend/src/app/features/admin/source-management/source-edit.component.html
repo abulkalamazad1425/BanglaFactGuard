@@ -1,0 +1,170 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ isEditMode() ? 'Edit Source' : 'Register New Source' }}</h1>
+      <p class="text-muted text-sm" style="margin-top: 5px;">Configure the properties and scraping rules for this news outlet.</p>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-outline" routerLink="/admin/sources">Cancel</button>
+      <button class="btn btn-primary" (click)="onSubmit()" [disabled]="form.invalid">
+        {{ isEditMode() ? 'Save Changes' : 'Register Source' }}
+      </button>
+    </div>
+  </div>
+
+  <form [formGroup]="form" class="mt-4 form-grid">
+    <div class="card form-section">
+      <h3>Basic Information</h3>
+      
+      <div class="form-group mt-3">
+        <label>Canonical Name <span class="text-danger">*</span></label>
+        <input type="text" class="form-control" formControlName="canonical_name" placeholder="e.g. prothomalo.com" [readonly]="isEditMode()">
+        <small class="text-muted">Unique identifier for this source. Cannot be changed after creation.</small>
+      </div>
+
+      <div class="form-group">
+        <label>Display Name <span class="text-danger">*</span></label>
+        <input type="text" class="form-control" formControlName="display_name" placeholder="e.g. প্রথম আলো">
+      </div>
+
+      <div class="form-group">
+        <label>Display Name (English)</label>
+        <input type="text" class="form-control" formControlName="display_name_en" placeholder="e.g. Prothom Alo">
+      </div>
+
+      <div class="form-group">
+        <label>Base URL <span class="text-danger">*</span></label>
+        <input type="url" class="form-control" formControlName="base_url" placeholder="e.g. https://www.prothomalo.com">
+      </div>
+
+      <div class="form-group">
+        <label>Description</label>
+        <textarea class="form-control" formControlName="description" rows="3" placeholder="Brief description of the source"></textarea>
+      </div>
+
+      <div class="form-row mt-3">
+        <div class="form-group half">
+          <label>Language</label>
+          <select class="form-control" formControlName="language">
+            <option value="bn">Bangla (bn)</option>
+            <option value="en">English (en)</option>
+          </select>
+        </div>
+        <div class="form-group half">
+          <label>Search Language</label>
+          <select class="form-control" formControlName="search_language">
+            <option value="bn">Bangla (bn)</option>
+            <option value="en">English (en)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group checkbox-group mt-3">
+        <label>
+          <input type="checkbox" formControlName="js_rendered">
+          Is JS Rendered?
+        </label>
+        <small class="text-muted d-block mt-1">Check this if the site heavily relies on JavaScript (React/Next.js) for initial content rendering.</small>
+      </div>
+    </div>
+
+    <div class="card form-section">
+      <h3>Search & Feed</h3>
+      
+      <div class="form-group mt-3">
+        <label>Internal Search URL</label>
+        <input type="text" class="form-control" formControlName="internal_search_url" placeholder="e.g. https://www.prothomalo.com/search?q={{ '{query}' }}">
+        <small class="text-muted">Use <code>{{ '{query}' }}</code> as the placeholder for the search term.</small>
+      </div>
+
+      <div class="form-group">
+        <label>RSS Feed URL</label>
+        <input type="url" class="form-control" formControlName="rss_url" placeholder="e.g. https://www.prothomalo.com/feed">
+      </div>
+
+      <div class="form-group mt-4">
+        <label class="d-flex justify-content-between align-items-center">
+          Aliases
+          <button type="button" class="btn btn-sm btn-outline" (click)="addArrayItem('aliases')">+ Add Alias</button>
+        </label>
+        <div formArrayName="aliases" class="array-container">
+          <div *ngFor="let control of aliases.controls; let i = index" class="array-item">
+            <input type="text" class="form-control" [formControlName]="i" placeholder="Alternative name">
+            <button type="button" class="btn btn-sm btn-outline-danger" (click)="removeArrayItem('aliases', i)">✕</button>
+          </div>
+          <div *ngIf="aliases.length === 0" class="text-muted text-sm fst-italic">No aliases defined.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card form-section full-width">
+      <h3>Extraction Rules</h3>
+      <p class="text-sm text-muted">Define CSS selectors to extract content from article pages. Order them from most specific to most generic.</p>
+
+      <div class="extraction-grid mt-4">
+        <!-- Body Selectors -->
+        <div class="form-group">
+          <label class="d-flex justify-content-between align-items-center">
+            Body Selectors
+            <button type="button" class="btn btn-sm btn-outline" (click)="addArrayItem('body_selectors')">+ Add</button>
+          </label>
+          <div formArrayName="body_selectors" class="array-container">
+            <div *ngFor="let control of bodySelectors.controls; let i = index" class="array-item">
+              <input type="text" class="form-control" [formControlName]="i" placeholder="e.g. article p">
+              <button type="button" class="btn btn-sm btn-outline-danger" (click)="removeArrayItem('body_selectors', i)">✕</button>
+            </div>
+            <div *ngIf="bodySelectors.length === 0" class="text-muted text-sm fst-italic">No selectors defined.</div>
+          </div>
+        </div>
+
+        <!-- Title Selectors -->
+        <div class="form-group">
+          <label class="d-flex justify-content-between align-items-center">
+            Title Selectors
+            <button type="button" class="btn btn-sm btn-outline" (click)="addArrayItem('title_selectors')">+ Add</button>
+          </label>
+          <div formArrayName="title_selectors" class="array-container">
+            <div *ngFor="let control of titleSelectors.controls; let i = index" class="array-item">
+              <input type="text" class="form-control" [formControlName]="i" placeholder="e.g. h1.title">
+              <button type="button" class="btn btn-sm btn-outline-danger" (click)="removeArrayItem('title_selectors', i)">✕</button>
+            </div>
+            <div *ngIf="titleSelectors.length === 0" class="text-muted text-sm fst-italic">No selectors defined.</div>
+          </div>
+        </div>
+
+        <!-- Date Selectors -->
+        <div class="form-group">
+          <label class="d-flex justify-content-between align-items-center">
+            Date Selectors
+            <button type="button" class="btn btn-sm btn-outline" (click)="addArrayItem('date_selectors')">+ Add</button>
+          </label>
+          <div formArrayName="date_selectors" class="array-container">
+            <div *ngFor="let control of dateSelectors.controls; let i = index" class="array-item">
+              <input type="text" class="form-control" [formControlName]="i" placeholder="e.g. time[datetime]">
+              <button type="button" class="btn btn-sm btn-outline-danger" (click)="removeArrayItem('date_selectors', i)">✕</button>
+            </div>
+            <div *ngIf="dateSelectors.length === 0" class="text-muted text-sm fst-italic">No selectors defined.</div>
+          </div>
+        </div>
+      </div>
+
+      <hr class="my-4" style="border-color: var(--border-color)">
+
+      <div class="form-group">
+        <label class="d-flex justify-content-between align-items-center">
+          Article URL Patterns (Regex)
+          <button type="button" class="btn btn-sm btn-outline" (click)="addArrayItem('article_url_patterns')">+ Add Pattern</button>
+        </label>
+        <small class="text-muted d-block mb-2">Used to identify valid article URLs to scrape during search.</small>
+        <div formArrayName="article_url_patterns" class="array-container">
+          <div *ngFor="let control of articleUrlPatterns.controls; let i = index" class="array-item">
+            <input type="text" class="form-control" [formControlName]="i" placeholder="e.g. prothomalo\.com/[^/]+/[^/]*/article/[a-zA-Z0-9_-]+">
+            <button type="button" class="btn btn-sm btn-outline-danger" (click)="removeArrayItem('article_url_patterns', i)">✕</button>
+          </div>
+          <div *ngIf="articleUrlPatterns.length === 0" class="text-muted text-sm fst-italic">No patterns defined.</div>
+        </div>
+      </div>
+
+    </div>
+  </form>
+</div>

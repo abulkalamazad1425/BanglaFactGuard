@@ -1,8 +1,13 @@
     <div class="dashboard-page">
       <div class="container" style="padding-top:48px; padding-bottom:80px;">
         <div class="page-header animate-in">
-          <h1>Platform Dashboard</h1>
-          <p>Live statistics from the BanglaFactGuard platform</p>
+          <div class="explorer-hero">
+            <div class="explorer-icon">🔍</div>
+            <div>
+              <h1>Fact Explorer</h1>
+              <p>A public repository of all verified fact-checks from BanglaFactGuard — browse AI-verified, source-verified, and multimodal-verified claims.</p>
+            </div>
+          </div>
         </div>
 
         @if (loading()) { <div class="loading-overlay"><div class="spinner"></div></div> }
@@ -13,37 +18,39 @@
             <div class="grid-4" style="margin-bottom:32px;">
               <div class="stat-card card text-center">
                 <span class="stat-num">{{ stats()!.total_submissions | number }}</span>
-                <span class="stat-lbl">Total Claims</span>
+                <span class="stat-lbl">Total Verified Claims</span>
               </div>
               <div class="stat-card card text-center text-success">
                 <span class="stat-num">{{ stats()!.true_count | number }}</span>
-                <span class="stat-lbl">Verified True</span>
+                <span class="stat-lbl">Non-Fake Claims</span>
               </div>
               <div class="stat-card card text-center text-error">
                 <span class="stat-num">{{ stats()!.false_count | number }}</span>
-                <span class="stat-lbl">Found False</span>
+                <span class="stat-lbl">Fake Claims Detected</span>
               </div>
-              <div class="stat-card card text-center">
+              <div class="stat-card card text-center" style="color: var(--warning);">
                 <span class="stat-num">{{ stats()!.pending_count | number }}</span>
-                <span class="stat-lbl">Pending</span>
+                <span class="stat-lbl">Pending Reviews</span>
               </div>
             </div>
 
             <!-- Verdict Bars -->
             <div class="grid-2">
               <div class="card">
-                <h3 class="card-title">Verdict Distribution</h3>
+                <h3 class="card-title">Misinformation Trends</h3>
+                <p class="card-subtitle">Verdict distribution across all verified claims</p>
                 <div class="bar-list">
                   <app-score-bar label="True ✓" [value]="ratio(stats()!.true_count)" color="var(--success)" />
                   <app-score-bar label="False ✗" [value]="ratio(stats()!.false_count)" color="var(--error)" />
                   <app-score-bar label="Partially True ◑" [value]="ratio(stats()!.partially_true_count)" color="var(--warning)" />
-                  <app-score-bar label="Not Found ?" [value]="ratio(stats()!.not_found_count)" color="var(--text-secondary)" />
+                  <app-score-bar label="Uncertain ?" [value]="ratio(stats()!.not_found_count)" color="var(--text-secondary)" />
                 </div>
-                <p class="text-muted text-xs mt-4">Excluding {{ stats()!.pending_count }} pending submissions</p>
+                <p class="text-muted text-xs mt-4">Excludes {{ stats()!.pending_count }} pending submissions</p>
               </div>
 
               <div class="card">
-                <h3 class="card-title">Top Sources Claimed</h3>
+                <h3 class="card-title">Most Claimed Sources</h3>
+                <p class="card-subtitle">News outlets most frequently cited in submitted claims</p>
                 @if (topSources().length) {
                   <div class="sources-list">
                     @for (src of topSources(); track src.source; let i = $index) {

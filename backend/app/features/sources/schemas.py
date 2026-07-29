@@ -31,10 +31,13 @@ class SourceCreateSchema(BaseModel):
         examples=["prothomalo.com", "thedailystar.net"],
     )
     display_name: str = Field(..., min_length=1, max_length=255)
+    display_name_en: str | None = Field(default=None, max_length=255)
     aliases: list[str] = Field(default_factory=list)
     base_url: str = Field(..., max_length=512)
     rss_url: str | None = Field(default=None, max_length=512)
     language: str = Field(default="bn", min_length=2, max_length=10, examples=["bn", "en"])
+    search_language: str = Field(default="bn", min_length=2, max_length=10, examples=["bn", "en"])
+    js_rendered: bool = Field(default=False)
     description: str | None = Field(default=None, max_length=2000)
     body_selectors: list[str] = Field(default_factory=list)
     title_selectors: list[str] = Field(default_factory=list)
@@ -59,6 +62,15 @@ class SourceCreateSchema(BaseModel):
         lower = v.strip().lower()
         if lower not in allowed:
             raise ValueError(f"language must be one of {allowed}, got {v!r}")
+        return lower
+
+    @field_validator("search_language")
+    @classmethod
+    def _validate_search_language(cls, v: str) -> str:
+        allowed = {"bn", "en"}
+        lower = v.strip().lower()
+        if lower not in allowed:
+            raise ValueError(f"search_language must be one of {allowed}, got {v!r}")
         return lower
 
     @field_validator("aliases")
@@ -99,10 +111,13 @@ class SourceUpdateSchema(BaseModel):
     """Request body for partially updating an existing source."""
 
     display_name: str | None = Field(default=None, min_length=1, max_length=255)
+    display_name_en: str | None = Field(default=None, max_length=255)
     aliases: list[str] | None = Field(default=None)
     base_url: str | None = Field(default=None, max_length=512)
     rss_url: str | None = Field(default=None, max_length=512)
     language: str | None = Field(default=None, min_length=2, max_length=10)
+    search_language: str | None = Field(default=None, min_length=2, max_length=10)
+    js_rendered: bool | None = Field(default=None)
     description: str | None = Field(default=None, max_length=2000)
     is_active: bool | None = Field(default=None)
     body_selectors: list[str] | None = Field(default=None)
@@ -151,10 +166,13 @@ class SourceResponseSchema(BaseModel):
     id: uuid.UUID
     canonical_name: str
     display_name: str
+    display_name_en: str | None = None
     aliases: list[str] = Field(default_factory=list)
     base_url: str
     rss_url: str | None = None
     language: str
+    search_language: str
+    js_rendered: bool
     is_active: bool
     description: str | None = None
     body_selectors: list[str] = Field(default_factory=list)

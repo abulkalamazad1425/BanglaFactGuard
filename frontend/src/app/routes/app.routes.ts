@@ -67,6 +67,7 @@ export const APP_ROUTES: Routes = [
           { path: '',            loadComponent: () => import('../features/admin/admin-dashboard/admin-dashboard').then(m => m.AdminDashboardComponent) },
           { path: 'experts',     loadComponent: () => import('../features/admin/expert-management/expert-management').then(m => m.ExpertManagementComponent) },
           { path: 'experts/new', loadComponent: () => import('../features/admin/create-expert/create-expert').then(m => m.CreateExpertComponent) },
+          { path: 'sources',     loadComponent: () => import('../features/admin/source-management/source-management.component').then(m => m.SourceManagementComponent) },
         ],
       },
 
