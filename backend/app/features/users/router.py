@@ -1,13 +1,3 @@
-"""
-app/features/users/router.py
-================================
-User self-service endpoints.
-
-GET  /api/v1/users/me/submissions       — Submission history
-GET  /api/v1/users/me/submissions/stats — Aggregate stats
-GET  /api/v1/users/me/profile           — Profile info
-PUT  /api/v1/users/me/profile           — Update profile
-"""
 
 from __future__ import annotations
 

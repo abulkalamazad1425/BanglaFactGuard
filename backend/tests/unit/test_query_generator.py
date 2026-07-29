@@ -17,16 +17,16 @@ async def test_query_generation_basic():
         headline="প্রধানমন্ত্রী শেখ হাসিনা নতুন ফ্লাইওভার উদ্বোধন করলেন",
         claimed_source="prothomalo.com",
     )
-    # Populate normalized values (mimicking S01 output)
+
     context.normalized_headline = context.raw_headline
 
     stage = QueryGeneratorStage()
     context = await stage.execute(context)
 
     assert len(context.search_queries) >= 1
-    # First query must be headline
+
     assert context.search_queries[0] == (context.normalized_headline, QueryType.HEADLINE.value)
-    # Check if keywords were extracted
+
     keyword_queries = [q for q, t in context.search_queries if t == QueryType.KEYWORDS.value]
     assert len(keyword_queries) <= 1
 

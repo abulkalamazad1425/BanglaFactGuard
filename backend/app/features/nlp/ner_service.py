@@ -1,29 +1,3 @@
-"""
-app/services/ner_service.py
-============================
-Named Entity Recognition (NER) service using BanglaBERT for Stage 8.
-
-## Model
-
-BanglaBERT NER (csebuetnlp/banglabert) fine-tuned on Bangla NER corpus.
-Entity types: PER (person), LOC (location), ORG (organisation), MISC (other).
-
-## Architecture
-
-Loaded once at startup alongside LaBSE. Uses a HuggingFace `pipeline`
-with aggregation strategy "simple" to merge sub-word tokens into full spans.
-
-## Async wrapping
-
-HuggingFace pipeline inference is synchronous/CPU-bound.
-All NER calls are dispatched to a shared `ThreadPoolExecutor`.
-
-## Output normalisation
-
-Entity spans are lowercased and stripped for set-intersection comparison.
-Only entities of type PER, LOC, ORG are used in entity_match scoring —
-MISC entities are filtered out as too noisy.
-"""
 
 from __future__ import annotations
 
@@ -49,22 +23,11 @@ _NER_POOL = ThreadPoolExecutor(
 
 
 class NERService:
-    """
-    Singleton NER service backed by BanglaBERT.
-
-    Usage::
-
-        service = NERService()
-        await service.load()
-        entities = await service.extract_entities("প্রধানমন্ত্রী শেখ হাসিনা ঢাকায়")
-        # → ["শেখ হাসিনা", "ঢাকা"]
-    """
 
     _pipeline = None
     _loaded: bool = False
 
     async def load(self) -> None:
-        """Load BanglaBERT NER pipeline (called once at startup)."""
         if NERService._loaded:
             return
         loop = asyncio.get_event_loop()
@@ -76,7 +39,7 @@ class NERService:
                     "ner",
                     model=_NER_MODEL,
                     aggregation_strategy="simple",
-                    device=-1,  # CPU; change to 0 for GPU
+                    device=-1,
                 ),
             )
             NERService._loaded = True
@@ -86,16 +49,6 @@ class NERService:
             raise
 
     async def extract_entities(self, text: str) -> list[str]:
-        """
-        Extract named entities from text.
-
-        Args:
-            text: Input Bangla or mixed text.
-
-        Returns:
-            List of entity span strings (lowercased, deduplicated).
-            Returns empty list if NER is not loaded or extraction fails.
-        """
         if not NERService._loaded or NERService._pipeline is None:
             logger.warning("ner_not_loaded_returning_empty")
             return []
@@ -103,16 +56,16 @@ class NERService:
         if not text or len(text.strip()) < 5:
             return []
 
-        # Truncate to avoid exceeding BanglaBERT's 512 token limit
+
         truncated = text[:1000]
 
         loop = asyncio.get_event_loop()
         try:
             raw_entities = await loop.run_in_executor(
                 _NER_POOL,
-                lambda: NERService._pipeline(truncated),  # type: ignore[misc]
+                lambda: NERService._pipeline(truncated),
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning("ner_extraction_failed", error=str(exc))
             return []
 
@@ -132,18 +85,6 @@ class NERService:
         claim_entities: list[str],
         article_entities: list[str],
     ) -> float:
-        """
-        Compute entity set-intersection ratio between claim and article.
-
-        Score = |claim_entities ∩ article_entities| / max(|claim_entities|, 1)
-
-        Args:
-            claim_entities:   Entities extracted from claim headline + body.
-            article_entities: Entities extracted from article title + body.
-
-        Returns:
-            Float in [0.0, 1.0]. 1.0 if no claim entities (nothing to match).
-        """
         if not claim_entities:
             return 1.0
 
@@ -157,25 +98,6 @@ class NERService:
         return matched / len(claim_set)
 
     async def extract_entities_with_types(self, text: str) -> list[tuple[str, str]]:
-        """
-        Extract named entities with their type labels from text.
-
-        Unlike `extract_entities` which returns only span strings, this returns
-        (entity_span, entity_type) tuples. Entity types are normalised to the
-        base category: PER, LOC, or ORG.
-
-        Used by S10 for entity-type-aware substitution detection — checking
-        whether claim PER entities were replaced with different PER entities
-        (deliberate substitution) vs. completely different entity types
-        (topic mismatch).
-
-        Args:
-            text: Input Bangla or mixed text.
-
-        Returns:
-            List of (entity_span, entity_type) tuples, deduplicated.
-            Returns empty list if NER is not loaded or extraction fails.
-        """
         if not NERService._loaded or NERService._pipeline is None:
             return []
 
@@ -189,10 +111,10 @@ class NERService:
                 _NER_POOL,
                 lambda: NERService._pipeline(truncated),
             )
-        except Exception:  # noqa: BLE001
+        except Exception:
             return []
 
-        # Normalise entity group labels to base types (PER, LOC, ORG)
+
         _TYPE_MAP = {
             "PER": "PER", "B-PER": "PER", "I-PER": "PER",
             "LOC": "LOC", "B-LOC": "LOC", "I-LOC": "LOC",
@@ -216,29 +138,10 @@ class NERService:
         claim_typed: list[tuple[str, str]],
         article_typed: list[tuple[str, str]],
     ) -> bool:
-        """
-        Detect whether entities were substituted with same-type replacements.
-
-        This is a stronger signal of deliberate manipulation than raw entity
-        overlap: if the claim mentions person A but the article mentions
-        person B (both PER), the entity was likely deliberately replaced.
-
-        Returns True if:
-        - The claim has entities of a given type (e.g. PER)
-        - The article also has entities of the same type
-        - But the specific entities differ (substitution, not absence)
-
-        Args:
-            claim_typed:   (entity_span, type) pairs from the claim.
-            article_typed: (entity_span, type) pairs from the article.
-
-        Returns:
-            True if same-type entity substitution is detected.
-        """
         if not claim_typed or not article_typed:
             return False
 
-        # Group entities by type
+
         claim_by_type: dict[str, set[str]] = {}
         for span, etype in claim_typed:
             claim_by_type.setdefault(etype, set()).add(span)
@@ -247,12 +150,12 @@ class NERService:
         for span, etype in article_typed:
             article_by_type.setdefault(etype, set()).add(span)
 
-        # Check each type: if both sides have entities of this type but
-        # the overlap is zero, it's a same-type substitution.
+
+
         for etype, claim_ents in claim_by_type.items():
             article_ents = article_by_type.get(etype, set())
             if article_ents and not (claim_ents & article_ents):
-                # Both sides have this entity type but zero overlap → substitution
+
                 return True
 
         return False

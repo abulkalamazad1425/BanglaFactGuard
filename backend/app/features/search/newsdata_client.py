@@ -1,16 +1,3 @@
-"""
-app/clients/newsdata_client.py
-==============================
-Async client for NewsData.io latest news API.
-
-## Query strategy
-
-NewsData.io works best with short, clean keyword queries (not full Bangla
-headlines). This client:
-  - Uses the raw query if it is already short (≤80 chars).
-  - Otherwise extracts the top 8 keyword tokens and joins them.
-  - Appends the publication year if published_date is provided.
-"""
 
 from __future__ import annotations
 
@@ -26,24 +13,15 @@ logger = structlog.get_logger(__name__)
 
 
 def _shorten_query(query: str, max_words: int = 8) -> str:
-    """
-    Strip site: operator and reduce query to top N words.
-    NewsData performs better with short, punctuation-free queries.
-    """
     clean = re.sub(r'site:\S+\s*', '', query).strip()
     clean = re.sub(r'[।?!\'"(){}\[\]<>:;,।]', ' ', clean)
     clean = re.sub(r'\s+', ' ', clean).strip()
     words = clean.split()
     shortened = ' '.join(words[:max_words])
-    return shortened[:80]  # Hard cap
+    return shortened[:80]
 
 
 class NewsDataClient:
-    """
-    Client for NewsData.io (https://newsdata.io/api/1/latest).
-    Uses country=bd and language=bn by default.
-    Requires an API key configured in SEARCH_NEWSDATA_API_KEY.
-    """
 
     def __init__(self, http_client: httpx.AsyncClient) -> None:
         self.client = http_client
@@ -55,23 +33,11 @@ class NewsDataClient:
         domain: str | None = None,
         published_date: date | None = None,
     ) -> list[tuple[str, str]]:
-        """
-        Execute a search using NewsData.io and return (url, title) tuples.
-
-        Args:
-            query:          Search query (will be keyword-shortened internally).
-            domain:         Target domain (e.g. 'prothomalo.com'). NewsData
-                            accepts domain names directly via the 'domain' param.
-            published_date: Optional publication date — year appended to query.
-
-        Returns:
-            List of (URL, title) tuples.
-        """
         api_key = self.settings.newsdata_api_key
         if not api_key:
             raise NewsDataError("NewsData API key is not configured.")
 
-        # Shorten query for better API results
+
         short_query = _shorten_query(query, max_words=8)
 
         if published_date:

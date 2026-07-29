@@ -1,15 +1,3 @@
-"""
-app/features/expert_review/service.py
-========================================
-Expert review service: queue management, voting, finalization, credibility updates.
-
-Business rules enforced here:
-  - An expert cannot vote on the same claim twice.
-  - Justification must be at least 50 characters.
-  - A claim is finalized when MIN_EXPERT_VOTES have been cast.
-  - Finalization computes a credibility-weighted verdict and updates scores.
-  - Credibility scores are system-computed only — no manual override.
-"""
 
 from __future__ import annotations
 
@@ -41,9 +29,6 @@ _AUTH = _SETTINGS.auth
 
 
 class ExpertReviewService:
-    """
-    Manages the full lifecycle of expert reviews: queue, voting, and finalization.
-    """
 
     def __init__(
         self,
@@ -56,14 +41,10 @@ class ExpertReviewService:
         self._credibility = credibility_repo
         self._claims = claim_repo
         self._results = result_repo
-        # Session is accessible via any repo for explicit async queries
+
         self._session = review_repo.session
 
     async def _fetch_top_article(self, result) -> ExpertTopArticle | None:
-        """
-        Explicitly fetch the top article for a result using an async-safe query.
-        (Lazy loading is NOT safe in SQLAlchemy async — use explicit select instead.)
-        """
         if result is None or result.top_article_id is None:
             return None
         from sqlalchemy import select
@@ -81,15 +62,14 @@ class ExpertReviewService:
             body_snippet=(body[:400] + '…') if body and len(body) > 400 else body,
         )
 
-    # ------------------------------------------------------------------
-    # Queue
-    # ------------------------------------------------------------------
+
+
+
 
     async def get_queue_item(
         self,
         claim_id: uuid.UUID,
     ) -> ExpertQueueItemResponse:
-        """Fetch a single claim for expert review."""
         from app.core.exceptions import RecordNotFoundError
         claim = await self._claims.get_by_id(claim_id)
         if not claim:
@@ -118,14 +98,11 @@ class ExpertReviewService:
         limit: int = 20,
         offset: int = 0,
     ) -> list[ExpertQueueItemResponse]:
-        """
-        Return completed AI-verified claims that this expert has not yet voted on.
-        """
         from app.core.constants import ClaimStatus
-        # Get completed claims for queue
+
         claims = await self._claims.get_recent(status=ClaimStatus.COMPLETED, limit=100)
 
-        # Filter out ones this expert has already voted on
+
         already_voted_claim_ids = {
             r.claim_id
             for r in await self._reviews.get_history_for_expert(expert_id, limit=10000)
@@ -151,13 +128,13 @@ class ExpertReviewService:
                 top_article=top_article,
             ))
 
-        # Apply pagination
+
         paginated = queue_items[offset: offset + limit]
         return paginated
 
-    # ------------------------------------------------------------------
-    # Voting
-    # ------------------------------------------------------------------
+
+
+
 
     async def submit_vote(
         self,
@@ -166,16 +143,9 @@ class ExpertReviewService:
         expert_label: VerificationLabel,
         justification: str,
     ) -> ExpertReviewResponse:
-        """
-        Cast an expert vote on a claim.
-
-        Raises:
-            RecordNotFoundError:    If the claim does not exist.
-            DomainValidationError:  If the expert has already voted on this claim.
-        """
         claim = await self._claims.get_by_id(claim_id)
 
-        # Check for duplicate vote
+
         existing = await self._reviews.get_by_claim_and_reviewer(claim_id, expert_id)
         if existing is not None:
             raise DomainValidationError(
@@ -183,12 +153,12 @@ class ExpertReviewService:
                 details={"review_id": str(existing.id)},
             )
 
-        # Fetch current credibility score for this expert
+
         cred = await self._credibility.get_or_create(
             expert_id, initial_score=_AUTH.initial_expert_credibility
         )
 
-        # Fetch AI label for reference
+
         result = await self._results.get_by_claim_id(claim_id)
         ai_label = result.label if result else VerificationLabel.NOT_FOUND_IN_CLAIMED_SOURCE
 
@@ -211,7 +181,7 @@ class ExpertReviewService:
             label=expert_label.value,
         )
 
-        # Auto-finalize if minimum vote threshold reached
+
         vote_count = await self._reviews.count_votes_for_claim(claim_id)
         if vote_count >= _AUTH.min_expert_votes_to_finalize:
             await self._finalize_claim(claim_id)
@@ -225,14 +195,6 @@ class ExpertReviewService:
         expert_label: VerificationLabel | None,
         justification: str | None,
     ) -> ExpertReviewResponse:
-        """
-        Update an existing vote — only allowed before the claim is finalized.
-
-        Raises:
-            RecordNotFoundError:   If the review does not exist.
-            PermissionDeniedError: If the reviewer_id doesn't match.
-            DomainValidationError: If the claim has already been finalized.
-        """
         review = await self._reviews.get_by_id(review_id)
 
         if review.reviewer_id != expert_id:
@@ -254,9 +216,9 @@ class ExpertReviewService:
 
         return _review_to_response(review)
 
-    # ------------------------------------------------------------------
-    # Expert History & Stats
-    # ------------------------------------------------------------------
+
+
+
 
     async def get_history(
         self,
@@ -265,7 +227,6 @@ class ExpertReviewService:
         limit: int = 50,
         offset: int = 0,
     ) -> list[ExpertHistoryItemResponse]:
-        """Return all votes by this expert with final verdict comparison."""
         reviews = await self._reviews.get_history_for_expert(
             expert_id, limit=limit, offset=offset
         )
@@ -291,7 +252,6 @@ class ExpertReviewService:
         return items
 
     async def get_stats(self, expert_id: uuid.UUID) -> ExpertStatsResponse:
-        """Return aggregate performance stats for an expert."""
         from app.features.auth.models import User
         cred = await self._credibility.get_or_create(
             expert_id, initial_score=_AUTH.initial_expert_credibility
@@ -313,22 +273,11 @@ class ExpertReviewService:
             current_credibility=round(cred.score, 4),
         )
 
-    # ------------------------------------------------------------------
-    # Finalization (internal)
-    # ------------------------------------------------------------------
+
+
+
 
     async def _finalize_claim(self, claim_id: uuid.UUID) -> None:
-        """
-        Compute the final weighted verdict and update expert credibility scores.
-
-        Formula:
-          1. Collect all expert votes with their credibility weights.
-          2. Sum weights per label → weighted vote map.
-          3. Add AI confidence to the label it predicted (weight = 1.0).
-          4. Winning label = argmax of weighted totals.
-          5. On a tie, the AI label wins (tiebreaker).
-          6. Update credibility scores for all voting experts.
-        """
         reviews = await self._reviews.get_reviews_for_claim(claim_id)
         if not reviews:
             return
@@ -337,30 +286,30 @@ class ExpertReviewService:
         if result is None:
             return
 
-        # Weighted vote aggregation
+
         weighted_totals: dict[VerificationLabel, float] = {}
         for review in reviews:
             lbl = review.expert_label
             weighted_totals[lbl] = weighted_totals.get(lbl, 0.0) + review.credibility_weight
 
-        # Add AI vote (weight = ai_confidence)
+
         ai_lbl = result.label
         ai_weight = result.confidence
         weighted_totals[ai_lbl] = weighted_totals.get(ai_lbl, 0.0) + ai_weight
 
-        # Determine winner; AI wins ties
+
         max_weight = max(weighted_totals.values())
         winners = [l for l, w in weighted_totals.items() if w == max_weight]
         final_label = ai_lbl if ai_lbl in winners else winners[0]
 
-        # Update result with final label (keep existing confidence — it's the AI score)
+
         await self._results.update(result, label=final_label)
 
-        # Mark all reviews as finalized
+
         for review in reviews:
             await self._reviews.update(review, status="finalized")
 
-        # Update credibility scores
+
         await self._update_credibility_scores(reviews, final_label)
 
         logger.info(
@@ -375,12 +324,6 @@ class ExpertReviewService:
         reviews: list[ExpertReview],
         final_label: VerificationLabel,
     ) -> None:
-        """
-        Adjust credibility scores after finalization.
-
-        Correct vote: score += 0.05 (up to 1.0 cap)
-        Wrong vote:   score -= 0.03 (floor 0.1)
-        """
         for review in reviews:
             if review.reviewer_id is None:
                 continue
@@ -397,9 +340,9 @@ class ExpertReviewService:
             )
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+
+
+
 
 
 def _review_to_response(r: ExpertReview) -> ExpertReviewResponse:

@@ -1,10 +1,3 @@
-"""
-app/features/health/router.py
-================================
-Health check endpoints.
-
-Migrated from: app/api/v1/endpoints/health.py
-"""
 
 from __future__ import annotations
 
@@ -50,7 +43,7 @@ async def readiness(
 ) -> ReadinessResponse:
     from fastapi import HTTPException
 
-    # Check PostgreSQL
+
     db_status = "ok"
     try:
         async with AsyncSessionLocal() as session:
@@ -59,7 +52,7 @@ async def readiness(
     except Exception as exc:
         db_status = f"error: {exc}"
 
-    # Check Redis
+
     redis_status = "ok" if await cache.health_check() else "error: unreachable"
 
     if "error" in db_status or "error" in redis_status:

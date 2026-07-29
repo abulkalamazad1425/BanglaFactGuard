@@ -1,8 +1,3 @@
-"""
-tests/unit/test_multimodal_service.py
-======================================
-Unit tests for MultimodalPredictionService with mocked dependencies.
-"""
 
 from __future__ import annotations
 
@@ -19,7 +14,6 @@ def _make_fake_record(
     confidence_real: float = 0.15,
     is_duplicate_of_id=None,
 ):
-    """Build a fake ORM-like record for assertions."""
     record = MagicMock()
     record.id = uuid.uuid4()
     record.headline = "Test headline"
@@ -39,10 +33,8 @@ def _make_fake_record(
 
 
 class TestMultimodalPredictionService:
-    """Tests for the MultimodalPredictionService orchestrator."""
 
     def _make_service(self, *, duplicate_record=None):
-        """Create service with all dependencies mocked."""
         from app.features.multimodal.service import MultimodalPredictionService
 
         db = AsyncMock()
@@ -51,10 +43,10 @@ class TestMultimodalPredictionService:
         storage = AsyncMock()
         storage.upload_image = AsyncMock(return_value="multimodal/abc/test.jpg")
 
-        # Patch internal components
+
         service = MultimodalPredictionService(db=db, loader=loader, storage=storage)
 
-        # Mock extractor
+
         text_emb = np.ones(768, dtype=np.float32)
         img_emb = np.ones(1792, dtype=np.float32)
         combined_emb = np.ones(2560, dtype=np.float32)
@@ -73,7 +65,7 @@ class TestMultimodalPredictionService:
             )
         )
 
-        # Mock repository
+
         fresh_record = _make_fake_record(prediction="FAKE")
         service._repo = AsyncMock()
         service._repo.find_similar_candidates = AsyncMock(
@@ -81,7 +73,7 @@ class TestMultimodalPredictionService:
         )
         service._repo.create = AsyncMock(return_value=fresh_record)
 
-        # Mock inference engine
+
         from app.features.multimodal.pipeline.inference_engine import PredictionResult
         infer_result = PredictionResult(
             prediction="FAKE",
@@ -96,7 +88,6 @@ class TestMultimodalPredictionService:
 
     @pytest.mark.asyncio
     async def test_fresh_inference_called_when_no_duplicate(self):
-        """Without duplicate, inference engine must be called."""
         service, fresh_record, _ = self._make_service(duplicate_record=None)
 
         response = await service.predict(
@@ -112,7 +103,6 @@ class TestMultimodalPredictionService:
 
     @pytest.mark.asyncio
     async def test_inference_skipped_on_cache_hit(self):
-        """When a duplicate is found, inference must NOT be called."""
         duplicate = _make_fake_record(prediction="NON_FAKE", confidence_fake=0.1, confidence_real=0.9)
         service, _, _ = self._make_service(duplicate_record=duplicate)
 
@@ -129,7 +119,6 @@ class TestMultimodalPredictionService:
 
     @pytest.mark.asyncio
     async def test_image_always_uploaded_to_minio(self):
-        """Image must be uploaded even on cache hit."""
         duplicate = _make_fake_record()
         service, _, _ = self._make_service(duplicate_record=duplicate)
 
@@ -144,7 +133,6 @@ class TestMultimodalPredictionService:
 
     @pytest.mark.asyncio
     async def test_response_contains_similarity_scores_on_cache_hit(self):
-        """Similarity scores should be included in cache-hit responses."""
         duplicate = _make_fake_record()
         service, _, _ = self._make_service(duplicate_record=duplicate)
 
@@ -162,7 +150,6 @@ class TestMultimodalPredictionService:
 
     @pytest.mark.asyncio
     async def test_similarity_scores_none_on_fresh_inference(self):
-        """No similarity scores for fresh inference responses."""
         service, _, _ = self._make_service(duplicate_record=None)
 
         response = await service.predict(

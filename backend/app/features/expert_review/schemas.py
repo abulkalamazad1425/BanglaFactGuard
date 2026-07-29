@@ -1,8 +1,3 @@
-"""
-app/features/expert_review/schemas.py
-========================================
-Pydantic schemas for the expert review feature.
-"""
 
 from __future__ import annotations
 
@@ -15,7 +10,6 @@ from app.core.constants import VerificationLabel
 
 
 class ExpertVoteRequest(BaseModel):
-    """Request body for POST /api/v1/expert/queue/{claim_id}/vote."""
     expert_label: VerificationLabel
     justification: str = Field(
         ...,
@@ -26,13 +20,11 @@ class ExpertVoteRequest(BaseModel):
 
 
 class ExpertVoteUpdateRequest(BaseModel):
-    """Request body for PUT /api/v1/expert/reviews/{review_id}."""
     expert_label: VerificationLabel | None = None
     justification: str | None = Field(default=None, min_length=50, max_length=5000)
 
 
 class ExpertReviewResponse(BaseModel):
-    """Full review record returned to the expert."""
     id: str
     claim_id: str
     reviewer_id: str | None
@@ -48,52 +40,47 @@ class ExpertReviewResponse(BaseModel):
 
 
 class ExpertTopArticle(BaseModel):
-    """Top matched article for queue preview."""
     url: str
     title: str | None = None
     published_date: str | None = None
     rank_score: float | None = None
-    body_snippet: str | None = None  # First 400 chars
+    body_snippet: str | None = None
 
 
 class ExpertQueueItemResponse(BaseModel):
-    """Summary of a claim awaiting expert review."""
     claim_id: str
     headline: str | None
-    news_body: str | None = None       # Submitted news body (truncated preview)
+    news_body: str | None = None
     claimed_source: str | None
     ai_label: str | None
     ai_confidence: float | None
     submitted_at: datetime
-    vote_count: int  # how many experts have voted so far
-    top_article: ExpertTopArticle | None = None  # Highest-ranked matched article
+    vote_count: int
+    top_article: ExpertTopArticle | None = None
 
 
 class ExpertHistoryItemResponse(BaseModel):
-    """A single item in an expert's vote history."""
     review_id: str
     claim_id: str
     headline: str | None
     claimed_source: str | None
     expert_label: str
     ai_label: str
-    final_label: str | None  # None if not yet finalized
-    matched: bool | None      # True if expert_label == final_label
+    final_label: str | None
+    matched: bool | None
     voted_at: datetime
 
 
 class ExpertStatsResponse(BaseModel):
-    """Aggregate performance stats for an expert."""
     user_id: str
     full_name: str | None
     total_votes: int
     correct_votes: int
-    accuracy_pct: float | None  # None if total_votes == 0
+    accuracy_pct: float | None
     current_credibility: float
 
 
 class CredibilityScoreResponse(BaseModel):
-    """Credibility score record."""
     user_id: str
     score: float
     total_votes: int

@@ -1,14 +1,3 @@
-"""
-app/features/verification/router.py
-======================================
-Verification API endpoints.
-
-Migrated from: app/api/v1/endpoints/verification.py
-
-POST /api/v1/verify              — Submit a claim for source-based verification
-GET  /api/v1/verify/{claim_id}   — Retrieve a previously computed result
-GET  /api/v1/verify/{claim_id}/status — Lightweight status polling
-"""
 
 from __future__ import annotations
 
@@ -54,7 +43,6 @@ async def verify_claim(
     service: VerificationService = Depends(get_verification_service),
     current_user: User | None = Depends(get_current_user_optional),
 ) -> VerificationResponse:
-    """Run the 12-stage source-based verification pipeline."""
     try:
         submitter_id = current_user.id if current_user else None
         return await service.verify(request, submitter_id=submitter_id)
@@ -82,7 +70,6 @@ async def get_verification_result(
     claim_id: uuid.UUID,
     service: VerificationService = Depends(get_verification_service),
 ) -> VerificationResponse:
-    """Retrieve a previously computed verification result by its claim UUID."""
     result = await service.get_result(claim_id)
     if result is None:
         raise HTTPException(
@@ -106,7 +93,6 @@ async def get_verification_status(
     claim_repo: ClaimRepository = Depends(get_claim_repo),
     service: VerificationService = Depends(get_verification_service),
 ) -> VerificationStatusResponse:
-    """Lightweight status check for a verification request."""
     try:
         claim = await claim_repo.get_by_id(claim_id)
     except RecordNotFoundError:

@@ -1,14 +1,3 @@
-"""
-app/features/search/duckduckgo_client.py
-========================================
-Lightweight DuckDuckGo HTML scraper for fallback search.
-
-## Strategy
-
-Uses DuckDuckGo's HTML endpoint (no API key required).
-Sends `site:domain query` for source-constrained searches.
-Parses result__a (title) and result__url (URL) from the HTML response.
-"""
 
 from __future__ import annotations
 
@@ -43,10 +32,6 @@ _HEADERS = {
 
 
 class DuckDuckGoClient:
-    """
-    Client for standard web searches via DuckDuckGo HTML.
-    Uses httpx + BeautifulSoup4 — no API key required.
-    """
 
     def __init__(self) -> None:
         self.base_url = "https://html.duckduckgo.com/html/"
@@ -57,18 +42,7 @@ class DuckDuckGoClient:
         domain: str | None = None,
         published_date: date | None = None,
     ) -> list[tuple[str, str]]:
-        """
-        Execute a DuckDuckGo HTML search and return (url, title) tuples.
 
-        Args:
-            query:          Search query (may already include site: operator).
-            domain:         Target domain — added as site: if not already present.
-            published_date: Optional date — year appended to query if provided.
-
-        Returns:
-            List of (URL, title) tuples (at most 10 results).
-        """
-        # Strip any existing site: and rebuild cleanly
         clean_query = re.sub(r'site:\S+\s*', '', query).strip()
 
         if published_date:
@@ -78,7 +52,7 @@ class DuckDuckGoClient:
 
         data = {
             "q": search_q,
-            "kl": "bd-bn",   # Bangladesh / Bengali region
+            "kl": "bd-bn",
         }
 
         try:
@@ -102,13 +76,13 @@ class DuckDuckGoClient:
                 title = title_anchors[i].get_text(strip=True)
                 raw_url = url_spans[i].get("href", "") or url_spans[i].get_text(strip=True)
 
-                # Unwrap DDG redirect URLs
+
                 if raw_url.startswith("/l/?uddg="):
                     real_url = unquote(raw_url.split("uddg=")[1].split("&")[0])
                 elif raw_url.startswith("http"):
                     real_url = raw_url
                 else:
-                    # Build absolute URL from displayed text (DDG sometimes shows naked domain)
+
                     display = url_spans[i].get_text(strip=True)
                     if display and "." in display:
                         real_url = f"https://{display.strip()}"

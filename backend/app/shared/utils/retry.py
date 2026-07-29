@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 
 F = TypeVar("F", bound=Callable[..., Any])
 
-# HTTP status codes that warrant a retry
+
 _RETRYABLE_HTTP_CODES: frozenset[int] = frozenset({429, 500, 502, 503, 504})
 
 
@@ -128,7 +128,7 @@ def async_retry(
                 with attempt:
                     return await func(*args, **kwargs)
 
-        return wrapper  # type: ignore[return-value]
+        return wrapper
 
     return decorator
 
@@ -165,7 +165,7 @@ def sync_retry(
                 with attempt:
                     return func(*args, **kwargs)
 
-        return wrapper  # type: ignore[return-value]
+        return wrapper
 
     return decorator
 

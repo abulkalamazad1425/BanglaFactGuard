@@ -1,8 +1,3 @@
-"""
-tests/integration/test_verification_pipeline.py
-=================================================
-Integration tests for the 12-stage fact-verification pipeline orchestrator.
-"""
 
 import pytest
 import uuid
@@ -25,19 +20,18 @@ async def test_full_pipeline_execution(
     mock_ner_service,
     mock_nli_service,
 ):
-    """Verify end-to-end verification pipeline runs successfully and stores logs/verdicts."""
     claim_repo = ClaimRepository(db_session)
     result_repo = ResultRepository(db_session)
     article_repo = ArticleRepository(db_session)
     source_repo = SourceRepository(db_session)
     
-    # Mock search client methods inside stages
+
     from app.features.search.newsdata_client import NewsDataClient
     from app.features.search.google_cse_client import GoogleCSEClient
     from app.features.search.duckduckgo_client import DuckDuckGoClient
     import httpx
 
-    # Instantiate HTTP client
+
     async with httpx.AsyncClient() as http_client:
         service = VerificationService(
             claim_repo=claim_repo,
@@ -56,7 +50,7 @@ async def test_full_pipeline_execution(
             claimed_source="https://prothomalo.com",
             news_body=None,
             published_date=None,
-            force_refresh=True,  # Bypass cache
+            force_refresh=True,
         )
 
         with (
@@ -69,7 +63,7 @@ async def test_full_pipeline_execution(
             mock_google.return_value = []
             mock_ddg.return_value = []
             
-            # Mock extractor to append a retrieved article
+
             async def dummy_extract_exec(context):
                 from app.features.articles.schemas import RankedArticleSchema
                 from app.core.constants import SearchProvider
@@ -91,7 +85,7 @@ async def test_full_pipeline_execution(
             assert response.confidence > 0.8
             assert response.cached is False
 
-            # Verify claim is persisted in DB
+
             claim = await claim_repo.get_completed_by_hash(response.claim_id)
             assert claim is not None or response.claim_id is not None
 
@@ -103,14 +97,13 @@ async def test_pipeline_cache_hit(
     mock_ner_service,
     mock_nli_service,
 ):
-    """Verify that cache lookup stage returns result immediately on cache hit."""
     claim_repo = ClaimRepository(db_session)
     result_repo = ResultRepository(db_session)
     article_repo = ArticleRepository(db_session)
     source_repo = SourceRepository(db_session)
     
-    # Pre-populate Redis cache with mock result
-    claim_hash = "f35a646c2eb5387b328a9b3a0bb21897e930bc22998a442e97a3eb17b7a0d1e2" # Sample hash
+
+    claim_hash = "f35a646c2eb5387b328a9b3a0bb21897e930bc22998a442e97a3eb17b7a0d1e2"
     cached_payload = {
         "label": "TRUE",
         "confidence": 0.94,
@@ -155,17 +148,17 @@ async def test_pipeline_cache_hit(
             force_refresh=False,
         )
 
-        # Patch S01 normalizer to return the exact hash so cache hits
+
         with patch("app.features.verification.pipeline.stages.s01_normalizer.compute_claim_hash") as mock_hash:
             mock_hash.return_value = claim_hash
             
-            # Set up mock search stages that shouldn't be executed
+
             with patch("app.features.verification.pipeline.stages.s03_query_generator.QueryGeneratorStage.execute") as mock_s03:
                 response = await service.verify(request_payload)
                 
                 assert response.label == VerificationLabel.TRUE
                 assert response.confidence == 0.94
                 assert response.cached is True
-                # Ensure downstream stages were skipped
+
                 mock_s03.assert_not_called()
 

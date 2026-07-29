@@ -85,7 +85,7 @@ class NLIService:
                 lambda: hf_pipeline(
                     "text-classification",
                     model=_NLI_MODEL,
-                    top_k=None,  # Return scores for all labels
+                    top_k=None,
                     device=-1,
                 ),
             )
@@ -111,7 +111,7 @@ class NLIService:
             logger.warning("nli_not_loaded_returning_none")
             return None
 
-        # Truncate to safe lengths
+
         truncated_premise = truncate_for_nli(premise, max_chars=1200)
         truncated_hyp = truncate_for_nli(hypothesis, max_chars=300)
 
@@ -119,11 +119,11 @@ class NLIService:
         try:
             raw_output = await loop.run_in_executor(
                 _NLI_POOL,
-                lambda: NLIService._pipeline(  # type: ignore[misc]
+                lambda: NLIService._pipeline(
                     {"text": truncated_premise, "text_pair": truncated_hyp}
                 ),
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning("nli_inference_failed", error=str(exc))
             return None
 

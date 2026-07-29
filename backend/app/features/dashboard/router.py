@@ -1,11 +1,3 @@
-"""
-app/features/dashboard/router.py
-===================================
-Public dashboard endpoints — no authentication required.
-
-GET /api/v1/dashboard/stats         — Overall platform statistics
-GET /api/v1/dashboard/top-sources   — Most frequently claimed sources
-"""
 
 from __future__ import annotations
 
@@ -39,7 +31,6 @@ class TopSourceItem(BaseModel):
 async def get_public_stats(
     session: AsyncSession = Depends(get_async_session),
 ) -> PublicStatsResponse:
-    """Return aggregate statistics visible to all visitors."""
     from app.core.constants import ClaimStatus
 
     total = (await session.execute(
@@ -80,7 +71,6 @@ async def get_top_sources(
     limit: int = Query(default=10, ge=1, le=50),
     session: AsyncSession = Depends(get_async_session),
 ) -> list[TopSourceItem]:
-    """Return the most frequently cited news sources in submissions."""
     stmt = (
         select(VerifiedClaim.claimed_source, func.count().label("cnt"))
         .group_by(VerifiedClaim.claimed_source)

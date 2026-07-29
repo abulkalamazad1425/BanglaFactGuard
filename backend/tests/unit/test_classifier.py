@@ -78,7 +78,7 @@ async def test_classifier_false_verdict_nli(base_context, dummy_article):
     """Verify high contradiction score overrides verdict to FALSE."""
     base_context.ranked_articles = [dummy_article]
     base_context.top_article = dummy_article
-    # High contradiction
+
     base_context.scores = VerificationScoresSchema(
         semantic_similarity=0.50,
         entity_match=0.60,
@@ -112,7 +112,7 @@ async def test_classifier_partially_true_manipulation(base_context, dummy_articl
         numerical_consistency=1.0,
         contradiction_score=0.05,
     )
-    # Headline manipulated flag set
+
     base_context.manipulation_flags = ManipulationFlagsSchema(
         headline_manipulated=True,
         body_altered=False,

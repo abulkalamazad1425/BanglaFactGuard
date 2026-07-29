@@ -96,9 +96,9 @@ class CacheLookupStage:
             claim_hash=context.claim_hash,
         )
 
-        # ------------------------------------------------------------------
-        # force_refresh bypass
-        # ------------------------------------------------------------------
+
+
+
         if context.force_refresh:
             log.info("cache_bypassed_force_refresh")
             context.cache_hit = False
@@ -109,35 +109,35 @@ class CacheLookupStage:
             context.cache_hit = False
             return context
 
-        # ------------------------------------------------------------------
-        # L1: Redis lookup
-        # ------------------------------------------------------------------
+
+
+
         try:
             redis_hit = await self._check_redis(context, log)
             if redis_hit:
                 return context
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             log.warning("redis_cache_error", error=str(exc))
-            # Non-fatal: fall through to DB
 
-        # ------------------------------------------------------------------
-        # L2: PostgreSQL lookup
-        # ------------------------------------------------------------------
+
+
+
+
         try:
             db_hit = await self._check_db(context, log)
             if db_hit:
                 return context
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             log.warning("db_cache_error", error=str(exc))
-            # Non-fatal: continue to full pipeline
+
 
         log.info("cache_miss")
         context.cache_hit = False
         return context
 
-    # ------------------------------------------------------------------
-    # Private helpers
-    # ------------------------------------------------------------------
+
+
+
 
     async def _check_redis(
         self,
@@ -163,7 +163,7 @@ class CacheLookupStage:
             return True
         except (json.JSONDecodeError, KeyError, ValueError) as exc:
             log.warning("redis_cache_deserialisation_error", error=str(exc))
-            # Treat corrupt cache entry as a miss
+
             return False
 
     async def _check_db(
@@ -184,13 +184,13 @@ class CacheLookupStage:
             log.debug("db_miss")
             return False
 
-        # Claim found — fetch its result
+
         result = await self.result_repo.get_by_claim_id(claim.id)
         if result is None:
             log.debug("db_claim_found_but_no_result", claim_id=str(claim.id))
             return False
 
-        # Populate context from DB result
+
         context.claim_id = claim.id
         context.normalized_source = claim.normalized_source
         context.cached_label = VerificationLabel(result.label)
@@ -212,10 +212,10 @@ class CacheLookupStage:
             label=context.cached_label.value,
         )
 
-        # Write-back to Redis so next request hits L1
+
         try:
             await self._write_to_redis(context)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             log.warning("redis_write_back_failed", error=str(exc))
 
         return True
@@ -240,7 +240,7 @@ class CacheLookupStage:
         context.cached_manipulation_flags = ManipulationFlagsSchema(
             **data.get("manipulation_flags", {})
         )
-        # Reconstruct matched articles if stored
+
         raw_articles = data.get("matched_articles", [])
         context.cached_matched_articles = [
             RankedArticleSchema(**a) for a in raw_articles

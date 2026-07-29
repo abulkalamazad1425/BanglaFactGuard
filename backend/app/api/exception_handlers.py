@@ -10,7 +10,6 @@ logger = structlog.get_logger(__name__)
 
 
 def register_exception_handlers(app: FastAPI) -> None:
-    """Register global exception handlers for domain and unexpected errors."""
 
     @app.exception_handler(BanglaFactGuardError)
     async def domain_error_handler(

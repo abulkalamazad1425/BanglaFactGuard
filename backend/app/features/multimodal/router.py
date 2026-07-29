@@ -1,22 +1,3 @@
-"""
-app/features/multimodal/router.py
-====================================
-FastAPI router for the multimodal fake-news prediction API.
-
-Endpoints:
-    POST /api/v1/multimodal/predict
-        Submit headline + body_text + image (multipart/form-data).
-        Returns prediction, confidence scores, and deduplication metadata.
-
-    GET  /api/v1/multimodal/predict/{prediction_id}
-        Retrieve a stored prediction by UUID.
-
-    GET  /api/v1/multimodal/predictions
-        List recent predictions with pagination.
-
-All endpoints depend on the MultimodalModelLoader being present on app.state
-(set by the FastAPI lifespan handler in main.py).
-"""
 
 from __future__ import annotations
 
@@ -46,22 +27,21 @@ _SETTINGS = get_settings()
 
 router = APIRouter(prefix="/multimodal", tags=["Multimodal Fake-News Detection"])
 
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
 
-_MAX_IMAGE_BYTES = 10 * 1024 * 1024   # 10 MB hard limit
+
+
+
+_MAX_IMAGE_BYTES = 10 * 1024 * 1024
 _ALLOWED_CONTENT_TYPES = {
     "image/jpeg", "image/png", "image/gif", "image/webp",
 }
 
-# ---------------------------------------------------------------------------
-# Dependency helpers
-# ---------------------------------------------------------------------------
+
+
+
 
 
 def _get_loader(request: Request):
-    """Retrieve the model loader from app.state (set at startup)."""
     loader = getattr(request.app.state, "multimodal_loader", None)
     if loader is None or not loader.is_loaded:
         raise ModelNotLoadedError("MultimodalModelLoader")
@@ -69,16 +49,15 @@ def _get_loader(request: Request):
 
 
 def _get_storage(request: Request) -> MultimodalStorageService:
-    """Retrieve the shared MinIO storage service from app.state."""
     storage = getattr(request.app.state, "multimodal_storage", None)
     if storage is None:
         raise ModelNotLoadedError("MultimodalStorageService")
     return storage
 
 
-# ---------------------------------------------------------------------------
-# Endpoints
-# ---------------------------------------------------------------------------
+
+
+
 
 
 @router.post(
@@ -121,14 +100,7 @@ async def predict(
     ),
     db: AsyncSession = Depends(get_async_session),
 ) -> MultimodalPredictionResponse:
-    """
-    Predict whether a news article is FAKE or NON_FAKE.
 
-    - **headline**: News headline (required, stored for display only)
-    - **body_text**: Article body text (required, passed to BanglaBERT)
-    - **image**: News image file (required, stored in MinIO)
-    """
-    # ── Validate image ────────────────────────────────────────────────────
     if image.content_type not in _ALLOWED_CONTENT_TYPES:
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
@@ -187,7 +159,6 @@ async def get_prediction(
     request: Request,
     db: AsyncSession = Depends(get_async_session),
 ) -> MultimodalPredictionDetail:
-    """Retrieve a stored prediction by its UUID."""
     loader = _get_loader(request)
     storage = _get_storage(request)
     service = MultimodalPredictionService(db=db, loader=loader, storage=storage)
@@ -225,7 +196,6 @@ async def list_predictions(
     offset: int = Query(default=0, ge=0, description="Pagination offset"),
     db: AsyncSession = Depends(get_async_session),
 ) -> PredictionListResponse:
-    """List recent multimodal predictions with pagination."""
     loader = _get_loader(request)
     storage = _get_storage(request)
     service = MultimodalPredictionService(db=db, loader=loader, storage=storage)

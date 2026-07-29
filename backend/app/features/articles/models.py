@@ -37,9 +37,9 @@ if TYPE_CHECKING:
     from app.features.verification.models import VerificationResult, VerifiedClaim
 
 
-# ---------------------------------------------------------------------------
-# RetrievedArticle
-# ---------------------------------------------------------------------------
+
+
+
 
 
 class RetrievedArticle(UUIDMixin, ReprMixin, Base):
@@ -148,9 +148,9 @@ class RetrievedArticle(UUIDMixin, ReprMixin, Base):
     )
 
 
-# ---------------------------------------------------------------------------
-# SearchQuery
-# ---------------------------------------------------------------------------
+
+
+
 
 
 class SearchQuery(UUIDMixin, ReprMixin, Base):

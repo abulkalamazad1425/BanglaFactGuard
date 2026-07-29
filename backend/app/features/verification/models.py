@@ -1,13 +1,3 @@
-"""
-app/features/verification/models.py
-=====================================
-ORM models for the verification feature.
-
-Consolidated from:
-  - app/models/verified_claim.py
-  - app/models/verification_result.py
-  - app/models/verification_log.py
-"""
 
 from __future__ import annotations
 
@@ -45,19 +35,12 @@ if TYPE_CHECKING:
     from app.features.sources.models import VerifiedSource
 
 
-# ---------------------------------------------------------------------------
-# VerifiedClaim
-# ---------------------------------------------------------------------------
+
+
+
 
 
 class VerifiedClaim(UUIDMixin, TimestampMixin, ReprMixin, Base):
-    """
-    Records a single fact-checking request and its lifecycle state.
-
-    The `claim_hash` column is the deduplication key: before running the
-    full pipeline, the system checks whether a result for this hash already
-    exists (Stage 2 DB cache lookup).
-    """
 
     __tablename__ = "verified_claims"
 
@@ -167,18 +150,12 @@ class VerifiedClaim(UUIDMixin, TimestampMixin, ReprMixin, Base):
     )
 
 
-# ---------------------------------------------------------------------------
-# VerificationResult
-# ---------------------------------------------------------------------------
+
+
+
 
 
 class VerificationResult(UUIDMixin, TimestampMixin, ReprMixin, Base):
-    """
-    Final verdict and scoring breakdown for a verified claim.
-
-    One-to-one with VerifiedClaim. All scoring dimensions from Stages 8-10
-    are stored as individual columns for analytical queries.
-    """
 
     __tablename__ = "verification_results"
 
@@ -275,18 +252,12 @@ class VerificationResult(UUIDMixin, TimestampMixin, ReprMixin, Base):
     )
 
 
-# ---------------------------------------------------------------------------
-# VerificationLog
-# ---------------------------------------------------------------------------
+
+
+
 
 
 class VerificationLog(UUIDMixin, ReprMixin, Base):
-    """
-    Append-only audit log entry for a single event within a pipeline stage.
-
-    Intentionally write-once (no updated_at) to preserve audit integrity.
-    metadata_ stored as JSONB for stage-specific debug payloads.
-    """
 
     __tablename__ = "verification_logs"
 

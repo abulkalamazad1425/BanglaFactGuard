@@ -1,8 +1,3 @@
-"""
-tests/integration/test_api_endpoints.py
-=========================================
-Integration tests for FastAPI endpoints (Verification, Sources, and Health).
-"""
 
 import pytest
 import uuid
@@ -12,7 +7,6 @@ from app.core.constants import VerificationLabel
 
 @pytest.mark.asyncio
 async def test_health_endpoint(client):
-    """Verify liveness probe returns status ok."""
     response = await client.get("/api/v1/health")
     assert response.status_code == 200
     data = response.json()
@@ -21,8 +15,7 @@ async def test_health_endpoint(client):
 
 @pytest.mark.asyncio
 async def test_readiness_endpoint(client, test_cache_service):
-    """Verify readiness probe checks DB and Redis correctly."""
-    # Mock cache health check to succeed
+
     test_cache_service.health_check = AsyncMock(return_value=True)
 
     response = await client.get("/api/v1/health/ready")
@@ -34,7 +27,6 @@ async def test_readiness_endpoint(client, test_cache_service):
 
 @pytest.mark.asyncio
 async def test_verify_claim_endpoint(client):
-    """Verify submitting a claim via API works and calls VerificationService."""
     mock_response_payload = {
         "claim_id": str(uuid.uuid4()),
         "label": "TRUE",
@@ -60,7 +52,7 @@ async def test_verify_claim_endpoint(client):
         "created_at": "2026-06-07T00:00:00Z"
     }
 
-    # Mock the VerificationService.verify method
+
     with patch("app.features.verification.service.VerificationService.verify", new_callable=AsyncMock) as mock_verify:
         mock_verify.return_value = mock_response_payload
 
@@ -81,7 +73,6 @@ async def test_verify_claim_endpoint(client):
 
 @pytest.mark.asyncio
 async def test_get_verification_result_endpoint(client):
-    """Verify getting a verification result by ID returns the payload."""
     mock_response_payload = {
         "claim_id": str(uuid.uuid4()),
         "label": "FALSE",
@@ -119,7 +110,6 @@ async def test_get_verification_result_endpoint(client):
 
 @pytest.mark.asyncio
 async def test_sources_crud_endpoints(client):
-    """Verify CRUD endpoints for news source registry."""
     source_id = uuid.uuid4()
     mock_source = {
         "id": str(source_id),
@@ -135,7 +125,7 @@ async def test_sources_crud_endpoints(client):
         "updated_at": "2026-06-07T00:00:00Z"
     }
 
-    # Test GET /api/v1/sources/{id}
+
     with patch("app.features.sources.service.SourceService.get_source", new_callable=AsyncMock) as mock_get:
         mock_get.return_value = mock_source
         response = await client.get(f"/api/v1/sources/{source_id}")
@@ -144,7 +134,7 @@ async def test_sources_crud_endpoints(client):
         assert data["canonical_name"] == "dailystar.net"
         mock_get.assert_called_once_with(source_id)
 
-    # Test POST /api/v1/sources
+
     with patch("app.features.sources.service.SourceService.create_source", new_callable=AsyncMock) as mock_create:
         mock_create.return_value = mock_source
         create_payload = {
@@ -159,7 +149,7 @@ async def test_sources_crud_endpoints(client):
         data = response.json()
         assert data["canonical_name"] == "dailystar.net"
 
-    # Test PUT /api/v1/sources/{id}
+
     with patch("app.features.sources.service.SourceService.update_source", new_callable=AsyncMock) as mock_update:
         mock_update.return_value = mock_source
         update_payload = {
@@ -168,7 +158,7 @@ async def test_sources_crud_endpoints(client):
         response = await client.put(f"/api/v1/sources/{source_id}", json=update_payload)
         assert response.status_code == 200
 
-    # Test DELETE /api/v1/sources/{id}
+
     with patch("app.features.sources.service.SourceService.delete_source", new_callable=AsyncMock) as mock_delete:
         mock_delete.return_value = None
         response = await client.delete(f"/api/v1/sources/{source_id}")

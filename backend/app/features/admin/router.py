@@ -1,17 +1,3 @@
-"""
-app/features/admin/router.py
-================================
-Admin API endpoints. All require role='admin'.
-
-POST   /api/v1/admin/experts           — Create expert account
-GET    /api/v1/admin/experts           — List all experts
-GET    /api/v1/admin/experts/{id}      — Get single expert
-PUT    /api/v1/admin/experts/{id}      — Update expert profile
-POST   /api/v1/admin/experts/{id}/reset-password — Reset expert password
-POST   /api/v1/admin/experts/{id}/deactivate     — Deactivate account
-POST   /api/v1/admin/experts/{id}/activate       — Activate account
-GET    /api/v1/admin/stats             — Platform statistics
-"""
 
 from __future__ import annotations
 
@@ -58,7 +44,6 @@ async def create_expert(
     _: User = Depends(_ADMIN_ONLY),
     svc: AdminService = Depends(_get_service),
 ) -> ExpertResponse:
-    """Admin creates a new expert account with initial credentials."""
     return await svc.create_expert(body)
 
 
@@ -73,7 +58,6 @@ async def list_experts(
     _: User = Depends(_ADMIN_ONLY),
     svc: AdminService = Depends(_get_service),
 ) -> list[ExpertResponse]:
-    """Return all expert accounts with credibility scores."""
     return await svc.list_experts(limit=limit, offset=offset)
 
 
@@ -101,7 +85,6 @@ async def update_expert(
     _: User = Depends(_ADMIN_ONLY),
     svc: AdminService = Depends(_get_service),
 ) -> ExpertResponse:
-    """Update an expert's profile info. Credentials are NOT modifiable here."""
     return await svc.update_expert(expert_id, body)
 
 
@@ -115,7 +98,6 @@ async def reset_expert_password(
     _: User = Depends(_ADMIN_ONLY),
     svc: AdminService = Depends(_get_service),
 ) -> dict:
-    """Admin force-resets an expert's password. The expert must log in again."""
     return await svc.reset_expert_password(expert_id, body)
 
 
@@ -154,5 +136,4 @@ async def get_platform_stats(
     _: User = Depends(_ADMIN_ONLY),
     svc: AdminService = Depends(_get_service),
 ) -> AdminStatsResponse:
-    """Return aggregate platform metrics for the admin dashboard."""
     return await svc.get_platform_stats()

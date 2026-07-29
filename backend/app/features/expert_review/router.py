@@ -1,18 +1,3 @@
-"""
-app/features/expert_review/router.py
-========================================
-Expert review API endpoints.
-
-GET  /api/v1/expert/queue              — Paginated review queue
-GET  /api/v1/expert/queue/{claim_id}   — Single claim detail for review
-POST /api/v1/expert/queue/{claim_id}/vote — Submit a vote
-PUT  /api/v1/expert/reviews/{review_id}   — Edit an existing vote
-GET  /api/v1/expert/history            — Expert vote history
-GET  /api/v1/expert/stats              — Aggregate stats
-GET  /api/v1/expert/credibility        — Current credibility score
-
-All endpoints require an authenticated user with role='expert' or 'admin'.
-"""
 
 from __future__ import annotations
 
@@ -65,7 +50,6 @@ async def get_queue(
     current_user: User = Depends(_EXPERT_OR_ADMIN),
     svc: ExpertReviewService = Depends(_get_service),
 ) -> list[ExpertQueueItemResponse]:
-    """Return claims awaiting this expert's review."""
     return await svc.get_queue(current_user.id, limit=limit, offset=offset)
 
 
@@ -79,7 +63,6 @@ async def get_queue_item(
     current_user: User = Depends(_EXPERT_OR_ADMIN),
     svc: ExpertReviewService = Depends(_get_service),
 ) -> ExpertQueueItemResponse:
-    """Return a specific claim for expert review."""
     return await svc.get_queue_item(claim_id)
 
 
@@ -95,7 +78,6 @@ async def submit_vote(
     current_user: User = Depends(_EXPERT_OR_ADMIN),
     svc: ExpertReviewService = Depends(_get_service),
 ) -> ExpertReviewResponse:
-    """Cast an expert verdict on a claim. Each expert may vote only once per claim."""
     return await svc.submit_vote(
         claim_id=claim_id,
         expert_id=current_user.id,
@@ -115,7 +97,6 @@ async def edit_vote(
     current_user: User = Depends(_EXPERT_OR_ADMIN),
     svc: ExpertReviewService = Depends(_get_service),
 ) -> ExpertReviewResponse:
-    """Update a vote before the claim is finalized."""
     return await svc.edit_vote(
         review_id=review_id,
         expert_id=current_user.id,
@@ -135,7 +116,6 @@ async def get_history(
     current_user: User = Depends(_EXPERT_OR_ADMIN),
     svc: ExpertReviewService = Depends(_get_service),
 ) -> list[ExpertHistoryItemResponse]:
-    """Return all votes by the current expert with outcome information."""
     return await svc.get_history(current_user.id, limit=limit, offset=offset)
 
 
@@ -148,7 +128,6 @@ async def get_stats(
     current_user: User = Depends(_EXPERT_OR_ADMIN),
     svc: ExpertReviewService = Depends(_get_service),
 ) -> ExpertStatsResponse:
-    """Return aggregate performance statistics for the current expert."""
     return await svc.get_stats(current_user.id)
 
 
@@ -161,7 +140,6 @@ async def get_credibility(
     current_user: User = Depends(_EXPERT_OR_ADMIN),
     session: AsyncSession = Depends(get_async_session),
 ) -> CredibilityScoreResponse:
-    """Return the current expert's credibility score record."""
     from app.features.expert_review.repository import CredibilityScoreRepository
     repo = CredibilityScoreRepository(session)
     from app.core.config import get_settings

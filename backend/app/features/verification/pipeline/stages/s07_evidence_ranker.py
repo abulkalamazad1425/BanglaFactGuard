@@ -1,45 +1,3 @@
-"""
-app/pipelines/stages/s07_evidence_ranker.py
-=============================================
-Stage 7: Evidence Ranking
-
-## Responsibility
-
-Rank the extracted candidate articles (from Stage 6) by relevance to the claim,
-and select the top-K as evidence for Stages 8–11.
-
-## Ranking formula
-
-Each article receives a composite rank_score from three components:
-
-    rank_score = (
-        W_SEM  * semantic_similarity   +  # LaBSE cosine sim of headlines
-        W_KW   * keyword_overlap       +  # Jaccard of claim vs article keywords
-        W_DATE * date_bonus            +  # 1.0 if dates match, else 0.0
-    )
-
-    Weights: W_SEM=0.60, W_KW=0.25, W_DATE=0.15
-
-Semantic similarity (headline vs headline) is the dominant signal because
-it captures topical equivalence across paraphrasing and transliteration.
-
-Keyword overlap provides a fast, model-free complementary signal.
-
-Date bonus rewards articles whose publication date matches the claimed date,
-without penalising articles with unknown dates (date_bonus=0.5 when unknown).
-
-## Top-K selection
-
-After ranking, the list is sorted by rank_score DESC and truncated to
-`max_ranked_articles` (from settings, default 5). Only articles above
-a minimum rank threshold (`min_rank_score`, default 0.05) are kept.
-
-The highest-ranked article is stored as `context.top_article`.
-
-## Criticality: NON-CRITICAL
-If ranking fails or all articles fall below the minimum threshold,
-the original extraction order is preserved as a fallback.
-"""
 
 from __future__ import annotations
 
@@ -67,12 +25,6 @@ _W_DOMAIN = 0.20
 
 
 class EvidenceRankerStage:
-    """
-    Stage 7: Rank extracted articles by relevance using LaBSE + keyword overlap.
-
-    Dependencies:
-        embedding_service: For computing LaBSE headline similarity.
-    """
 
     stage_id = PipelineStageID.S07_EVIDENCE_RANKER
 
@@ -83,15 +35,6 @@ class EvidenceRankerStage:
         self._reranker = CrossEncoderReranker()
 
     async def execute(self, context: PipelineContext) -> PipelineContext:
-        """
-        Compute rank scores for all extracted articles and select top-K.
-
-        Args:
-            context: Pipeline context with extracted_articles (Stage 6 output).
-
-        Returns:
-            Context with ranked_articles (sorted DESC) and top_article set.
-        """
         articles = context.extracted_articles
 
         if not articles:
@@ -115,15 +58,15 @@ class EvidenceRankerStage:
             )
             scored.append((score, article))
 
-        # Sort by score descending
+
         scored.sort(key=lambda x: x[0], reverse=True)
 
-        # Filter below minimum threshold, then take top-K
+
         ranked: list[RankedArticleSchema] = []
         for score, article in scored:
             if score < self._min_score:
                 break
-            # Rebuild schema with updated rank_score
+
             updated = RankedArticleSchema(
                 url=article.url,
                 title=article.title,
@@ -138,7 +81,7 @@ class EvidenceRankerStage:
             if len(ranked) >= self._max_ranked:
                 break
 
-        # Fallback: if all below threshold, keep top-1 anyway
+
         if not ranked and scored:
             best_score, best_article = scored[0]
             ranked = [
@@ -147,7 +90,7 @@ class EvidenceRankerStage:
                 )
             ]
 
-        # ── Cross-Encoder Re-ranking ──────────────────────────────────────
+
         if len(ranked) > 3:
             logger.info("s07_reranking_articles", count=len(ranked))
             ranked = self._reranker.rerank(claim_headline, ranked, top_k=self._max_ranked)
@@ -171,20 +114,7 @@ class EvidenceRankerStage:
         claim_date,
         context: PipelineContext,
     ) -> float:
-        """
-        Compute the composite rank score for a single article.
 
-        Args:
-            article:         The candidate article to score.
-            claim_headline:  Normalised claim headline.
-            claim_keywords:  Pre-extracted claim keywords.
-            claim_date:      Claimed publication date (may be None).
-            context:         PipelineContext to access claim_source.
-
-        Returns:
-            Composite rank score in [0.0, 1.0].
-        """
-        # ── Semantic similarity: claim headline vs article title (or body) ────
         article_title = article.title or ""
         try:
             if article_title:
@@ -192,8 +122,8 @@ class EvidenceRankerStage:
                     claim_headline, article_title
                 )
             else:
-                # No title extracted — compare claim against first 400 chars of body.
-                # No penalty: extraction failure is not the article's fault.
+
+
                 body_prefix = (article.body or "")[:400]
                 if body_prefix:
                     sem_sim = await self._embedder.compute_similarity(
@@ -201,26 +131,26 @@ class EvidenceRankerStage:
                     )
                 else:
                     sem_sim = 0.0
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.debug("s07_sem_similarity_failed", error=str(exc))
             sem_sim = 0.0
 
-        # ── Keyword overlap: claim keywords vs article title + body ──────
+
         article_text = f"{article.title or ''} {(article.body or '')[:500]}"
         article_keywords = extract_headline_keywords(article_text, top_n=8)
         kw_overlap = compute_keyword_overlap(claim_keywords, article_keywords)
 
-        # ── Date bonus ────────────────────────────────────────────────────
+
         if claim_date is None or article.published_date is None:
-            date_bonus = 0.5  # Unknown — neutral
+            date_bonus = 0.5
         elif claim_date == article.published_date:
             date_bonus = 1.0
         else:
-            # Partial credit within 7 days
+
             delta = abs((claim_date - article.published_date).days)
             date_bonus = max(0.0, 1.0 - (delta / 7.0))
 
-        # ── Source domain match bonus ─────────────────────────────────────
+
         domain_bonus = self._source_domain_bonus(context, article)
 
         composite = (
@@ -230,7 +160,7 @@ class EvidenceRankerStage:
             + _W_DOMAIN * domain_bonus
         )
 
-        # ── Levenshtein headline bonus ────────────────────────────────────
+
         if article_title:
             sim = ratio(normalize_bangla_text(claim_headline), normalize_bangla_text(article_title))
             if sim > 0.85:
@@ -246,7 +176,7 @@ class EvidenceRankerStage:
         
         def extract_domain(url: str) -> str:
             if not url: return ""
-            # Handle source strings that might not be valid URLs initially
+
             if not url.startswith(('http://', 'https://')):
                 url = 'https://' + url
             parsed = urlparse(url)

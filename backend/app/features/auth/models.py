@@ -1,13 +1,3 @@
-"""
-app/features/auth/models.py
-==============================
-ORM models for the authentication feature.
-
-Tables:
-    users         - Core user account
-    refresh_tokens - JWT refresh token store (for rotation)
-    password_reset_tokens - One-time password reset tokens
-"""
 
 from __future__ import annotations
 
@@ -27,7 +17,6 @@ if TYPE_CHECKING:
 
 
 class User(UUIDMixin, TimestampMixin, ReprMixin, Base):
-    """Core user account with email/password or OAuth credentials."""
 
     __tablename__ = "users"
 
@@ -77,7 +66,7 @@ class User(UUIDMixin, TimestampMixin, ReprMixin, Base):
         comment="OAuth provider subject ID",
     )
 
-    # Relationships
+
     profile: Mapped["UserProfile | None"] = relationship(
         "UserProfile",
         back_populates="user",
@@ -99,7 +88,6 @@ class User(UUIDMixin, TimestampMixin, ReprMixin, Base):
 
 
 class RefreshToken(UUIDMixin, Base):
-    """Stored JWT refresh token for token rotation and revocation."""
 
     __tablename__ = "refresh_tokens"
 
@@ -135,7 +123,6 @@ class RefreshToken(UUIDMixin, Base):
 
 
 class PasswordResetToken(UUIDMixin, Base):
-    """One-time token for password reset flow."""
 
     __tablename__ = "password_reset_tokens"
 

@@ -1,10 +1,3 @@
-"""
-app/features/sources/service.py
-=================================
-Application service for source registry CRUD operations.
-
-Migrated from: app/services/source_service.py
-"""
 
 from __future__ import annotations
 
@@ -23,13 +16,11 @@ from app.features.sources.schemas import (
 
 
 class SourceService:
-    """CRUD service for the source_registry table."""
 
     def __init__(self, source_repo: SourceRepository) -> None:
         self.source_repo = source_repo
 
     async def create_source(self, payload: SourceCreateSchema) -> SourceResponseSchema:
-        """Create a new source. Raises DuplicateRecordError if canonical_name exists."""
         existing = await self.source_repo.get_by_canonical_name(payload.canonical_name)
         if existing:
             raise DuplicateRecordError(
@@ -56,14 +47,12 @@ class SourceService:
         return SourceResponseSchema.model_validate(created)
 
     async def get_source(self, source_id: uuid.UUID) -> SourceResponseSchema:
-        """Fetch a source by UUID. Raises RecordNotFoundError if absent."""
         source = await self.source_repo.get_by_id(source_id)
         return SourceResponseSchema.model_validate(source)
 
     async def update_source(
         self, source_id: uuid.UUID, payload: SourceUpdateSchema
     ) -> SourceResponseSchema:
-        """Partially update a source. Only non-None fields are applied."""
         source = await self.source_repo.get_by_id(source_id)
         update_fields = payload.model_dump(exclude_none=True)
         if update_fields:
@@ -71,7 +60,6 @@ class SourceService:
         return SourceResponseSchema.model_validate(source)
 
     async def delete_source(self, source_id: uuid.UUID) -> None:
-        """Hard-delete a source record."""
         await self.source_repo.delete_by_id(source_id)
 
     async def list_sources(
@@ -81,7 +69,6 @@ class SourceService:
         page: int = 1,
         size: int = 20,
     ) -> SourceListSchema:
-        """Return a paginated list of active sources."""
         offset = (page - 1) * size
         items = await self.source_repo.list_active(
             language=language, limit=size, offset=offset

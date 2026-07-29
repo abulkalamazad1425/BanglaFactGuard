@@ -1,12 +1,3 @@
-"""
-app/features/verification/repository.py
-=========================================
-Repositories for the verification feature.
-
-Consolidated from:
-  - app/repositories/claim_repository.py  (ClaimRepository)
-  - app/repositories/result_repository.py (ResultRepository)
-"""
 
 from __future__ import annotations
 
@@ -28,17 +19,12 @@ from app.shared.base_repository import BaseRepository
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# ClaimRepository
-# ---------------------------------------------------------------------------
+
+
+
 
 
 class ClaimRepository(BaseRepository[VerifiedClaim]):
-    """
-    Async repository for VerifiedClaim ORM model.
-
-    Provides cache-hit detection, status lifecycle management, and domain queries.
-    """
 
     model_class = VerifiedClaim
 
@@ -46,7 +32,6 @@ class ClaimRepository(BaseRepository[VerifiedClaim]):
         super().__init__(session)
 
     async def get_by_claim_hash(self, claim_hash: str) -> VerifiedClaim | None:
-        """Fetch a claim by its SHA-256 hash (DB-level cache lookup)."""
         stmt = (
             select(VerifiedClaim)
             .where(VerifiedClaim.claim_hash == claim_hash)
@@ -56,7 +41,6 @@ class ClaimRepository(BaseRepository[VerifiedClaim]):
         return result.scalar_one_or_none()
 
     async def get_completed_by_hash(self, claim_hash: str) -> VerifiedClaim | None:
-        """Fetch a claim only if it is in COMPLETED status."""
         stmt = (
             select(VerifiedClaim)
             .where(
@@ -71,7 +55,6 @@ class ClaimRepository(BaseRepository[VerifiedClaim]):
         return result.scalar_one_or_none()
 
     async def set_status(self, claim_id: uuid.UUID, status: ClaimStatus) -> None:
-        """Update the status of a claim using a direct UPDATE statement."""
         stmt = (
             update(VerifiedClaim)
             .where(VerifiedClaim.id == claim_id)
@@ -85,15 +68,12 @@ class ClaimRepository(BaseRepository[VerifiedClaim]):
         )
 
     async def mark_processing(self, claim_id: uuid.UUID) -> None:
-        """Transition a claim from PENDING to PROCESSING."""
         await self.set_status(claim_id, ClaimStatus.PROCESSING)
 
     async def mark_completed(self, claim_id: uuid.UUID) -> None:
-        """Transition a claim to COMPLETED after successful pipeline run."""
         await self.set_status(claim_id, ClaimStatus.COMPLETED)
 
     async def mark_failed(self, claim_id: uuid.UUID) -> None:
-        """Transition a claim to FAILED after an unrecoverable pipeline error."""
         await self.set_status(claim_id, ClaimStatus.FAILED)
 
     async def get_by_normalized_source(
@@ -104,7 +84,6 @@ class ClaimRepository(BaseRepository[VerifiedClaim]):
         limit: int = 20,
         offset: int = 0,
     ) -> list[VerifiedClaim]:
-        """List claims for a specific canonical source domain."""
         conditions = [VerifiedClaim.normalized_source == normalized_source]
         if status is not None:
             conditions.append(VerifiedClaim.status == status)
@@ -127,7 +106,6 @@ class ClaimRepository(BaseRepository[VerifiedClaim]):
         limit: int = 50,
         offset: int = 0,
     ) -> list[VerifiedClaim]:
-        """List claims with a published_date within the given range."""
         stmt = (
             select(VerifiedClaim)
             .where(
@@ -149,7 +127,6 @@ class ClaimRepository(BaseRepository[VerifiedClaim]):
         status: ClaimStatus | None = ClaimStatus.COMPLETED,
         limit: int = 20,
     ) -> list[VerifiedClaim]:
-        """Return the most recently processed claims."""
         stmt = select(VerifiedClaim)
         if status is not None:
             stmt = stmt.where(VerifiedClaim.status == status)
@@ -158,18 +135,12 @@ class ClaimRepository(BaseRepository[VerifiedClaim]):
         return list(result.scalars().all())
 
 
-# ---------------------------------------------------------------------------
-# ResultRepository
-# ---------------------------------------------------------------------------
+
+
+
 
 
 class ResultRepository(BaseRepository[VerificationResult]):
-    """
-    Async repository for VerificationResult and VerificationLog ORM models.
-
-    Both tables are always written and read together (Stage 12 / GET /verify/{id}),
-    so they are combined in a single repository.
-    """
 
     model_class = VerificationResult
 
@@ -177,7 +148,6 @@ class ResultRepository(BaseRepository[VerificationResult]):
         super().__init__(session)
 
     async def get_by_claim_id(self, claim_id: uuid.UUID) -> VerificationResult | None:
-        """Fetch the verification result for a specific claim."""
         stmt = (
             select(VerificationResult)
             .where(VerificationResult.claim_id == claim_id)
@@ -193,7 +163,6 @@ class ResultRepository(BaseRepository[VerificationResult]):
         limit: int = 50,
         offset: int = 0,
     ) -> list[VerificationResult]:
-        """Return verification results filtered by verdict label."""
         stmt = (
             select(VerificationResult)
             .where(VerificationResult.label == label)
@@ -218,7 +187,6 @@ class ResultRepository(BaseRepository[VerificationResult]):
         numerical_consistency: float | None,
         top_article_id: uuid.UUID | None = None,
     ) -> VerificationResult:
-        """Insert or update the VerificationResult for a claim."""
         existing = await self.get_by_claim_id(claim_id)
 
         if existing is not None:
@@ -259,7 +227,6 @@ class ResultRepository(BaseRepository[VerificationResult]):
         metadata: dict | None = None,
         duration_ms: int | None = None,
     ) -> VerificationLog:
-        """Append a single audit log entry for a pipeline stage event."""
         log_entry = VerificationLog(
             claim_id=claim_id,
             stage=stage,
@@ -276,7 +243,6 @@ class ResultRepository(BaseRepository[VerificationResult]):
         self,
         entries: list[VerificationLog],
     ) -> list[VerificationLog]:
-        """Persist multiple log entries in a single flush (Stage 12 batch write)."""
         if not entries:
             return []
         self.session.add_all(entries)
@@ -291,7 +257,6 @@ class ResultRepository(BaseRepository[VerificationResult]):
         level: LogLevel | None = None,
         limit: int = 100,
     ) -> list[VerificationLog]:
-        """Retrieve audit log entries for a claim, with optional filters."""
         conditions = [VerificationLog.claim_id == claim_id]
         if stage is not None:
             conditions.append(VerificationLog.stage == stage)
@@ -308,7 +273,6 @@ class ResultRepository(BaseRepository[VerificationResult]):
         return list(result.scalars().all())
 
     async def get_error_logs(self, claim_id: uuid.UUID) -> list[VerificationLog]:
-        """Shortcut: retrieve only ERROR-level log entries for a claim."""
         return await self.get_logs_for_claim(
             claim_id, level=LogLevel.ERROR, limit=50
         )

@@ -1,12 +1,3 @@
-"""
-app/features/expert_review/models.py
-=======================================
-ORM models for the expert review feature.
-
-Tables:
-    expert_reviews    - Manual review records linked to a verified claim
-    credibility_scores - Running credibility score per expert (system-computed only)
-"""
 
 from __future__ import annotations
 
@@ -27,12 +18,6 @@ if TYPE_CHECKING:
 
 
 class ExpertReview(UUIDMixin, TimestampMixin, ReprMixin, Base):
-    """
-    A manual expert vote on an AI verification verdict.
-
-    Allows certified fact-checkers to independently vote on claims.
-    A minimum number of votes triggers automatic finalization.
-    """
 
     __tablename__ = "expert_reviews"
 
@@ -84,15 +69,6 @@ class ExpertReview(UUIDMixin, TimestampMixin, ReprMixin, Base):
 
 
 class CredibilityScore(UUIDMixin, TimestampMixin, Base):
-    """
-    Running credibility score for each expert user.
-
-    Score is system-computed only — updated each time a claim they voted on
-    is finalized. It is NOT manually adjustable.
-
-    Range: 0.0 (never correct) to 1.0 (always correct).
-    Starting value: AUTH_INITIAL_EXPERT_CREDIBILITY (default 0.5).
-    """
 
     __tablename__ = "credibility_scores"
 

@@ -68,11 +68,11 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Criticality registry
-# ---------------------------------------------------------------------------
 
-# Stages whose failure aborts the entire pipeline
+
+
+
+
 _CRITICAL_STAGES: frozenset[PipelineStageID] = frozenset(
     {
         PipelineStageID.S01_NORMALIZER,
@@ -81,7 +81,7 @@ _CRITICAL_STAGES: frozenset[PipelineStageID] = frozenset(
     }
 )
 
-# Stages that are skipped on cache hit (S02 already returned a result)
+
 _POST_CACHE_STAGES: frozenset[PipelineStageID] = frozenset(
     {
         PipelineStageID.S03_QUERY_GENERATOR,
@@ -98,9 +98,9 @@ _POST_CACHE_STAGES: frozenset[PipelineStageID] = frozenset(
 )
 
 
-# ---------------------------------------------------------------------------
-# Orchestrator
-# ---------------------------------------------------------------------------
+
+
+
 
 
 class PipelineOrchestrator:
@@ -166,21 +166,21 @@ class PipelineOrchestrator:
 
         log.info("pipeline_started", stage_count=len(self.stages))
 
-        # Update claim status to PROCESSING (if claim_id is already set)
+
         if context.claim_id:
             bind_pipeline_context(str(context.claim_id))
             try:
                 await self.claim_repo.mark_processing(context.claim_id)
-            except Exception as exc:  # noqa: BLE001
-                # Non-fatal — status update failure must not abort verification
+            except Exception as exc:
+
                 log.warning("claim_status_update_failed", error=str(exc))
 
         for stage in self.stages:
             stage_id = stage.stage_id
 
-            # -----------------------------------------------------------------
-            # Cache short-circuit: skip all post-cache stages
-            # -----------------------------------------------------------------
+
+
+
             if context.cache_hit and stage_id in _POST_CACHE_STAGES:
                 log.debug(
                     "stage_skipped_cache_hit",
@@ -188,10 +188,10 @@ class PipelineOrchestrator:
                 )
                 continue
 
-            # -----------------------------------------------------------------
-            # Fatal error guard: abort remaining stages if a critical stage
-            # has already failed
-            # -----------------------------------------------------------------
+
+
+
+
             if context.has_fatal_error:
                 log.warning(
                     "stage_skipped_fatal_error",
@@ -200,9 +200,9 @@ class PipelineOrchestrator:
                 )
                 break
 
-            # -----------------------------------------------------------------
-            # Execute the stage
-            # -----------------------------------------------------------------
+
+
+
             stage_start = time.perf_counter()
 
             log.info("stage_started", stage=stage_id.value)
@@ -245,8 +245,8 @@ class PipelineOrchestrator:
                         duration_ms=duration_ms,
                     )
 
-            except Exception as exc:  # noqa: BLE001
-                # Unexpected exception from any stage
+            except Exception as exc:
+
                 duration_ms = int((time.perf_counter() - stage_start) * 1000)
                 context.record_stage_timing(stage_id, duration_ms)
                 error_msg = f"{type(exc).__name__}: {exc!s}"
@@ -272,9 +272,9 @@ class PipelineOrchestrator:
                         duration_ms=duration_ms,
                     )
 
-        # -----------------------------------------------------------------
-        # Pipeline complete
-        # -----------------------------------------------------------------
+
+
+
         total_ms = context.elapsed_ms
         log.info(
             "pipeline_completed",
@@ -287,9 +287,9 @@ class PipelineOrchestrator:
 
         return context
 
-    # ------------------------------------------------------------------
-    # Private helpers
-    # ------------------------------------------------------------------
+
+
+
 
     async def _handle_fatal_failure(self, context: PipelineContext) -> None:
         """
@@ -312,7 +312,7 @@ class PipelineOrchestrator:
                 claim_id=str(context.claim_id),
                 fatal_error=context.fatal_error,
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.error(
                 "failed_to_mark_claim_failed",
                 claim_id=str(context.claim_id),

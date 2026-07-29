@@ -1,26 +1,3 @@
-"""
-app/services/verification_service.py
-=======================================
-VerificationService — top-level application service that wires the full
-12-stage pipeline and exposes the public API for the FastAPI router.
-
-## Responsibilities
-
-1. Accept a `VerificationRequest` from the API layer.
-2. Construct a `PipelineContext` from the request.
-3. Build a `PipelineOrchestrator` with all 12 stage instances (all dependencies
-   injected via constructor, provided by FastAPI DI).
-4. Run the orchestrator.
-5. Translate the completed `PipelineContext` into a `VerificationResponse`.
-6. Handle cache-hit short-circuit (return cached response without pipeline run).
-
-## DI pattern
-
-`VerificationService` is instantiated per-request by FastAPI's DI system.
-Each request gets its own service instance with a fresh `AsyncSession`.
-ML services (EmbeddingService, NERService, NLIService) are application-scope
-singletons injected once at startup.
-"""
 
 from __future__ import annotations
 
@@ -64,22 +41,6 @@ logger = structlog.get_logger(__name__)
 
 
 class VerificationService:
-    """
-    Orchestrates the full 12-stage verification pipeline for a single claim.
-
-    All dependencies are injected via __init__ and provided by FastAPI's DI.
-
-    Args:
-        claim_repo:         ClaimRepository (per-request).
-        result_repo:        ResultRepository (per-request).
-        article_repo:       ArticleRepository (per-request).
-        source_repo:        SourceRepository (per-request).
-        cache_service:      CacheService (singleton via app state).
-        embedding_service:  EmbeddingService (singleton — model loaded at startup).
-        ner_service:        NERService (singleton).
-        nli_service:        NLIService (singleton).
-        http_client:        Shared httpx.AsyncClient (singleton).
-    """
 
     def __init__(
         self,
@@ -104,22 +65,9 @@ class VerificationService:
         self.http_client = http_client
 
     async def verify(self, request: VerificationRequest, *, submitter_id: uuid.UUID | None = None) -> VerificationResponse:
-        """
-        Run the full verification pipeline for a claim.
-
-        Args:
-            request:      The validated VerificationRequest from the API.
-            submitter_id: UUID of the authenticated user submitting the claim (None = anonymous).
-
-        Returns:
-            VerificationResponse with verdict, confidence, reasoning, and scores.
-
-        Raises:
-            PipelineError: On CRITICAL stage failure (S01, S11, S12).
-        """
         log = logger.bind(claimed_source=request.claimed_source)
 
-        # Build pipeline context
+
         context = build_context(
             headline=request.headline,
             claimed_source=request.claimed_source,
@@ -135,28 +83,22 @@ class VerificationService:
             headline_preview=request.headline[:80],
         )
 
-        # Build stage instances
+
         stages = self._build_stages()
 
-        # Build orchestrator
+
         orchestrator = PipelineOrchestrator(
             stages=stages,
             claim_repo=self.claim_repo,
         )
 
-        # Run pipeline
+
         context = await orchestrator.run(context)
 
-        # Build and return response
+
         return self._build_response(context)
 
     async def get_result(self, claim_id: uuid.UUID) -> VerificationResponse | None:
-        """
-        Retrieve a previously computed verification result by claim ID.
-        Fetches the top-ranked articles from the retrieved_articles table and
-        attempts to restore full scores (headline_similarity, body_similarity)
-        and manipulation_flags from the Redis cache.
-        """
         result = await self.result_repo.get_by_claim_id(claim_id)
         if result is None:
             return None
@@ -174,9 +116,9 @@ class VerificationService:
         from sqlalchemy import select
         from app.features.articles.models import RetrievedArticle
 
-        # -----------------------------------------------------------------
-        # Fetch top-3 retrieved articles from DB (async-safe explicit query)
-        # -----------------------------------------------------------------
+
+
+
         art_stmt = (
             select(RetrievedArticle)
             .where(
@@ -196,15 +138,15 @@ class VerificationService:
                 published_date=a.published_date,
                 body=a.body,
                 rank_score=a.rank_score or 0.0,
-                search_provider=SearchProvider.INTERNAL_SITE,  # default — actual value not stored on article
+                search_provider=SearchProvider.INTERNAL_SITE,
                 extraction_method=a.extraction_method,
             )
             for a in art_rows
         ]
 
-        # -----------------------------------------------------------------
-        # Try Redis cache for full scores + manipulation_flags
-        # -----------------------------------------------------------------
+
+
+
         cached_scores = None
         cached_flags = None
         try:
@@ -231,7 +173,7 @@ class VerificationService:
                         entities_replaced=f.get("entities_replaced", False),
                     )
         except Exception:
-            pass  # Redis unavailable — fallback to DB scores below
+            pass
 
         scores = cached_scores or VerificationScoresResponse(
             semantic_similarity=result.semantic_similarity,
@@ -256,12 +198,11 @@ class VerificationService:
             created_at=result.created_at,
         )
 
-    # ------------------------------------------------------------------
-    # Private helpers
-    # ------------------------------------------------------------------
+
+
+
 
     def _build_stages(self) -> list:
-        """Construct all 12 stage instances with injected dependencies."""
         newsdata = NewsDataClient(self.http_client)
         google_cse = GoogleCSEClient(self.http_client)
         pygooglenews = PyGoogleNewsClient()
@@ -303,11 +244,10 @@ class VerificationService:
         ]
 
     def _build_response(self, context: PipelineContext) -> VerificationResponse:
-        """Translate a completed PipelineContext into a VerificationResponse."""
         from app.core.constants import VerificationLabel
         from app.features.verification.schemas import VerificationScoresResponse
 
-        # Cache hit — use cached fields
+
         if context.cache_hit:
             return VerificationResponse(
                 claim_id=context.claim_id or uuid.uuid4(),
@@ -325,7 +265,7 @@ class VerificationService:
                 created_at=datetime.utcnow(),
             )
 
-        # Full pipeline result
+
         return VerificationResponse(
             claim_id=context.claim_id or uuid.uuid4(),
             label=context.label or VerificationLabel.NOT_FOUND_IN_CLAIMED_SOURCE,

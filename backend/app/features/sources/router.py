@@ -1,16 +1,3 @@
-"""
-app/features/sources/router.py
-=================================
-Source registry management endpoints.
-
-Migrated from: app/api/v1/endpoints/sources.py
-
-GET    /api/v1/sources          — List active sources (paginated)
-POST   /api/v1/sources          — Register a new source
-GET    /api/v1/sources/{id}     — Get a source by UUID
-PUT    /api/v1/sources/{id}     — Update a source
-DELETE /api/v1/sources/{id}     — Remove a source
-"""
 
 from __future__ import annotations
 

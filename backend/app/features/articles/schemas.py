@@ -27,14 +27,14 @@ class ExtractedContentSchema(BaseModel):
     success: bool = Field(default=False)
     error_message: str | None = Field(default=None)
 
-    @computed_field  # type: ignore[prop-decorator]
+    @computed_field
     @property
     def word_count(self) -> int:
         if not self.body:
             return 0
         return len(self.body.split())
 
-    @computed_field  # type: ignore[prop-decorator]
+    @computed_field
     @property
     def char_count(self) -> int:
         return len(self.body) if self.body else 0
@@ -89,7 +89,7 @@ class RankedArticleSchema(BaseModel):
     search_provider: SearchProvider
     extraction_method: ExtractionMethod | None = Field(default=None)
 
-    @computed_field  # type: ignore[prop-decorator]
+    @computed_field
     @property
     def has_body(self) -> bool:
         return bool(self.body and len(self.body.strip()) > 50)
@@ -116,12 +116,12 @@ class ArticleExtractionResult(BaseModel):
     successful: list[ExtractedContentSchema] = Field(default_factory=list)
     failed_urls: list[str] = Field(default_factory=list)
 
-    @computed_field  # type: ignore[prop-decorator]
+    @computed_field
     @property
     def total_attempted(self) -> int:
         return len(self.successful) + len(self.failed_urls)
 
-    @computed_field  # type: ignore[prop-decorator]
+    @computed_field
     @property
     def success_rate(self) -> float:
         if self.total_attempted == 0:

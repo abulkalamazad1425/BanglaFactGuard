@@ -1,31 +1,3 @@
-"""
-app/shared/dependencies.py
-============================
-FastAPI dependency injection providers.
-
-Migrated from: app/api/dependencies.py
-
-All request-scoped dependencies are factories that FastAPI resolves per request.
-Application-scope singletons (ML models, HTTP client, Redis) are stored on
-`app.state` during the lifespan startup and accessed here.
-
-Dependency graph:
-    get_async_session  → AsyncSession (per-request, auto-commit/rollback)
-         │
-         ├── get_claim_repo     → ClaimRepository
-         ├── get_result_repo    → ResultRepository
-         ├── get_article_repo   → ArticleRepository
-         └── get_source_repo    → SourceRepository
-
-    get_cache_service     → CacheService (app-scope singleton from app.state)
-    get_embedding_service → EmbeddingService (singleton)
-    get_ner_service       → NERService (singleton)
-    get_nli_service       → NLIService (singleton)
-    get_http_client       → httpx.AsyncClient (singleton)
-
-    get_verification_service → VerificationService (per-request, all deps injected)
-    get_source_service       → SourceService (per-request)
-"""
 
 from __future__ import annotations
 
@@ -47,13 +19,12 @@ from app.features.verification.repository import ClaimRepository, ResultReposito
 from app.features.verification.service import VerificationService
 
 
-# ---------------------------------------------------------------------------
-# Database Session
-# ---------------------------------------------------------------------------
+
+
+
 
 
 async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
-    """Provide a per-request SQLAlchemy AsyncSession."""
     async with AsyncSessionLocal() as session:
         try:
             yield session
@@ -63,9 +34,9 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
             raise
 
 
-# ---------------------------------------------------------------------------
-# Repository dependencies (per-request)
-# ---------------------------------------------------------------------------
+
+
+
 
 
 async def get_claim_repo(
@@ -92,39 +63,34 @@ async def get_source_repo(
     return SourceRepository(session)
 
 
-# ---------------------------------------------------------------------------
-# App-state singleton dependencies
-# ---------------------------------------------------------------------------
+
+
+
 
 
 def get_cache_service(request: Request) -> CacheService:
-    """Return the CacheService singleton from app.state."""
     return request.app.state.cache_service
 
 
 def get_embedding_service(request: Request) -> EmbeddingService:
-    """Return the EmbeddingService singleton (LaBSE loaded at startup)."""
     return request.app.state.embedding_service
 
 
 def get_ner_service(request: Request) -> NERService:
-    """Return the NERService singleton (BanglaBERT loaded at startup)."""
     return request.app.state.ner_service
 
 
 def get_nli_service(request: Request) -> NLIService:
-    """Return the NLIService singleton (DeBERTa loaded at startup)."""
     return request.app.state.nli_service
 
 
 def get_http_client(request: Request) -> httpx.AsyncClient:
-    """Return the shared httpx.AsyncClient from app.state."""
     return request.app.state.http_client
 
 
-# ---------------------------------------------------------------------------
-# Service dependencies (per-request, all deps injected)
-# ---------------------------------------------------------------------------
+
+
+
 
 
 async def get_verification_service(
@@ -138,7 +104,6 @@ async def get_verification_service(
     nli_service: NLIService = Depends(get_nli_service),
     http_client: httpx.AsyncClient = Depends(get_http_client),
 ) -> VerificationService:
-    """Construct a per-request VerificationService with all dependencies."""
     return VerificationService(
         claim_repo=claim_repo,
         result_repo=result_repo,
@@ -155,5 +120,4 @@ async def get_verification_service(
 async def get_source_service(
     source_repo: SourceRepository = Depends(get_source_repo),
 ) -> SourceService:
-    """Construct a per-request SourceService."""
     return SourceService(source_repo=source_repo)

@@ -1,8 +1,3 @@
-"""
-app/api/v1/router.py
-======================
-Aggregates all v1 feature routers into a single APIRouter.
-"""
 
 from __future__ import annotations
 

@@ -1,10 +1,3 @@
-"""
-tests/unit/test_multimodal_embedding_extractor.py
-==================================================
-Unit tests for MultimodalEmbeddingExtractor.
-
-These tests mock the PyTorch backbones so they run without GPU/model weights.
-"""
 
 from __future__ import annotations
 
@@ -13,26 +6,25 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+
+
+
 
 def _make_mock_loader(text_dim: int = 768, img_dim: int = 1792):
-    """Build a mock MultimodalModelLoader that returns fake embeddings."""
     loader = MagicMock()
     loader.device = "cpu"
     loader.is_loaded = True
 
-    # text_backbone: returns zeros tensor
+
     import torch
     text_feat = torch.zeros(1, text_dim)
     loader.text_backbone.return_value = text_feat
 
-    # img_backbone: returns ones tensor
+
     img_feat = torch.ones(1, img_dim)
     loader.img_backbone.return_value = img_feat
 
-    # tokenizer
+
     loader.tokenizer.return_value = {
         "input_ids": torch.zeros(1, 128, dtype=torch.long),
         "attention_mask": torch.ones(1, 128, dtype=torch.long),
@@ -40,12 +32,11 @@ def _make_mock_loader(text_dim: int = 768, img_dim: int = 1792):
     return loader
 
 
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
+
+
+
 
 class TestCombinedEmbedding:
-    """Test _build_combined_embedding static method."""
 
     def test_output_shape(self):
         from app.features.multimodal.pipeline.embedding_extractor import (
@@ -72,13 +63,12 @@ class TestCombinedEmbedding:
         )
         text_emb = np.zeros(768, dtype=np.float32)
         img_emb = np.zeros(1792, dtype=np.float32)
-        # Should not raise — zero norm is handled gracefully
+
         combined = MultimodalEmbeddingExtractor._build_combined_embedding(text_emb, img_emb)
         assert combined.shape == (2560,)
 
 
 class TestCosineSimilarity:
-    """Test cosine_similarity static method."""
 
     def test_identical_vectors(self):
         from app.features.multimodal.pipeline.embedding_extractor import (
@@ -98,7 +88,6 @@ class TestCosineSimilarity:
         assert abs(sim - 0.0) < 1e-6
 
     def test_result_clamped_to_zero(self):
-        """Negative cosine similarity is clamped to 0.0."""
         from app.features.multimodal.pipeline.embedding_extractor import (
             MultimodalEmbeddingExtractor,
         )
@@ -118,7 +107,6 @@ class TestCosineSimilarity:
 
 
 class TestIsDuplicate:
-    """Test is_duplicate logic — all three thresholds must pass."""
 
     def _make_extractor(self):
         from app.features.multimodal.pipeline.embedding_extractor import (
@@ -151,13 +139,12 @@ class TestIsDuplicate:
         assert scores["text_similarity"] == pytest.approx(1.0, abs=1e-5)
 
     def test_different_image_breaks_cache_hit(self):
-        """Same text + orthogonal image → not a duplicate."""
         extractor = self._make_extractor()
         text_emb = np.ones(768, dtype=np.float32)
 
-        # Same text embedding for both
+
         img_q = np.zeros(1792, dtype=np.float32)
-        img_q[0] = 1.0  # orthogonal to candidate
+        img_q[0] = 1.0
 
         img_c = np.zeros(1792, dtype=np.float32)
         img_c[1] = 1.0

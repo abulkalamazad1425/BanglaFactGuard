@@ -1,8 +1,3 @@
-"""
-app/features/admin/service.py
-================================
-Admin service: expert account management and platform statistics.
-"""
 
 from __future__ import annotations
 
@@ -37,13 +32,11 @@ _SETTINGS = get_settings()
 
 
 def _validate_password(password: str) -> None:
-    """Reuse password strength rules from auth."""
     from app.features.auth.service import _validate_password_strength
     _validate_password_strength(password)
 
 
 class AdminService:
-    """Handles admin-level operations: expert management and statistics."""
 
     def __init__(
         self,
@@ -57,16 +50,11 @@ class AdminService:
         self._credibility = credibility_repo
         self._tokens = token_repo
 
-    # ------------------------------------------------------------------
-    # Expert management
-    # ------------------------------------------------------------------
+
+
+
 
     async def create_expert(self, req: CreateExpertRequest) -> ExpertResponse:
-        """
-        Create a new expert user account.
-        Admin sets the initial credentials. The expert can change their
-        password later via the change-password endpoint.
-        """
         _validate_password(req.password)
 
         if await self._users.email_exists(req.email):
@@ -78,18 +66,18 @@ class AdminService:
             full_name=req.full_name,
             role="expert",
             is_active=True,
-            is_verified=True,  # Admin-created accounts are pre-verified
+            is_verified=True,
         )
         user = await self._users.create(user)
 
-        # Create profile with expertise area
+
         profile = UserProfile(
             user_id=user.id,
             bio=req.expertise_area,
         )
         self._session.add(profile)
 
-        # Initialize credibility score
+
         cred = CredibilityScore(
             user_id=user.id,
             score=_SETTINGS.auth.initial_expert_credibility,
@@ -103,7 +91,6 @@ class AdminService:
         return _expert_to_response(user, req.expertise_area, _SETTINGS.auth.initial_expert_credibility, 0)
 
     async def list_experts(self, *, limit: int = 50, offset: int = 0) -> list[ExpertResponse]:
-        """Return all expert accounts with their credibility scores."""
         users = await self._users.list_by_role("expert", limit=limit, offset=offset)
         results = []
         for u in users:
@@ -120,7 +107,6 @@ class AdminService:
         return results
 
     async def get_expert(self, user_id: uuid.UUID) -> ExpertResponse:
-        """Return a single expert's details."""
         user = await self._users.get_by_id(user_id)
         if user.role != "expert":
             raise RecordNotFoundError(model="Expert", identifier=str(user_id))
@@ -136,7 +122,6 @@ class AdminService:
         )
 
     async def update_expert(self, user_id: uuid.UUID, req: UpdateExpertRequest) -> ExpertResponse:
-        """Update an expert's profile (name, email, expertise, active status)."""
         user = await self._users.get_by_id(user_id)
         updates: dict = {}
         if req.full_name is not None:
@@ -150,7 +135,7 @@ class AdminService:
         if updates:
             user = await self._users.update(user, **updates)
 
-        # Update expertise area in profile
+
         if req.expertise_area is not None:
             profile_stmt = select(UserProfile).where(UserProfile.user_id == user_id).limit(1)
             profile_result = await self._session.execute(profile_stmt)
@@ -171,7 +156,6 @@ class AdminService:
     async def reset_expert_password(
         self, user_id: uuid.UUID, req: ResetExpertPasswordRequest
     ) -> dict:
-        """Admin force-resets an expert's password and revokes all their tokens."""
         _validate_password(req.new_password)
         user = await self._users.get_by_id(user_id)
         if user.role not in ("expert", "admin"):
@@ -184,35 +168,32 @@ class AdminService:
         return {"message": "Password has been reset. The expert must log in again."}
 
     async def deactivate_expert(self, user_id: uuid.UUID) -> ExpertResponse:
-        """Deactivate an expert account (prevents login)."""
         user = await self._users.update(await self._users.get_by_id(user_id), is_active=False)
         await self._tokens.revoke_all_for_user(user_id)
         return await self.get_expert(user_id)
 
     async def activate_expert(self, user_id: uuid.UUID) -> ExpertResponse:
-        """Re-activate a previously deactivated expert account."""
         await self._users.update(await self._users.get_by_id(user_id), is_active=True)
         return await self.get_expert(user_id)
 
-    # ------------------------------------------------------------------
-    # Platform statistics
-    # ------------------------------------------------------------------
+
+
+
 
     async def get_platform_stats(self) -> AdminStatsResponse:
-        """Aggregate platform-wide metrics for the admin dashboard."""
         thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
 
-        # Total submissions
+
         total_stmt = select(func.count()).select_from(VerifiedClaim)
         total = (await self._session.execute(total_stmt)).scalar_one()
 
-        # Last 30 days
+
         recent_stmt = select(func.count()).select_from(VerifiedClaim).where(
             VerifiedClaim.created_at >= thirty_days_ago
         )
         recent = (await self._session.execute(recent_stmt)).scalar_one()
 
-        # Verdict breakdown
+
         def _count_label(lbl: VerificationLabel):
             return select(func.count()).select_from(VerificationResult).where(
                 VerificationResult.label == lbl
@@ -223,14 +204,14 @@ class AdminService:
         partial_c = (await self._session.execute(_count_label(VerificationLabel.PARTIALLY_TRUE))).scalar_one()
         nf_c = (await self._session.execute(_count_label(VerificationLabel.NOT_FOUND_IN_CLAIMED_SOURCE))).scalar_one()
 
-        # Expert counts
+
         total_experts = await self._users.count_by_role("expert")
         active_experts_stmt = select(func.count()).select_from(User).where(
             User.role == "expert", User.is_active.is_(True)
         )
         active_experts = (await self._session.execute(active_experts_stmt)).scalar_one()
 
-        # Pending expert reviews
+
         from app.features.expert_review.models import ExpertReview
         pending_stmt = select(func.count()).select_from(ExpertReview).where(
             ExpertReview.status == "pending"
@@ -249,13 +230,13 @@ class AdminService:
             pending_expert_reviews=pending,
             total_experts=total_experts,
             active_experts=active_experts,
-            avg_verification_time_seconds=None,  # Future: compute from created_at diff
+            avg_verification_time_seconds=None,
         )
 
 
-# ---------------------------------------------------------------------------
-# Helper
-# ---------------------------------------------------------------------------
+
+
+
 
 
 def _expert_to_response(

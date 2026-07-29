@@ -1,23 +1,3 @@
-"""
-app/features/multimodal/repository.py
-======================================
-Database access layer for multimodal predictions.
-
-All queries use the async SQLAlchemy 2.0 API. The session is injected via
-FastAPI's dependency injection system (``get_async_session``).
-
-Duplicate detection search strategy:
-    The ``find_similar_candidates`` method fetches the most recent N predictions
-    (configurable via ``MULTIMODAL_DEDUP_CANDIDATE_LIMIT``) for the same
-    model version and returns them. The caller (MultimodalPredictionService)
-    then computes exact cosine similarity on all three embedding dimensions to
-    identify genuine duplicates.
-
-    This avoids requiring pgvector (a PostgreSQL extension) while still being
-    efficient enough for typical traffic volumes. For large-scale deployments,
-    replace the ``ORDER BY created_at DESC LIMIT N`` scan with a pgvector
-    HNSW index query.
-"""
 
 from __future__ import annotations
 
@@ -38,19 +18,13 @@ _SETTINGS = get_settings()
 
 
 class MultimodalPredictionRepository:
-    """
-    CRUD and search operations for ``MultimodalPrediction`` records.
-
-    Args:
-        db: An async SQLAlchemy session (injected via FastAPI DI).
-    """
 
     def __init__(self, db: AsyncSession) -> None:
         self._db = db
 
-    # ------------------------------------------------------------------
-    # Create
-    # ------------------------------------------------------------------
+
+
+
 
     async def create(
         self,
@@ -67,11 +41,6 @@ class MultimodalPredictionRepository:
         model_version: str,
         is_duplicate_of_id: uuid.UUID | None = None,
     ) -> MultimodalPrediction:
-        """
-        Persist a new prediction record and return it.
-
-        Embeddings are stored as plain Python lists (PostgreSQL ARRAY(Float)).
-        """
         record = MultimodalPrediction(
             headline=headline,
             body_text=body_text,
@@ -86,7 +55,7 @@ class MultimodalPredictionRepository:
             is_duplicate_of_id=is_duplicate_of_id,
         )
         self._db.add(record)
-        await self._db.flush()   # populate id / timestamps without committing
+        await self._db.flush()
         await self._db.refresh(record)
         logger.info(
             "multimodal_prediction_created",
@@ -96,17 +65,11 @@ class MultimodalPredictionRepository:
         )
         return record
 
-    # ------------------------------------------------------------------
-    # Read
-    # ------------------------------------------------------------------
+
+
+
 
     async def get_by_id(self, prediction_id: uuid.UUID) -> MultimodalPrediction:
-        """
-        Retrieve a single prediction by primary key.
-
-        Raises:
-            RecordNotFoundError: If no record with the given id exists.
-        """
         result = await self._db.execute(
             select(MultimodalPrediction).where(MultimodalPrediction.id == prediction_id)
         )
@@ -119,7 +82,6 @@ class MultimodalPredictionRepository:
         return record
 
     async def list_recent(self, *, limit: int = 20, offset: int = 0) -> Sequence[MultimodalPrediction]:
-        """Return the most recent predictions ordered by creation time (desc)."""
         result = await self._db.execute(
             select(MultimodalPrediction)
             .order_by(desc(MultimodalPrediction.created_at))
@@ -128,9 +90,9 @@ class MultimodalPredictionRepository:
         )
         return result.scalars().all()
 
-    # ------------------------------------------------------------------
-    # Duplicate detection — candidate retrieval
-    # ------------------------------------------------------------------
+
+
+
 
     async def find_similar_candidates(
         self,
@@ -138,19 +100,6 @@ class MultimodalPredictionRepository:
         model_version: str,
         limit: int | None = None,
     ) -> Sequence[MultimodalPrediction]:
-        """
-        Fetch recent predictions for the same model version to use as
-        duplicate-detection candidates.
-
-        Returns the N most recent rows (default: ``MULTIMODAL_DEDUP_CANDIDATE_LIMIT``).
-        The caller is responsible for computing cosine similarities and
-        deciding whether any candidate is a genuine duplicate.
-
-        Args:
-            model_version: Only candidates of the same model version are returned;
-                           this prevents stale model results from being reused.
-            limit:         Override the default candidate limit from settings.
-        """
         n = limit or _SETTINGS.multimodal.dedup_candidate_limit
         result = await self._db.execute(
             select(MultimodalPrediction)

@@ -1,10 +1,3 @@
-"""
-app/features/sources/models.py
-================================
-ORM model for the sources feature.
-
-Migrated from: app/models/source_registry.py
-"""
 
 from __future__ import annotations
 
@@ -21,13 +14,6 @@ if TYPE_CHECKING:
 
 
 class VerifiedSource(UUIDMixin, TimestampMixin, ReprMixin, Base):
-    """
-    Registry of verified news sources with canonical domain names, aliases, and scraping configurations.
-
-    Used by Stage 1 (Normalizer) to resolve raw claimed source strings
-    (e.g. "প্রথম আলো", "prothom alo") to canonical domains (e.g. "prothomalo.com").
-    Also used by Stage 6 (Article Extractor) to fetch article scraping configurations.
-    """
 
     __tablename__ = "verified_sources"
 

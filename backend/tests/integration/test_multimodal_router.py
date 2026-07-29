@@ -1,11 +1,3 @@
-"""
-tests/integration/test_multimodal_router.py
-============================================
-Integration-level HTTP tests for the multimodal prediction router.
-
-These tests use FastAPI's TestClient with app state mocked so no actual
-model weights or MinIO connection is required.
-"""
 
 from __future__ import annotations
 
@@ -37,12 +29,11 @@ def _make_fake_response(prediction: str = "FAKE", is_cached: bool = False):
 
 
 def _make_test_app():
-    """Build a FastAPI test application with mocked state."""
     from app.main import create_app
 
     app = create_app()
 
-    # Override lifespan by injecting mock state directly
+
     mock_loader = MagicMock()
     mock_loader.is_loaded = True
 
@@ -55,10 +46,8 @@ def _make_test_app():
 
 
 class TestMultimodalPredictEndpoint:
-    """Tests for POST /api/v1/multimodal/predict."""
 
     def _make_image_bytes(self) -> bytes:
-        """Generate a minimal valid 1x1 white PNG."""
         import struct, zlib
         def png_chunk(tag, data):
             c = struct.pack(">I", len(data)) + tag + data
@@ -73,7 +62,6 @@ class TestMultimodalPredictEndpoint:
         return png
 
     def test_predict_returns_200_with_valid_inputs(self):
-        """Valid request should return 200 with prediction data."""
         with patch(
             "app.features.multimodal.router.MultimodalPredictionService"
         ) as mock_service_cls:
@@ -100,7 +88,6 @@ class TestMultimodalPredictEndpoint:
         assert "prediction_id" in data
 
     def test_predict_rejects_non_image_file(self):
-        """Non-image content type should return 415."""
         app = _make_test_app()
         client = TestClient(app, raise_server_exceptions=False)
 
@@ -112,7 +99,6 @@ class TestMultimodalPredictEndpoint:
         assert response.status_code == 415
 
     def test_predict_rejects_empty_body_text(self):
-        """Empty body_text (below min_length=10) should return 422."""
         app = _make_test_app()
         client = TestClient(app, raise_server_exceptions=False)
 
@@ -125,7 +111,6 @@ class TestMultimodalPredictEndpoint:
         assert response.status_code == 422
 
     def test_predict_missing_image_returns_422(self):
-        """Missing image field should return 422."""
         app = _make_test_app()
         client = TestClient(app, raise_server_exceptions=False)
 
@@ -136,7 +121,6 @@ class TestMultimodalPredictEndpoint:
         assert response.status_code == 422
 
     def test_predict_returns_cached_flag(self):
-        """Cache hit response must have is_cached=True and original_id set."""
         with patch(
             "app.features.multimodal.router.MultimodalPredictionService"
         ) as mock_service_cls:

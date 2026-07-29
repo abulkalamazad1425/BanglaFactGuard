@@ -1,13 +1,3 @@
-"""
-app/features/notifications/router.py
-=====================================
-Notification API endpoints.
-
-GET  /api/v1/notifications         — Paginated notification list for current user
-GET  /api/v1/notifications/count   — Unread notification count
-POST /api/v1/notifications/{id}/read     — Mark single notification as read
-POST /api/v1/notifications/read-all     — Mark all notifications as read
-"""
 
 from __future__ import annotations
 
@@ -51,7 +41,6 @@ async def list_notifications(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_async_session),
 ) -> list[NotificationResponse]:
-    """Return the current user's notifications, most recent first."""
     stmt = (
         select(Notification)
         .where(Notification.user_id == current_user.id)
@@ -80,7 +69,6 @@ async def get_unread_count(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_async_session),
 ) -> UnreadCountResponse:
-    """Return the number of unread notifications for the current user."""
     stmt = (
         select(func.count())
         .select_from(Notification)
@@ -103,7 +91,6 @@ async def mark_read(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_async_session),
 ) -> None:
-    """Mark one notification as read."""
     stmt = (
         update(Notification)
         .where(
@@ -125,7 +112,6 @@ async def mark_all_read(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_async_session),
 ) -> None:
-    """Mark all unread notifications for the current user as read."""
     stmt = (
         update(Notification)
         .where(

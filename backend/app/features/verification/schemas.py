@@ -1,12 +1,3 @@
-"""
-app/features/verification/schemas.py
-======================================
-Pydantic schemas for the verification feature.
-
-Consolidated from:
-  - app/schemas/verification.py
-  - app/schemas/scores.py
-"""
 
 from __future__ import annotations
 
@@ -19,13 +10,12 @@ from app.core.constants import ClaimStatus, VerificationLabel
 from app.features.articles.schemas import RankedArticleSchema
 
 
-# ---------------------------------------------------------------------------
-# Scores & Manipulation Flags (from scores.py)
-# ---------------------------------------------------------------------------
+
+
+
 
 
 class NLIScoresSchema(BaseModel):
-    """Raw NLI output triple from the DeBERTa cross-encoder (Stage 9)."""
 
     entailment: float = Field(..., ge=0.0, le=1.0, description="NLI entailment probability")
     contradiction: float = Field(..., ge=0.0, le=1.0, description="NLI contradiction probability")
@@ -39,7 +29,6 @@ class NLIScoresSchema(BaseModel):
 
 
 class VerificationScoresSchema(BaseModel):
-    """Aggregated multi-dimensional evidence scores for a verification result."""
 
     semantic_similarity: float | None = Field(default=None, ge=0.0, le=1.0)
     entity_match: float | None = Field(default=None, ge=0.0, le=1.0)
@@ -47,7 +36,7 @@ class VerificationScoresSchema(BaseModel):
     numerical_consistency: float | None = Field(default=None, ge=0.0, le=1.0)
     contradiction_score: float | None = Field(default=None, ge=0.0, le=1.0)
 
-    # Pre-computed sub-dimensions exposed for S10 and S11
+
     headline_similarity: float | None = Field(
         default=None, ge=0.0, le=1.0,
         description="LaBSE cosine similarity between claim headline and article title only.",
@@ -71,7 +60,6 @@ class VerificationScoresSchema(BaseModel):
 
 
 class ManipulationFlagsSchema(BaseModel):
-    """Boolean flags produced by Stage 10 (Manipulation Detector)."""
 
     headline_manipulated: bool = Field(default=False)
     body_altered: bool = Field(default=False)
@@ -80,7 +68,6 @@ class ManipulationFlagsSchema(BaseModel):
 
     @property
     def any_manipulation_detected(self) -> bool:
-        """Return True if any manipulation flag is set."""
         return any([
             self.headline_manipulated,
             self.body_altered,
@@ -100,13 +87,12 @@ class ManipulationFlagsSchema(BaseModel):
     }
 
 
-# ---------------------------------------------------------------------------
-# Request schema
-# ---------------------------------------------------------------------------
+
+
+
 
 
 class VerificationRequest(BaseModel):
-    """Input body for POST /api/v1/verify."""
 
     headline: str = Field(
         ...,
@@ -157,18 +143,16 @@ class VerificationRequest(BaseModel):
     }
 
 
-# ---------------------------------------------------------------------------
-# Response schemas
-# ---------------------------------------------------------------------------
+
+
+
 
 
 class VerificationScoresResponse(VerificationScoresSchema):
-    """Scores as returned in the API response."""
     pass
 
 
 class VerificationResponse(BaseModel):
-    """Full response body for POST /api/v1/verify and GET /api/v1/verify/{id}."""
 
     claim_id: uuid.UUID
     label: VerificationLabel
@@ -215,7 +199,6 @@ class VerificationResponse(BaseModel):
 
 
 class VerificationResultSummary(BaseModel):
-    """Compact summary for embedding in list responses or notifications."""
 
     claim_id: uuid.UUID
     headline: str = Field(..., max_length=200)
@@ -229,7 +212,6 @@ class VerificationResultSummary(BaseModel):
 
 
 class VerificationStatusResponse(BaseModel):
-    """Lightweight response for GET /api/v1/verify/{claim_id}/status."""
 
     claim_id: uuid.UUID
     status: ClaimStatus

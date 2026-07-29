@@ -1,10 +1,3 @@
-"""
-app/features/articles/repository.py
-======================================
-Repository for the articles feature.
-
-Migrated from: app/repositories/article_repository.py
-"""
 
 from __future__ import annotations
 
@@ -21,11 +14,6 @@ logger = logging.getLogger(__name__)
 
 
 class ArticleRepository(BaseRepository[RetrievedArticle]):
-    """
-    Async repository for RetrievedArticle ORM model.
-
-    Handles storage and retrieval of candidate articles fetched during Stages 5-7.
-    """
 
     model_class = RetrievedArticle
 
@@ -37,7 +25,6 @@ class ArticleRepository(BaseRepository[RetrievedArticle]):
         claim_id: uuid.UUID,
         url_hash: str,
     ) -> RetrievedArticle | None:
-        """Check whether a URL has already been retrieved for this claim."""
         stmt = (
             select(RetrievedArticle)
             .where(
@@ -56,7 +43,6 @@ class ArticleRepository(BaseRepository[RetrievedArticle]):
         claim_id: uuid.UUID,
         url_hash: str,
     ) -> bool:
-        """Return True if a URL has already been retrieved for this claim."""
         from sqlalchemy import func
 
         stmt = (
@@ -80,7 +66,6 @@ class ArticleRepository(BaseRepository[RetrievedArticle]):
         order_by_rank: bool = True,
         limit: int = 10,
     ) -> list[RetrievedArticle]:
-        """Retrieve all articles associated with a claim."""
         conditions = [RetrievedArticle.claim_id == claim_id]
         if successful_only:
             conditions.append(RetrievedArticle.extraction_success.is_(True))
@@ -98,7 +83,6 @@ class ArticleRepository(BaseRepository[RetrievedArticle]):
         self,
         claim_id: uuid.UUID,
     ) -> RetrievedArticle | None:
-        """Return the single highest-ranked successfully extracted article for a claim."""
         stmt = (
             select(RetrievedArticle)
             .where(
@@ -119,7 +103,6 @@ class ArticleRepository(BaseRepository[RetrievedArticle]):
         *,
         successful_only: bool = False,
     ) -> int:
-        """Count articles retrieved for a claim."""
         from sqlalchemy import func
 
         conditions = [RetrievedArticle.claim_id == claim_id]
@@ -139,7 +122,6 @@ class ArticleRepository(BaseRepository[RetrievedArticle]):
         article_id: uuid.UUID,
         rank_score: float,
     ) -> None:
-        """Update the rank_score of a specific article using a direct UPDATE."""
         from sqlalchemy import update
 
         stmt = (

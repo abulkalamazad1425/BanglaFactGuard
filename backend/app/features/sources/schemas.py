@@ -1,10 +1,3 @@
-"""
-app/features/sources/schemas.py
-=================================
-Pydantic schemas for the sources feature.
-
-Migrated from: app/schemas/source.py
-"""
 
 from __future__ import annotations
 
@@ -21,7 +14,6 @@ _DOMAIN_RE = re.compile(
 
 
 class SourceCreateSchema(BaseModel):
-    """Request body for registering a new source in the source_registry."""
 
     canonical_name: str = Field(
         ...,
@@ -108,7 +100,6 @@ class SourceCreateSchema(BaseModel):
 
 
 class SourceUpdateSchema(BaseModel):
-    """Request body for partially updating an existing source."""
 
     display_name: str | None = Field(default=None, min_length=1, max_length=255)
     display_name_en: str | None = Field(default=None, max_length=255)
@@ -161,7 +152,6 @@ class SourceUpdateSchema(BaseModel):
 
 
 class SourceResponseSchema(BaseModel):
-    """Full source record returned by GET /sources/{id} and POST /sources."""
 
     id: uuid.UUID
     canonical_name: str
@@ -204,7 +194,6 @@ class SourceResponseSchema(BaseModel):
 
 
 class SourceListSchema(BaseModel):
-    """Paginated list of sources returned by GET /sources."""
 
     items: list[SourceResponseSchema]
     total: int = Field(..., ge=0)

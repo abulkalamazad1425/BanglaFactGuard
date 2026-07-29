@@ -1,8 +1,3 @@
-"""
-app/main.py
-============
-FastAPI application factory with async lifespan management.
-"""
 
 from __future__ import annotations
 
@@ -24,17 +19,11 @@ from app.core.lifespan import lifespan
 _SETTINGS = get_settings()
 
 
-# ---------------------------------------------------------------------------
-# Application factory
-# ---------------------------------------------------------------------------
+
+
+
 
 def create_app() -> FastAPI:
-    """
-    Construct and configure the FastAPI application.
-
-    Returns:
-        Configured FastAPI instance ready for ASGI serving.
-    """
     app = FastAPI(
         title="BanglaFactGuard",
         summary="Multimodal Bangla Source-Based Fact Verification API",
@@ -50,7 +39,7 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # ── CORS ─────────────────────────────────────────────────────────────
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=_SETTINGS.cors_origins,
@@ -59,21 +48,21 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # ── Custom middleware (order: outermost → innermost) ─────────────────
+
     app.add_middleware(ProcessTimeMiddleware)
     app.add_middleware(CorrelationIDMiddleware)
 
-    # ── Routers ──────────────────────────────────────────────────────────
+
     app.include_router(api_router)
 
-    # ── Exception handlers ───────────────────────────────────────────────
+
     register_exception_handlers(app)
 
     return app
 
 
-# ---------------------------------------------------------------------------
-# ASGI entry-point
-# ---------------------------------------------------------------------------
+
+
+
 
 app = create_app()

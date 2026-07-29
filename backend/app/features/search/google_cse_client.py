@@ -1,8 +1,3 @@
-"""
-app/clients/google_cse_client.py
-================================
-Async client for Google Custom Search JSON API.
-"""
 
 from __future__ import annotations
 
@@ -17,10 +12,6 @@ logger = structlog.get_logger(__name__)
 
 
 class GoogleCSEClient:
-    """
-    Client for Google Custom Search JSON API.
-    Requires an API key and a Search Engine ID (cx) configured.
-    """
 
     def __init__(self, http_client: httpx.AsyncClient) -> None:
         self.client = http_client
@@ -32,31 +23,20 @@ class GoogleCSEClient:
         domain: str | None = None,
         published_date: date | None = None,
     ) -> list[tuple[str, str]]:
-        """
-        Execute a search using Google Custom Search API and return (url, title) tuples.
-
-        Args:
-            query: The search query string.
-            domain: The target domain (e.g., 'prothomalo.com').
-            published_date: Optional publication date.
-
-        Returns:
-            List of (URL, title) tuples.
-        """
         api_key = self.settings.google_cse_api_key
         cx = self.settings.google_cse_cx
 
         if not api_key or not cx:
             raise GoogleCSEError("Google Custom Search API key or cx is not configured.")
 
-        # Construct query with site operator if domain is provided
+
         search_q = f"site:{domain} {query}" if domain else query
 
         params = {
             "key": api_key,
             "cx": cx,
             "q": search_q,
-            "num": min(self.settings.google_cse_max_results, 10)  # max 10 per request
+            "num": min(self.settings.google_cse_max_results, 10)
         }
 
         if published_date:
