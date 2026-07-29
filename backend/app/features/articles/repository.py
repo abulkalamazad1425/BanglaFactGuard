@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import logging
@@ -110,9 +109,7 @@ class ArticleRepository(BaseRepository[RetrievedArticle]):
             conditions.append(RetrievedArticle.extraction_success.is_(True))
 
         stmt = (
-            select(func.count())
-            .select_from(RetrievedArticle)
-            .where(and_(*conditions))
+            select(func.count()).select_from(RetrievedArticle).where(and_(*conditions))
         )
         result = await self.session.execute(stmt)
         return result.scalar_one()

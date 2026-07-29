@@ -1,6 +1,5 @@
-
-revision = 'f89542b9b55a'
-down_revision = '3e7f64e4c47d'
+revision = "f89542b9b55a"
+down_revision = "3e7f64e4c47d"
 branch_labels = None
 depends_on = None
 

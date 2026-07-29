@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import structlog
@@ -34,24 +33,11 @@ class ManipulationDetectorStage:
         article = context.top_article
         scores = context.scores
 
-
-
-
-
-
-
-
-
-
-
-
-
         try:
 
             headline_sim = scores.headline_similarity
             if headline_sim is None:
                 headline_sim = await self._compute_headline_similarity(context, article)
-
 
             body_sim = scores.body_similarity or scores.semantic_similarity or 0.0
 
@@ -71,29 +57,16 @@ class ManipulationDetectorStage:
         except Exception as exc:
             logger.warning("s10_headline_check_failed", error=str(exc))
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         sem_sim = scores.semantic_similarity
         kw_overlap = scores.keyword_overlap
         headline_sim_val = scores.headline_similarity
 
         if sem_sim is not None and sem_sim < self._thresholds.body_altered_threshold:
 
-            if kw_overlap is not None and kw_overlap >= self._thresholds.body_altered_min_keyword_overlap:
+            if (
+                kw_overlap is not None
+                and kw_overlap >= self._thresholds.body_altered_min_keyword_overlap
+            ):
 
                 flags = ManipulationFlagsSchema(
                     **{**flags.model_dump(), "body_altered": True}
@@ -110,8 +83,6 @@ class ManipulationDetectorStage:
                 and headline_sim_val < self._thresholds.headline_sim_threshold
             ):
 
-
-
                 flags = ManipulationFlagsSchema(
                     **{**flags.model_dump(), "body_altered": True}
                 )
@@ -123,11 +94,10 @@ class ManipulationDetectorStage:
                     reason="both_headline_and_body_low",
                 )
 
-
-
-
         try:
-            claim_full = f"{context.normalized_headline} {context.normalized_body or ''}"
+            claim_full = (
+                f"{context.normalized_headline} {context.normalized_body or ''}"
+            )
             article_full = f"{article.title or ''} {article.body or ''}"
             altered_nums = find_altered_numbers(claim_full, article_full)
             if altered_nums:
@@ -143,20 +113,8 @@ class ManipulationDetectorStage:
         except Exception as exc:
             logger.warning("s10_number_check_failed", error=str(exc))
 
-
-
-
-
-
-
-
-
-
-
-
         entity_score = scores.entity_match
         entity_flagged = False
-
 
         if (
             entity_score is not None
@@ -164,9 +122,6 @@ class ManipulationDetectorStage:
             and context.claim_entities
         ):
             entity_flagged = True
-
-
-
 
         if (
             not entity_flagged
@@ -188,7 +143,9 @@ class ManipulationDetectorStage:
             detected.append(ManipulationType.ENTITIES_REPLACED)
             logger.info(
                 "s10_entities_replaced_detected",
-                entity_score=round(entity_score, 3) if entity_score is not None else None,
+                entity_score=(
+                    round(entity_score, 3) if entity_score is not None else None
+                ),
                 claim_entities=context.claim_entities[:5],
             )
 
@@ -202,7 +159,9 @@ class ManipulationDetectorStage:
         )
         return context
 
-    async def _compute_headline_similarity(self, context: PipelineContext, article) -> float:
+    async def _compute_headline_similarity(
+        self, context: PipelineContext, article
+    ) -> float:
         article_title = article.title or ""
         if not article_title:
             return 0.5

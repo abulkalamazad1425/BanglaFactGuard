@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import torch
@@ -9,7 +8,9 @@ from transformers import AutoModel
 
 class EfficientNetBackbone(nn.Module):
 
-    def __init__(self, model_name: str = "efficientnet_b4", pretrained: bool = True) -> None:
+    def __init__(
+        self, model_name: str = "efficientnet_b4", pretrained: bool = True
+    ) -> None:
         super().__init__()
         self.backbone = timm.create_model(
             model_name,

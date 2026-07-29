@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import logging
@@ -19,11 +18,6 @@ from app.shared.base_repository import BaseRepository
 logger = logging.getLogger(__name__)
 
 
-
-
-
-
-
 class ClaimRepository(BaseRepository[VerifiedClaim]):
 
     model_class = VerifiedClaim
@@ -33,9 +27,7 @@ class ClaimRepository(BaseRepository[VerifiedClaim]):
 
     async def get_by_claim_hash(self, claim_hash: str) -> VerifiedClaim | None:
         stmt = (
-            select(VerifiedClaim)
-            .where(VerifiedClaim.claim_hash == claim_hash)
-            .limit(1)
+            select(VerifiedClaim).where(VerifiedClaim.claim_hash == claim_hash).limit(1)
         )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
@@ -133,11 +125,6 @@ class ClaimRepository(BaseRepository[VerifiedClaim]):
         stmt = stmt.order_by(VerifiedClaim.created_at.desc()).limit(limit)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
-
-
-
-
-
 
 
 class ResultRepository(BaseRepository[VerificationResult]):
@@ -273,6 +260,4 @@ class ResultRepository(BaseRepository[VerificationResult]):
         return list(result.scalars().all())
 
     async def get_error_logs(self, claim_id: uuid.UUID) -> list[VerificationLog]:
-        return await self.get_logs_for_claim(
-            claim_id, level=LogLevel.ERROR, limit=50
-        )
+        return await self.get_logs_for_claim(claim_id, level=LogLevel.ERROR, limit=50)

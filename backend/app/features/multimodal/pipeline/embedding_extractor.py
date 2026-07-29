@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import asyncio
@@ -29,11 +28,13 @@ _IMG_STD = [0.229, 0.224, 0.225]
 
 
 def _build_eval_transform(img_size: int) -> transforms.Compose:
-    return transforms.Compose([
-        transforms.Resize((img_size, img_size)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=_IMG_MEAN, std=_IMG_STD),
-    ])
+    return transforms.Compose(
+        [
+            transforms.Resize((img_size, img_size)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=_IMG_MEAN, std=_IMG_STD),
+        ]
+    )
 
 
 class MultimodalEmbeddingExtractor:
@@ -42,10 +43,6 @@ class MultimodalEmbeddingExtractor:
         self._loader = loader
         self._cfg = _SETTINGS.multimodal
         self._eval_transform = _build_eval_transform(self._cfg.img_size)
-
-
-
-
 
     async def extract_text_embedding(self, body_text: str) -> np.ndarray:
         loop = asyncio.get_event_loop()
@@ -75,10 +72,6 @@ class MultimodalEmbeddingExtractor:
         combined_emb = self._build_combined_embedding(text_emb, img_emb)
         return text_emb, img_emb, combined_emb
 
-
-
-
-
     @staticmethod
     def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
         norm_a = np.linalg.norm(a)
@@ -100,7 +93,9 @@ class MultimodalEmbeddingExtractor:
     ) -> tuple[bool, dict[str, float]]:
         cfg = self._cfg
 
-        combined_sim = self.cosine_similarity(query_combined_emb, candidate_combined_emb)
+        combined_sim = self.cosine_similarity(
+            query_combined_emb, candidate_combined_emb
+        )
         text_sim = self.cosine_similarity(query_text_emb, candidate_text_emb)
         image_sim = self.cosine_similarity(query_img_emb, candidate_img_emb)
 
@@ -116,10 +111,6 @@ class MultimodalEmbeddingExtractor:
             and image_sim >= cfg.image_sim_threshold
         )
         return is_dup, scores
-
-
-
-
 
     def _text_encode_sync(self, body_text: str) -> np.ndarray:
         cfg = self._cfg
@@ -151,7 +142,9 @@ class MultimodalEmbeddingExtractor:
         except Exception:
 
             logger.warning("multimodal_image_decode_failed_using_blank")
-            pil_img = Image.new("RGB", (self._cfg.img_size, self._cfg.img_size), (0, 0, 0))
+            pil_img = Image.new(
+                "RGB", (self._cfg.img_size, self._cfg.img_size), (0, 0, 0)
+            )
 
         tensor = self._eval_transform(pil_img).unsqueeze(0).to(device)
 
@@ -159,10 +152,6 @@ class MultimodalEmbeddingExtractor:
             feat: torch.Tensor = img_backbone(tensor)
 
         return feat.squeeze(0).cpu().numpy().astype(np.float32)
-
-
-
-
 
     @staticmethod
     def _build_combined_embedding(

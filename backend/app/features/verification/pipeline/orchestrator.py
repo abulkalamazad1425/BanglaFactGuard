@@ -68,11 +68,6 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 
-
-
-
-
-
 _CRITICAL_STAGES: frozenset[PipelineStageID] = frozenset(
     {
         PipelineStageID.S01_NORMALIZER,
@@ -96,11 +91,6 @@ _POST_CACHE_STAGES: frozenset[PipelineStageID] = frozenset(
         PipelineStageID.S12_PERSISTENCE,
     }
 )
-
-
-
-
-
 
 
 class PipelineOrchestrator:
@@ -166,7 +156,6 @@ class PipelineOrchestrator:
 
         log.info("pipeline_started", stage_count=len(self.stages))
 
-
         if context.claim_id:
             bind_pipeline_context(str(context.claim_id))
             try:
@@ -178,19 +167,12 @@ class PipelineOrchestrator:
         for stage in self.stages:
             stage_id = stage.stage_id
 
-
-
-
             if context.cache_hit and stage_id in _POST_CACHE_STAGES:
                 log.debug(
                     "stage_skipped_cache_hit",
                     stage=stage_id.value,
                 )
                 continue
-
-
-
-
 
             if context.has_fatal_error:
                 log.warning(
@@ -199,9 +181,6 @@ class PipelineOrchestrator:
                     fatal_error=context.fatal_error,
                 )
                 break
-
-
-
 
             stage_start = time.perf_counter()
 
@@ -272,9 +251,6 @@ class PipelineOrchestrator:
                         duration_ms=duration_ms,
                     )
 
-
-
-
         total_ms = context.elapsed_ms
         log.info(
             "pipeline_completed",
@@ -286,10 +262,6 @@ class PipelineOrchestrator:
         )
 
         return context
-
-
-
-
 
     async def _handle_fatal_failure(self, context: PipelineContext) -> None:
         """
@@ -318,7 +290,3 @@ class PipelineOrchestrator:
                 claim_id=str(context.claim_id),
                 error=str(exc),
             )
-
-
-
-

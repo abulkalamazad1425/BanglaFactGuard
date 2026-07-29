@@ -1,4 +1,3 @@
-
 from typing import List
 import structlog
 from sentence_transformers import CrossEncoder
@@ -6,6 +5,7 @@ from sentence_transformers import CrossEncoder
 from app.features.articles.schemas import RankedArticleSchema
 
 logger = structlog.get_logger(__name__)
+
 
 class CrossEncoderReranker:
 
@@ -19,13 +19,14 @@ class CrossEncoderReranker:
             logger.error("cross_encoder_load_failed", error=str(exc))
             self.model = None
 
-    def rerank(self, claim_headline: str, articles: List[RankedArticleSchema], top_k: int = 3) -> List[RankedArticleSchema]:
+    def rerank(
+        self, claim_headline: str, articles: List[RankedArticleSchema], top_k: int = 3
+    ) -> List[RankedArticleSchema]:
         if not self.model or not articles:
             return articles
 
         if len(articles) <= 3:
             return articles
-
 
         pairs = []
         for article in articles:
@@ -36,11 +37,9 @@ class CrossEncoderReranker:
 
         try:
             scores = self.model.predict(pairs)
-            
 
             scored_articles = list(zip(scores, articles))
             scored_articles.sort(key=lambda x: x[0], reverse=True)
-            
 
             return [article for score, article in scored_articles[:top_k]]
         except Exception as exc:

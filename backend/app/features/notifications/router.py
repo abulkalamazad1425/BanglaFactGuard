@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import uuid
@@ -41,10 +40,7 @@ async def list_notifications(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_async_session),
 ) -> list[NotificationResponse]:
-    stmt = (
-        select(Notification)
-        .where(Notification.user_id == current_user.id)
-    )
+    stmt = select(Notification).where(Notification.user_id == current_user.id)
     if unread_only:
         stmt = stmt.where(Notification.is_read.is_(False))
     stmt = stmt.order_by(Notification.created_at.desc()).offset(offset).limit(limit)

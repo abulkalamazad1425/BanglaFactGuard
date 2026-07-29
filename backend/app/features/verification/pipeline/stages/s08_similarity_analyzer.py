@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import asyncio
@@ -19,11 +18,7 @@ from app.shared.utils.number_extractor import extract_numerals_set
 logger = structlog.get_logger(__name__)
 
 
-
-
 _ARTICLE_EXTRA_ENTITY_PENALTY = 0.3
-
-
 
 
 _NUM_NEAR_MATCH_TOLERANCE = 0.10
@@ -45,7 +40,9 @@ class SimilarityAnalyzerStage:
     async def execute(self, context: PipelineContext) -> PipelineContext:
         if not context.top_article:
             logger.debug("s08_no_top_article_skipping")
-            context.record_stage_error(self.stage_id, "No ranked article available for analysis")
+            context.record_stage_error(
+                self.stage_id, "No ranked article available for analysis"
+            )
             return context
 
         article = context.top_article
@@ -54,20 +51,8 @@ class SimilarityAnalyzerStage:
         article_title = article.title or ""
         article_body = article.body or ""
 
-
         claim_full = f"{claim_headline} {claim_body}".strip()
         article_full = f"{article_title} {article_body}".strip()
-
-
-
-
-
-
-
-
-
-
-
 
         headline_sim: float | None = None
         body_sim: float | None = None
@@ -75,18 +60,21 @@ class SimilarityAnalyzerStage:
 
         try:
 
-            headline_sim_task = self._embedder.compute_similarity(
-                claim_headline, article_title
-            ) if article_title else asyncio.coroutine(lambda: 0.5)()
+            headline_sim_task = (
+                self._embedder.compute_similarity(claim_headline, article_title)
+                if article_title
+                else asyncio.coroutine(lambda: 0.5)()
+            )
 
-            body_sim_task = self._embedder.compute_similarity(
-                claim_full, article_body
-            ) if article_body else asyncio.coroutine(lambda: None)()
+            body_sim_task = (
+                self._embedder.compute_similarity(claim_full, article_body)
+                if article_body
+                else asyncio.coroutine(lambda: None)()
+            )
 
             headline_sim, body_sim = await asyncio.gather(
                 headline_sim_task, body_sim_task
             )
-
 
             if body_sim is not None and headline_sim is not None:
                 sem_sim = 0.3 * headline_sim + 0.7 * body_sim
@@ -97,32 +85,23 @@ class SimilarityAnalyzerStage:
 
             logger.debug(
                 "s08_semantic_similarity",
-                headline_sim=round(headline_sim, 4) if headline_sim is not None else None,
+                headline_sim=(
+                    round(headline_sim, 4) if headline_sim is not None else None
+                ),
                 body_sim=round(body_sim, 4) if body_sim is not None else None,
                 composite=round(sem_sim, 4) if sem_sim is not None else None,
             )
         except Exception as exc:
             logger.warning("s08_semantic_similarity_failed", error=str(exc))
-            context.record_stage_error(self.stage_id, f"Semantic similarity failed: {exc}")
-
-
-
-
-
-
-
-
-
-
-
-
+            context.record_stage_error(
+                self.stage_id, f"Semantic similarity failed: {exc}"
+            )
 
         entity_match: float | None = None
         try:
 
-            (claim_entities, article_entities,
-             claim_typed, article_typed) = await _gather_entities_with_types(
-                self._ner, claim_full, article_full
+            claim_entities, article_entities, claim_typed, article_typed = (
+                await _gather_entities_with_types(self._ner, claim_full, article_full)
             )
 
             context.claim_entities = claim_entities
@@ -143,14 +122,6 @@ class SimilarityAnalyzerStage:
             logger.warning("s08_entity_match_failed", error=str(exc))
             context.record_stage_error(self.stage_id, f"Entity match failed: {exc}")
 
-
-
-
-
-
-
-
-
         kw_overlap: float | None = None
         try:
             claim_kws_weighted = extract_keywords_with_scores(
@@ -160,25 +131,15 @@ class SimilarityAnalyzerStage:
                 article_full, max_ngram_size=2, num_keywords=10
             )
 
-            context.claim_keywords = (
-                context.claim_keywords
-                or [kw for kw, _ in claim_kws_weighted]
-            )
+            context.claim_keywords = context.claim_keywords or [
+                kw for kw, _ in claim_kws_weighted
+            ]
             kw_overlap = compute_weighted_keyword_overlap(
                 claim_kws_weighted, article_kws_weighted
             )
             logger.debug("s08_keyword_overlap", score=round(kw_overlap, 4))
         except Exception as exc:
             logger.warning("s08_keyword_overlap_failed", error=str(exc))
-
-
-
-
-
-
-
-
-
 
         num_consistency: float | None = None
         try:
@@ -192,9 +153,6 @@ class SimilarityAnalyzerStage:
             logger.debug("s08_numerical_consistency", score=round(num_consistency, 4))
         except Exception as exc:
             logger.warning("s08_numerical_consistency_failed", error=str(exc))
-
-
-
 
         context.update_scores(
             semantic_similarity=sem_sim,
@@ -215,11 +173,6 @@ class SimilarityAnalyzerStage:
             numeral=round(num_consistency, 3) if num_consistency is not None else None,
         )
         return context
-
-
-
-
-
 
 
 async def _gather_entities_with_types(
@@ -247,9 +200,7 @@ def _compute_directional_entity_overlap(
     if not claim_set:
         return 1.0
 
-
     recall = len(claim_set & article_set) / len(claim_set)
-
 
     if article_set:
         extra_ratio = len(article_set - claim_set) / len(article_set)
@@ -267,7 +218,6 @@ def _compute_asymmetric_numerical_consistency(
     if not claim_nums:
         return 1.0
 
-
     article_values: list[float] = []
     for n in article_nums:
         try:
@@ -281,7 +231,6 @@ def _compute_asymmetric_numerical_consistency(
             total_credit += 1.0
             continue
 
-
         try:
             claim_val = float(num_str.replace(",", ""))
         except ValueError:
@@ -289,11 +238,11 @@ def _compute_asymmetric_numerical_consistency(
             continue
 
         near_match = any(
-            abs(claim_val - av) <= _NUM_NEAR_MATCH_TOLERANCE * max(abs(claim_val), abs(av), 1e-9)
+            abs(claim_val - av)
+            <= _NUM_NEAR_MATCH_TOLERANCE * max(abs(claim_val), abs(av), 1e-9)
             for av in article_values
         )
         if near_match:
             total_credit += _NUM_NEAR_MATCH_CREDIT
-
 
     return total_credit / len(claim_nums)

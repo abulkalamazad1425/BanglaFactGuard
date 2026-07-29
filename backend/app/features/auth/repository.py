@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import hashlib
@@ -29,9 +28,7 @@ class UserRepository(BaseRepository[User]):
 
     async def get_active_by_email(self, email: str) -> User | None:
         stmt = (
-            select(User)
-            .where(User.email == email, User.is_active.is_(True))
-            .limit(1)
+            select(User).where(User.email == email, User.is_active.is_(True)).limit(1)
         )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
@@ -51,6 +48,7 @@ class UserRepository(BaseRepository[User]):
 
     async def count_by_role(self, role: str) -> int:
         from sqlalchemy import func
+
         stmt = select(func.count()).select_from(User).where(User.role == role)
         result = await self.session.execute(stmt)
         return result.scalar_one()
@@ -77,10 +75,14 @@ class RefreshTokenRepository(BaseRepository[RefreshToken]):
 
     async def revoke_by_raw_token(self, raw_token: str) -> bool:
         token_hash = _sha256(raw_token)
-        stmt = select(RefreshToken).where(
-            RefreshToken.token_hash == token_hash,
-            RefreshToken.revoked.is_(False),
-        ).limit(1)
+        stmt = (
+            select(RefreshToken)
+            .where(
+                RefreshToken.token_hash == token_hash,
+                RefreshToken.revoked.is_(False),
+            )
+            .limit(1)
+        )
         result = await self.session.execute(stmt)
         token = result.scalar_one_or_none()
         if token is None:
@@ -105,6 +107,7 @@ class RefreshTokenRepository(BaseRepository[RefreshToken]):
 
     async def delete_expired(self) -> int:
         from sqlalchemy import delete as sa_delete
+
         now = datetime.now(timezone.utc)
         stmt = sa_delete(RefreshToken).where(RefreshToken.expires_at < now)
         result = await self.session.execute(stmt)

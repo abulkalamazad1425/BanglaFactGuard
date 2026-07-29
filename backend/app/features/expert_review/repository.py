@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import uuid
@@ -100,14 +99,14 @@ class CredibilityScoreRepository(BaseRepository[CredibilityScore]):
 
     async def get_by_user_id(self, user_id: uuid.UUID) -> CredibilityScore | None:
         stmt = (
-            select(CredibilityScore)
-            .where(CredibilityScore.user_id == user_id)
-            .limit(1)
+            select(CredibilityScore).where(CredibilityScore.user_id == user_id).limit(1)
         )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def get_or_create(self, user_id: uuid.UUID, initial_score: float = 0.5) -> CredibilityScore:
+    async def get_or_create(
+        self, user_id: uuid.UUID, initial_score: float = 0.5
+    ) -> CredibilityScore:
         existing = await self.get_by_user_id(user_id)
         if existing:
             return existing

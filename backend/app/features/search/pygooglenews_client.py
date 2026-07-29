@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import asyncio
@@ -39,7 +38,6 @@ class PyGoogleNewsClient:
     ) -> list[tuple[str, str]]:
         search_q = f"site:{domain} {query}" if domain else query
 
-
         kwargs: dict[str, str] = {}
         if published_date:
             after = (published_date - timedelta(days=7)).strftime("%Y-%m-%d")
@@ -53,7 +51,9 @@ class PyGoogleNewsClient:
             raise PyGoogleNewsError(f"PyGoogleNews search failed: {exc}") from exc
 
         entries: list[tuple[str, str]] = []
-        for item in results.get("entries", [])[: self.settings.pygooglenews_max_results]:
+        for item in results.get("entries", [])[
+            : self.settings.pygooglenews_max_results
+        ]:
             link = item.get("link", "")
             title = item.get("title", "")
             if not link:
@@ -73,7 +73,6 @@ class PyGoogleNewsClient:
             self._sync_search, query, domain, published_date
         )
 
-
         wrapped_urls = [u for u, _ in entries if "news.google.com" in u]
         if wrapped_urls:
             resolved_map = await self._resolve_with_playwright(wrapped_urls)
@@ -87,6 +86,7 @@ class PyGoogleNewsClient:
 
     async def _resolve_with_playwright(self, urls: list[str]) -> dict[str, str]:
         import sys
+
         if sys.platform == "win32":
             return await asyncio.to_thread(self._run_playwright_sync, urls)
         return await self._run_playwright_async(urls)
@@ -94,6 +94,7 @@ class PyGoogleNewsClient:
     def _run_playwright_sync(self, urls: list[str]) -> dict[str, str]:
         import asyncio
         import sys
+
         if sys.platform == "win32":
             asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
         loop = asyncio.new_event_loop()
@@ -124,18 +125,27 @@ class PyGoogleNewsClient:
                 context = await browser.new_context(
                     user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
                 )
-                await context.route("**/*.{png,jpg,jpeg,gif,webp,svg,ico,woff,woff2,ttf,mp4,mp3}", lambda route: route.abort())
+                await context.route(
+                    "**/*.{png,jpg,jpeg,gif,webp,svg,ico,woff,woff2,ttf,mp4,mp3}",
+                    lambda route: route.abort(),
+                )
 
                 async def resolve_one(url: str) -> tuple[str, str]:
                     page = await context.new_page()
                     try:
-                        await page.goto(url, wait_until="domcontentloaded", timeout=12000)
+                        await page.goto(
+                            url, wait_until="domcontentloaded", timeout=12000
+                        )
                         await page.wait_for_timeout(2000)
                         final_url = page.url
-                        logger.debug("pgn_resolved_url", orig=url[:60], final=final_url[:60])
+                        logger.debug(
+                            "pgn_resolved_url", orig=url[:60], final=final_url[:60]
+                        )
                         return url, final_url
                     except Exception as exc:
-                        logger.warning("pgn_resolve_failed", url=url[:60], error=str(exc))
+                        logger.warning(
+                            "pgn_resolve_failed", url=url[:60], error=str(exc)
+                        )
                         return url, url
                     finally:
                         await page.close()

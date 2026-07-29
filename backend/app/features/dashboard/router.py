@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
@@ -27,30 +26,39 @@ class TopSourceItem(BaseModel):
     count: int
 
 
-@router.get("/stats", response_model=PublicStatsResponse, summary="Public platform statistics")
+@router.get(
+    "/stats", response_model=PublicStatsResponse, summary="Public platform statistics"
+)
 async def get_public_stats(
     session: AsyncSession = Depends(get_async_session),
 ) -> PublicStatsResponse:
     from app.core.constants import ClaimStatus
 
-    total = (await session.execute(
-        select(func.count()).select_from(VerifiedClaim)
-    )).scalar_one()
+    total = (
+        await session.execute(select(func.count()).select_from(VerifiedClaim))
+    ).scalar_one()
 
-    pending = (await session.execute(
-        select(func.count()).select_from(VerifiedClaim)
-        .where(VerifiedClaim.status == ClaimStatus.PENDING)
-    )).scalar_one()
+    pending = (
+        await session.execute(
+            select(func.count())
+            .select_from(VerifiedClaim)
+            .where(VerifiedClaim.status == ClaimStatus.PENDING)
+        )
+    ).scalar_one()
 
     def _lc(lbl: VerificationLabel) -> int:
-        return select(func.count()).select_from(VerificationResult).where(
-            VerificationResult.label == lbl
+        return (
+            select(func.count())
+            .select_from(VerificationResult)
+            .where(VerificationResult.label == lbl)
         )
 
     tc = (await session.execute(_lc(VerificationLabel.TRUE))).scalar_one()
     fc = (await session.execute(_lc(VerificationLabel.FALSE))).scalar_one()
     pc = (await session.execute(_lc(VerificationLabel.PARTIALLY_TRUE))).scalar_one()
-    nc = (await session.execute(_lc(VerificationLabel.NOT_FOUND_IN_CLAIMED_SOURCE))).scalar_one()
+    nc = (
+        await session.execute(_lc(VerificationLabel.NOT_FOUND_IN_CLAIMED_SOURCE))
+    ).scalar_one()
 
     return PublicStatsResponse(
         total_submissions=total,

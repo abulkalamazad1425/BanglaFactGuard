@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import asyncio
@@ -29,13 +28,14 @@ _PROVIDER_PRIORITY: dict[SearchProvider, int] = {
     SearchProvider.PY_GOOGLE_NEWS: 4,
 }
 
-
-
-
-
 _NON_ARTICLE_PATTERNS = [
-    r"/tag/", r"/tags/", r"/author/", r"/feed",
-    r"\.rss$", r"\.xml$", r"\.atom$",
+    r"/tag/",
+    r"/tags/",
+    r"/author/",
+    r"/feed",
+    r"\.rss$",
+    r"\.xml$",
+    r"\.atom$",
     r"/amp/$",
     r"\?s=",
     r"#comments$",
@@ -45,11 +45,22 @@ _NON_ARTICLE_PATTERNS = [
 ]
 _NON_ARTICLE_RE = re.compile("|".join(_NON_ARTICLE_PATTERNS))
 
-
-_STRIP_PARAMS = frozenset([
-    "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term",
-    "fbclid", "gclid", "ref", "source", "from", "_ga", "cid",
-])
+_STRIP_PARAMS = frozenset(
+    [
+        "utm_source",
+        "utm_medium",
+        "utm_campaign",
+        "utm_content",
+        "utm_term",
+        "fbclid",
+        "gclid",
+        "ref",
+        "source",
+        "from",
+        "_ga",
+        "cid",
+    ]
+)
 
 
 def _canonicalise_url(url: str) -> str:
@@ -59,19 +70,24 @@ def _canonicalise_url(url: str) -> str:
         path = re.sub(r"/amp/?$", "", p.path).rstrip("/") or "/"
 
         if p.query:
-            qs = {k: v for k, v in parse_qs(p.query, keep_blank_values=False).items()
-                  if k.lower() not in _STRIP_PARAMS}
+            qs = {
+                k: v
+                for k, v in parse_qs(p.query, keep_blank_values=False).items()
+                if k.lower() not in _STRIP_PARAMS
+            }
             query = urlencode(sorted(qs.items()), doseq=True)
         else:
             query = ""
-        canonical = urlunparse((
-            "https",
-            p.netloc.lower(),
-            path,
-            "",
-            query,
-            "",
-        ))
+        canonical = urlunparse(
+            (
+                "https",
+                p.netloc.lower(),
+                path,
+                "",
+                query,
+                "",
+            )
+        )
         return canonical
     except Exception:
         return url
@@ -86,7 +102,7 @@ def _is_probable_article(url: str, source_patterns: list[str] | None) -> bool:
 
 def _build_keyword_query(text: str, max_words: int) -> str:
     clean = re.sub(r"site:\S+\s*", "", text).strip()
-    clean = re.sub(r'[।?!\'\"(){}\\[\\]<>،؟]', " ", clean)
+    clean = re.sub(r"[।?!\'\"(){}\\[\\]<>،؟]", " ", clean)
     clean = re.sub(r"\s+", " ", clean).strip()
     return " ".join(clean.split()[:max_words])
 
@@ -129,23 +145,26 @@ class SourceSearchStage:
         )
 
         providers_with_clients = [
-            (SearchProvider.INTERNAL_SITE,        self.internal_site_client),
-            (SearchProvider.NEWSDATA,              self.newsdata_client),
-            (SearchProvider.GOOGLE_CUSTOM_SEARCH,  self.google_cse_client),
-            (SearchProvider.DDG,                   self.duckduckgo_client),
-            (SearchProvider.PY_GOOGLE_NEWS,        self.pygooglenews_client),
+            (SearchProvider.INTERNAL_SITE, self.internal_site_client),
+            (SearchProvider.NEWSDATA, self.newsdata_client),
+            (SearchProvider.GOOGLE_CUSTOM_SEARCH, self.google_cse_client),
+            (SearchProvider.DDG, self.duckduckgo_client),
+            (SearchProvider.PY_GOOGLE_NEWS, self.pygooglenews_client),
         ]
-
 
         tasks: list[tuple[SearchProvider, str, str, object]] = []
 
         for query_text, query_type in context.search_queries:
             for provider_enum, client in providers_with_clients:
 
-                if not self._should_dispatch(provider_enum, query_type, query_text, domain):
+                if not self._should_dispatch(
+                    provider_enum, query_type, query_text, domain
+                ):
                     continue
 
-                adapted = self._adapt_query(provider_enum, query_text, domain, query_type)
+                adapted = self._adapt_query(
+                    provider_enum, query_text, domain, query_type
+                )
                 if not adapted.strip():
                     continue
 
@@ -170,9 +189,10 @@ class SourceSearchStage:
         coros = [t[3] for t in tasks]
         results = await asyncio.gather(*coros, return_exceptions=True)
 
-
         canon_map: dict[str, tuple[int, CandidateArticleSchema]] = {}
-        provider_hit_counts: dict[str, int] = {p.value: 0 for p, _ in providers_with_clients}
+        provider_hit_counts: dict[str, int] = {
+            p.value: 0 for p, _ in providers_with_clients
+        }
 
         for (provider_enum, _, query_type, _), result in zip(tasks, results):
             if isinstance(result, Exception) or not isinstance(result, list):
@@ -183,17 +203,17 @@ class SourceSearchStage:
             for candidate in result:
                 url = candidate.url
 
-
                 if domain:
                     clean_domain = domain.replace("www.", "").lower()
                     url_netloc = urlparse(url).netloc.replace("www.", "").lower()
-                    if not (url_netloc == clean_domain or url_netloc.endswith("." + clean_domain)):
+                    if not (
+                        url_netloc == clean_domain
+                        or url_netloc.endswith("." + clean_domain)
+                    ):
                         continue
-
 
                 if not _is_probable_article(url, article_url_patterns):
                     continue
-
 
                 canon = _canonicalise_url(url)
                 existing = canon_map.get(canon)
@@ -212,12 +232,9 @@ class SourceSearchStage:
         if all_candidates:
             context.search_provider_used = all_candidates[0].search_provider
 
-
         for provider_name, count in provider_hit_counts.items():
             if count == 0:
                 log.warning("s04_provider_zero_results", provider=provider_name)
-
-
 
         log.info(
             "s04_search_completed",
@@ -225,10 +242,6 @@ class SourceSearchStage:
             provider_hit_counts=provider_hit_counts,
         )
         return context
-
-
-
-
 
     def _should_dispatch(
         self,
@@ -246,21 +259,14 @@ class SourceSearchStage:
 
         if provider == SearchProvider.NEWSDATA:
 
-
             if qt in ("HEADLINE", "SITE_RESTRICTED"):
                 return False
 
         if provider == SearchProvider.PY_GOOGLE_NEWS:
-
-
             if qt in ("KEYWORDS", "DATE_BOUND"):
                 return False
 
         return True
-
-
-
-
 
     def _adapt_query(
         self,
@@ -272,14 +278,9 @@ class SourceSearchStage:
         content_only = re.sub(r"site:\S+\s*", "", query).strip()
 
         if provider == SearchProvider.INTERNAL_SITE:
-
-
             return _build_keyword_query(content_only, max_words=6)
 
         if provider == SearchProvider.NEWSDATA:
-
-
-
             kw = _build_keyword_query(content_only, max_words=7)
             return kw[:80]
 
@@ -289,23 +290,9 @@ class SourceSearchStage:
                 return f"site:{domain} {content_only}"
             return content_only
 
-
-
-
-
-
-
-
-
-
-
         if domain:
             return f"site:{domain} {content_only}"
         return content_only
-
-
-
-
 
     async def _call_provider(
         self,
@@ -322,14 +309,15 @@ class SourceSearchStage:
         provider_name = provider_enum.value
         query_hash = compute_search_query_hash(provider_name, query)
 
-
         if getattr(context, "force_refresh", False):
             cached_urls = None
         else:
             cached_urls = await self._get_cached_search(provider_name, query_hash)
 
         if cached_urls is not None:
-            log.debug("s04_cache_hit", provider=provider_name, cached_count=len(cached_urls))
+            log.debug(
+                "s04_cache_hit", provider=provider_name, cached_count=len(cached_urls)
+            )
             return [
                 CandidateArticleSchema(
                     url=u,
@@ -340,7 +328,6 @@ class SourceSearchStage:
                 )
                 for idx, u in enumerate(cached_urls)
             ]
-
 
         try:
             kwargs: dict = {}
@@ -392,17 +379,17 @@ class SourceSearchStage:
                 )
             return []
 
-
-
-
-
-    async def _get_cached_search(self, provider: str, query_hash: str) -> list[str] | None:
+    async def _get_cached_search(
+        self, provider: str, query_hash: str
+    ) -> list[str] | None:
         try:
             return await self.cache_service.get_search_result(provider, query_hash)
         except Exception:
             return None
 
-    async def _cache_search_result(self, provider: str, query_hash: str, urls: list[str]) -> None:
+    async def _cache_search_result(
+        self, provider: str, query_hash: str, urls: list[str]
+    ) -> None:
         try:
             await self.cache_service.set_search_result(provider, query_hash, urls)
         except Exception:

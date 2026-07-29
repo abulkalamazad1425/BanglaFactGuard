@@ -1,10 +1,19 @@
-
 from __future__ import annotations
 
 import uuid
 
 import structlog
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+    status,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -28,17 +37,13 @@ _SETTINGS = get_settings()
 router = APIRouter(prefix="/multimodal", tags=["Multimodal Fake-News Detection"])
 
 
-
-
-
 _MAX_IMAGE_BYTES = 10 * 1024 * 1024
 _ALLOWED_CONTENT_TYPES = {
-    "image/jpeg", "image/png", "image/gif", "image/webp",
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/webp",
 }
-
-
-
-
 
 
 def _get_loader(request: Request):
@@ -53,11 +58,6 @@ def _get_storage(request: Request) -> MultimodalStorageService:
     if storage is None:
         raise ModelNotLoadedError("MultimodalStorageService")
     return storage
-
-
-
-
-
 
 
 @router.post(
@@ -166,7 +166,9 @@ async def get_prediction(
     try:
         record = await service.get_prediction(prediction_id)
     except RecordNotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message) from exc
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=exc.message
+        ) from exc
 
     return MultimodalPredictionDetail(
         prediction_id=str(record.id),
@@ -176,7 +178,9 @@ async def get_prediction(
         confidence_fake=record.confidence_fake,
         confidence_real=record.confidence_real,
         is_cached=record.is_duplicate_of_id is not None,
-        original_id=str(record.is_duplicate_of_id) if record.is_duplicate_of_id else None,
+        original_id=(
+            str(record.is_duplicate_of_id) if record.is_duplicate_of_id else None
+        ),
         minio_object_key=record.minio_object_key,
         model_version=record.model_version,
         created_at=record.created_at,
@@ -192,7 +196,9 @@ async def get_prediction(
 )
 async def list_predictions(
     request: Request,
-    limit: int = Query(default=20, ge=1, le=100, description="Number of results to return"),
+    limit: int = Query(
+        default=20, ge=1, le=100, description="Number of results to return"
+    ),
     offset: int = Query(default=0, ge=0, description="Pagination offset"),
     db: AsyncSession = Depends(get_async_session),
 ) -> PredictionListResponse:

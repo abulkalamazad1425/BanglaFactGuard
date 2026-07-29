@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import sys
@@ -19,10 +18,6 @@ from app.core.lifespan import lifespan
 _SETTINGS = get_settings()
 
 
-
-
-
-
 def create_app() -> FastAPI:
     app = FastAPI(
         title="BanglaFactGuard",
@@ -39,7 +34,6 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-
     app.add_middleware(
         CORSMiddleware,
         allow_origins=_SETTINGS.cors_origins,
@@ -48,21 +42,14 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-
     app.add_middleware(ProcessTimeMiddleware)
     app.add_middleware(CorrelationIDMiddleware)
 
-
     app.include_router(api_router)
-
 
     register_exception_handlers(app)
 
     return app
-
-
-
-
 
 
 app = create_app()

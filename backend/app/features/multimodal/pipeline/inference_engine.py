@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import asyncio
@@ -47,11 +46,13 @@ class MultimodalInferenceEngine:
     def __init__(self, loader: MultimodalModelLoader) -> None:
         self._loader = loader
         self._cfg = _SETTINGS.multimodal
-        self._eval_transform = transforms.Compose([
-            transforms.Resize((self._cfg.img_size, self._cfg.img_size)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=_IMG_MEAN, std=_IMG_STD),
-        ])
+        self._eval_transform = transforms.Compose(
+            [
+                transforms.Resize((self._cfg.img_size, self._cfg.img_size)),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=_IMG_MEAN, std=_IMG_STD),
+            ]
+        )
 
     async def predict(
         self,
@@ -81,10 +82,6 @@ class MultimodalInferenceEngine:
         )
         return result
 
-
-
-
-
     def _forward_pass_sync(
         self,
         body_text: str,
@@ -93,7 +90,6 @@ class MultimodalInferenceEngine:
         loader = self._loader
         device = loader.device
         cfg = self._cfg
-
 
         enc = loader.tokenizer(
             body_text,
@@ -105,7 +101,6 @@ class MultimodalInferenceEngine:
         input_ids = enc["input_ids"].to(device)
         attn_mask = enc["attention_mask"].to(device)
 
-
         try:
             pil_img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         except Exception:
@@ -113,7 +108,6 @@ class MultimodalInferenceEngine:
             pil_img = Image.new("RGB", (cfg.img_size, cfg.img_size), (0, 0, 0))
 
         img_tensor = self._eval_transform(pil_img).unsqueeze(0).to(device)
-
 
         with torch.no_grad():
             img_feats: torch.Tensor = loader.img_backbone(img_tensor)

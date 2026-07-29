@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import logging
@@ -20,9 +19,6 @@ from app.core.exceptions import ConfigurationError
 logger = logging.getLogger(__name__)
 
 
-
-
-
 _settings = get_settings()
 
 
@@ -32,11 +28,8 @@ _async_engine: AsyncEngine = create_async_engine(
     pool_size=_settings.db.pool_size,
     max_overflow=_settings.db.max_overflow,
     pool_timeout=_settings.db.pool_timeout,
-
     pool_recycle=1800,
-
     pool_pre_ping=True,
-
     connect_args={"server_settings": {"jit": "off"}},
 )
 
@@ -50,18 +43,8 @@ AsyncSessionLocal: async_sessionmaker[AsyncSession] = async_sessionmaker(
 )
 
 
-
-
-
-
-
 def get_engine() -> AsyncEngine:
     return _async_engine
-
-
-
-
-
 
 
 async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
@@ -82,11 +65,6 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
             raise
 
 
-
-
-
-
-
 @asynccontextmanager
 async def get_db_context() -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSessionLocal() as session:
@@ -105,11 +83,6 @@ async def get_db_context() -> AsyncGenerator[AsyncSession, None]:
             raise
 
 
-
-
-
-
-
 async def check_db_connection() -> None:
     try:
         async with _async_engine.connect() as conn:
@@ -120,11 +93,6 @@ async def check_db_connection() -> None:
             message="Cannot connect to PostgreSQL. Check DB_* environment variables.",
             details={"error": str(exc), "url": _settings.db.async_url},
         ) from exc
-
-
-
-
-
 
 
 async def close_engine() -> None:

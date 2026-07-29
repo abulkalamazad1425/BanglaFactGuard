@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import html
@@ -7,10 +6,6 @@ import re
 from app.core.config import get_settings
 
 _SETTINGS = get_settings()
-
-
-
-
 
 
 _HTML_TAG_RE = re.compile(r"<[^>]+>", re.DOTALL)
@@ -52,14 +47,7 @@ _BOILERPLATE_PATTERNS: list[re.Pattern[str]] = [
 ]
 
 
-_METADATA_LINE_RE = re.compile(
-    r"^[\s\d\|•·–\-:,./()[\]\"'A-Za-z@#%+]+$"
-)
-
-
-
-
-
+_METADATA_LINE_RE = re.compile(r"^[\s\d\|•·–\-:,./()[\]\"'A-Za-z@#%+]+$")
 
 
 def clean_extracted_text(
@@ -71,21 +59,18 @@ def clean_extracted_text(
     if not text:
         return None
 
-    _min = min_length if min_length is not None else _SETTINGS.search.min_body_length_chars
-
+    _min = (
+        min_length if min_length is not None else _SETTINGS.search.min_body_length_chars
+    )
 
     text = html.unescape(text)
 
-
     text = _HTML_TAG_RE.sub(" ", text)
-
 
     if remove_boilerplate:
         text = _remove_boilerplate(text)
 
-
     text = _normalise_whitespace(text)
-
 
     if len(text) < _min:
         return None
@@ -112,7 +97,6 @@ def truncate_for_nli(
     if len(text) <= max_chars:
         return text
 
-
     truncated = text[:max_chars]
 
     for boundary in ("।", ".", "\n"):
@@ -131,16 +115,10 @@ def extract_first_n_sentences(text: str, n: int = 5) -> str:
     return " ".join(selected)
 
 
-
-
-
-
-
 def _remove_boilerplate(text: str) -> str:
 
     for pattern in _BOILERPLATE_PATTERNS:
         text = pattern.sub("", text)
-
 
     cleaned_lines = []
     for line in text.splitlines():
@@ -148,7 +126,6 @@ def _remove_boilerplate(text: str) -> str:
         if not stripped:
             cleaned_lines.append("")
             continue
-
 
         if len(stripped) < 8 and _METADATA_LINE_RE.match(stripped):
             continue

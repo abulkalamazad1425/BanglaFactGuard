@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import asyncio
@@ -47,7 +46,6 @@ class EmbeddingService:
 
         def _load() -> SentenceTransformer:
 
-
             return SentenceTransformer(
                 _MODEL_NAME,
                 model_kwargs={"low_cpu_mem_usage": True},
@@ -67,10 +65,10 @@ class EmbeddingService:
                 "EmbeddingService.load() must be called before encoding."
             )
 
-
-        truncated = truncate_for_nli(text, max_chars=_SETTINGS.ml.max_text_chars_for_embedding)
+        truncated = truncate_for_nli(
+            text, max_chars=_SETTINGS.ml.max_text_chars_for_embedding
+        )
         cache_key = f"{_CACHE_KEY_PREFIX}:{compute_text_hash(truncated)}"
-
 
         try:
             cached_bytes = await self._cache.get_raw(cache_key)
@@ -78,7 +76,6 @@ class EmbeddingService:
                 return np.array(json.loads(cached_bytes), dtype=np.float32)
         except Exception:
             pass
-
 
         loop = asyncio.get_event_loop()
         embedding: np.ndarray = await loop.run_in_executor(
@@ -90,7 +87,6 @@ class EmbeddingService:
                 convert_to_numpy=True,
             ),
         )
-
 
         asyncio.create_task(self._write_cache(cache_key, embedding))
 
@@ -133,5 +129,3 @@ class EmbeddingService:
             await self._cache.set_raw(key, payload, ttl=_CACHE_TTL_SECONDS)
         except Exception:
             pass
-
-

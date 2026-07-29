@@ -6,9 +6,12 @@ Unit tests for Stage 3: Search Query Generator (`QueryGeneratorStage`).
 
 import pytest
 from datetime import date
-from app.features.verification.pipeline.stages.s03_query_generator import QueryGeneratorStage
+from app.features.verification.pipeline.stages.s03_query_generator import (
+    QueryGeneratorStage,
+)
 from app.features.verification.pipeline.context import PipelineContext, build_context
 from app.core.constants import QueryType
+
 
 @pytest.mark.asyncio
 async def test_query_generation_basic():
@@ -25,10 +28,16 @@ async def test_query_generation_basic():
 
     assert len(context.search_queries) >= 1
 
-    assert context.search_queries[0] == (context.normalized_headline, QueryType.HEADLINE.value)
+    assert context.search_queries[0] == (
+        context.normalized_headline,
+        QueryType.HEADLINE.value,
+    )
 
-    keyword_queries = [q for q, t in context.search_queries if t == QueryType.KEYWORDS.value]
+    keyword_queries = [
+        q for q, t in context.search_queries if t == QueryType.KEYWORDS.value
+    ]
     assert len(keyword_queries) <= 1
+
 
 @pytest.mark.asyncio
 async def test_query_generation_with_date():
@@ -43,9 +52,12 @@ async def test_query_generation_with_date():
     stage = QueryGeneratorStage()
     context = await stage.execute(context)
 
-    date_bound_queries = [q for q, t in context.search_queries if t == QueryType.DATE_BOUND.value]
+    date_bound_queries = [
+        q for q, t in context.search_queries if t == QueryType.DATE_BOUND.value
+    ]
     assert len(date_bound_queries) == 1
     assert "2026 May 20" in date_bound_queries[0]
+
 
 @pytest.mark.asyncio
 async def test_query_generation_with_body():
@@ -61,8 +73,11 @@ async def test_query_generation_with_body():
     stage = QueryGeneratorStage()
     context = await stage.execute(context)
 
-    body_summary_queries = [q for q, t in context.search_queries if t == QueryType.BODY_SUMMARY.value]
+    body_summary_queries = [
+        q for q, t in context.search_queries if t == QueryType.BODY_SUMMARY.value
+    ]
     assert len(body_summary_queries) == 1
+
 
 @pytest.mark.asyncio
 async def test_query_generation_max_limit():
@@ -81,4 +96,3 @@ async def test_query_generation_max_limit():
     context = await stage.execute(context)
 
     assert len(context.search_queries) <= 5
-

@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import math
@@ -20,10 +19,9 @@ _W_KW = 0.15
 _W_NUM = 0.15
 
 
-
-assert abs((_W_SEM + _W_ENT + _W_KW + _W_NUM) - 1.0) < 1e-9, (
-    f"Score aggregation weights must sum to 1.0, got {_W_SEM + _W_ENT + _W_KW + _W_NUM}"
-)
+assert (
+    abs((_W_SEM + _W_ENT + _W_KW + _W_NUM) - 1.0) < 1e-9
+), f"Score aggregation weights must sum to 1.0, got {_W_SEM + _W_ENT + _W_KW + _W_NUM}"
 
 
 class ClassifierStage:
@@ -34,8 +32,6 @@ class ClassifierStage:
         thresholds = _SETTINGS.classification
 
         try:
-
-
 
             if not context.has_evidence:
                 context.label = VerificationLabel.NOT_FOUND_IN_CLAIMED_SOURCE
@@ -49,21 +45,15 @@ class ClassifierStage:
                 )
                 return context
 
-
-
-
-
-
-
             sem_sim = context.scores.semantic_similarity
             if (
                 sem_sim is not None
                 and sem_sim < thresholds.not_found_max_semantic_similarity
             ):
 
-
-
-                raw_conf = 0.5 + (thresholds.not_found_max_semantic_similarity - sem_sim) * 2
+                raw_conf = (
+                    0.5 + (thresholds.not_found_max_semantic_similarity - sem_sim) * 2
+                )
                 context.label = VerificationLabel.NOT_FOUND_IN_CLAIMED_SOURCE
                 context.confidence = round(max(0.55, min(0.90, raw_conf)), 3)
                 context.reasoning = (
@@ -81,20 +71,14 @@ class ClassifierStage:
                 )
                 return context
 
-
-
-
             scores = context.scores
             evidence_score = _compute_weighted_score(scores, thresholds)
-
 
             contradiction = scores.contradiction_score or 0.0
             if contradiction > thresholds.contradiction_override_threshold:
 
                 context.label = VerificationLabel.FALSE
-                context.confidence = round(
-                    min(0.95, 0.6 + contradiction * 0.35), 3
-                )
+                context.confidence = round(min(0.95, 0.6 + contradiction * 0.35), 3)
                 context.reasoning = self._build_reasoning(
                     context, VerificationLabel.FALSE, evidence_score
                 )
@@ -107,29 +91,18 @@ class ClassifierStage:
                 )
                 return context
 
-
             if contradiction > 0.5:
                 penalty = (contradiction - 0.5) * 0.4
                 evidence_score = max(0.0, evidence_score - penalty)
-
 
             if context.stage_error_count > 0:
                 degradation = min(0.15, context.stage_error_count * 0.05)
                 evidence_score = max(0.0, evidence_score - degradation)
 
-
-
-
             manipulation = context.manipulation_flags
             label = _assign_label(evidence_score, manipulation, thresholds)
 
-
-
-
             confidence = _compute_confidence(evidence_score, label, thresholds)
-
-
-
 
             reasoning = self._build_reasoning(context, label, evidence_score)
 
@@ -152,10 +125,6 @@ class ClassifierStage:
                 message=f"Classification failed: {exc}",
             ) from exc
 
-
-
-
-
     def _build_reasoning(
         self,
         context: PipelineContext,
@@ -168,24 +137,19 @@ class ClassifierStage:
         source = context.normalized_source or context.raw_claimed_source
         flags = context.manipulation_flags
 
-
         if article:
             parts.append(
                 f"A matching article was found on {source or 'the claimed source'}."
             )
         else:
-            parts.append(f"No matching article was found on {source or 'the claimed source'}.")
-
+            parts.append(
+                f"No matching article was found on {source or 'the claimed source'}."
+            )
 
         if scores.semantic_similarity is not None:
-            parts.append(
-                f"Semantic similarity: {scores.semantic_similarity:.2f}."
-            )
+            parts.append(f"Semantic similarity: {scores.semantic_similarity:.2f}.")
         if scores.entity_match is not None:
             parts.append(f"Entity match: {scores.entity_match:.2f}.")
-
-
-
 
         if scores.keyword_overlap is not None:
             kw_note = f"Keyword overlap: {scores.keyword_overlap:.2f}"
@@ -201,7 +165,10 @@ class ClassifierStage:
             kw_note += "."
             parts.append(kw_note)
 
-        if scores.numerical_consistency is not None and scores.numerical_consistency < 1.0:
+        if (
+            scores.numerical_consistency is not None
+            and scores.numerical_consistency < 1.0
+        ):
             parts.append(
                 f"Numerical consistency: {scores.numerical_consistency:.2f} "
                 "(some numbers may differ)."
@@ -211,16 +178,20 @@ class ClassifierStage:
                 f"Contradiction detected (score: {scores.contradiction_score:.2f})."
             )
 
-
         if flags.headline_manipulated:
-            parts.append("Headline appears to have been manipulated relative to the original article.")
+            parts.append(
+                "Headline appears to have been manipulated relative to the original article."
+            )
         if flags.body_altered:
-            parts.append("Article body shows significant divergence from the matched article.")
+            parts.append(
+                "Article body shows significant divergence from the matched article."
+            )
         if flags.numbers_altered:
             parts.append("One or more numerical values appear to have been altered.")
         if flags.entities_replaced:
-            parts.append("Named entities (persons/places/organisations) may have been substituted.")
-
+            parts.append(
+                "Named entities (persons/places/organisations) may have been substituted."
+            )
 
         label_summary = {
             VerificationLabel.TRUE: "Verdict: The claim is TRUE — the source published matching content.",
@@ -242,11 +213,6 @@ class ClassifierStage:
         )
 
 
-
-
-
-
-
 def _compute_weighted_score(scores, thresholds) -> float:
     max_dim_weight = thresholds.max_single_dimension_weight
 
@@ -256,7 +222,6 @@ def _compute_weighted_score(scores, thresholds) -> float:
         (scores.keyword_overlap, _W_KW),
         (scores.numerical_consistency, _W_NUM),
     ]
-
 
     available: list[tuple[float, float]] = [
         (val, wt) for val, wt in dim_weights if val is not None
@@ -268,8 +233,6 @@ def _compute_weighted_score(scores, thresholds) -> float:
     total_weight = sum(wt for _, wt in available)
     if total_weight == 0:
         return 0.0
-
-
 
     capped_available: list[tuple[float, float]] = []
     excess = 0.0
@@ -284,7 +247,6 @@ def _compute_weighted_score(scores, thresholds) -> float:
             capped_available.append((val, effective))
             uncapped_weight += effective
 
-
     if excess > 0 and uncapped_weight > 0:
         final: list[tuple[float, float]] = []
         for val, eff_wt in capped_available:
@@ -296,9 +258,7 @@ def _compute_weighted_score(scores, thresholds) -> float:
     else:
         final = capped_available
 
-
     result = sum(val * eff_wt for val, eff_wt in final)
-
 
     if len(available) < 4:
         logger.debug(
@@ -320,11 +280,9 @@ def _assign_label(evidence_score: float, manipulation, thresholds) -> Verificati
             return VerificationLabel.PARTIALLY_TRUE
         return VerificationLabel.TRUE
 
-
-
-
-
-    soft_true_threshold = (thresholds.partial_threshold + thresholds.true_threshold) / 2.0
+    soft_true_threshold = (
+        thresholds.partial_threshold + thresholds.true_threshold
+    ) / 2.0
 
     if evidence_score >= soft_true_threshold:
         if any_manip:
@@ -347,9 +305,6 @@ def _compute_confidence(
         thresholds.false_threshold,
     ]
     min_distance = min(abs(evidence_score - b) for b in boundaries)
-
-
-
 
     base = 0.5 + 0.47 * (1.0 - math.exp(-15.0 * min_distance))
     confidence = round(min(0.97, max(0.50, base)), 3)

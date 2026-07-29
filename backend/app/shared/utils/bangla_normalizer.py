@@ -1,15 +1,9 @@
-
 from __future__ import annotations
 
 import re
 import unicodedata
 
 from app.core.constants import KNOWN_SOURCE_ALIASES
-
-
-
-
-
 
 _BANGLA_DIGITS: dict[str, str] = {
     "০": "0",
@@ -26,9 +20,7 @@ _BANGLA_DIGITS: dict[str, str] = {
 _BANGLA_DIGIT_TABLE = str.maketrans(_BANGLA_DIGITS)
 
 
-_ZERO_WIDTH_CHARS_RE = re.compile(
-    r"[\u200B\u200C\u200D\u200E\u200F\uFEFF\u00AD]"
-)
+_ZERO_WIDTH_CHARS_RE = re.compile(r"[\u200B\u200C\u200D\u200E\u200F\uFEFF\u00AD]")
 
 
 _MULTI_WHITESPACE_RE = re.compile(r"\s+")
@@ -37,8 +29,8 @@ _MULTI_WHITESPACE_RE = re.compile(r"\s+")
 _BANGLA_PUNCT_MAP: dict[str, str] = {
     "।": ".",
     "॥": ".",
-    "\u201C": '"',
-    "\u201D": '"',
+    "\u201c": '"',
+    "\u201d": '"',
     "\u2018": "'",
     "\u2019": "'",
     "\u2014": "-",
@@ -46,10 +38,6 @@ _BANGLA_PUNCT_MAP: dict[str, str] = {
     "\u2026": "...",
 }
 _BANGLA_PUNCT_TABLE = str.maketrans(_BANGLA_PUNCT_MAP)
-
-
-
-
 
 
 def normalize_unicode(text: str) -> str:
@@ -81,38 +69,27 @@ def normalize_bangla_text(text: str, *, normalize_digits: bool = False) -> str:
     return text
 
 
-
-
-
-
-
 def normalize_source_name(raw_source: str) -> str | None:
     if not raw_source:
         return None
 
-
     stripped = raw_source.strip()
     lowered = stripped.lower()
-
 
     if lowered in KNOWN_SOURCE_ALIASES:
         return KNOWN_SOURCE_ALIASES[lowered]
 
-
     if stripped in KNOWN_SOURCE_ALIASES:
         return KNOWN_SOURCE_ALIASES[stripped]
-
 
     for alias, domain in KNOWN_SOURCE_ALIASES.items():
         if lowered.startswith(alias.lower()):
             return domain
 
-
     for alias, domain in KNOWN_SOURCE_ALIASES.items():
         alias_lower = alias.lower()
         if alias_lower and alias_lower in lowered:
             return domain
-
 
     if _looks_like_domain(lowered):
         return lowered
@@ -141,7 +118,6 @@ def extract_canonical_domain(url_or_domain: str) -> str | None:
 
         parsed = urlparse(url_or_domain)
         hostname = parsed.hostname or ""
-
 
         if hostname.startswith("www."):
             hostname = hostname[4:]

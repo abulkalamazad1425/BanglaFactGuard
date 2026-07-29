@@ -26,7 +26,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     log = structlog.get_logger("lifespan")
     log.info("bangla_fact_guard_starting", env=_SETTINGS.environment)
 
-
     redis_client = aioredis.from_url(
         _SETTINGS.redis.url,
         encoding="utf-8",
@@ -36,14 +35,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.cache_service = CacheService(redis_client)
     log.info("redis_connected", url=_SETTINGS.redis.url)
 
-
     app.state.http_client = httpx.AsyncClient(
         timeout=httpx.Timeout(30.0),
         limits=httpx.Limits(max_connections=100, max_keepalive_connections=20),
         follow_redirects=True,
     )
     log.info("http_client_created")
-
 
     embedding_service = EmbeddingService(cache_service=app.state.cache_service)
     ner_service = NERService()
@@ -76,7 +73,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.ner_service = ner_service
     app.state.nli_service = nli_service
 
-
     multimodal_loader = MultimodalModelLoader()
     if _SETTINGS.multimodal.load_on_startup:
         log.info("loading_multimodal_model", model_dir=_SETTINGS.multimodal.model_dir)
@@ -94,7 +90,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         log.warning("multimodal_model_load_skipped")
     app.state.multimodal_loader = multimodal_loader
 
-
     multimodal_storage = MultimodalStorageService()
     try:
         await multimodal_storage.ensure_bucket()
@@ -106,7 +101,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     log.info("bangla_fact_guard_ready")
 
     yield
-
 
     log.info("bangla_fact_guard_shutting_down")
     await app.state.http_client.aclose()

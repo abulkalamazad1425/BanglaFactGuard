@@ -1,4 +1,3 @@
-
 import re
 import httpx
 from typing import Optional
@@ -29,23 +28,18 @@ _MAX_RESULTS = 15
 
 def _build_keyword_query(raw: str, max_words: int = 8) -> str:
 
-    clean = re.sub(r'site:\S+\s*', '', raw).strip()
+    clean = re.sub(r"site:\S+\s*", "", raw).strip()
 
+    clean = re.sub(r'[?!\'"(){}\[\]<>:;,\u0964\u09f7]', " ", clean)
 
-    clean = re.sub(r'[?!\'"(){}\[\]<>:;,\u0964\u09f7]', ' ', clean)
-
-    clean = re.sub(r'\s+', ' ', clean).strip()
+    clean = re.sub(r"\s+", " ", clean).strip()
     words = clean.split()
-
-
-
 
     priority_words = [w for w in words if len(w) >= 4]
     short_words = [w for w in words if len(w) < 4]
 
-
     selected = (priority_words + short_words)[:max_words]
-    return ' '.join(selected)
+    return " ".join(selected)
 
 
 class InternalSiteSearchClient:
@@ -101,18 +95,19 @@ class InternalSiteSearchClient:
 
             full_url = urljoin(search_url, href)
 
-
             if not patterns or any(re.search(pat, full_url) for pat in patterns):
                 if full_url in seen_urls:
                     continue
 
-
                 url_domain = urlparse(full_url).netloc.replace("www.", "")
-                if domain and url_domain and domain.replace("www.", "") not in url_domain:
+                if (
+                    domain
+                    and url_domain
+                    and domain.replace("www.", "") not in url_domain
+                ):
                     continue
 
                 seen_urls.add(full_url)
-
 
                 link_text = a_tag.get_text(strip=True)
                 if len(link_text) < 8:

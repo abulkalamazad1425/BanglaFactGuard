@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import uuid
@@ -21,10 +20,6 @@ class MultimodalPredictionRepository:
 
     def __init__(self, db: AsyncSession) -> None:
         self._db = db
-
-
-
-
 
     async def create(
         self,
@@ -65,10 +60,6 @@ class MultimodalPredictionRepository:
         )
         return record
 
-
-
-
-
     async def get_by_id(self, prediction_id: uuid.UUID) -> MultimodalPrediction:
         result = await self._db.execute(
             select(MultimodalPrediction).where(MultimodalPrediction.id == prediction_id)
@@ -81,7 +72,9 @@ class MultimodalPredictionRepository:
             )
         return record
 
-    async def list_recent(self, *, limit: int = 20, offset: int = 0) -> Sequence[MultimodalPrediction]:
+    async def list_recent(
+        self, *, limit: int = 20, offset: int = 0
+    ) -> Sequence[MultimodalPrediction]:
         result = await self._db.execute(
             select(MultimodalPrediction)
             .order_by(desc(MultimodalPrediction.created_at))
@@ -89,10 +82,6 @@ class MultimodalPredictionRepository:
             .offset(offset)
         )
         return result.scalars().all()
-
-
-
-
 
     async def find_similar_candidates(
         self,

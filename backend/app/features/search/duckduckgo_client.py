@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import re
@@ -43,7 +42,7 @@ class DuckDuckGoClient:
         published_date: date | None = None,
     ) -> list[tuple[str, str]]:
 
-        clean_query = re.sub(r'site:\S+\s*', '', query).strip()
+        clean_query = re.sub(r"site:\S+\s*", "", query).strip()
 
         if published_date:
             clean_query = f"{clean_query} {published_date.year}"
@@ -74,8 +73,9 @@ class DuckDuckGoClient:
 
             for i in range(min(len(title_anchors), len(url_spans), 10)):
                 title = title_anchors[i].get_text(strip=True)
-                raw_url = url_spans[i].get("href", "") or url_spans[i].get_text(strip=True)
-
+                raw_url = url_spans[i].get("href", "") or url_spans[i].get_text(
+                    strip=True
+                )
 
                 if raw_url.startswith("/l/?uddg="):
                     real_url = unquote(raw_url.split("uddg=")[1].split("&")[0])
@@ -94,5 +94,7 @@ class DuckDuckGoClient:
             return entries
 
         except Exception as exc:
-            logger.warning("DuckDuckGo search failed for query '%s': %s", search_q[:60], exc)
+            logger.warning(
+                "DuckDuckGo search failed for query '%s': %s", search_q[:60], exc
+            )
             raise SearchError(f"DuckDuckGo search failed: {exc}") from exc

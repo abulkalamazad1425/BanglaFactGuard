@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import uuid
@@ -33,11 +32,6 @@ from app.shared.base_model import Base, ReprMixin, TimestampMixin, UUIDMixin
 if TYPE_CHECKING:
     from app.features.articles.models import RetrievedArticle, SearchQuery
     from app.features.sources.models import VerifiedSource
-
-
-
-
-
 
 
 class VerifiedClaim(UUIDMixin, TimestampMixin, ReprMixin, Base):
@@ -108,7 +102,6 @@ class VerifiedClaim(UUIDMixin, TimestampMixin, ReprMixin, Base):
         comment="Pipeline lifecycle state: pending → processing → completed/failed",
     )
 
-
     source: Mapped["VerifiedSource | None"] = relationship(
         "VerifiedSource",
         back_populates="claims",
@@ -148,11 +141,6 @@ class VerifiedClaim(UUIDMixin, TimestampMixin, ReprMixin, Base):
         Index("ix_verified_claims_source_status", normalized_source, status),
         Index("ix_verified_claims_status_created", status, sa.text("created_at DESC")),
     )
-
-
-
-
-
 
 
 class VerificationResult(UUIDMixin, TimestampMixin, ReprMixin, Base):
@@ -238,7 +226,9 @@ class VerificationResult(UUIDMixin, TimestampMixin, ReprMixin, Base):
     )
 
     __table_args__ = (
-        CheckConstraint("confidence >= 0.0 AND confidence <= 1.0", name="ck_confidence_range"),
+        CheckConstraint(
+            "confidence >= 0.0 AND confidence <= 1.0", name="ck_confidence_range"
+        ),
         CheckConstraint(
             "semantic_similarity IS NULL OR (semantic_similarity >= 0.0 AND semantic_similarity <= 1.0)",
             name="ck_semantic_similarity_range",
@@ -250,11 +240,6 @@ class VerificationResult(UUIDMixin, TimestampMixin, ReprMixin, Base):
         Index("ix_verification_results_label_confidence", label, confidence),
         Index("ix_verification_results_label_created", label, "created_at"),
     )
-
-
-
-
-
 
 
 class VerificationLog(UUIDMixin, ReprMixin, Base):

@@ -1,5 +1,4 @@
-
-revision = 'c64e7a11f599'
+revision = "c64e7a11f599"
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -8,178 +7,749 @@ from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
+
 def upgrade() -> None:
 
-    op.create_table('source_registry',
-    sa.Column('canonical_name', sa.String(length=255), nullable=False, comment='Canonical domain name (e.g. prothomalo.com) — unique identifier'),
-    sa.Column('display_name', sa.String(length=255), nullable=False, comment='Human-readable outlet name (e.g. Prothom Alo)'),
-    sa.Column('aliases', postgresql.JSONB(astext_type=sa.Text()), nullable=True, comment='JSONB array of alternate names, e.g. ["প্রথম আলো", "prothom alo"]'),
-    sa.Column('base_url', sa.String(length=512), nullable=False, comment='Homepage URL (e.g. https://www.prothomalo.com)'),
-    sa.Column('rss_url', sa.String(length=512), nullable=True, comment='RSS feed URL for Google News RSS client (optional)'),
-    sa.Column('language', sa.String(length=10), nullable=False, comment="Primary language code: 'bn' (Bangla) or 'en' (English)"),
-    sa.Column('is_active', sa.Boolean(), nullable=False, comment='Whether this source is active and eligible for verification'),
-    sa.Column('description', sa.Text(), nullable=True, comment='Optional editorial description of the news outlet'),
-    sa.Column('id', sa.UUID(), nullable=False, comment='Primary key — UUID v4 generated in Python before INSERT'),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False, comment='Row creation timestamp (UTC, set by DB on INSERT)'),
-    sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False, comment='Row last-update timestamp (UTC, auto-updated by DB on UPDATE)'),
-    sa.PrimaryKeyConstraint('id')
+    op.create_table(
+        "source_registry",
+        sa.Column(
+            "canonical_name",
+            sa.String(length=255),
+            nullable=False,
+            comment="Canonical domain name (e.g. prothomalo.com) — unique identifier",
+        ),
+        sa.Column(
+            "display_name",
+            sa.String(length=255),
+            nullable=False,
+            comment="Human-readable outlet name (e.g. Prothom Alo)",
+        ),
+        sa.Column(
+            "aliases",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=True,
+            comment='JSONB array of alternate names, e.g. ["প্রথম আলো", "prothom alo"]',
+        ),
+        sa.Column(
+            "base_url",
+            sa.String(length=512),
+            nullable=False,
+            comment="Homepage URL (e.g. https://www.prothomalo.com)",
+        ),
+        sa.Column(
+            "rss_url",
+            sa.String(length=512),
+            nullable=True,
+            comment="RSS feed URL for Google News RSS client (optional)",
+        ),
+        sa.Column(
+            "language",
+            sa.String(length=10),
+            nullable=False,
+            comment="Primary language code: 'bn' (Bangla) or 'en' (English)",
+        ),
+        sa.Column(
+            "is_active",
+            sa.Boolean(),
+            nullable=False,
+            comment="Whether this source is active and eligible for verification",
+        ),
+        sa.Column(
+            "description",
+            sa.Text(),
+            nullable=True,
+            comment="Optional editorial description of the news outlet",
+        ),
+        sa.Column(
+            "id",
+            sa.UUID(),
+            nullable=False,
+            comment="Primary key — UUID v4 generated in Python before INSERT",
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+            comment="Row creation timestamp (UTC, set by DB on INSERT)",
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+            comment="Row last-update timestamp (UTC, auto-updated by DB on UPDATE)",
+        ),
+        sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index('ix_source_registry_aliases_gin', 'source_registry', ['aliases'], unique=False, postgresql_using='gin')
-    op.create_index(op.f('ix_source_registry_canonical_name'), 'source_registry', ['canonical_name'], unique=True)
-    op.create_index(op.f('ix_source_registry_created_at'), 'source_registry', ['created_at'], unique=False)
-    op.create_index(op.f('ix_source_registry_is_active'), 'source_registry', ['is_active'], unique=False)
-    op.create_index('ix_source_registry_language_active', 'source_registry', ['language', 'is_active'], unique=False)
-    op.create_table('verified_claims',
-    sa.Column('claim_hash', sa.String(length=64), nullable=False, comment='SHA-256 hex of normalised (headline + claimed_source) — dedup key'),
-    sa.Column('headline', sa.Text(), nullable=False, comment='Raw headline as submitted in the verification request'),
-    sa.Column('news_body', sa.Text(), nullable=True, comment='Raw article body as submitted (may be empty for headline-only claims)'),
-    sa.Column('claimed_source', sa.String(length=255), nullable=False, comment='Raw source string as provided by the user'),
-    sa.Column('normalized_source', sa.String(length=255), nullable=True, comment='Resolved canonical domain (e.g. prothomalo.com)'),
-    sa.Column('source_id', sa.UUID(), nullable=True, comment='FK to source_registry.id — set when source is successfully resolved'),
-    sa.Column('published_date', sa.Date(), nullable=True, comment='Alleged publication date supplied in the request (optional)'),
-    sa.Column('status', sa.Enum('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED', name='claim_status_enum'), nullable=False, comment='Pipeline lifecycle state: pending → processing → completed/failed'),
-    sa.Column('id', sa.UUID(), nullable=False, comment='Primary key — UUID v4 generated in Python before INSERT'),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False, comment='Row creation timestamp (UTC, set by DB on INSERT)'),
-    sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False, comment='Row last-update timestamp (UTC, auto-updated by DB on UPDATE)'),
-    sa.ForeignKeyConstraint(['source_id'], ['source_registry.id'], ondelete='SET NULL'),
-    sa.PrimaryKeyConstraint('id')
+    op.create_index(
+        "ix_source_registry_aliases_gin",
+        "source_registry",
+        ["aliases"],
+        unique=False,
+        postgresql_using="gin",
     )
-    op.create_index(op.f('ix_verified_claims_claim_hash'), 'verified_claims', ['claim_hash'], unique=True)
-    op.create_index(op.f('ix_verified_claims_claimed_source'), 'verified_claims', ['claimed_source'], unique=False)
-    op.create_index(op.f('ix_verified_claims_created_at'), 'verified_claims', ['created_at'], unique=False)
-    op.create_index(op.f('ix_verified_claims_normalized_source'), 'verified_claims', ['normalized_source'], unique=False)
-    op.create_index(op.f('ix_verified_claims_source_id'), 'verified_claims', ['source_id'], unique=False)
-    op.create_index('ix_verified_claims_source_status', 'verified_claims', ['normalized_source', 'status'], unique=False)
-    op.create_index(op.f('ix_verified_claims_status'), 'verified_claims', ['status'], unique=False)
-    op.create_index('ix_verified_claims_status_created', 'verified_claims', ['status', sa.text('created_at DESC')], unique=False)
-    op.create_table('retrieved_articles',
-    sa.Column('claim_id', sa.UUID(), nullable=False, comment='FK to verified_claims — the claim this article was retrieved for'),
-    sa.Column('url', sa.Text(), nullable=False, comment='Full URL of the retrieved candidate article'),
-    sa.Column('url_hash', sa.String(length=64), nullable=False, comment='SHA-256 of the URL — used for deduplication within a claim'),
-    sa.Column('title', sa.Text(), nullable=True, comment='Extracted article title'),
-    sa.Column('body', sa.Text(), nullable=True, comment='Extracted full article body text'),
-    sa.Column('author', sa.String(length=255), nullable=True, comment='Extracted author byline (if available in the article metadata)'),
-    sa.Column('published_date', sa.Date(), nullable=True, comment='Publication date extracted from the article (if parseable)'),
-    sa.Column('extraction_method', sa.Enum('TRAFILATURA', 'BEAUTIFULSOUP', name='extraction_method_enum'), nullable=True, comment='Which extraction backend produced this content: trafilatura | beautifulsoup'),
-    sa.Column('extraction_success', sa.Boolean(), nullable=False, comment='True if extraction produced content exceeding the minimum length threshold'),
-    sa.Column('rank_score', sa.Float(), nullable=True, comment='Stage 7 evidence ranking score in [0.0, 1.0] — higher is more relevant'),
-    sa.Column('retrieved_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False, comment='Timestamp when this URL was fetched and processed (UTC)'),
-    sa.Column('id', sa.UUID(), nullable=False, comment='Primary key — UUID v4 generated in Python before INSERT'),
-    sa.ForeignKeyConstraint(['claim_id'], ['verified_claims.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id')
+    op.create_index(
+        op.f("ix_source_registry_canonical_name"),
+        "source_registry",
+        ["canonical_name"],
+        unique=True,
     )
-    op.create_index(op.f('ix_retrieved_articles_claim_id'), 'retrieved_articles', ['claim_id'], unique=False)
-    op.create_index('ix_retrieved_articles_claim_rank', 'retrieved_articles', ['claim_id', 'rank_score'], unique=False)
-    op.create_index('ix_retrieved_articles_extraction_success', 'retrieved_articles', ['claim_id', 'extraction_success'], unique=False)
-    op.create_index(op.f('ix_retrieved_articles_rank_score'), 'retrieved_articles', ['rank_score'], unique=False)
-    op.create_index('uq_retrieved_articles_claim_url_hash', 'retrieved_articles', ['claim_id', 'url_hash'], unique=True)
-    op.create_table('search_queries',
-    sa.Column('claim_id', sa.UUID(), nullable=False, comment='FK to verified_claims — the claim this query was generated for'),
-    sa.Column('query_type', sa.Enum('HEADLINE', 'KEYWORDS', 'ENTITIES', 'DATE_BOUND', 'BODY_SUMMARY', name='query_type_enum'), nullable=False, comment='Category of query: headline | keywords | entities | date_bound | body_summary'),
-    sa.Column('query_text', sa.Text(), nullable=False, comment='Exact query string sent to the search provider'),
-    sa.Column('search_provider', sa.Enum('BRAVE', 'GOOGLE_RSS', 'DDG', name='search_provider_enum'), nullable=False, comment='Which search provider executed this query: brave | google_rss | ddg'),
-    sa.Column('results_count', sa.Integer(), nullable=False, comment='Number of result URLs returned by the provider'),
-    sa.Column('executed_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False, comment='Timestamp when the search query was dispatched (UTC)'),
-    sa.Column('id', sa.UUID(), nullable=False, comment='Primary key — UUID v4 generated in Python before INSERT'),
-    sa.ForeignKeyConstraint(['claim_id'], ['verified_claims.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id')
+    op.create_index(
+        op.f("ix_source_registry_created_at"),
+        "source_registry",
+        ["created_at"],
+        unique=False,
     )
-    op.create_index(op.f('ix_search_queries_claim_id'), 'search_queries', ['claim_id'], unique=False)
-    op.create_index('ix_search_queries_claim_provider', 'search_queries', ['claim_id', 'search_provider'], unique=False)
-    op.create_index('ix_search_queries_claim_type', 'search_queries', ['claim_id', 'query_type'], unique=False)
-    op.create_index(op.f('ix_search_queries_executed_at'), 'search_queries', ['executed_at'], unique=False)
-    op.create_index(op.f('ix_search_queries_search_provider'), 'search_queries', ['search_provider'], unique=False)
-    op.create_table('verification_logs',
-    sa.Column('claim_id', sa.UUID(), nullable=False, comment='FK to verified_claims — the claim this log entry belongs to'),
-    sa.Column('stage', sa.Enum('S01_NORMALIZER', 'S02_CACHE_LOOKUP', 'S03_QUERY_GENERATOR', 'S04_SOURCE_SEARCH', 'S05_EVIDENCE_RETRIEVAL', 'S06_ARTICLE_EXTRACTOR', 'S07_EVIDENCE_RANKER', 'S08_SIMILARITY_ANALYZER', 'S09_CONTRADICTION_DETECTOR', 'S10_MANIPULATION_DETECTOR', 'S11_CLASSIFIER', 'S12_PERSISTENCE', name='pipeline_stage_id_enum'), nullable=False, comment='Pipeline stage that emitted this log: s01_normalizer … s12_persistence'),
-    sa.Column('level', sa.Enum('INFO', 'WARNING', 'ERROR', name='log_level_enum'), nullable=False, comment='Log severity: INFO | WARNING | ERROR'),
-    sa.Column('message', sa.Text(), nullable=False, comment='Short human-readable description of the logged event'),
-    sa.Column('metadata', postgresql.JSONB(astext_type=sa.Text()), nullable=True, comment='Stage-specific debug payload as JSONB (e.g. query text, error message, scores)'),
-    sa.Column('duration_ms', sa.Integer(), nullable=True, comment='Milliseconds elapsed in the stage up to this log point'),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False, comment='Log entry timestamp (UTC)'),
-    sa.Column('id', sa.UUID(), nullable=False, comment='Primary key — UUID v4 generated in Python before INSERT'),
-    sa.ForeignKeyConstraint(['claim_id'], ['verified_claims.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id')
+    op.create_index(
+        op.f("ix_source_registry_is_active"),
+        "source_registry",
+        ["is_active"],
+        unique=False,
     )
-    op.create_index(op.f('ix_verification_logs_claim_id'), 'verification_logs', ['claim_id'], unique=False)
-    op.create_index('ix_verification_logs_claim_level', 'verification_logs', ['claim_id', 'level'], unique=False)
-    op.create_index('ix_verification_logs_claim_stage', 'verification_logs', ['claim_id', 'stage'], unique=False)
-    op.create_index(op.f('ix_verification_logs_created_at'), 'verification_logs', ['created_at'], unique=False)
-    op.create_index(op.f('ix_verification_logs_level'), 'verification_logs', ['level'], unique=False)
-    op.create_index('ix_verification_logs_metadata_gin', 'verification_logs', ['metadata'], unique=False, postgresql_using='gin')
-    op.create_index(op.f('ix_verification_logs_stage'), 'verification_logs', ['stage'], unique=False)
-    op.create_index('ix_verification_logs_stage_level', 'verification_logs', ['stage', 'level'], unique=False)
-    op.create_table('verification_results',
-    sa.Column('claim_id', sa.UUID(), nullable=False, comment='FK to verified_claims (UNIQUE — one result per claim)'),
-    sa.Column('top_article_id', sa.UUID(), nullable=True, comment='FK to the highest-ranked supporting evidence article'),
-    sa.Column('label', sa.Enum('TRUE', 'FALSE', 'PARTIALLY_TRUE', 'NOT_FOUND_IN_CLAIMED_SOURCE', name='verification_label_enum'), nullable=False, comment='Final verdict: TRUE | FALSE | PARTIALLY_TRUE | NOT_FOUND_IN_CLAIMED_SOURCE'),
-    sa.Column('confidence', sa.Float(), nullable=False, comment='Overall confidence score in [0.0, 1.0]'),
-    sa.Column('reasoning', sa.Text(), nullable=True, comment='Human-readable explanation of the verdict and score breakdown'),
-    sa.Column('semantic_similarity', sa.Float(), nullable=True, comment='LaBSE cosine similarity between claim and best-matching article [0, 1]'),
-    sa.Column('entity_match', sa.Float(), nullable=True, comment='NER entity set-intersection ratio between claim and article [0, 1]'),
-    sa.Column('contradiction_score', sa.Float(), nullable=True, comment='NLI contradiction probability from DeBERTa cross-encoder [0, 1]'),
-    sa.Column('keyword_overlap', sa.Float(), nullable=True, comment='Jaccard similarity of keyword sets between claim and article [0, 1]'),
-    sa.Column('numerical_consistency', sa.Float(), nullable=True, comment='Proportion of claim numerals that match the article [0, 1]'),
-    sa.Column('id', sa.UUID(), nullable=False, comment='Primary key — UUID v4 generated in Python before INSERT'),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False, comment='Row creation timestamp (UTC, set by DB on INSERT)'),
-    sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False, comment='Row last-update timestamp (UTC, auto-updated by DB on UPDATE)'),
-    sa.CheckConstraint('confidence >= 0.0 AND confidence <= 1.0', name='ck_confidence_range'),
-    sa.CheckConstraint('contradiction_score IS NULL OR (contradiction_score >= 0.0 AND contradiction_score <= 1.0)', name='ck_contradiction_score_range'),
-    sa.CheckConstraint('semantic_similarity IS NULL OR (semantic_similarity >= 0.0 AND semantic_similarity <= 1.0)', name='ck_semantic_similarity_range'),
-    sa.ForeignKeyConstraint(['claim_id'], ['verified_claims.id'], ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['top_article_id'], ['retrieved_articles.id'], ondelete='SET NULL'),
-    sa.PrimaryKeyConstraint('id')
+    op.create_index(
+        "ix_source_registry_language_active",
+        "source_registry",
+        ["language", "is_active"],
+        unique=False,
     )
-    op.create_index(op.f('ix_verification_results_claim_id'), 'verification_results', ['claim_id'], unique=True)
-    op.create_index(op.f('ix_verification_results_created_at'), 'verification_results', ['created_at'], unique=False)
-    op.create_index(op.f('ix_verification_results_label'), 'verification_results', ['label'], unique=False)
-    op.create_index('ix_verification_results_label_confidence', 'verification_results', ['label', 'confidence'], unique=False)
-    op.create_index('ix_verification_results_label_created', 'verification_results', ['label', 'created_at'], unique=False)
-
+    op.create_table(
+        "verified_claims",
+        sa.Column(
+            "claim_hash",
+            sa.String(length=64),
+            nullable=False,
+            comment="SHA-256 hex of normalised (headline + claimed_source) — dedup key",
+        ),
+        sa.Column(
+            "headline",
+            sa.Text(),
+            nullable=False,
+            comment="Raw headline as submitted in the verification request",
+        ),
+        sa.Column(
+            "news_body",
+            sa.Text(),
+            nullable=True,
+            comment="Raw article body as submitted (may be empty for headline-only claims)",
+        ),
+        sa.Column(
+            "claimed_source",
+            sa.String(length=255),
+            nullable=False,
+            comment="Raw source string as provided by the user",
+        ),
+        sa.Column(
+            "normalized_source",
+            sa.String(length=255),
+            nullable=True,
+            comment="Resolved canonical domain (e.g. prothomalo.com)",
+        ),
+        sa.Column(
+            "source_id",
+            sa.UUID(),
+            nullable=True,
+            comment="FK to source_registry.id — set when source is successfully resolved",
+        ),
+        sa.Column(
+            "published_date",
+            sa.Date(),
+            nullable=True,
+            comment="Alleged publication date supplied in the request (optional)",
+        ),
+        sa.Column(
+            "status",
+            sa.Enum(
+                "PENDING", "PROCESSING", "COMPLETED", "FAILED", name="claim_status_enum"
+            ),
+            nullable=False,
+            comment="Pipeline lifecycle state: pending → processing → completed/failed",
+        ),
+        sa.Column(
+            "id",
+            sa.UUID(),
+            nullable=False,
+            comment="Primary key — UUID v4 generated in Python before INSERT",
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+            comment="Row creation timestamp (UTC, set by DB on INSERT)",
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+            comment="Row last-update timestamp (UTC, auto-updated by DB on UPDATE)",
+        ),
+        sa.ForeignKeyConstraint(
+            ["source_id"], ["source_registry.id"], ondelete="SET NULL"
+        ),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(
+        op.f("ix_verified_claims_claim_hash"),
+        "verified_claims",
+        ["claim_hash"],
+        unique=True,
+    )
+    op.create_index(
+        op.f("ix_verified_claims_claimed_source"),
+        "verified_claims",
+        ["claimed_source"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_verified_claims_created_at"),
+        "verified_claims",
+        ["created_at"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_verified_claims_normalized_source"),
+        "verified_claims",
+        ["normalized_source"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_verified_claims_source_id"),
+        "verified_claims",
+        ["source_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_verified_claims_source_status",
+        "verified_claims",
+        ["normalized_source", "status"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_verified_claims_status"), "verified_claims", ["status"], unique=False
+    )
+    op.create_index(
+        "ix_verified_claims_status_created",
+        "verified_claims",
+        ["status", sa.text("created_at DESC")],
+        unique=False,
+    )
+    op.create_table(
+        "retrieved_articles",
+        sa.Column(
+            "claim_id",
+            sa.UUID(),
+            nullable=False,
+            comment="FK to verified_claims — the claim this article was retrieved for",
+        ),
+        sa.Column(
+            "url",
+            sa.Text(),
+            nullable=False,
+            comment="Full URL of the retrieved candidate article",
+        ),
+        sa.Column(
+            "url_hash",
+            sa.String(length=64),
+            nullable=False,
+            comment="SHA-256 of the URL — used for deduplication within a claim",
+        ),
+        sa.Column("title", sa.Text(), nullable=True, comment="Extracted article title"),
+        sa.Column(
+            "body", sa.Text(), nullable=True, comment="Extracted full article body text"
+        ),
+        sa.Column(
+            "author",
+            sa.String(length=255),
+            nullable=True,
+            comment="Extracted author byline (if available in the article metadata)",
+        ),
+        sa.Column(
+            "published_date",
+            sa.Date(),
+            nullable=True,
+            comment="Publication date extracted from the article (if parseable)",
+        ),
+        sa.Column(
+            "extraction_method",
+            sa.Enum("TRAFILATURA", "BEAUTIFULSOUP", name="extraction_method_enum"),
+            nullable=True,
+            comment="Which extraction backend produced this content: trafilatura | beautifulsoup",
+        ),
+        sa.Column(
+            "extraction_success",
+            sa.Boolean(),
+            nullable=False,
+            comment="True if extraction produced content exceeding the minimum length threshold",
+        ),
+        sa.Column(
+            "rank_score",
+            sa.Float(),
+            nullable=True,
+            comment="Stage 7 evidence ranking score in [0.0, 1.0] — higher is more relevant",
+        ),
+        sa.Column(
+            "retrieved_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+            comment="Timestamp when this URL was fetched and processed (UTC)",
+        ),
+        sa.Column(
+            "id",
+            sa.UUID(),
+            nullable=False,
+            comment="Primary key — UUID v4 generated in Python before INSERT",
+        ),
+        sa.ForeignKeyConstraint(
+            ["claim_id"], ["verified_claims.id"], ondelete="CASCADE"
+        ),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(
+        op.f("ix_retrieved_articles_claim_id"),
+        "retrieved_articles",
+        ["claim_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_retrieved_articles_claim_rank",
+        "retrieved_articles",
+        ["claim_id", "rank_score"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_retrieved_articles_extraction_success",
+        "retrieved_articles",
+        ["claim_id", "extraction_success"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_retrieved_articles_rank_score"),
+        "retrieved_articles",
+        ["rank_score"],
+        unique=False,
+    )
+    op.create_index(
+        "uq_retrieved_articles_claim_url_hash",
+        "retrieved_articles",
+        ["claim_id", "url_hash"],
+        unique=True,
+    )
+    op.create_table(
+        "search_queries",
+        sa.Column(
+            "claim_id",
+            sa.UUID(),
+            nullable=False,
+            comment="FK to verified_claims — the claim this query was generated for",
+        ),
+        sa.Column(
+            "query_type",
+            sa.Enum(
+                "HEADLINE",
+                "KEYWORDS",
+                "ENTITIES",
+                "DATE_BOUND",
+                "BODY_SUMMARY",
+                name="query_type_enum",
+            ),
+            nullable=False,
+            comment="Category of query: headline | keywords | entities | date_bound | body_summary",
+        ),
+        sa.Column(
+            "query_text",
+            sa.Text(),
+            nullable=False,
+            comment="Exact query string sent to the search provider",
+        ),
+        sa.Column(
+            "search_provider",
+            sa.Enum("BRAVE", "GOOGLE_RSS", "DDG", name="search_provider_enum"),
+            nullable=False,
+            comment="Which search provider executed this query: brave | google_rss | ddg",
+        ),
+        sa.Column(
+            "results_count",
+            sa.Integer(),
+            nullable=False,
+            comment="Number of result URLs returned by the provider",
+        ),
+        sa.Column(
+            "executed_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+            comment="Timestamp when the search query was dispatched (UTC)",
+        ),
+        sa.Column(
+            "id",
+            sa.UUID(),
+            nullable=False,
+            comment="Primary key — UUID v4 generated in Python before INSERT",
+        ),
+        sa.ForeignKeyConstraint(
+            ["claim_id"], ["verified_claims.id"], ondelete="CASCADE"
+        ),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(
+        op.f("ix_search_queries_claim_id"), "search_queries", ["claim_id"], unique=False
+    )
+    op.create_index(
+        "ix_search_queries_claim_provider",
+        "search_queries",
+        ["claim_id", "search_provider"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_search_queries_claim_type",
+        "search_queries",
+        ["claim_id", "query_type"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_search_queries_executed_at"),
+        "search_queries",
+        ["executed_at"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_search_queries_search_provider"),
+        "search_queries",
+        ["search_provider"],
+        unique=False,
+    )
+    op.create_table(
+        "verification_logs",
+        sa.Column(
+            "claim_id",
+            sa.UUID(),
+            nullable=False,
+            comment="FK to verified_claims — the claim this log entry belongs to",
+        ),
+        sa.Column(
+            "stage",
+            sa.Enum(
+                "S01_NORMALIZER",
+                "S02_CACHE_LOOKUP",
+                "S03_QUERY_GENERATOR",
+                "S04_SOURCE_SEARCH",
+                "S05_EVIDENCE_RETRIEVAL",
+                "S06_ARTICLE_EXTRACTOR",
+                "S07_EVIDENCE_RANKER",
+                "S08_SIMILARITY_ANALYZER",
+                "S09_CONTRADICTION_DETECTOR",
+                "S10_MANIPULATION_DETECTOR",
+                "S11_CLASSIFIER",
+                "S12_PERSISTENCE",
+                name="pipeline_stage_id_enum",
+            ),
+            nullable=False,
+            comment="Pipeline stage that emitted this log: s01_normalizer … s12_persistence",
+        ),
+        sa.Column(
+            "level",
+            sa.Enum("INFO", "WARNING", "ERROR", name="log_level_enum"),
+            nullable=False,
+            comment="Log severity: INFO | WARNING | ERROR",
+        ),
+        sa.Column(
+            "message",
+            sa.Text(),
+            nullable=False,
+            comment="Short human-readable description of the logged event",
+        ),
+        sa.Column(
+            "metadata",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=True,
+            comment="Stage-specific debug payload as JSONB (e.g. query text, error message, scores)",
+        ),
+        sa.Column(
+            "duration_ms",
+            sa.Integer(),
+            nullable=True,
+            comment="Milliseconds elapsed in the stage up to this log point",
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+            comment="Log entry timestamp (UTC)",
+        ),
+        sa.Column(
+            "id",
+            sa.UUID(),
+            nullable=False,
+            comment="Primary key — UUID v4 generated in Python before INSERT",
+        ),
+        sa.ForeignKeyConstraint(
+            ["claim_id"], ["verified_claims.id"], ondelete="CASCADE"
+        ),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(
+        op.f("ix_verification_logs_claim_id"),
+        "verification_logs",
+        ["claim_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_verification_logs_claim_level",
+        "verification_logs",
+        ["claim_id", "level"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_verification_logs_claim_stage",
+        "verification_logs",
+        ["claim_id", "stage"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_verification_logs_created_at"),
+        "verification_logs",
+        ["created_at"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_verification_logs_level"), "verification_logs", ["level"], unique=False
+    )
+    op.create_index(
+        "ix_verification_logs_metadata_gin",
+        "verification_logs",
+        ["metadata"],
+        unique=False,
+        postgresql_using="gin",
+    )
+    op.create_index(
+        op.f("ix_verification_logs_stage"), "verification_logs", ["stage"], unique=False
+    )
+    op.create_index(
+        "ix_verification_logs_stage_level",
+        "verification_logs",
+        ["stage", "level"],
+        unique=False,
+    )
+    op.create_table(
+        "verification_results",
+        sa.Column(
+            "claim_id",
+            sa.UUID(),
+            nullable=False,
+            comment="FK to verified_claims (UNIQUE — one result per claim)",
+        ),
+        sa.Column(
+            "top_article_id",
+            sa.UUID(),
+            nullable=True,
+            comment="FK to the highest-ranked supporting evidence article",
+        ),
+        sa.Column(
+            "label",
+            sa.Enum(
+                "TRUE",
+                "FALSE",
+                "PARTIALLY_TRUE",
+                "NOT_FOUND_IN_CLAIMED_SOURCE",
+                name="verification_label_enum",
+            ),
+            nullable=False,
+            comment="Final verdict: TRUE | FALSE | PARTIALLY_TRUE | NOT_FOUND_IN_CLAIMED_SOURCE",
+        ),
+        sa.Column(
+            "confidence",
+            sa.Float(),
+            nullable=False,
+            comment="Overall confidence score in [0.0, 1.0]",
+        ),
+        sa.Column(
+            "reasoning",
+            sa.Text(),
+            nullable=True,
+            comment="Human-readable explanation of the verdict and score breakdown",
+        ),
+        sa.Column(
+            "semantic_similarity",
+            sa.Float(),
+            nullable=True,
+            comment="LaBSE cosine similarity between claim and best-matching article [0, 1]",
+        ),
+        sa.Column(
+            "entity_match",
+            sa.Float(),
+            nullable=True,
+            comment="NER entity set-intersection ratio between claim and article [0, 1]",
+        ),
+        sa.Column(
+            "contradiction_score",
+            sa.Float(),
+            nullable=True,
+            comment="NLI contradiction probability from DeBERTa cross-encoder [0, 1]",
+        ),
+        sa.Column(
+            "keyword_overlap",
+            sa.Float(),
+            nullable=True,
+            comment="Jaccard similarity of keyword sets between claim and article [0, 1]",
+        ),
+        sa.Column(
+            "numerical_consistency",
+            sa.Float(),
+            nullable=True,
+            comment="Proportion of claim numerals that match the article [0, 1]",
+        ),
+        sa.Column(
+            "id",
+            sa.UUID(),
+            nullable=False,
+            comment="Primary key — UUID v4 generated in Python before INSERT",
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+            comment="Row creation timestamp (UTC, set by DB on INSERT)",
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+            comment="Row last-update timestamp (UTC, auto-updated by DB on UPDATE)",
+        ),
+        sa.CheckConstraint(
+            "confidence >= 0.0 AND confidence <= 1.0", name="ck_confidence_range"
+        ),
+        sa.CheckConstraint(
+            "contradiction_score IS NULL OR (contradiction_score >= 0.0 AND contradiction_score <= 1.0)",
+            name="ck_contradiction_score_range",
+        ),
+        sa.CheckConstraint(
+            "semantic_similarity IS NULL OR (semantic_similarity >= 0.0 AND semantic_similarity <= 1.0)",
+            name="ck_semantic_similarity_range",
+        ),
+        sa.ForeignKeyConstraint(
+            ["claim_id"], ["verified_claims.id"], ondelete="CASCADE"
+        ),
+        sa.ForeignKeyConstraint(
+            ["top_article_id"], ["retrieved_articles.id"], ondelete="SET NULL"
+        ),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(
+        op.f("ix_verification_results_claim_id"),
+        "verification_results",
+        ["claim_id"],
+        unique=True,
+    )
+    op.create_index(
+        op.f("ix_verification_results_created_at"),
+        "verification_results",
+        ["created_at"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_verification_results_label"),
+        "verification_results",
+        ["label"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_verification_results_label_confidence",
+        "verification_results",
+        ["label", "confidence"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_verification_results_label_created",
+        "verification_results",
+        ["label", "created_at"],
+        unique=False,
+    )
 
 
 def downgrade() -> None:
 
-    op.drop_index('ix_verification_results_label_created', table_name='verification_results')
-    op.drop_index('ix_verification_results_label_confidence', table_name='verification_results')
-    op.drop_index(op.f('ix_verification_results_label'), table_name='verification_results')
-    op.drop_index(op.f('ix_verification_results_created_at'), table_name='verification_results')
-    op.drop_index(op.f('ix_verification_results_claim_id'), table_name='verification_results')
-    op.drop_table('verification_results')
-    op.drop_index('ix_verification_logs_stage_level', table_name='verification_logs')
-    op.drop_index(op.f('ix_verification_logs_stage'), table_name='verification_logs')
-    op.drop_index('ix_verification_logs_metadata_gin', table_name='verification_logs', postgresql_using='gin')
-    op.drop_index(op.f('ix_verification_logs_level'), table_name='verification_logs')
-    op.drop_index(op.f('ix_verification_logs_created_at'), table_name='verification_logs')
-    op.drop_index('ix_verification_logs_claim_stage', table_name='verification_logs')
-    op.drop_index('ix_verification_logs_claim_level', table_name='verification_logs')
-    op.drop_index(op.f('ix_verification_logs_claim_id'), table_name='verification_logs')
-    op.drop_table('verification_logs')
-    op.drop_index(op.f('ix_search_queries_search_provider'), table_name='search_queries')
-    op.drop_index(op.f('ix_search_queries_executed_at'), table_name='search_queries')
-    op.drop_index('ix_search_queries_claim_type', table_name='search_queries')
-    op.drop_index('ix_search_queries_claim_provider', table_name='search_queries')
-    op.drop_index(op.f('ix_search_queries_claim_id'), table_name='search_queries')
-    op.drop_table('search_queries')
-    op.drop_index('uq_retrieved_articles_claim_url_hash', table_name='retrieved_articles')
-    op.drop_index(op.f('ix_retrieved_articles_rank_score'), table_name='retrieved_articles')
-    op.drop_index('ix_retrieved_articles_extraction_success', table_name='retrieved_articles')
-    op.drop_index('ix_retrieved_articles_claim_rank', table_name='retrieved_articles')
-    op.drop_index(op.f('ix_retrieved_articles_claim_id'), table_name='retrieved_articles')
-    op.drop_table('retrieved_articles')
-    op.drop_index('ix_verified_claims_status_created', table_name='verified_claims')
-    op.drop_index(op.f('ix_verified_claims_status'), table_name='verified_claims')
-    op.drop_index('ix_verified_claims_source_status', table_name='verified_claims')
-    op.drop_index(op.f('ix_verified_claims_source_id'), table_name='verified_claims')
-    op.drop_index(op.f('ix_verified_claims_normalized_source'), table_name='verified_claims')
-    op.drop_index(op.f('ix_verified_claims_created_at'), table_name='verified_claims')
-    op.drop_index(op.f('ix_verified_claims_claimed_source'), table_name='verified_claims')
-    op.drop_index(op.f('ix_verified_claims_claim_hash'), table_name='verified_claims')
-    op.drop_table('verified_claims')
-    op.drop_index('ix_source_registry_language_active', table_name='source_registry')
-    op.drop_index(op.f('ix_source_registry_is_active'), table_name='source_registry')
-    op.drop_index(op.f('ix_source_registry_created_at'), table_name='source_registry')
-    op.drop_index(op.f('ix_source_registry_canonical_name'), table_name='source_registry')
-    op.drop_index('ix_source_registry_aliases_gin', table_name='source_registry', postgresql_using='gin')
-    op.drop_table('source_registry')
-
+    op.drop_index(
+        "ix_verification_results_label_created", table_name="verification_results"
+    )
+    op.drop_index(
+        "ix_verification_results_label_confidence", table_name="verification_results"
+    )
+    op.drop_index(
+        op.f("ix_verification_results_label"), table_name="verification_results"
+    )
+    op.drop_index(
+        op.f("ix_verification_results_created_at"), table_name="verification_results"
+    )
+    op.drop_index(
+        op.f("ix_verification_results_claim_id"), table_name="verification_results"
+    )
+    op.drop_table("verification_results")
+    op.drop_index("ix_verification_logs_stage_level", table_name="verification_logs")
+    op.drop_index(op.f("ix_verification_logs_stage"), table_name="verification_logs")
+    op.drop_index(
+        "ix_verification_logs_metadata_gin",
+        table_name="verification_logs",
+        postgresql_using="gin",
+    )
+    op.drop_index(op.f("ix_verification_logs_level"), table_name="verification_logs")
+    op.drop_index(
+        op.f("ix_verification_logs_created_at"), table_name="verification_logs"
+    )
+    op.drop_index("ix_verification_logs_claim_stage", table_name="verification_logs")
+    op.drop_index("ix_verification_logs_claim_level", table_name="verification_logs")
+    op.drop_index(op.f("ix_verification_logs_claim_id"), table_name="verification_logs")
+    op.drop_table("verification_logs")
+    op.drop_index(
+        op.f("ix_search_queries_search_provider"), table_name="search_queries"
+    )
+    op.drop_index(op.f("ix_search_queries_executed_at"), table_name="search_queries")
+    op.drop_index("ix_search_queries_claim_type", table_name="search_queries")
+    op.drop_index("ix_search_queries_claim_provider", table_name="search_queries")
+    op.drop_index(op.f("ix_search_queries_claim_id"), table_name="search_queries")
+    op.drop_table("search_queries")
+    op.drop_index(
+        "uq_retrieved_articles_claim_url_hash", table_name="retrieved_articles"
+    )
+    op.drop_index(
+        op.f("ix_retrieved_articles_rank_score"), table_name="retrieved_articles"
+    )
+    op.drop_index(
+        "ix_retrieved_articles_extraction_success", table_name="retrieved_articles"
+    )
+    op.drop_index("ix_retrieved_articles_claim_rank", table_name="retrieved_articles")
+    op.drop_index(
+        op.f("ix_retrieved_articles_claim_id"), table_name="retrieved_articles"
+    )
+    op.drop_table("retrieved_articles")
+    op.drop_index("ix_verified_claims_status_created", table_name="verified_claims")
+    op.drop_index(op.f("ix_verified_claims_status"), table_name="verified_claims")
+    op.drop_index("ix_verified_claims_source_status", table_name="verified_claims")
+    op.drop_index(op.f("ix_verified_claims_source_id"), table_name="verified_claims")
+    op.drop_index(
+        op.f("ix_verified_claims_normalized_source"), table_name="verified_claims"
+    )
+    op.drop_index(op.f("ix_verified_claims_created_at"), table_name="verified_claims")
+    op.drop_index(
+        op.f("ix_verified_claims_claimed_source"), table_name="verified_claims"
+    )
+    op.drop_index(op.f("ix_verified_claims_claim_hash"), table_name="verified_claims")
+    op.drop_table("verified_claims")
+    op.drop_index("ix_source_registry_language_active", table_name="source_registry")
+    op.drop_index(op.f("ix_source_registry_is_active"), table_name="source_registry")
+    op.drop_index(op.f("ix_source_registry_created_at"), table_name="source_registry")
+    op.drop_index(
+        op.f("ix_source_registry_canonical_name"), table_name="source_registry"
+    )
+    op.drop_index(
+        "ix_source_registry_aliases_gin",
+        table_name="source_registry",
+        postgresql_using="gin",
+    )
+    op.drop_table("source_registry")

@@ -1,12 +1,6 @@
-
 from __future__ import annotations
 
 from typing import Any
-
-
-
-
-
 
 
 class BanglaFactGuardError(Exception):
@@ -26,29 +20,14 @@ class BanglaFactGuardError(Exception):
         return f"{self.__class__.__name__}(message={self.message!r}, details={self.details!r})"
 
 
-
-
-
-
-
 class ConfigurationError(BanglaFactGuardError):
 
     http_status_code = 500
 
 
-
-
-
-
-
 class DomainValidationError(BanglaFactGuardError):
 
     http_status_code = 422
-
-
-
-
-
 
 
 class SourceNotFoundError(BanglaFactGuardError):
@@ -66,11 +45,6 @@ class SourceNotFoundError(BanglaFactGuardError):
 class SourceNormalizationError(BanglaFactGuardError):
 
     http_status_code = 422
-
-
-
-
-
 
 
 class PipelineError(BanglaFactGuardError):
@@ -91,35 +65,39 @@ class StageError(PipelineError):
 
 
 class NormalizationError(StageError):
+    pass
 
 
 class CacheError(StageError):
+    pass
 
 
 class QueryGenerationError(StageError):
+    pass
 
 
 class SearchError(StageError):
+    pass
 
 
 class ExtractionError(StageError):
+    pass
 
 
 class SimilarityError(StageError):
+    pass
 
 
 class NLIError(StageError):
+    pass
 
 
 class ClassificationError(StageError):
+    pass
 
 
 class PersistenceError(StageError):
-
-
-
-
-
+    pass
 
 
 class RepositoryError(BanglaFactGuardError):
@@ -151,19 +129,9 @@ class DuplicateRecordError(RepositoryError):
         )
 
 
-
-
-
-
-
 class CacheBackendError(BanglaFactGuardError):
 
     http_status_code = 503
-
-
-
-
-
 
 
 class ExternalAPIError(BanglaFactGuardError):
@@ -200,7 +168,9 @@ class BraveAPIError(ExternalAPIError):
 class GoogleRSSError(ExternalAPIError):
 
     def __init__(self, message: str, status_code: int | None = None) -> None:
-        super().__init__(provider="google_rss", message=message, status_code=status_code)
+        super().__init__(
+            provider="google_rss", message=message, status_code=status_code
+        )
 
 
 class DDGError(ExternalAPIError):
@@ -218,18 +188,17 @@ class NewsDataError(ExternalAPIError):
 class GoogleCSEError(ExternalAPIError):
 
     def __init__(self, message: str, status_code: int | None = None) -> None:
-        super().__init__(provider="google_custom_search", message=message, status_code=status_code)
+        super().__init__(
+            provider="google_custom_search", message=message, status_code=status_code
+        )
 
 
 class PyGoogleNewsError(ExternalAPIError):
 
     def __init__(self, message: str, status_code: int | None = None) -> None:
-        super().__init__(provider="py_google_news", message=message, status_code=status_code)
-
-
-
-
-
+        super().__init__(
+            provider="py_google_news", message=message, status_code=status_code
+        )
 
 
 class MLModelError(BanglaFactGuardError):
@@ -242,7 +211,7 @@ class ModelNotLoadedError(MLModelError):
     def __init__(self, model_name: str) -> None:
         super().__init__(
             message=f"ML model {model_name!r} has not been loaded. "
-                    "Ensure it is initialised in the FastAPI lifespan handler.",
+            "Ensure it is initialised in the FastAPI lifespan handler.",
             details={"model_name": model_name},
         )
         self.model_name = model_name
@@ -256,11 +225,6 @@ class InferenceError(MLModelError):
             details={"model_name": model_name, "cause": cause},
         )
         self.model_name = model_name
-
-
-
-
-
 
 
 class AuthError(BanglaFactGuardError):

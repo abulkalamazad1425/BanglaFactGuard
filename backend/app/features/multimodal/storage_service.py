@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import asyncio
@@ -47,17 +46,15 @@ class MultimodalStorageService:
         self._bucket = cfg.bucket_name
         self._url_expiry = cfg.presigned_url_expiry_seconds
 
-
-
-
-
     async def ensure_bucket(self) -> None:
         loop = asyncio.get_event_loop()
         try:
             await loop.run_in_executor(_MINIO_POOL, self._ensure_bucket_sync)
             logger.info("minio_bucket_ready", bucket=self._bucket)
         except S3Error as exc:
-            logger.error("minio_bucket_create_failed", bucket=self._bucket, error=str(exc))
+            logger.error(
+                "minio_bucket_create_failed", bucket=self._bucket, error=str(exc)
+            )
             raise MultimodalStorageError(
                 message=f"Failed to create MinIO bucket '{self._bucket}': {exc}",
                 details={"bucket": self._bucket, "error": str(exc)},
@@ -66,10 +63,6 @@ class MultimodalStorageService:
     def _ensure_bucket_sync(self) -> None:
         if not self._client.bucket_exists(self._bucket):
             self._client.make_bucket(self._bucket)
-
-
-
-
 
     async def upload_image(
         self,
@@ -83,6 +76,7 @@ class MultimodalStorageService:
         object_key = f"multimodal/{sid}/{safe_name}"
 
         import io
+
         data_stream = io.BytesIO(image_bytes)
         content_type = _infer_content_type(original_filename)
 
@@ -112,10 +106,6 @@ class MultimodalStorageService:
                 details={"object_key": object_key, "error": str(exc)},
             ) from exc
 
-
-
-
-
     async def get_presigned_url(self, object_key: str) -> str:
         from datetime import timedelta
 
@@ -137,10 +127,6 @@ class MultimodalStorageService:
                 details={"object_key": object_key},
             ) from exc
 
-
-
-
-
     async def delete_image(self, object_key: str) -> None:
         loop = asyncio.get_event_loop()
         try:
@@ -151,11 +137,6 @@ class MultimodalStorageService:
             logger.info("minio_image_deleted", key=object_key)
         except Exception as exc:
             logger.warning("minio_delete_failed", key=object_key, error=str(exc))
-
-
-
-
-
 
 
 def _infer_content_type(filename: str) -> str:

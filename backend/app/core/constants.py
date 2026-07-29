@@ -1,12 +1,6 @@
-
 from __future__ import annotations
 
 from enum import Enum
-
-
-
-
-
 
 
 class VerificationLabel(str, Enum):
@@ -17,11 +11,6 @@ class VerificationLabel(str, Enum):
     NOT_FOUND_IN_CLAIMED_SOURCE = "NOT_FOUND_IN_CLAIMED_SOURCE"
 
 
-
-
-
-
-
 class ClaimStatus(str, Enum):
 
     PENDING = "pending"
@@ -30,28 +19,17 @@ class ClaimStatus(str, Enum):
     FAILED = "failed"
 
 
-
-
-
-
-
 class SearchProvider(str, Enum):
 
     INTERNAL_SITE = "internal_site"
     NEWSDATA = "newsdata"
     GOOGLE_CUSTOM_SEARCH = "google_custom_search"
     PY_GOOGLE_NEWS = "py_google_news"
-    
 
     SEARXNG = "searxng"
     GOOGLE_RSS = "google_rss"
     DDG = "ddg"
     BRAVE = "brave"
-
-
-
-
-
 
 
 class QueryType(str, Enum):
@@ -64,11 +42,6 @@ class QueryType(str, Enum):
     SITE_RESTRICTED = "site_restricted"
 
 
-
-
-
-
-
 class ExtractionMethod(str, Enum):
 
     JSON_LD = "json_ld"
@@ -79,21 +52,11 @@ class ExtractionMethod(str, Enum):
     BEAUTIFULSOUP = "beautifulsoup"
 
 
-
-
-
-
-
 class NLILabel(str, Enum):
 
     ENTAILMENT = "entailment"
     CONTRADICTION = "contradiction"
     NEUTRAL = "neutral"
-
-
-
-
-
 
 
 class ManipulationType(str, Enum):
@@ -104,21 +67,11 @@ class ManipulationType(str, Enum):
     ENTITIES_REPLACED = "entities_replaced"
 
 
-
-
-
-
-
 class LogLevel(str, Enum):
 
     INFO = "INFO"
     WARNING = "WARNING"
     ERROR = "ERROR"
-
-
-
-
-
 
 
 class PipelineStageID(str, Enum):
@@ -137,79 +90,52 @@ class PipelineStageID(str, Enum):
     S12_PERSISTENCE = "s12_persistence"
 
 
-
-
-
-
-
-
-
 KNOWN_SOURCE_ALIASES: dict[str, str] = {
-
     "প্রথম আলো": "prothomalo.com",
     "prothom alo": "prothomalo.com",
     "prothomalo": "prothomalo.com",
     "prothom-alo": "prothomalo.com",
-
     "বাংলাদেশ প্রতিদিন": "bd-pratidin.com",
     "bangladesh pratidin": "bd-pratidin.com",
     "bd pratidin": "bd-pratidin.com",
     "bd-pratidin": "bd-pratidin.com",
-
     "the daily star": "thedailystar.net",
     "daily star": "thedailystar.net",
     "dailystar": "thedailystar.net",
-
     "যুগান্তর": "jugantor.com",
     "jugantor": "jugantor.com",
-
     "ইত্তেফাক": "ittefaq.com.bd",
     "ittefaq": "ittefaq.com.bd",
-
     "কালের কণ্ঠ": "kalerkantho.com",
     "kaler kantho": "kalerkantho.com",
     "kalerkantho": "kalerkantho.com",
-
     "সমকাল": "samakal.com",
     "samakal": "samakal.com",
-
     "মানবজমিন": "mzamin.com",
     "manab zamin": "mzamin.com",
     "manabzamin": "mzamin.com",
     "mzamin": "mzamin.com",
-
     "ইনকিলাব": "dailyinqilab.com",
     "inqilab": "dailyinqilab.com",
     "daily inqilab": "dailyinqilab.com",
     "dailyinqilab": "dailyinqilab.com",
-
     "নয়া দিগন্ত": "dailynayadiganta.com",
     "naya diganta": "dailynayadiganta.com",
     "nayadiganta": "dailynayadiganta.com",
     "daily nayadiganta": "dailynayadiganta.com",
-
     "বাংলা ট্রিবিউন": "banglatribune.com",
     "bangla tribune": "banglatribune.com",
-
     "dhaka tribune": "dhakatribune.com",
     "dhakatribune": "dhakatribune.com",
-
     "bdnews24": "bdnews24.com",
     "বিডিনিউজ২৪": "bdnews24.com",
-
     "rtv": "rtvonline.com",
     "আরটিভি": "rtvonline.com",
-
     "somoy tv": "somoynews.tv",
     "সময় টিভি": "somoynews.tv",
-
     "channel 24": "channel24bd.tv",
     "চ্যানেল ২৪": "channel24bd.tv",
 }
-
-
-
-
 
 
 MAX_SEARCH_QUERIES: int = 10

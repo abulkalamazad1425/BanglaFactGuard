@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import uuid
@@ -12,19 +11,15 @@ from app.core.constants import (
     VerificationLabel,
 )
 from app.features.articles.schemas import CandidateArticleSchema, RankedArticleSchema
-from app.features.verification.schemas import ManipulationFlagsSchema, NLIScoresSchema, VerificationScoresSchema
-
-
-
-
-
+from app.features.verification.schemas import (
+    ManipulationFlagsSchema,
+    NLIScoresSchema,
+    VerificationScoresSchema,
+)
 
 
 @dataclass
 class PipelineContext:
-
-
-
 
     request_id: uuid.UUID = field(default_factory=uuid.uuid4)
     claim_id: uuid.UUID | None = None
@@ -35,17 +30,11 @@ class PipelineContext:
     published_date: date | None = None
     force_refresh: bool = False
 
-
-
-
     normalized_headline: str = ""
     normalized_body: str | None = None
     normalized_source: str | None = None
     source_config: dict | None = None
     claim_hash: str | None = None
-
-
-
 
     cache_hit: bool = False
     cached_label: VerificationLabel | None = None
@@ -55,76 +44,42 @@ class PipelineContext:
     cached_manipulation_flags: ManipulationFlagsSchema | None = None
     cached_matched_articles: list[RankedArticleSchema] = field(default_factory=list)
 
-
-
-
     search_queries: list[tuple[str, str]] = field(default_factory=list)
-
-
-
-
 
     candidate_urls: list[CandidateArticleSchema] = field(default_factory=list)
     search_provider_used: str | None = None
-
-
-
 
     extracted_articles: list[RankedArticleSchema] = field(default_factory=list)
 
     failed_extraction_urls: list[str] = field(default_factory=list)
 
-
-
-
     ranked_articles: list[RankedArticleSchema] = field(default_factory=list)
 
     top_article: RankedArticleSchema | None = None
 
-
-
-
-    scores: VerificationScoresSchema = field(
-        default_factory=VerificationScoresSchema
-    )
+    scores: VerificationScoresSchema = field(default_factory=VerificationScoresSchema)
     claim_entities: list[str] = field(default_factory=list)
     claim_keywords: list[str] = field(default_factory=list)
     claim_numerals: list[str] = field(default_factory=list)
     article_entities: list[str] = field(default_factory=list)
     article_numerals: list[str] = field(default_factory=list)
 
-
     claim_entity_types: list[tuple[str, str]] = field(default_factory=list)
     article_entity_types: list[tuple[str, str]] = field(default_factory=list)
 
-
-
-
     nli_scores: NLIScoresSchema | None = None
-
-
-
 
     manipulation_flags: ManipulationFlagsSchema = field(
         default_factory=ManipulationFlagsSchema
     )
     detected_manipulations: list[ManipulationType] = field(default_factory=list)
 
-
-
-
     label: VerificationLabel | None = None
     confidence: float = 0.0
     reasoning: str = ""
 
-
-
-
     result_id: uuid.UUID | None = None
     persisted: bool = False
-
-
-
 
     pipeline_start_time: datetime = field(default_factory=datetime.utcnow)
     stage_timings: dict[str, int] = field(default_factory=dict)
@@ -134,11 +89,6 @@ class PipelineContext:
     pending_log_entries: list[Any] = field(default_factory=list)
 
     fatal_error: str | None = None
-
-
-
-
-
 
     @property
     def has_body(self) -> bool:
@@ -175,18 +125,12 @@ class PipelineContext:
         self.scores = VerificationScoresSchema(**current)
 
 
-
-
-
-
-
 @runtime_checkable
 class PipelineStage(Protocol):
 
     stage_id: PipelineStageID
 
-    async def execute(self, context: PipelineContext) -> PipelineContext:
-        ...
+    async def execute(self, context: PipelineContext) -> PipelineContext: ...
 
 
 def build_context(
@@ -210,5 +154,3 @@ def build_context(
         force_refresh=force_refresh,
         pipeline_start_time=datetime.utcnow(),
     )
-
-

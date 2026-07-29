@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import uuid
@@ -8,7 +7,11 @@ import structlog
 
 from app.core.config import get_settings
 from app.core.constants import VerificationLabel
-from app.core.exceptions import DomainValidationError, PermissionDeniedError, RecordNotFoundError
+from app.core.exceptions import (
+    DomainValidationError,
+    PermissionDeniedError,
+    RecordNotFoundError,
+)
 from app.features.expert_review.models import CredibilityScore, ExpertReview
 from app.features.expert_review.repository import (
     CredibilityScoreRepository,
@@ -23,6 +26,7 @@ from app.features.expert_review.schemas import (
     ExpertTopArticle,
 )
 from app.features.verification.repository import ClaimRepository, ResultRepository
+
 logger = structlog.get_logger(__name__)
 _SETTINGS = get_settings()
 _AUTH = _SETTINGS.auth
@@ -49,7 +53,10 @@ class ExpertReviewService:
             return None
         from sqlalchemy import select
         from app.features.articles.models import RetrievedArticle
-        stmt = select(RetrievedArticle).where(RetrievedArticle.id == result.top_article_id)
+
+        stmt = select(RetrievedArticle).where(
+            RetrievedArticle.id == result.top_article_id
+        )
         row = (await self._session.execute(stmt)).scalar_one_or_none()
         if row is None:
             return None
@@ -59,18 +66,15 @@ class ExpertReviewService:
             title=row.title,
             published_date=str(row.published_date) if row.published_date else None,
             rank_score=row.rank_score,
-            body_snippet=(body[:400] + '…') if body and len(body) > 400 else body,
+            body_snippet=(body[:400] + "…") if body and len(body) > 400 else body,
         )
-
-
-
-
 
     async def get_queue_item(
         self,
         claim_id: uuid.UUID,
     ) -> ExpertQueueItemResponse:
         from app.core.exceptions import RecordNotFoundError
+
         claim = await self._claims.get_by_id(claim_id)
         if not claim:
             raise RecordNotFoundError("Claim not found.")
@@ -82,7 +86,11 @@ class ExpertReviewService:
         return ExpertQueueItemResponse(
             claim_id=str(claim.id),
             headline=claim.headline,
-            news_body=(claim.news_body[:600] + '…') if claim.news_body and len(claim.news_body) > 600 else claim.news_body,
+            news_body=(
+                (claim.news_body[:600] + "…")
+                if claim.news_body and len(claim.news_body) > 600
+                else claim.news_body
+            ),
             claimed_source=claim.claimed_source,
             ai_label=result.label.value if result else None,
             ai_confidence=result.confidence if result else None,
@@ -102,7 +110,6 @@ class ExpertReviewService:
 
         claims = await self._claims.get_recent(status=ClaimStatus.COMPLETED, limit=100)
 
-
         already_voted_claim_ids = {
             r.claim_id
             for r in await self._reviews.get_history_for_expert(expert_id, limit=10000)
@@ -116,25 +123,26 @@ class ExpertReviewService:
             vote_count = await self._reviews.count_votes_for_claim(claim.id)
             top_article = await self._fetch_top_article(result)
 
-            queue_items.append(ExpertQueueItemResponse(
-                claim_id=str(claim.id),
-                headline=claim.headline,
-                news_body=(claim.news_body[:400] + '…') if claim.news_body and len(claim.news_body) > 400 else claim.news_body,
-                claimed_source=claim.claimed_source,
-                ai_label=result.label.value if result else None,
-                ai_confidence=result.confidence if result else None,
-                submitted_at=claim.created_at,
-                vote_count=vote_count,
-                top_article=top_article,
-            ))
+            queue_items.append(
+                ExpertQueueItemResponse(
+                    claim_id=str(claim.id),
+                    headline=claim.headline,
+                    news_body=(
+                        (claim.news_body[:400] + "…")
+                        if claim.news_body and len(claim.news_body) > 400
+                        else claim.news_body
+                    ),
+                    claimed_source=claim.claimed_source,
+                    ai_label=result.label.value if result else None,
+                    ai_confidence=result.confidence if result else None,
+                    submitted_at=claim.created_at,
+                    vote_count=vote_count,
+                    top_article=top_article,
+                )
+            )
 
-
-        paginated = queue_items[offset: offset + limit]
+        paginated = queue_items[offset : offset + limit]
         return paginated
-
-
-
-
 
     async def submit_vote(
         self,
@@ -145,7 +153,6 @@ class ExpertReviewService:
     ) -> ExpertReviewResponse:
         claim = await self._claims.get_by_id(claim_id)
 
-
         existing = await self._reviews.get_by_claim_and_reviewer(claim_id, expert_id)
         if existing is not None:
             raise DomainValidationError(
@@ -153,14 +160,14 @@ class ExpertReviewService:
                 details={"review_id": str(existing.id)},
             )
 
-
         cred = await self._credibility.get_or_create(
             expert_id, initial_score=_AUTH.initial_expert_credibility
         )
 
-
         result = await self._results.get_by_claim_id(claim_id)
-        ai_label = result.label if result else VerificationLabel.NOT_FOUND_IN_CLAIMED_SOURCE
+        ai_label = (
+            result.label if result else VerificationLabel.NOT_FOUND_IN_CLAIMED_SOURCE
+        )
 
         review = ExpertReview(
             claim_id=claim_id,
@@ -180,7 +187,6 @@ class ExpertReviewService:
             expert_id=str(expert_id),
             label=expert_label.value,
         )
-
 
         vote_count = await self._reviews.count_votes_for_claim(claim_id)
         if vote_count >= _AUTH.min_expert_votes_to_finalize:
@@ -216,10 +222,6 @@ class ExpertReviewService:
 
         return _review_to_response(review)
 
-
-
-
-
     async def get_history(
         self,
         expert_id: uuid.UUID,
@@ -237,28 +239,29 @@ class ExpertReviewService:
             final_label = result.label.value if result else None
             matched: bool | None = None
             if final_label and r.status == "finalized":
-                matched = (r.expert_label.value == final_label)
-            items.append(ExpertHistoryItemResponse(
-                review_id=str(r.id),
-                claim_id=str(r.claim_id),
-                headline=claim.headline if claim else None,
-                claimed_source=claim.claimed_source if claim else None,
-                expert_label=r.expert_label.value,
-                ai_label=r.ai_label.value,
-                final_label=final_label,
-                matched=matched,
-                voted_at=r.created_at,
-            ))
+                matched = r.expert_label.value == final_label
+            items.append(
+                ExpertHistoryItemResponse(
+                    review_id=str(r.id),
+                    claim_id=str(r.claim_id),
+                    headline=claim.headline if claim else None,
+                    claimed_source=claim.claimed_source if claim else None,
+                    expert_label=r.expert_label.value,
+                    ai_label=r.ai_label.value,
+                    final_label=final_label,
+                    matched=matched,
+                    voted_at=r.created_at,
+                )
+            )
         return items
 
     async def get_stats(self, expert_id: uuid.UUID) -> ExpertStatsResponse:
         from app.features.auth.models import User
+
         cred = await self._credibility.get_or_create(
             expert_id, initial_score=_AUTH.initial_expert_credibility
         )
-        user: User | None = await self._credibility.session.get(
-            User, expert_id
-        )
+        user: User | None = await self._credibility.session.get(User, expert_id)
         accuracy = (
             round(cred.correct_votes / cred.total_votes * 100, 1)
             if cred.total_votes > 0
@@ -273,10 +276,6 @@ class ExpertReviewService:
             current_credibility=round(cred.score, 4),
         )
 
-
-
-
-
     async def _finalize_claim(self, claim_id: uuid.UUID) -> None:
         reviews = await self._reviews.get_reviews_for_claim(claim_id)
         if not reviews:
@@ -286,29 +285,25 @@ class ExpertReviewService:
         if result is None:
             return
 
-
         weighted_totals: dict[VerificationLabel, float] = {}
         for review in reviews:
             lbl = review.expert_label
-            weighted_totals[lbl] = weighted_totals.get(lbl, 0.0) + review.credibility_weight
-
+            weighted_totals[lbl] = (
+                weighted_totals.get(lbl, 0.0) + review.credibility_weight
+            )
 
         ai_lbl = result.label
         ai_weight = result.confidence
         weighted_totals[ai_lbl] = weighted_totals.get(ai_lbl, 0.0) + ai_weight
 
-
         max_weight = max(weighted_totals.values())
         winners = [l for l, w in weighted_totals.items() if w == max_weight]
         final_label = ai_lbl if ai_lbl in winners else winners[0]
 
-
         await self._results.update(result, label=final_label)
-
 
         for review in reviews:
             await self._reviews.update(review, status="finalized")
-
 
         await self._update_credibility_scores(reviews, final_label)
 
@@ -338,11 +333,6 @@ class ExpertReviewService:
                 total_votes=cred.total_votes + 1,
                 correct_votes=new_correct,
             )
-
-
-
-
-
 
 
 def _review_to_response(r: ExpertReview) -> ExpertReviewResponse:

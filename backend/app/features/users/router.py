@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import uuid
@@ -75,15 +74,17 @@ async def get_my_submissions(
             .limit(1)
         )
         result = (await session.execute(result_stmt)).scalar_one_or_none()
-        items.append(SubmissionSummary(
-            claim_id=str(claim.id),
-            headline=claim.headline,
-            claimed_source=claim.claimed_source,
-            status=claim.status.value,
-            ai_label=result.label.value if result else None,
-            ai_confidence=result.confidence if result else None,
-            submitted_at=claim.created_at,
-        ))
+        items.append(
+            SubmissionSummary(
+                claim_id=str(claim.id),
+                headline=claim.headline,
+                claimed_source=claim.claimed_source,
+                status=claim.status.value,
+                ai_label=result.label.value if result else None,
+                ai_confidence=result.confidence if result else None,
+                submitted_at=claim.created_at,
+            )
+        )
     return items
 
 
@@ -92,31 +93,47 @@ async def get_my_submission_stats(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_async_session),
 ) -> SubmissionStatsResponse:
-    total = (await session.execute(
-        select(func.count()).select_from(VerifiedClaim)
-        .where(VerifiedClaim.submitter_id == current_user.id)
-    )).scalar_one()
+    total = (
+        await session.execute(
+            select(func.count())
+            .select_from(VerifiedClaim)
+            .where(VerifiedClaim.submitter_id == current_user.id)
+        )
+    ).scalar_one()
 
-    pending = (await session.execute(
-        select(func.count()).select_from(VerifiedClaim)
-        .where(VerifiedClaim.submitter_id == current_user.id,
-               VerifiedClaim.status == ClaimStatus.PENDING)
-    )).scalar_one()
+    pending = (
+        await session.execute(
+            select(func.count())
+            .select_from(VerifiedClaim)
+            .where(
+                VerifiedClaim.submitter_id == current_user.id,
+                VerifiedClaim.status == ClaimStatus.PENDING,
+            )
+        )
+    ).scalar_one()
 
     def _lc(lbl):
         return (
-            select(func.count()).select_from(VerificationResult)
+            select(func.count())
+            .select_from(VerificationResult)
             .join(VerifiedClaim, VerificationResult.claim_id == VerifiedClaim.id)
-            .where(VerifiedClaim.submitter_id == current_user.id,
-                   VerificationResult.label == lbl)
+            .where(
+                VerifiedClaim.submitter_id == current_user.id,
+                VerificationResult.label == lbl,
+            )
         )
 
     tc = (await session.execute(_lc(VerificationLabel.TRUE))).scalar_one()
     fc = (await session.execute(_lc(VerificationLabel.FALSE))).scalar_one()
     pc = (await session.execute(_lc(VerificationLabel.PARTIALLY_TRUE))).scalar_one()
 
-    return SubmissionStatsResponse(total=total, finalized_true=tc, finalized_false=fc,
-                                   finalized_partially_true=pc, pending=pending)
+    return SubmissionStatsResponse(
+        total=total,
+        finalized_true=tc,
+        finalized_false=fc,
+        finalized_partially_true=pc,
+        pending=pending,
+    )
 
 
 @router.get("/me/profile", response_model=ProfileResponse)
@@ -125,9 +142,12 @@ async def get_my_profile(
     session: AsyncSession = Depends(get_async_session),
 ) -> ProfileResponse:
     from app.features.users.models import UserProfile
-    profile = (await session.execute(
-        select(UserProfile).where(UserProfile.user_id == current_user.id).limit(1)
-    )).scalar_one_or_none()
+
+    profile = (
+        await session.execute(
+            select(UserProfile).where(UserProfile.user_id == current_user.id).limit(1)
+        )
+    ).scalar_one_or_none()
     return ProfileResponse(
         id=str(current_user.id),
         full_name=current_user.full_name,
@@ -147,12 +167,15 @@ async def update_my_profile(
     session: AsyncSession = Depends(get_async_session),
 ) -> ProfileResponse:
     from app.features.users.models import UserProfile
+
     if body.full_name is not None:
         current_user.full_name = body.full_name
         session.add(current_user)
-    profile = (await session.execute(
-        select(UserProfile).where(UserProfile.user_id == current_user.id).limit(1)
-    )).scalar_one_or_none()
+    profile = (
+        await session.execute(
+            select(UserProfile).where(UserProfile.user_id == current_user.id).limit(1)
+        )
+    ).scalar_one_or_none()
     if profile and body.bio is not None:
         profile.bio = body.bio
         session.add(profile)

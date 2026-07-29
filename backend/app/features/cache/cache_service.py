@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import json
@@ -27,10 +26,6 @@ class CacheService:
         self._search_ttl = _SETTINGS.redis.ttl_search_result
         self._article_ttl = _SETTINGS.redis.ttl_article_content
 
-
-
-
-
     async def get_claim_result(self, claim_hash: str) -> bytes | None:
         try:
             return await self._redis.get(f"{_KEY_CLAIM}:{claim_hash}")
@@ -53,10 +48,6 @@ class CacheService:
             await self._redis.delete(f"{_KEY_CLAIM}:{claim_hash}")
         except Exception:
             pass
-
-
-
-
 
     async def get_search_result(
         self, provider: str, query_hash: str
@@ -81,10 +72,6 @@ class CacheService:
         except Exception:
             pass
 
-
-
-
-
     async def get_article(self, url_hash: str) -> dict | None:
         try:
             raw = await self._redis.get(f"{_KEY_ARTICLE}:{url_hash}")
@@ -103,10 +90,6 @@ class CacheService:
             )
         except Exception:
             pass
-
-
-
-
 
     async def get_raw(self, key: str) -> bytes | None:
         try:

@@ -1,4 +1,3 @@
-
 from app.shared.base_model import Base
 
 
@@ -41,31 +40,20 @@ from app.features.notifications.models import Notification
 
 from app.features.feedback.models import UserFeedback
 
-
 __all__ = [
     "Base",
-
     "VerifiedClaim",
     "VerificationResult",
     "VerificationLog",
-
     "RetrievedArticle",
     "SearchQuery",
-
     "VerifiedSource",
-
     "User",
     "RefreshToken",
     "PasswordResetToken",
-
     "UserProfile",
-
     "ExpertReview",
-
     "MultimodalPrediction",
-
-
     "Notification",
-
     "UserFeedback",
 ]

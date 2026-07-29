@@ -1,4 +1,3 @@
-
 from typing import TypedDict
 
 
@@ -18,22 +17,18 @@ class SourceConfig(TypedDict, total=False):
 
 
 SOURCE_REGISTRY: dict[str, SourceConfig] = {
-
-
-
-
-
-
     "prothomalo.com": {
         "name": "প্রথম আলো",
         "display_name_en": "Prothom Alo",
         "base_url": "https://www.prothomalo.com",
         "aliases": [
-            "প্রথম আলো", "prothom alo", "prothomalo", "prothom-alo",
-            "www.prothomalo.com", "prothomalo.com",
+            "প্রথম আলো",
+            "prothom alo",
+            "prothomalo",
+            "prothom-alo",
+            "www.prothomalo.com",
+            "prothomalo.com",
         ],
-
-
         "body_selectors": [
             "div.story-element-text",
             "div[class*='story-element-text']",
@@ -60,9 +55,6 @@ SOURCE_REGISTRY: dict[str, SourceConfig] = {
             "time",
         ],
         "internal_search_url": "https://www.prothomalo.com/search?q={query}",
-
-
-
         "article_url_patterns": [
             r"prothomalo\.com/[^/]+/[^/]*/article/[a-zA-Z0-9_-]+",
             r"prothomalo\.com/[^/]+/article/[a-zA-Z0-9_-]+",
@@ -73,18 +65,17 @@ SOURCE_REGISTRY: dict[str, SourceConfig] = {
         "js_rendered": False,
         "search_language": "bn",
     },
-
-
-
-
-
     "bd-pratidin.com": {
         "name": "বাংলাদেশ প্রতিদিন",
         "display_name_en": "Bangladesh Pratidin",
         "base_url": "https://www.bd-pratidin.com",
         "aliases": [
-            "বাংলাদেশ প্রতিদিন", "bangladesh pratidin", "bd pratidin",
-            "bd-pratidin", "www.bd-pratidin.com", "bd-pratidin.com",
+            "বাংলাদেশ প্রতিদিন",
+            "bangladesh pratidin",
+            "bd pratidin",
+            "bd-pratidin",
+            "www.bd-pratidin.com",
+            "bd-pratidin.com",
         ],
         "body_selectors": [
             ".news-details p",
@@ -111,10 +102,6 @@ SOURCE_REGISTRY: dict[str, SourceConfig] = {
             "time",
         ],
         "internal_search_url": "https://www.bd-pratidin.com/search?q={query}",
-
-
-
-
         "article_url_patterns": [
             r"bd-pratidin\.com/[^/]+/\d{4}/\d{2}/\d{2}/\d+",
             r"bd-pratidin\.com/[^/]+/\d{6,}",
@@ -124,20 +111,17 @@ SOURCE_REGISTRY: dict[str, SourceConfig] = {
         "js_rendered": False,
         "search_language": "bn",
     },
-
-
-
-
-
     "bangla.thedailystar.net": {
         "name": "দ্য ডেইলি স্টার",
         "display_name_en": "The Daily Star Bangla",
         "base_url": "https://bangla.thedailystar.net",
         "aliases": [
-            "দ্য ডেইলি স্টার", "the daily star bangla", "the daily star",
-            "bangla.thedailystar.net", "thedailystar",
+            "দ্য ডেইলি স্টার",
+            "the daily star bangla",
+            "the daily star",
+            "bangla.thedailystar.net",
+            "thedailystar",
         ],
-
         "body_selectors": [
             ".block-field-blocknodenewsbody p",
             ".article-body p",
@@ -158,8 +142,6 @@ SOURCE_REGISTRY: dict[str, SourceConfig] = {
             "time[datetime]",
             "time",
         ],
-
-
         "internal_search_url": "",
         "article_url_patterns": [
             r"bangla\.thedailystar\.net/[a-zA-Z0-9-]+/.*news-\d+",
@@ -169,18 +151,16 @@ SOURCE_REGISTRY: dict[str, SourceConfig] = {
         "js_rendered": False,
         "search_language": "bn",
     },
-
-
-
-
-
     "kalerkantho.com": {
         "name": "কালের কণ্ঠ",
         "display_name_en": "Kaler Kantho",
         "base_url": "https://www.kalerkantho.com",
         "aliases": [
-            "কালের কণ্ঠ", "kaler kantho", "kalerkantho",
-            "www.kalerkantho.com", "kalerkantho.com",
+            "কালের কণ্ঠ",
+            "kaler kantho",
+            "kalerkantho",
+            "www.kalerkantho.com",
+            "kalerkantho.com",
         ],
         "body_selectors": [
             ".details-txt p",
@@ -206,12 +186,7 @@ SOURCE_REGISTRY: dict[str, SourceConfig] = {
             "span[class*='date']",
             "time",
         ],
-
-
         "internal_search_url": "https://www.kalerkantho.com/search?q={query}",
-
-
-
         "article_url_patterns": [
             r"kalerkantho\.com/online/[^/]+/\d{4}/\d{2}/\d{2}/\d+",
             r"kalerkantho\.com/print-edition/[^/]+/\d{4}/\d{2}/\d{2}/\d+",
@@ -221,17 +196,15 @@ SOURCE_REGISTRY: dict[str, SourceConfig] = {
         "js_rendered": False,
         "search_language": "bn",
     },
-
-
-
-
-
     "jugantor.com": {
         "name": "যুগান্তর",
         "display_name_en": "Jugantor",
         "base_url": "https://www.jugantor.com",
         "aliases": [
-            "যুগান্তর", "jugantor", "www.jugantor.com", "jugantor.com",
+            "যুগান্তর",
+            "jugantor",
+            "www.jugantor.com",
+            "jugantor.com",
         ],
         "body_selectors": [
             "div#myText p",
@@ -255,8 +228,6 @@ SOURCE_REGISTRY: dict[str, SourceConfig] = {
             "span[class*='date']",
             "time",
         ],
-
-
         "internal_search_url": "https://www.jugantor.com/search?q={query}",
         "article_url_patterns": [
             r"jugantor\.com/[^/]+/\d{4}/\d{2}/\d{2}/\d+",
@@ -266,17 +237,15 @@ SOURCE_REGISTRY: dict[str, SourceConfig] = {
         "js_rendered": False,
         "search_language": "bn",
     },
-
-
-
-
-
     "ittefaq.com.bd": {
         "name": "ইত্তেফাক",
         "display_name_en": "Ittefaq",
         "base_url": "https://www.ittefaq.com.bd",
         "aliases": [
-            "ইত্তেফাক", "ittefaq", "www.ittefaq.com.bd", "ittefaq.com.bd",
+            "ইত্তেফাক",
+            "ittefaq",
+            "www.ittefaq.com.bd",
+            "ittefaq.com.bd",
         ],
         "body_selectors": [
             "div.dtl_content_block p",
@@ -300,9 +269,6 @@ SOURCE_REGISTRY: dict[str, SourceConfig] = {
             "time",
         ],
         "internal_search_url": "https://www.ittefaq.com.bd/search?q={query}",
-
-
-
         "article_url_patterns": [
             r"ittefaq\.com\.bd/\d{5,}$",
             r"ittefaq\.com\.bd/[a-z-]+/\d{4}-\d{2}-\d{2}/\d+",
@@ -312,17 +278,15 @@ SOURCE_REGISTRY: dict[str, SourceConfig] = {
         "js_rendered": False,
         "search_language": "bn",
     },
-
-
-
-
-
     "samakal.com": {
         "name": "সমকাল",
         "display_name_en": "Samakal",
         "base_url": "https://samakal.com",
         "aliases": [
-            "সমকাল", "samakal", "www.samakal.com", "samakal.com",
+            "সমকাল",
+            "samakal",
+            "www.samakal.com",
+            "samakal.com",
         ],
         "body_selectors": [
             "div.description p",
@@ -346,9 +310,6 @@ SOURCE_REGISTRY: dict[str, SourceConfig] = {
             "time",
         ],
         "internal_search_url": "https://samakal.com/search?q={query}",
-
-
-
         "article_url_patterns": [
             r"samakal\.com/[^/]+/article/[a-zA-Z0-9_-]+",
             r"samakal\.com/[^/]+/[^/?#]{8,}$",
@@ -357,25 +318,22 @@ SOURCE_REGISTRY: dict[str, SourceConfig] = {
         "js_rendered": False,
         "search_language": "bn",
     },
-
-
-
-
-
     "mzamin.com": {
         "name": "মানবজমিন",
         "display_name_en": "Manab Zamin",
         "base_url": "https://mzamin.com",
         "aliases": [
-            "মানবজমিন", "manab zamin", "manabzamin", "mzamin",
-            "www.mzamin.com", "mzamin.com",
+            "মানবজমিন",
+            "manab zamin",
+            "manabzamin",
+            "mzamin",
+            "www.mzamin.com",
+            "mzamin.com",
         ],
         "body_selectors": [
             ".details-text p",
             "div.details-text p",
             ".news-details p",
-
-
             ".col-md-8 .content p",
             ".col-md-8 p",
             "article p",
@@ -393,9 +351,6 @@ SOURCE_REGISTRY: dict[str, SourceConfig] = {
             "time",
         ],
         "internal_search_url": "https://mzamin.com/search.php?q={query}",
-
-
-
         "article_url_patterns": [
             r"mzamin\.com/article\.php\?mzamin=\d+",
             r"mzamin\.com/news/\d+",
@@ -404,18 +359,17 @@ SOURCE_REGISTRY: dict[str, SourceConfig] = {
         "js_rendered": False,
         "search_language": "bn",
     },
-
-
-
-
-
     "dailyinqilab.com": {
         "name": "ইনকিলাব",
         "display_name_en": "Daily Inqilab",
         "base_url": "https://dailyinqilab.com",
         "aliases": [
-            "ইনকিলাব", "inqilab", "daily inqilab", "dailyinqilab",
-            "www.dailyinqilab.com", "dailyinqilab.com",
+            "ইনকিলাব",
+            "inqilab",
+            "daily inqilab",
+            "dailyinqilab",
+            "www.dailyinqilab.com",
+            "dailyinqilab.com",
         ],
         "body_selectors": [
             ".news-details p",
@@ -436,9 +390,6 @@ SOURCE_REGISTRY: dict[str, SourceConfig] = {
             "time",
         ],
         "internal_search_url": "https://dailyinqilab.com/search?q={query}",
-
-
-
         "article_url_patterns": [
             r"dailyinqilab\.com/article/\d+",
             r"dailyinqilab\.com/news/\d+",
@@ -447,18 +398,17 @@ SOURCE_REGISTRY: dict[str, SourceConfig] = {
         "js_rendered": False,
         "search_language": "bn",
     },
-
-
-
-
-
     "dailynayadiganta.com": {
         "name": "নয়া দিগন্ত",
         "display_name_en": "Naya Diganta",
         "base_url": "https://www.dailynayadiganta.com",
         "aliases": [
-            "নয়া দিগন্ত", "naya diganta", "nayadiganta", "daily nayadiganta",
-            "www.dailynayadiganta.com", "dailynayadiganta.com",
+            "নয়া দিগন্ত",
+            "naya diganta",
+            "nayadiganta",
+            "daily nayadiganta",
+            "www.dailynayadiganta.com",
+            "dailynayadiganta.com",
         ],
         "body_selectors": [
             ".news-content p",
@@ -481,10 +431,6 @@ SOURCE_REGISTRY: dict[str, SourceConfig] = {
             "time",
         ],
         "internal_search_url": "https://www.dailynayadiganta.com/search?q={query}",
-
-
-
-
         "article_url_patterns": [
             r"dailynayadiganta\.com/detail/news/\d+",
             r"dailynayadiganta\.com/[^/]+/\d+[a-z]*$",

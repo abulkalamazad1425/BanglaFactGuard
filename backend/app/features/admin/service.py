@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import uuid
@@ -10,7 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.constants import ClaimStatus, VerificationLabel
-from app.core.exceptions import DuplicateRecordError, RecordNotFoundError, WeakPasswordError
+from app.core.exceptions import (
+    DuplicateRecordError,
+    RecordNotFoundError,
+    WeakPasswordError,
+)
 from app.features.admin.schemas import (
     AdminStatsResponse,
     CreateExpertRequest,
@@ -33,6 +36,7 @@ _SETTINGS = get_settings()
 
 def _validate_password(password: str) -> None:
     from app.features.auth.service import _validate_password_strength
+
     _validate_password_strength(password)
 
 
@@ -50,10 +54,6 @@ class AdminService:
         self._credibility = credibility_repo
         self._tokens = token_repo
 
-
-
-
-
     async def create_expert(self, req: CreateExpertRequest) -> ExpertResponse:
         _validate_password(req.password)
 
@@ -70,13 +70,11 @@ class AdminService:
         )
         user = await self._users.create(user)
 
-
         profile = UserProfile(
             user_id=user.id,
             bio=req.expertise_area,
         )
         self._session.add(profile)
-
 
         cred = CredibilityScore(
             user_id=user.id,
@@ -88,22 +86,30 @@ class AdminService:
         await self._session.flush()
 
         logger.info("expert_created", user_id=str(user.id), email=req.email)
-        return _expert_to_response(user, req.expertise_area, _SETTINGS.auth.initial_expert_credibility, 0)
+        return _expert_to_response(
+            user, req.expertise_area, _SETTINGS.auth.initial_expert_credibility, 0
+        )
 
-    async def list_experts(self, *, limit: int = 50, offset: int = 0) -> list[ExpertResponse]:
+    async def list_experts(
+        self, *, limit: int = 50, offset: int = 0
+    ) -> list[ExpertResponse]:
         users = await self._users.list_by_role("expert", limit=limit, offset=offset)
         results = []
         for u in users:
             cred = await self._credibility.get_by_user_id(u.id)
-            profile_stmt = select(UserProfile).where(UserProfile.user_id == u.id).limit(1)
+            profile_stmt = (
+                select(UserProfile).where(UserProfile.user_id == u.id).limit(1)
+            )
             profile_result = await self._session.execute(profile_stmt)
             profile = profile_result.scalar_one_or_none()
-            results.append(_expert_to_response(
-                u,
-                expertise_area=profile.bio if profile else None,
-                credibility_score=cred.score if cred else None,
-                total_votes=cred.total_votes if cred else 0,
-            ))
+            results.append(
+                _expert_to_response(
+                    u,
+                    expertise_area=profile.bio if profile else None,
+                    credibility_score=cred.score if cred else None,
+                    total_votes=cred.total_votes if cred else 0,
+                )
+            )
         return results
 
     async def get_expert(self, user_id: uuid.UUID) -> ExpertResponse:
@@ -111,7 +117,9 @@ class AdminService:
         if user.role != "expert":
             raise RecordNotFoundError(model="Expert", identifier=str(user_id))
         cred = await self._credibility.get_by_user_id(user_id)
-        profile_stmt = select(UserProfile).where(UserProfile.user_id == user_id).limit(1)
+        profile_stmt = (
+            select(UserProfile).where(UserProfile.user_id == user_id).limit(1)
+        )
         profile_result = await self._session.execute(profile_stmt)
         profile = profile_result.scalar_one_or_none()
         return _expert_to_response(
@@ -121,7 +129,9 @@ class AdminService:
             total_votes=cred.total_votes if cred else 0,
         )
 
-    async def update_expert(self, user_id: uuid.UUID, req: UpdateExpertRequest) -> ExpertResponse:
+    async def update_expert(
+        self, user_id: uuid.UUID, req: UpdateExpertRequest
+    ) -> ExpertResponse:
         user = await self._users.get_by_id(user_id)
         updates: dict = {}
         if req.full_name is not None:
@@ -135,9 +145,10 @@ class AdminService:
         if updates:
             user = await self._users.update(user, **updates)
 
-
         if req.expertise_area is not None:
-            profile_stmt = select(UserProfile).where(UserProfile.user_id == user_id).limit(1)
+            profile_stmt = (
+                select(UserProfile).where(UserProfile.user_id == user_id).limit(1)
+            )
             profile_result = await self._session.execute(profile_stmt)
             profile = profile_result.scalar_one_or_none()
             if profile:
@@ -168,7 +179,9 @@ class AdminService:
         return {"message": "Password has been reset. The expert must log in again."}
 
     async def deactivate_expert(self, user_id: uuid.UUID) -> ExpertResponse:
-        user = await self._users.update(await self._users.get_by_id(user_id), is_active=False)
+        user = await self._users.update(
+            await self._users.get_by_id(user_id), is_active=False
+        )
         await self._tokens.revoke_all_for_user(user_id)
         return await self.get_expert(user_id)
 
@@ -176,45 +189,55 @@ class AdminService:
         await self._users.update(await self._users.get_by_id(user_id), is_active=True)
         return await self.get_expert(user_id)
 
-
-
-
-
     async def get_platform_stats(self) -> AdminStatsResponse:
         thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
-
 
         total_stmt = select(func.count()).select_from(VerifiedClaim)
         total = (await self._session.execute(total_stmt)).scalar_one()
 
-
-        recent_stmt = select(func.count()).select_from(VerifiedClaim).where(
-            VerifiedClaim.created_at >= thirty_days_ago
+        recent_stmt = (
+            select(func.count())
+            .select_from(VerifiedClaim)
+            .where(VerifiedClaim.created_at >= thirty_days_ago)
         )
         recent = (await self._session.execute(recent_stmt)).scalar_one()
 
-
         def _count_label(lbl: VerificationLabel):
-            return select(func.count()).select_from(VerificationResult).where(
-                VerificationResult.label == lbl
+            return (
+                select(func.count())
+                .select_from(VerificationResult)
+                .where(VerificationResult.label == lbl)
             )
 
-        true_c = (await self._session.execute(_count_label(VerificationLabel.TRUE))).scalar_one()
-        false_c = (await self._session.execute(_count_label(VerificationLabel.FALSE))).scalar_one()
-        partial_c = (await self._session.execute(_count_label(VerificationLabel.PARTIALLY_TRUE))).scalar_one()
-        nf_c = (await self._session.execute(_count_label(VerificationLabel.NOT_FOUND_IN_CLAIMED_SOURCE))).scalar_one()
-
+        true_c = (
+            await self._session.execute(_count_label(VerificationLabel.TRUE))
+        ).scalar_one()
+        false_c = (
+            await self._session.execute(_count_label(VerificationLabel.FALSE))
+        ).scalar_one()
+        partial_c = (
+            await self._session.execute(_count_label(VerificationLabel.PARTIALLY_TRUE))
+        ).scalar_one()
+        nf_c = (
+            await self._session.execute(
+                _count_label(VerificationLabel.NOT_FOUND_IN_CLAIMED_SOURCE)
+            )
+        ).scalar_one()
 
         total_experts = await self._users.count_by_role("expert")
-        active_experts_stmt = select(func.count()).select_from(User).where(
-            User.role == "expert", User.is_active.is_(True)
+        active_experts_stmt = (
+            select(func.count())
+            .select_from(User)
+            .where(User.role == "expert", User.is_active.is_(True))
         )
         active_experts = (await self._session.execute(active_experts_stmt)).scalar_one()
 
-
         from app.features.expert_review.models import ExpertReview
-        pending_stmt = select(func.count()).select_from(ExpertReview).where(
-            ExpertReview.status == "pending"
+
+        pending_stmt = (
+            select(func.count())
+            .select_from(ExpertReview)
+            .where(ExpertReview.status == "pending")
         )
         pending = (await self._session.execute(pending_stmt)).scalar_one()
 
@@ -232,11 +255,6 @@ class AdminService:
             active_experts=active_experts,
             avg_verification_time_seconds=None,
         )
-
-
-
-
-
 
 
 def _expert_to_response(

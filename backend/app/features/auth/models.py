@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import uuid
@@ -65,7 +64,6 @@ class User(UUIDMixin, TimestampMixin, ReprMixin, Base):
         nullable=True,
         comment="OAuth provider subject ID",
     )
-
 
     profile: Mapped["UserProfile | None"] = relationship(
         "UserProfile",

@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import hashlib
@@ -27,9 +26,6 @@ _SETTINGS = get_settings()
 _AUTH = _SETTINGS.auth
 
 
-
-
-
 def hash_password(plain: str) -> str:
 
     plain_bytes = plain.encode("utf-8")[:72]
@@ -44,11 +40,6 @@ def verify_password(plain: str, hashed: str) -> bool:
         return bcrypt.checkpw(plain_bytes, hashed.encode("utf-8"))
     except ValueError:
         return False
-
-
-
-
-
 
 
 def create_access_token(user_id: uuid.UUID, role: str) -> tuple[str, int]:
@@ -79,11 +70,6 @@ def _sha256(value: str) -> str:
     return hashlib.sha256(value.encode()).hexdigest()
 
 
-
-
-
-
-
 def decode_access_token(token: str) -> dict[str, Any]:
     try:
         payload = jwt.decode(token, _AUTH.secret_key, algorithms=[_AUTH.algorithm])
@@ -94,10 +80,6 @@ def decode_access_token(token: str) -> dict[str, Any]:
         raise TokenExpiredError()
     except JWTError:
         raise TokenInvalidError()
-
-
-
-
 
 
 _bearer_scheme = HTTPBearer(auto_error=False)
@@ -115,7 +97,6 @@ async def get_current_user(
         user_id = uuid.UUID(payload["sub"])
     except (KeyError, ValueError):
         raise TokenInvalidError()
-
 
     async with AsyncSessionLocal() as session:
         user: User | None = await session.get(User, user_id)

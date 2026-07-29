@@ -111,7 +111,6 @@ class NLIService:
             logger.warning("nli_not_loaded_returning_none")
             return None
 
-
         truncated_premise = truncate_for_nli(premise, max_chars=1200)
         truncated_hyp = truncate_for_nli(hypothesis, max_chars=300)
 
@@ -158,5 +157,3 @@ class NLIService:
         except (KeyError, ValueError, TypeError) as exc:
             logger.warning("nli_output_parse_failed", error=str(exc))
             return None
-
-

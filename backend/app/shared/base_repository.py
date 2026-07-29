@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import logging
@@ -24,10 +23,6 @@ class BaseRepository(Generic[ModelT]):
 
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
-
-
-
-
 
     async def get_by_id(self, record_id: uuid.UUID) -> ModelT:
         result = await self.session.get(self.model_class, record_id)
@@ -71,10 +66,6 @@ class BaseRepository(Generic[ModelT]):
         stmt = select(func.count()).where(pk_column == record_id).limit(1)
         result = await self.session.execute(stmt)
         return (result.scalar_one() or 0) > 0
-
-
-
-
 
     async def create(self, instance: ModelT) -> ModelT:
         try:

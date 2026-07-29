@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import structlog
@@ -29,22 +28,14 @@ logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
-
-
-
-
-
-def _get_auth_service(session: AsyncSession = Depends(get_async_session)) -> AuthService:
+def _get_auth_service(
+    session: AsyncSession = Depends(get_async_session),
+) -> AuthService:
     return AuthService(
         user_repo=UserRepository(session),
         token_repo=RefreshTokenRepository(session),
         reset_token_repo=PasswordResetTokenRepository(session),
     )
-
-
-
-
-
 
 
 @router.post(
@@ -63,12 +54,14 @@ async def register(
         full_name=body.full_name,
     )
 
-    return user_data.model_copy(update={
-        "access_token": tokens.access_token,
-        "refresh_token": tokens.refresh_token,
-        "token_type": tokens.token_type,
-        "expires_in": tokens.expires_in,
-    })
+    return user_data.model_copy(
+        update={
+            "access_token": tokens.access_token,
+            "refresh_token": tokens.refresh_token,
+            "token_type": tokens.token_type,
+            "expires_in": tokens.expires_in,
+        }
+    )
 
 
 @router.post(
@@ -117,6 +110,7 @@ async def me(
     current_user: User = Depends(get_current_user),
 ) -> UserMeResponse:
     from app.features.auth.service import _to_me_response
+
     return _to_me_response(current_user)
 
 
@@ -131,7 +125,6 @@ async def request_password_reset(
 ) -> dict:
     raw_token = await svc.request_password_reset(email=body.email)
     if raw_token:
-
 
         logger.info("password_reset_token_issued", token=raw_token[:8] + "…")
     return {"message": "If the email is registered, a reset link has been sent."}

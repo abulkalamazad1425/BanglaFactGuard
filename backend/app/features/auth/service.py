@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import hashlib
@@ -61,10 +60,6 @@ class AuthService:
         self._tokens = token_repo
         self._reset_tokens = reset_token_repo
 
-
-
-
-
     async def register(
         self,
         email: str,
@@ -91,7 +86,6 @@ class AuthService:
         )
         user = await self._users.create(user)
 
-
         profile = UserProfile(user_id=user.id)
         self._users.session.add(profile)
         await self._users.session.flush()
@@ -101,13 +95,10 @@ class AuthService:
         tokens = await self._issue_token_pair(user)
         return _to_me_response(user), tokens
 
-
-
-
-
-    async def login(self, email: str, password: str) -> tuple[UserMeResponse, TokenResponse]:
+    async def login(
+        self, email: str, password: str
+    ) -> tuple[UserMeResponse, TokenResponse]:
         user = await self._users.get_by_email(email)
-
 
         _dummy_hash = "$2b$12$dummy.hash.to.prevent.timing.oracle.attack.padding"
         hashed = user.hashed_password if user else _dummy_hash
@@ -123,10 +114,6 @@ class AuthService:
         tokens = await self._issue_token_pair(user)
         return _to_me_response(user), tokens
 
-
-
-
-
     async def refresh(self, raw_refresh_token: str) -> TokenResponse:
         old_token = await self._tokens.get_valid_by_raw_token(raw_refresh_token)
         if old_token is None:
@@ -137,7 +124,6 @@ class AuthService:
         if not user.is_active:
             raise InactiveAccountError()
 
-
         old_token.revoked = True
         self._users.session.add(old_token)
 
@@ -145,26 +131,14 @@ class AuthService:
         logger.info("token_refreshed", user_id=str(user.id))
         return tokens
 
-
-
-
-
     async def logout(self, raw_refresh_token: str) -> None:
         revoked = await self._tokens.revoke_by_raw_token(raw_refresh_token)
         if not revoked:
             logger.debug("logout_token_not_found_or_already_revoked")
 
-
-
-
-
     async def get_me(self, user_id: uuid.UUID) -> UserMeResponse:
         user = await self._users.get_by_id(user_id)
         return _to_me_response(user)
-
-
-
-
 
     async def request_password_reset(self, email: str) -> str | None:
         user = await self._users.get_by_email(email)
@@ -202,7 +176,6 @@ class AuthService:
         user.hashed_password = hash_password(new_password)
         self._users.session.add(user)
 
-
         await self._tokens.revoke_all_for_user(user.id)
 
         await self._users.session.flush()
@@ -221,10 +194,6 @@ class AuthService:
         await self._tokens.revoke_all_for_user(user.id)
         await self._users.session.flush()
         logger.info("password_changed", user_id=str(user.id))
-
-
-
-
 
     async def _issue_token_pair(self, user: User) -> TokenResponse:
         access_token, expires_in = create_access_token(user.id, user.role)
@@ -245,11 +214,6 @@ class AuthService:
             token_type="bearer",
             expires_in=expires_in,
         )
-
-
-
-
-
 
 
 def _to_me_response(user: User) -> UserMeResponse:

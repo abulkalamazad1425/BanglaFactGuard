@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import uuid
@@ -7,7 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.features.multimodal.models import MultimodalPrediction
-from app.features.multimodal.pipeline.embedding_extractor import MultimodalEmbeddingExtractor
+from app.features.multimodal.pipeline.embedding_extractor import (
+    MultimodalEmbeddingExtractor,
+)
 from app.features.multimodal.pipeline.inference_engine import (
     MultimodalInferenceEngine,
     PredictionResult,
@@ -37,10 +38,6 @@ class MultimodalPredictionService:
         self._engine = MultimodalInferenceEngine(loader)
         self._cfg = _SETTINGS.multimodal
 
-
-
-
-
     async def predict(
         self,
         *,
@@ -53,13 +50,11 @@ class MultimodalPredictionService:
         log = logger.bind(submission_id=submission_id)
         log.info("multimodal_predict_start", filename=original_filename)
 
-
         text_emb, img_emb, combined_emb = await self._extractor.extract_all_embeddings(
             body_text=body_text,
             image_bytes=image_bytes,
         )
         log.debug("embeddings_extracted")
-
 
         duplicate, similarity_scores = await self._find_duplicate(
             text_emb=text_emb,
@@ -67,14 +62,12 @@ class MultimodalPredictionService:
             combined_emb=combined_emb,
         )
 
-
         minio_key = await self._storage.upload_image(
             image_bytes=image_bytes,
             original_filename=original_filename,
             submission_id=submission_id,
         )
         log.info("image_uploaded_to_minio", key=minio_key)
-
 
         if duplicate is not None:
             log.info(
@@ -102,7 +95,6 @@ class MultimodalPredictionService:
                 similarity_scores=similarity_scores,
             )
 
-
         log.info("multimodal_running_fresh_inference")
         infer_result: PredictionResult = await self._engine.predict(
             body_text=body_text,
@@ -129,10 +121,6 @@ class MultimodalPredictionService:
         )
         return self._build_response(record=record, is_cached=False)
 
-
-
-
-
     async def get_prediction(self, prediction_id: uuid.UUID) -> MultimodalPrediction:
         return await self._repo.get_by_id(prediction_id)
 
@@ -141,10 +129,6 @@ class MultimodalPredictionService:
     ) -> tuple[list[MultimodalPrediction], int]:
         records = await self._repo.list_recent(limit=limit, offset=offset)
         return list(records), len(records)
-
-
-
-
 
     async def _find_duplicate(
         self,
@@ -162,6 +146,7 @@ class MultimodalPredictionService:
 
         for candidate in candidates:
             import numpy as np
+
             cand_text_emb = np.array(candidate.text_embedding, dtype=np.float32)
             cand_img_emb = np.array(candidate.image_embedding, dtype=np.float32)
             cand_combined_emb = np.array(candidate.combined_embedding, dtype=np.float32)

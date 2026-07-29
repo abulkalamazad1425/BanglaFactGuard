@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import logging
@@ -70,12 +69,17 @@ class SourceRepository(BaseRepository[VerifiedSource]):
         stmt = select(VerifiedSource).where(VerifiedSource.is_active.is_(True))
         if language:
             stmt = stmt.where(VerifiedSource.language == language.lower())
-        stmt = stmt.order_by(VerifiedSource.canonical_name.asc()).offset(offset).limit(limit)
+        stmt = (
+            stmt.order_by(VerifiedSource.canonical_name.asc())
+            .offset(offset)
+            .limit(limit)
+        )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
     async def count_active(self) -> int:
         from sqlalchemy import func
+
         stmt = (
             select(func.count())
             .select_from(VerifiedSource)

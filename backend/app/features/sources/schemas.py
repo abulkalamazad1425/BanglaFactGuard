@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import re
@@ -7,10 +6,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field, field_validator
 
-
-_DOMAIN_RE = re.compile(
-    r"^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$"
-)
+_DOMAIN_RE = re.compile(r"^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$")
 
 
 class SourceCreateSchema(BaseModel):
@@ -27,8 +23,12 @@ class SourceCreateSchema(BaseModel):
     aliases: list[str] = Field(default_factory=list)
     base_url: str = Field(..., max_length=512)
     rss_url: str | None = Field(default=None, max_length=512)
-    language: str = Field(default="bn", min_length=2, max_length=10, examples=["bn", "en"])
-    search_language: str = Field(default="bn", min_length=2, max_length=10, examples=["bn", "en"])
+    language: str = Field(
+        default="bn", min_length=2, max_length=10, examples=["bn", "en"]
+    )
+    search_language: str = Field(
+        default="bn", min_length=2, max_length=10, examples=["bn", "en"]
+    )
     js_rendered: bool = Field(default=False)
     description: str | None = Field(default=None, max_length=2000)
     body_selectors: list[str] = Field(default_factory=list)

@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import logging
@@ -9,12 +8,6 @@ import structlog
 from structlog.types import FilteringBoundLogger
 
 from app.core.config import AppSettings, get_settings
-
-
-
-
-
-
 
 _SHARED_PROCESSORS: list[Any] = [
     structlog.contextvars.merge_contextvars,
@@ -39,19 +32,11 @@ _CONSOLE_PROCESSORS: list[Any] = [
 ]
 
 
-
-
-
-
-
 def setup_logging(settings: AppSettings | None = None) -> None:
     if settings is None:
         settings = get_settings()
 
     log_level_int = getattr(logging, settings.log_level, logging.INFO)
-
-
-
 
     logging.basicConfig(
         format="%(message)s",
@@ -60,18 +45,14 @@ def setup_logging(settings: AppSettings | None = None) -> None:
         force=True,
     )
 
-
     if settings.log_level != "DEBUG":
         logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
         logging.getLogger("httpx").setLevel(logging.WARNING)
         logging.getLogger("httpcore").setLevel(logging.WARNING)
         logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
-
     processors = (
-        _JSON_PROCESSORS
-        if settings.log_format == "json"
-        else _CONSOLE_PROCESSORS
+        _JSON_PROCESSORS if settings.log_format == "json" else _CONSOLE_PROCESSORS
     )
 
     structlog.configure(
@@ -83,18 +64,8 @@ def setup_logging(settings: AppSettings | None = None) -> None:
     )
 
 
-
-
-
-
-
 def get_logger(name: str | None = None) -> FilteringBoundLogger:
     return structlog.get_logger(name)
-
-
-
-
-
 
 
 def bind_request_context(

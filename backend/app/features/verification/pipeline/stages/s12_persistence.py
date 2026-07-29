@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import json
@@ -12,7 +11,11 @@ from app.core.constants import ClaimStatus, PipelineStageID, SearchProvider
 from app.core.exceptions import PersistenceError
 from app.features.articles.models import RetrievedArticle, SearchQuery
 from app.features.notifications.models import Notification
-from app.features.verification.models import VerificationLog, VerifiedClaim, VerificationResult
+from app.features.verification.models import (
+    VerificationLog,
+    VerifiedClaim,
+    VerificationResult,
+)
 from app.features.verification.pipeline.context import PipelineContext
 from app.features.articles.repository import ArticleRepository
 from app.features.verification.repository import ClaimRepository
@@ -45,24 +48,13 @@ class PersistenceStage:
     async def execute(self, context: PipelineContext) -> PipelineContext:
         try:
 
-
-
             claim = await self._upsert_claim(context)
             context.claim_id = claim.id
-
-
-
 
             scores = context.scores
             top_article_id: uuid.UUID | None = None
 
-
-
-
-
-
             top_article_db_id = await self._persist_articles(context, claim.id)
-
 
             result = await self.result_repo.upsert_result(
                 claim_id=claim.id,
@@ -78,47 +70,15 @@ class PersistenceStage:
             )
             context.result_id = result.id
 
-
-
-
             await self._persist_search_queries(context, claim.id)
-
-
-
 
             await self._persist_logs(context, claim.id)
 
-
-
-
             await self.claim_repo.mark_completed(claim.id)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
             import asyncio
+
             asyncio.create_task(self._update_redis_cache(context))
-
-
-
 
             await self._send_notification(claim, context)
 
@@ -137,11 +97,9 @@ class PersistenceStage:
                 message=f"Persistence failed: {exc}",
             ) from exc
 
-
-
-
-
-    async def _send_notification(self, claim: VerifiedClaim, context: PipelineContext) -> None:
+    async def _send_notification(
+        self, claim: VerifiedClaim, context: PipelineContext
+    ) -> None:
         try:
             if not claim.submitter_id or not context.label:
                 return
@@ -158,18 +116,20 @@ class PersistenceStage:
             notif = Notification(
                 user_id=claim.submitter_id,
                 title=f"Verification Complete: {label_display} ({confidence_pct})",
-                body=f"Your claim \"{headline_preview}\" has been verified.",
+                body=f'Your claim "{headline_preview}" has been verified.',
                 notification_type="VERIFICATION_COMPLETE",
                 link_url=f"/verify/{claim.id}",
                 is_read=False,
             )
             self.session.add(notif)
             await self.session.flush()
-            logger.info("s12_notification_sent", claim_id=str(claim.id), user_id=str(claim.submitter_id))
+            logger.info(
+                "s12_notification_sent",
+                claim_id=str(claim.id),
+                user_id=str(claim.submitter_id),
+            )
         except Exception as exc:
             logger.warning("s12_notification_failed", error=str(exc))
-
-
 
     async def _upsert_claim(self, context: PipelineContext) -> VerifiedClaim:
         existing = None
@@ -177,7 +137,7 @@ class PersistenceStage:
             existing = await self.claim_repo.get_by_id_or_none(context.claim_id)
         if not existing and context.claim_hash:
             existing = await self.claim_repo.get_by_claim_hash(context.claim_hash)
-            
+
         if existing:
             return await self.claim_repo.update(
                 existing,
@@ -185,7 +145,6 @@ class PersistenceStage:
                 claim_hash=context.claim_hash,
                 normalized_source=context.normalized_source,
             )
-
 
         claim = VerifiedClaim(
             headline=context.raw_headline[:2000],
@@ -212,16 +171,20 @@ class PersistenceStage:
         for article in context.ranked_articles:
             url_hash = compute_url_hash(article.url)
 
-
             existing = await self.article_repo.get_by_url_hash(claim_id, url_hash)
             if existing:
 
-
                 if not existing.extraction_success and article.has_body:
-                    existing.title = article.title[:500] if article.title else existing.title
+                    existing.title = (
+                        article.title[:500] if article.title else existing.title
+                    )
                     existing.body = article.body
-                    existing.author = article.author[:255] if article.author else existing.author
-                    existing.published_date = article.published_date or existing.published_date
+                    existing.author = (
+                        article.author[:255] if article.author else existing.author
+                    )
+                    existing.published_date = (
+                        article.published_date or existing.published_date
+                    )
                     existing.rank_score = article.rank_score
                     existing.extraction_success = True
                     await self.claim_repo.session.flush()
@@ -230,7 +193,6 @@ class PersistenceStage:
                         url_hash=url_hash,
                         url=article.url[:80],
                     )
-
 
                 if article.url == top_article_url:
                     top_article_db_id = existing.id
@@ -265,7 +227,6 @@ class PersistenceStage:
         if not context.search_queries:
             return
 
-
         results_per_query_type: Counter[str] = Counter()
         for candidate in context.candidate_urls:
             results_per_query_type[candidate.query_type] += 1
@@ -291,15 +252,18 @@ class PersistenceStage:
 
         log_entries: list[VerificationLog] = []
 
-
         for stage_key, duration_ms in context.stage_timings.items():
             try:
                 stage_id = SID(stage_key)
             except ValueError:
                 continue
 
-            level = LogLevel.ERROR if stage_key in context.stage_errors else LogLevel.INFO
-            message = context.stage_errors.get(stage_key, f"Stage {stage_key} completed")
+            level = (
+                LogLevel.ERROR if stage_key in context.stage_errors else LogLevel.INFO
+            )
+            message = context.stage_errors.get(
+                stage_key, f"Stage {stage_key} completed"
+            )
 
             log_entries.append(
                 VerificationLog(

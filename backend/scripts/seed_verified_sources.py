@@ -1,13 +1,10 @@
-
 from __future__ import annotations
 
 import asyncio
 import sys
 import os
 
-
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 
 
 import app.features.sources.models
@@ -48,19 +45,17 @@ async def seed_verified_sources() -> None:
                 existing.article_url_patterns = config["article_url_patterns"]
                 existing.base_url = config["base_url"]
 
-
                 current_aliases: list[str] = existing.aliases or []
                 registry_aliases: list[str] = config.get("aliases", [])
                 merged = list(set(current_aliases) | set(registry_aliases))
                 existing.aliases = merged
-
 
                 if existing.rss_url is None and config.get("rss_url"):
                     existing.rss_url = config["rss_url"]
 
                 session.add(existing)
                 updated += 1
-                en_name = config.get('display_name_en', canonical_name)
+                en_name = config.get("display_name_en", canonical_name)
                 print(f"  [UPDATED] {canonical_name} ({en_name})")
 
             else:
@@ -82,7 +77,7 @@ async def seed_verified_sources() -> None:
                 )
                 session.add(new_source)
                 created += 1
-                en_name = config.get('display_name_en', canonical_name)
+                en_name = config.get("display_name_en", canonical_name)
                 print(f"  [CREATED] {canonical_name} ({en_name})")
 
         await session.commit()

@@ -1,9 +1,9 @@
-
 import pytest
 import uuid
 from unittest.mock import AsyncMock, patch
 
 from app.core.constants import VerificationLabel
+
 
 @pytest.mark.asyncio
 async def test_health_endpoint(client):
@@ -12,6 +12,7 @@ async def test_health_endpoint(client):
     data = response.json()
     assert data["status"] == "ok"
     assert "version" in data
+
 
 @pytest.mark.asyncio
 async def test_readiness_endpoint(client, test_cache_service):
@@ -24,6 +25,7 @@ async def test_readiness_endpoint(client, test_cache_service):
     assert data["status"] == "ready"
     assert data["database"] == "ok"
     assert data["redis"] == "ok"
+
 
 @pytest.mark.asyncio
 async def test_verify_claim_endpoint(client):
@@ -49,27 +51,30 @@ async def test_verify_claim_endpoint(client):
         "normalized_source": "prothomalo.com",
         "cached": False,
         "processing_time_ms": 120,
-        "created_at": "2026-06-07T00:00:00Z"
+        "created_at": "2026-06-07T00:00:00Z",
     }
 
-
-    with patch("app.features.verification.service.VerificationService.verify", new_callable=AsyncMock) as mock_verify:
+    with patch(
+        "app.features.verification.service.VerificationService.verify",
+        new_callable=AsyncMock,
+    ) as mock_verify:
         mock_verify.return_value = mock_response_payload
 
         payload = {
             "headline": "শেখ হাসিনা নতুন উড়ালসড়ক উদ্বোধন করলেন",
             "claimed_source": "https://prothomalo.com",
-            "force_refresh": True
+            "force_refresh": True,
         }
 
         response = await client.post("/api/v1/verify", json=payload)
-        
+
         assert response.status_code == 200
         data = response.json()
         assert data["label"] == "TRUE"
         assert data["confidence"] == 0.92
         assert data["normalized_source"] == "prothomalo.com"
         mock_verify.assert_called_once()
+
 
 @pytest.mark.asyncio
 async def test_get_verification_result_endpoint(client):
@@ -95,11 +100,14 @@ async def test_get_verification_result_endpoint(client):
         "normalized_source": "prothomalo.com",
         "cached": True,
         "processing_time_ms": None,
-        "created_at": "2026-06-07T00:00:00Z"
+        "created_at": "2026-06-07T00:00:00Z",
     }
 
     claim_id = uuid.uuid4()
-    with patch("app.features.verification.service.VerificationService.get_result", new_callable=AsyncMock) as mock_get_result:
+    with patch(
+        "app.features.verification.service.VerificationService.get_result",
+        new_callable=AsyncMock,
+    ) as mock_get_result:
         mock_get_result.return_value = mock_response_payload
 
         response = await client.get(f"/api/v1/verify/{claim_id}")
@@ -107,6 +115,7 @@ async def test_get_verification_result_endpoint(client):
         data = response.json()
         assert data["label"] == "FALSE"
         mock_get_result.assert_called_once_with(claim_id)
+
 
 @pytest.mark.asyncio
 async def test_sources_crud_endpoints(client):
@@ -122,11 +131,12 @@ async def test_sources_crud_endpoints(client):
         "description": "English news daily",
         "is_active": True,
         "created_at": "2026-06-07T00:00:00Z",
-        "updated_at": "2026-06-07T00:00:00Z"
+        "updated_at": "2026-06-07T00:00:00Z",
     }
 
-
-    with patch("app.features.sources.service.SourceService.get_source", new_callable=AsyncMock) as mock_get:
+    with patch(
+        "app.features.sources.service.SourceService.get_source", new_callable=AsyncMock
+    ) as mock_get:
         mock_get.return_value = mock_source
         response = await client.get(f"/api/v1/sources/{source_id}")
         assert response.status_code == 200
@@ -134,32 +144,36 @@ async def test_sources_crud_endpoints(client):
         assert data["canonical_name"] == "dailystar.net"
         mock_get.assert_called_once_with(source_id)
 
-
-    with patch("app.features.sources.service.SourceService.create_source", new_callable=AsyncMock) as mock_create:
+    with patch(
+        "app.features.sources.service.SourceService.create_source",
+        new_callable=AsyncMock,
+    ) as mock_create:
         mock_create.return_value = mock_source
         create_payload = {
             "canonical_name": "dailystar.net",
             "display_name": "Daily Star",
             "aliases": ["daily star"],
             "base_url": "https://dailystar.net",
-            "language": "en"
+            "language": "en",
         }
         response = await client.post("/api/v1/sources", json=create_payload)
         assert response.status_code == 201
         data = response.json()
         assert data["canonical_name"] == "dailystar.net"
 
-
-    with patch("app.features.sources.service.SourceService.update_source", new_callable=AsyncMock) as mock_update:
+    with patch(
+        "app.features.sources.service.SourceService.update_source",
+        new_callable=AsyncMock,
+    ) as mock_update:
         mock_update.return_value = mock_source
-        update_payload = {
-            "display_name": "Daily Star Updated"
-        }
+        update_payload = {"display_name": "Daily Star Updated"}
         response = await client.put(f"/api/v1/sources/{source_id}", json=update_payload)
         assert response.status_code == 200
 
-
-    with patch("app.features.sources.service.SourceService.delete_source", new_callable=AsyncMock) as mock_delete:
+    with patch(
+        "app.features.sources.service.SourceService.delete_source",
+        new_callable=AsyncMock,
+    ) as mock_delete:
         mock_delete.return_value = None
         response = await client.delete(f"/api/v1/sources/{source_id}")
         assert response.status_code == 204

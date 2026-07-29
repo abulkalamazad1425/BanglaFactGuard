@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import uuid
@@ -15,7 +14,6 @@ class MultimodalPrediction(UUIDMixin, TimestampMixin, Base):
 
     __tablename__ = "multimodal_predictions"
 
-
     headline: Mapped[str] = mapped_column(
         Text,
         nullable=False,
@@ -27,13 +25,11 @@ class MultimodalPrediction(UUIDMixin, TimestampMixin, Base):
         comment="Article body text — the sole text input to the BanglaBERT backbone",
     )
 
-
     minio_object_key: Mapped[str] = mapped_column(
         String(1024),
         nullable=False,
         comment="MinIO object key for the uploaded image (multimodal/{uuid}/{filename})",
     )
-
 
     prediction: Mapped[str] = mapped_column(
         String(20),
@@ -51,7 +47,6 @@ class MultimodalPrediction(UUIDMixin, TimestampMixin, Base):
         comment="Softmax probability for the NON_FAKE class (0.0–1.0)",
     )
 
-
     text_embedding: Mapped[list[float]] = mapped_column(
         ARRAY(Float),
         nullable=False,
@@ -68,14 +63,12 @@ class MultimodalPrediction(UUIDMixin, TimestampMixin, Base):
         comment="L2-normalised concat of text+image embeddings (2560-dim); primary dedup key",
     )
 
-
     model_version: Mapped[str] = mapped_column(
         String(100),
         nullable=False,
         default="banglabert_efficientnetb4_v1",
         comment="Model version tag — deduplication only reuses predictions of the same version",
     )
-
 
     is_duplicate_of_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
@@ -86,8 +79,6 @@ class MultimodalPrediction(UUIDMixin, TimestampMixin, Base):
     )
 
     __table_args__ = (
-
         Index("ix_multimodal_predictions_created_at", "created_at"),
-
         Index("ix_multimodal_predictions_model_version", "model_version"),
     )

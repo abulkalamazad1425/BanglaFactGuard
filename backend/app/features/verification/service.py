@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import uuid
@@ -14,16 +13,34 @@ from app.features.search.internal_site_client import InternalSiteSearchClient
 from app.core.exceptions import PipelineError
 from app.features.verification.pipeline.context import PipelineContext, build_context
 from app.features.verification.pipeline.orchestrator import PipelineOrchestrator
-from app.features.verification.pipeline.stages.s01_normalizer import InputNormalizerStage
+from app.features.verification.pipeline.stages.s01_normalizer import (
+    InputNormalizerStage,
+)
 from app.features.verification.pipeline.stages.s02_cache_lookup import CacheLookupStage
-from app.features.verification.pipeline.stages.s03_query_generator import QueryGeneratorStage
-from app.features.verification.pipeline.stages.s04_source_search import SourceSearchStage
-from app.features.verification.pipeline.stages.s05_evidence_retrieval import EvidenceRetrievalStage
-from app.features.verification.pipeline.stages.s06_article_extractor import ArticleExtractorStage
-from app.features.verification.pipeline.stages.s07_evidence_ranker import EvidenceRankerStage
-from app.features.verification.pipeline.stages.s08_similarity_analyzer import SimilarityAnalyzerStage
-from app.features.verification.pipeline.stages.s09_contradiction_detector import ContradictionDetectorStage
-from app.features.verification.pipeline.stages.s10_manipulation_detector import ManipulationDetectorStage
+from app.features.verification.pipeline.stages.s03_query_generator import (
+    QueryGeneratorStage,
+)
+from app.features.verification.pipeline.stages.s04_source_search import (
+    SourceSearchStage,
+)
+from app.features.verification.pipeline.stages.s05_evidence_retrieval import (
+    EvidenceRetrievalStage,
+)
+from app.features.verification.pipeline.stages.s06_article_extractor import (
+    ArticleExtractorStage,
+)
+from app.features.verification.pipeline.stages.s07_evidence_ranker import (
+    EvidenceRankerStage,
+)
+from app.features.verification.pipeline.stages.s08_similarity_analyzer import (
+    SimilarityAnalyzerStage,
+)
+from app.features.verification.pipeline.stages.s09_contradiction_detector import (
+    ContradictionDetectorStage,
+)
+from app.features.verification.pipeline.stages.s10_manipulation_detector import (
+    ManipulationDetectorStage,
+)
 from app.features.verification.pipeline.stages.s11_classifier import ClassifierStage
 from app.features.verification.pipeline.stages.s12_persistence import PersistenceStage
 from app.features.articles.repository import ArticleRepository
@@ -64,9 +81,10 @@ class VerificationService:
         self.nli_service = nli_service
         self.http_client = http_client
 
-    async def verify(self, request: VerificationRequest, *, submitter_id: uuid.UUID | None = None) -> VerificationResponse:
+    async def verify(
+        self, request: VerificationRequest, *, submitter_id: uuid.UUID | None = None
+    ) -> VerificationResponse:
         log = logger.bind(claimed_source=request.claimed_source)
-
 
         context = build_context(
             headline=request.headline,
@@ -83,18 +101,14 @@ class VerificationService:
             headline_preview=request.headline[:80],
         )
 
-
         stages = self._build_stages()
-
 
         orchestrator = PipelineOrchestrator(
             stages=stages,
             claim_repo=self.claim_repo,
         )
 
-
         context = await orchestrator.run(context)
-
 
         return self._build_response(context)
 
@@ -116,9 +130,6 @@ class VerificationService:
         from sqlalchemy import select
         from app.features.articles.models import RetrievedArticle
 
-
-
-
         art_stmt = (
             select(RetrievedArticle)
             .where(
@@ -128,8 +139,11 @@ class VerificationService:
             .order_by(RetrievedArticle.rank_score.desc())
             .limit(3)
         )
-        art_rows = list((await self.result_repo.session.execute(art_stmt)).scalars().all())
+        art_rows = list(
+            (await self.result_repo.session.execute(art_stmt)).scalars().all()
+        )
         from app.core.constants import SearchProvider
+
         matched_articles = [
             RankedArticleSchema(
                 url=a.url,
@@ -144,13 +158,11 @@ class VerificationService:
             for a in art_rows
         ]
 
-
-
-
         cached_scores = None
         cached_flags = None
         try:
             import json
+
             if claim.claim_hash:
                 raw = await self.cache_service.get_claim_result(claim.claim_hash)
                 if raw:
@@ -198,10 +210,6 @@ class VerificationService:
             created_at=result.created_at,
         )
 
-
-
-
-
     def _build_stages(self) -> list:
         newsdata = NewsDataClient(self.http_client)
         google_cse = GoogleCSEClient(self.http_client)
@@ -247,24 +255,24 @@ class VerificationService:
         from app.core.constants import VerificationLabel
         from app.features.verification.schemas import VerificationScoresResponse
 
-
         if context.cache_hit:
             return VerificationResponse(
                 claim_id=context.claim_id or uuid.uuid4(),
-                label=context.cached_label or VerificationLabel.NOT_FOUND_IN_CLAIMED_SOURCE,
+                label=context.cached_label
+                or VerificationLabel.NOT_FOUND_IN_CLAIMED_SOURCE,
                 confidence=context.cached_confidence or 0.0,
                 reasoning=context.cached_reasoning or "",
                 matched_articles=context.cached_matched_articles,
                 scores=VerificationScoresResponse.model_validate(
                     (context.cached_scores or context.scores).model_dump()
                 ),
-                manipulation_flags=context.cached_manipulation_flags or context.manipulation_flags,
+                manipulation_flags=context.cached_manipulation_flags
+                or context.manipulation_flags,
                 normalized_source=context.normalized_source,
                 cached=True,
                 processing_time_ms=None,
                 created_at=datetime.utcnow(),
             )
-
 
         return VerificationResponse(
             claim_id=context.claim_id or uuid.uuid4(),
@@ -272,13 +280,12 @@ class VerificationService:
             confidence=context.confidence,
             reasoning=context.reasoning,
             matched_articles=context.ranked_articles[:3],
-            scores=VerificationScoresResponse.model_validate(context.scores.model_dump()),
+            scores=VerificationScoresResponse.model_validate(
+                context.scores.model_dump()
+            ),
             manipulation_flags=context.manipulation_flags,
             normalized_source=context.normalized_source,
             cached=False,
             processing_time_ms=context.elapsed_ms,
             created_at=datetime.utcnow(),
         )
-
-
-

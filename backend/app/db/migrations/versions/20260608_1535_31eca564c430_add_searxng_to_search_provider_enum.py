@@ -1,6 +1,5 @@
-
-revision = '31eca564c430'
-down_revision = 'c64e7a11f599'
+revision = "31eca564c430"
+down_revision = "c64e7a11f599"
 branch_labels = None
 depends_on = None
 
@@ -14,6 +13,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-
 
     pass

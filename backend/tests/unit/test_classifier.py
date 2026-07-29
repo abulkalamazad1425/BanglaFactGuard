@@ -10,7 +10,11 @@ from app.features.verification.pipeline.stages.s11_classifier import ClassifierS
 from app.features.verification.pipeline.context import PipelineContext, build_context
 from app.core.constants import VerificationLabel, SearchProvider, ExtractionMethod
 from app.features.articles.schemas import RankedArticleSchema
-from app.features.verification.schemas import VerificationScoresSchema, ManipulationFlagsSchema
+from app.features.verification.schemas import (
+    VerificationScoresSchema,
+    ManipulationFlagsSchema,
+)
+
 
 @pytest.fixture
 def base_context() -> PipelineContext:
@@ -22,6 +26,7 @@ def base_context() -> PipelineContext:
     context.normalized_headline = context.raw_headline
     context.normalized_source = "prothomalo.com"
     return context
+
 
 @pytest.fixture
 def dummy_article() -> RankedArticleSchema:
@@ -37,6 +42,7 @@ def dummy_article() -> RankedArticleSchema:
         extraction_method=ExtractionMethod.TRAFILATURA,
     )
 
+
 @pytest.mark.asyncio
 async def test_classifier_not_found(base_context):
     """Verify verdict is NOT_FOUND_IN_CLAIMED_SOURCE when no evidence is retrieved."""
@@ -46,6 +52,7 @@ async def test_classifier_not_found(base_context):
     assert context.label == VerificationLabel.NOT_FOUND_IN_CLAIMED_SOURCE
     assert context.confidence == 0.95
     assert "No article matching the claim" in context.reasoning
+
 
 @pytest.mark.asyncio
 async def test_classifier_true_verdict(base_context, dummy_article):
@@ -72,6 +79,7 @@ async def test_classifier_true_verdict(base_context, dummy_article):
     assert context.label == VerificationLabel.TRUE
     assert context.confidence >= 0.85
     assert "Verdict: The claim is TRUE" in context.reasoning
+
 
 @pytest.mark.asyncio
 async def test_classifier_false_verdict_nli(base_context, dummy_article):
@@ -100,6 +108,7 @@ async def test_classifier_false_verdict_nli(base_context, dummy_article):
     assert context.confidence >= 0.75
     assert "Verdict: The claim is FALSE" in context.reasoning
 
+
 @pytest.mark.asyncio
 async def test_classifier_partially_true_manipulation(base_context, dummy_article):
     """Verify manipulation detection forces label to PARTIALLY_TRUE even on high similarity."""
@@ -125,4 +134,3 @@ async def test_classifier_partially_true_manipulation(base_context, dummy_articl
 
     assert context.label == VerificationLabel.PARTIALLY_TRUE
     assert "Headline appears to have been manipulated" in context.reasoning
-

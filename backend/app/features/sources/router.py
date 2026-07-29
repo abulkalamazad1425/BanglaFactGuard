@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import uuid
@@ -24,7 +23,9 @@ router = APIRouter(prefix="/sources", tags=["Sources"])
     summary="List registered news sources",
 )
 async def list_sources(
-    language: str | None = Query(None, description="Filter by language code (e.g. 'bn', 'en')"),
+    language: str | None = Query(
+        None, description="Filter by language code (e.g. 'bn', 'en')"
+    ),
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     size: int = Query(20, ge=1, le=100, description="Results per page"),
     service: SourceService = Depends(get_source_service),

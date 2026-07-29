@@ -1,5 +1,3 @@
-
-
 revision = "a1b2c3d4e5f6"
 down_revision = "2ece7aa03c5b"
 branch_labels = None
@@ -118,6 +116,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_multimodal_predictions_model_version", table_name="multimodal_predictions")
-    op.drop_index("ix_multimodal_predictions_created_at", table_name="multimodal_predictions")
+    op.drop_index(
+        "ix_multimodal_predictions_model_version", table_name="multimodal_predictions"
+    )
+    op.drop_index(
+        "ix_multimodal_predictions_created_at", table_name="multimodal_predictions"
+    )
     op.drop_table("multimodal_predictions")

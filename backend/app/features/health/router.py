@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Request
@@ -43,15 +42,14 @@ async def readiness(
 ) -> ReadinessResponse:
     from fastapi import HTTPException
 
-
     db_status = "ok"
     try:
         async with AsyncSessionLocal() as session:
             from sqlalchemy import text
+
             await session.execute(text("SELECT 1"))
     except Exception as exc:
         db_status = f"error: {exc}"
-
 
     redis_status = "ok" if await cache.health_check() else "error: unreachable"
 

@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import uuid
@@ -10,15 +9,14 @@ from app.core.constants import ClaimStatus, VerificationLabel
 from app.features.articles.schemas import RankedArticleSchema
 
 
-
-
-
-
-
 class NLIScoresSchema(BaseModel):
 
-    entailment: float = Field(..., ge=0.0, le=1.0, description="NLI entailment probability")
-    contradiction: float = Field(..., ge=0.0, le=1.0, description="NLI contradiction probability")
+    entailment: float = Field(
+        ..., ge=0.0, le=1.0, description="NLI entailment probability"
+    )
+    contradiction: float = Field(
+        ..., ge=0.0, le=1.0, description="NLI contradiction probability"
+    )
     neutral: float = Field(..., ge=0.0, le=1.0, description="NLI neutral probability")
 
     model_config = {
@@ -36,13 +34,16 @@ class VerificationScoresSchema(BaseModel):
     numerical_consistency: float | None = Field(default=None, ge=0.0, le=1.0)
     contradiction_score: float | None = Field(default=None, ge=0.0, le=1.0)
 
-
     headline_similarity: float | None = Field(
-        default=None, ge=0.0, le=1.0,
+        default=None,
+        ge=0.0,
+        le=1.0,
         description="LaBSE cosine similarity between claim headline and article title only.",
     )
     body_similarity: float | None = Field(
-        default=None, ge=0.0, le=1.0,
+        default=None,
+        ge=0.0,
+        le=1.0,
         description="LaBSE cosine similarity between claim full text and article body only.",
     )
 
@@ -68,12 +69,14 @@ class ManipulationFlagsSchema(BaseModel):
 
     @property
     def any_manipulation_detected(self) -> bool:
-        return any([
-            self.headline_manipulated,
-            self.body_altered,
-            self.numbers_altered,
-            self.entities_replaced,
-        ])
+        return any(
+            [
+                self.headline_manipulated,
+                self.body_altered,
+                self.numbers_altered,
+                self.entities_replaced,
+            ]
+        )
 
     model_config = {
         "json_schema_extra": {
@@ -85,11 +88,6 @@ class ManipulationFlagsSchema(BaseModel):
             }
         }
     }
-
-
-
-
-
 
 
 class VerificationRequest(BaseModel):
@@ -141,11 +139,6 @@ class VerificationRequest(BaseModel):
             }
         }
     }
-
-
-
-
-
 
 
 class VerificationScoresResponse(VerificationScoresSchema):

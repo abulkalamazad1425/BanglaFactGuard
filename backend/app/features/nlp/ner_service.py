@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import asyncio
@@ -13,8 +12,17 @@ logger = structlog.get_logger(__name__)
 _SETTINGS = get_settings()
 
 _NER_MODEL = "csebuetnlp/banglabert"
-_ENTITY_TYPES_KEPT = {"PER", "LOC", "ORG", "B-PER", "B-LOC", "B-ORG",
-                       "I-PER", "I-LOC", "I-ORG"}
+_ENTITY_TYPES_KEPT = {
+    "PER",
+    "LOC",
+    "ORG",
+    "B-PER",
+    "B-LOC",
+    "B-ORG",
+    "I-PER",
+    "I-LOC",
+    "I-ORG",
+}
 
 _NER_POOL = ThreadPoolExecutor(
     max_workers=_SETTINGS.ml.ner_thread_workers,
@@ -56,7 +64,6 @@ class NERService:
         if not text or len(text.strip()) < 5:
             return []
 
-
         truncated = text[:1000]
 
         loop = asyncio.get_event_loop()
@@ -71,7 +78,7 @@ class NERService:
 
         seen: set[str] = set()
         entities: list[str] = []
-        for ent in (raw_entities or []):
+        for ent in raw_entities or []:
             entity_group = ent.get("entity_group", ent.get("entity", ""))
             word = ent.get("word", "").strip().lower()
             if entity_group in _ENTITY_TYPES_KEPT and word and word not in seen:
@@ -114,16 +121,21 @@ class NERService:
         except Exception:
             return []
 
-
         _TYPE_MAP = {
-            "PER": "PER", "B-PER": "PER", "I-PER": "PER",
-            "LOC": "LOC", "B-LOC": "LOC", "I-LOC": "LOC",
-            "ORG": "ORG", "B-ORG": "ORG", "I-ORG": "ORG",
+            "PER": "PER",
+            "B-PER": "PER",
+            "I-PER": "PER",
+            "LOC": "LOC",
+            "B-LOC": "LOC",
+            "I-LOC": "LOC",
+            "ORG": "ORG",
+            "B-ORG": "ORG",
+            "I-ORG": "ORG",
         }
 
         seen: set[str] = set()
         typed_entities: list[tuple[str, str]] = []
-        for ent in (raw_entities or []):
+        for ent in raw_entities or []:
             entity_group = ent.get("entity_group", ent.get("entity", ""))
             word = ent.get("word", "").strip().lower()
             base_type = _TYPE_MAP.get(entity_group)
@@ -141,7 +153,6 @@ class NERService:
         if not claim_typed or not article_typed:
             return False
 
-
         claim_by_type: dict[str, set[str]] = {}
         for span, etype in claim_typed:
             claim_by_type.setdefault(etype, set()).add(span)
@@ -149,8 +160,6 @@ class NERService:
         article_by_type: dict[str, set[str]] = {}
         for span, etype in article_typed:
             article_by_type.setdefault(etype, set()).add(span)
-
-
 
         for etype, claim_ents in claim_by_type.items():
             article_ents = article_by_type.get(etype, set())

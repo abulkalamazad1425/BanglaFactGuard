@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import asyncio
@@ -29,9 +28,6 @@ _LOAD_POOL = ThreadPoolExecutor(
 
 class MultimodalModelLoader:
 
-
-
-
     _loaded: bool = False
     _lock: asyncio.Lock | None = None
 
@@ -40,15 +36,10 @@ class MultimodalModelLoader:
         self._cfg = cfg
         self._device = torch.device(cfg.device)
 
-
         self._img_backbone: EfficientNetBackbone | None = None
         self._text_backbone: BanglaBERTBackbone | None = None
         self._classifier: MultiFusionFake | None = None
         self._tokenizer: AutoTokenizer | None = None
-
-
-
-
 
     async def load(self) -> None:
 
@@ -60,7 +51,11 @@ class MultimodalModelLoader:
                 return
 
             model_dir = self._cfg.model_dir
-            logger.info("multimodal_model_loading", model_dir=model_dir, device=str(self._device))
+            logger.info(
+                "multimodal_model_loading",
+                model_dir=model_dir,
+                device=str(self._device),
+            )
 
             self._validate_model_dir(model_dir)
 
@@ -77,7 +72,12 @@ class MultimodalModelLoader:
                     cause=f"Weight loading failed: {exc}",
                 ) from exc
 
-            self._img_backbone, self._text_backbone, self._classifier, self._tokenizer = result
+            (
+                self._img_backbone,
+                self._text_backbone,
+                self._classifier,
+                self._tokenizer,
+            ) = result
             MultimodalModelLoader._loaded = True
             logger.info(
                 "multimodal_model_loaded",
@@ -88,7 +88,9 @@ class MultimodalModelLoader:
 
     def _validate_model_dir(self, model_dir: str) -> None:
         required = ["img_backbone.pt", "text_backbone.pt", "classifier.pt"]
-        missing = [f for f in required if not os.path.isfile(os.path.join(model_dir, f))]
+        missing = [
+            f for f in required if not os.path.isfile(os.path.join(model_dir, f))
+        ]
         if not os.path.isdir(os.path.join(model_dir, "tokenizer")):
             missing.append("tokenizer/")
         if missing:
@@ -103,12 +105,15 @@ class MultimodalModelLoader:
 
     def _load_sync(
         self, model_dir: str
-    ) -> tuple[EfficientNetBackbone, BanglaBERTBackbone, MultiFusionFake, AutoTokenizer]:
+    ) -> tuple[
+        EfficientNetBackbone, BanglaBERTBackbone, MultiFusionFake, AutoTokenizer
+    ]:
         cfg = self._cfg
         device = self._device
 
-
-        img_backbone = EfficientNetBackbone(cfg.image_model_name, pretrained=False).to(device)
+        img_backbone = EfficientNetBackbone(cfg.image_model_name, pretrained=False).to(
+            device
+        )
         text_backbone = BanglaBERTBackbone(cfg.text_model_name).to(device)
         classifier = MultiFusionFake(
             img_dim=img_backbone.out_dim,
@@ -116,7 +121,6 @@ class MultimodalModelLoader:
             num_classes=cfg.num_classes,
             dropout=cfg.dropout,
         ).to(device)
-
 
         img_backbone.load_state_dict(
             torch.load(
@@ -140,19 +144,13 @@ class MultimodalModelLoader:
             )
         )
 
-
         tokenizer = AutoTokenizer.from_pretrained(os.path.join(model_dir, "tokenizer"))
-
 
         img_backbone.eval()
         text_backbone.eval()
         classifier.eval()
 
         return img_backbone, text_backbone, classifier, tokenizer
-
-
-
-
 
     @property
     def is_loaded(self) -> bool:

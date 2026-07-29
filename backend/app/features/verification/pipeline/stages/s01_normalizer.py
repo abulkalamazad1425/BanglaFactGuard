@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import structlog
@@ -30,9 +29,6 @@ class InputNormalizerStage:
             claim_id=str(context.claim_id) if context.claim_id else "pending",
         )
 
-
-
-
         normalised_headline = normalize_bangla_text(
             context.raw_headline, normalize_digits=False
         )
@@ -49,9 +45,6 @@ class InputNormalizerStage:
             normalised_len=len(normalised_headline),
         )
 
-
-
-
         if context.raw_news_body:
             context.normalized_body = normalize_bangla_text(
                 context.raw_news_body, normalize_digits=False
@@ -59,15 +52,14 @@ class InputNormalizerStage:
         else:
             context.normalized_body = None
 
-
-
-
         context.normalized_source = await self._resolve_source(
             context.raw_claimed_source, context, log
         )
-        
+
         if context.normalized_source:
-            source_record = await self.source_repo.get_by_canonical_name(context.normalized_source)
+            source_record = await self.source_repo.get_by_canonical_name(
+                context.normalized_source
+            )
             if source_record:
                 context.source_config = {
                     "name": source_record.display_name,
@@ -77,11 +69,6 @@ class InputNormalizerStage:
                     "internal_search_url": source_record.internal_search_url,
                     "article_url_patterns": source_record.article_url_patterns or [],
                 }
-
-
-
-
-
 
         source_for_hash = context.normalized_source or context.raw_claimed_source
         context.claim_hash = compute_claim_hash(
@@ -102,23 +89,18 @@ class InputNormalizerStage:
         log: structlog.BoundLogger,
     ) -> str | None:
         if not raw_source:
-            context.record_stage_error(
-                self.stage_id, "claimed_source is empty"
-            )
+            context.record_stage_error(self.stage_id, "claimed_source is empty")
             return None
-
 
         canonical = extract_canonical_domain(raw_source)
         if canonical:
             log.debug("source_resolved_via_url_extraction", canonical=canonical)
             return canonical
 
-
         canonical = normalize_source_name(raw_source)
         if canonical:
             log.debug("source_resolved_via_static_map", canonical=canonical)
             return canonical
-
 
         try:
             source_record = await self.source_repo.resolve_source(raw_source)
@@ -133,11 +115,9 @@ class InputNormalizerStage:
                 error=str(exc),
             )
 
-
         log.warning("source_unresolved", raw_source=raw_source)
         context.record_stage_error(
             self.stage_id,
             f"Source could not be resolved: {raw_source!r}",
         )
         return None
-

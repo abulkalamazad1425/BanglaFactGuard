@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import uuid
@@ -30,7 +29,9 @@ router = APIRouter(prefix="/expert", tags=["Expert Review"])
 _EXPERT_OR_ADMIN = require_role("expert", "admin")
 
 
-def _get_service(session: AsyncSession = Depends(get_async_session)) -> ExpertReviewService:
+def _get_service(
+    session: AsyncSession = Depends(get_async_session),
+) -> ExpertReviewService:
     return ExpertReviewService(
         review_repo=ExpertReviewRepository(session),
         credibility_repo=CredibilityScoreRepository(session),
@@ -141,8 +142,10 @@ async def get_credibility(
     session: AsyncSession = Depends(get_async_session),
 ) -> CredibilityScoreResponse:
     from app.features.expert_review.repository import CredibilityScoreRepository
+
     repo = CredibilityScoreRepository(session)
     from app.core.config import get_settings
+
     cred = await repo.get_or_create(
         current_user.id,
         initial_score=get_settings().auth.initial_expert_credibility,

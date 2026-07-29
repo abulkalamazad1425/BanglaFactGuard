@@ -168,4 +168,3 @@ def sync_retry(
         return wrapper
 
     return decorator
-

@@ -37,11 +37,6 @@ if TYPE_CHECKING:
     from app.features.verification.models import VerificationResult, VerifiedClaim
 
 
-
-
-
-
-
 class RetrievedArticle(UUIDMixin, ReprMixin, Base):
     """
     A single candidate article retrieved and extracted for a claim.
@@ -148,11 +143,6 @@ class RetrievedArticle(UUIDMixin, ReprMixin, Base):
     )
 
 
-
-
-
-
-
 class SearchQuery(UUIDMixin, ReprMixin, Base):
     """
     Records a single search query dispatched during Stage 3/4.
@@ -214,4 +204,3 @@ class SearchQuery(UUIDMixin, ReprMixin, Base):
         Index("ix_search_queries_claim_provider", claim_id, search_provider),
         Index("ix_search_queries_claim_type", claim_id, query_type),
     )
-

@@ -1,11 +1,6 @@
-
 from __future__ import annotations
 
 from pydantic import BaseModel, EmailStr, Field
-
-
-
-
 
 
 class CreateExpertRequest(BaseModel):
@@ -42,10 +37,6 @@ class ExpertResponse(BaseModel):
     total_votes: int
 
     model_config = {"from_attributes": True}
-
-
-
-
 
 
 class VerdictBreakdown(BaseModel):

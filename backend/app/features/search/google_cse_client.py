@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import structlog
@@ -27,8 +26,9 @@ class GoogleCSEClient:
         cx = self.settings.google_cse_cx
 
         if not api_key or not cx:
-            raise GoogleCSEError("Google Custom Search API key or cx is not configured.")
-
+            raise GoogleCSEError(
+                "Google Custom Search API key or cx is not configured."
+            )
 
         search_q = f"site:{domain} {query}" if domain else query
 
@@ -36,11 +36,12 @@ class GoogleCSEClient:
             "key": api_key,
             "cx": cx,
             "q": search_q,
-            "num": min(self.settings.google_cse_max_results, 10)
+            "num": min(self.settings.google_cse_max_results, 10),
         }
 
         if published_date:
             from datetime import timedelta
+
             start_date = (published_date - timedelta(days=7)).strftime("%Y%m%d")
             end_date = (published_date + timedelta(days=7)).strftime("%Y%m%d")
             params["sort"] = f"date:r:{start_date}:{end_date}"
@@ -56,7 +57,7 @@ class GoogleCSEClient:
 
             items = data.get("items", [])
             entries: list[tuple[str, str]] = []
-            
+
             for item in items:
                 link = item.get("link")
                 title = item.get("title", "")

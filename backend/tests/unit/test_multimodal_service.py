@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import uuid
@@ -43,9 +42,7 @@ class TestMultimodalPredictionService:
         storage = AsyncMock()
         storage.upload_image = AsyncMock(return_value="multimodal/abc/test.jpg")
 
-
         service = MultimodalPredictionService(db=db, loader=loader, storage=storage)
-
 
         text_emb = np.ones(768, dtype=np.float32)
         img_emb = np.ones(1792, dtype=np.float32)
@@ -57,14 +54,17 @@ class TestMultimodalPredictionService:
         service._extractor.is_duplicate = MagicMock(
             return_value=(
                 duplicate_record is not None,
-                {
-                    "text_similarity": 0.99,
-                    "image_similarity": 0.97,
-                    "combined_similarity": 0.98,
-                } if duplicate_record else {},
+                (
+                    {
+                        "text_similarity": 0.99,
+                        "image_similarity": 0.97,
+                        "combined_similarity": 0.98,
+                    }
+                    if duplicate_record
+                    else {}
+                ),
             )
         )
-
 
         fresh_record = _make_fake_record(prediction="FAKE")
         service._repo = AsyncMock()
@@ -73,8 +73,8 @@ class TestMultimodalPredictionService:
         )
         service._repo.create = AsyncMock(return_value=fresh_record)
 
-
         from app.features.multimodal.pipeline.inference_engine import PredictionResult
+
         infer_result = PredictionResult(
             prediction="FAKE",
             confidence_fake=0.82,
@@ -103,7 +103,9 @@ class TestMultimodalPredictionService:
 
     @pytest.mark.asyncio
     async def test_inference_skipped_on_cache_hit(self):
-        duplicate = _make_fake_record(prediction="NON_FAKE", confidence_fake=0.1, confidence_real=0.9)
+        duplicate = _make_fake_record(
+            prediction="NON_FAKE", confidence_fake=0.1, confidence_real=0.9
+        )
         service, _, _ = self._make_service(duplicate_record=duplicate)
 
         response = await service.predict(

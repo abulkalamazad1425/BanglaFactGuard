@@ -4,16 +4,15 @@ import uuid
 from alembic import op
 import sqlalchemy as sa
 
-
-revision = 'seed_admin_user_001'
-down_revision = 'f89542b9b55a'
+revision = "seed_admin_user_001"
+down_revision = "f89542b9b55a"
 branch_labels = None
 depends_on = None
 
-ADMIN_EMAIL = 'admin@gmail.com'
+ADMIN_EMAIL = "admin@gmail.com"
 
-ADMIN_HASHED_PASSWORD = '$2b$12$zkaH4B4BLXDaI5Qh8qrBiuEobgUANmxsmc9xQwVbeXiTFC0xDvfLK'
-ADMIN_FULL_NAME = 'System Administrator'
+ADMIN_HASHED_PASSWORD = "$2b$12$zkaH4B4BLXDaI5Qh8qrBiuEobgUANmxsmc9xQwVbeXiTFC0xDvfLK"
+ADMIN_FULL_NAME = "System Administrator"
 ADMIN_ID = str(uuid.uuid4())
 
 

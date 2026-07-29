@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import asyncio
@@ -12,7 +11,6 @@ import uuid
 import numpy as np
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-
 
 os.environ["ENVIRONMENT"] = "development"
 os.environ["DB_HOST"] = "localhost"
@@ -34,8 +32,8 @@ from app.features.nlp.embedding_service import EmbeddingService
 from app.features.nlp.ner_service import NERService
 from app.features.nlp.nli_service import NLIService
 
-
 SQLITE_URL = "sqlite+aiosqlite:///:memory:"
+
 
 @pytest.fixture(scope="session")
 def event_loop():
@@ -47,9 +45,6 @@ def event_loop():
     loop.close()
 
 
-
-
-
 @pytest.fixture(scope="session")
 async def test_engine():
     engine = create_async_engine(SQLITE_URL, echo=False)
@@ -58,6 +53,7 @@ async def test_engine():
         await conn.run_sync(Base.metadata.create_all)
     yield engine
     await engine.dispose()
+
 
 @pytest.fixture
 async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
@@ -74,9 +70,6 @@ async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
         await session.rollback()
 
 
-
-
-
 @pytest.fixture
 def mock_redis() -> MagicMock:
     client = MagicMock()
@@ -86,12 +79,10 @@ def mock_redis() -> MagicMock:
     client.delete = AsyncMock(return_value=True)
     return client
 
+
 @pytest.fixture
 def test_cache_service(mock_redis) -> CacheService:
     return CacheService(mock_redis)
-
-
-
 
 
 @pytest.fixture
@@ -106,6 +97,7 @@ def mock_embedding_service() -> MagicMock:
     service.compute_similarity = AsyncMock(return_value=0.90)
     return service
 
+
 @pytest.fixture
 def mock_ner_service() -> MagicMock:
     service = MagicMock(spec=NERService)
@@ -113,6 +105,7 @@ def mock_ner_service() -> MagicMock:
     service.extract_entities = AsyncMock(return_value=["ঢাকা", "বাংলাদেশ"])
     service.compute_entity_overlap = MagicMock(return_value=1.0)
     return service
+
 
 @pytest.fixture
 def mock_nli_service() -> MagicMock:
@@ -124,9 +117,6 @@ def mock_nli_service() -> MagicMock:
     return service
 
 
-
-
-
 @pytest.fixture
 def mock_search_clients() -> dict[str, MagicMock]:
     from app.features.search.newsdata_client import NewsDataClient
@@ -135,7 +125,14 @@ def mock_search_clients() -> dict[str, MagicMock]:
     from app.features.search.duckduckgo_client import DuckDuckGoClient
 
     newsdata = MagicMock(spec=NewsDataClient)
-    newsdata.search_entries = AsyncMock(return_value=[("https://prothomalo.com/article/123", "শেখ হাসিনা নতুন উড়ালসড়ক উদ্বোধন করলেন")])
+    newsdata.search_entries = AsyncMock(
+        return_value=[
+            (
+                "https://prothomalo.com/article/123",
+                "শেখ হাসিনা নতুন উড়ালসড়ক উদ্বোধন করলেন",
+            )
+        ]
+    )
 
     google_cse = MagicMock(spec=GoogleCSEClient)
     google_cse.search_entries = AsyncMock(return_value=[])
@@ -154,9 +151,6 @@ def mock_search_clients() -> dict[str, MagicMock]:
     }
 
 
-
-
-
 @pytest.fixture
 async def app(
     db_session,
@@ -169,19 +163,20 @@ async def app(
 
     with (
         patch("app.main.lifespan") as mock_lifespan,
-        patch("app.features.nlp.embedding_service.EmbeddingService.load", new_callable=AsyncMock),
+        patch(
+            "app.features.nlp.embedding_service.EmbeddingService.load",
+            new_callable=AsyncMock,
+        ),
         patch("app.features.nlp.ner_service.NERService.load", new_callable=AsyncMock),
         patch("app.features.nlp.nli_service.NLIService.load", new_callable=AsyncMock),
     ):
         application = create_app()
-        
 
         application.state.cache_service = test_cache_service
         application.state.embedding_service = mock_embedding_service
         application.state.ner_service = mock_ner_service
         application.state.nli_service = mock_nli_service
         application.state.http_client = MagicMock()
-        
 
         application.dependency_overrides[get_async_session] = lambda: db_session
 
@@ -189,9 +184,10 @@ async def app(
 
         application.dependency_overrides.clear()
 
+
 @pytest.fixture
 async def client(app) -> AsyncGenerator[httpx.AsyncClient, None]:
     import httpx
+
     async with httpx.AsyncClient(app=app, base_url="http://testserver") as async_client:
         yield async_client
-

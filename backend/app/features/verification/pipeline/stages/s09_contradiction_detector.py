@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import math
@@ -32,14 +31,12 @@ class ContradictionDetectorStage:
         claim_headline = context.normalized_headline
         thresholds = _SETTINGS.classification
 
-
         degraded_mode = False
         if article.body:
             premise = _select_claim_relevant_sentences(
                 article.body, claim_headline, n=5
             )
         elif article.title:
-
 
             premise = article.title
             degraded_mode = True
@@ -70,26 +67,20 @@ class ContradictionDetectorStage:
             context.record_stage_error(self.stage_id, "NLI inference returned None")
             return context
 
-
-
-
-
         temperature = thresholds.nli_temperature
         if temperature != 1.0:
             nli_result = _calibrate_nli_scores(nli_result, temperature)
-
-
-
-
 
         if degraded_mode:
             attenuation = thresholds.nli_title_only_attenuation
             nli_result = NLIScoresSchema(
                 entailment=nli_result.entailment * attenuation,
                 contradiction=nli_result.contradiction * attenuation,
-
-                neutral=1.0 - (nli_result.entailment * attenuation
-                               + nli_result.contradiction * attenuation),
+                neutral=1.0
+                - (
+                    nli_result.entailment * attenuation
+                    + nli_result.contradiction * attenuation
+                ),
             )
 
         context.nli_scores = nli_result
@@ -105,39 +96,59 @@ class ContradictionDetectorStage:
         return context
 
 
-
-
-
-
-
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[।.!?])\s+")
 
 
 _TOKEN_RE = re.compile(r"[\s।.!?,;:\"'()\[\]{}\-]+")
 
 
-_OVERLAP_STOPWORDS = frozenset({
-    "এই", "এ", "ও", "এবং", "কিন্তু", "তবে", "যে", "যা", "তা", "তার",
-    "আর", "না", "নি", "হয়", "হয়েছে", "করা", "করে", "থেকে", "জন্য",
-    "the", "a", "an", "is", "are", "was", "of", "in", "on", "to", "for",
-})
+_OVERLAP_STOPWORDS = frozenset(
+    {
+        "এই",
+        "এ",
+        "ও",
+        "এবং",
+        "কিন্তু",
+        "তবে",
+        "যে",
+        "যা",
+        "তা",
+        "তার",
+        "আর",
+        "না",
+        "নি",
+        "হয়",
+        "হয়েছে",
+        "করা",
+        "করে",
+        "থেকে",
+        "জন্য",
+        "the",
+        "a",
+        "an",
+        "is",
+        "are",
+        "was",
+        "of",
+        "in",
+        "on",
+        "to",
+        "for",
+    }
+)
 
 
-def _select_claim_relevant_sentences(
-    body: str, claim_headline: str, n: int = 5
-) -> str:
+def _select_claim_relevant_sentences(body: str, claim_headline: str, n: int = 5) -> str:
     sentences = _SENTENCE_SPLIT_RE.split(body.strip())
     sentences = [s.strip() for s in sentences if s.strip() and len(s.strip()) > 10]
 
     if len(sentences) <= n:
         return " ".join(sentences)
 
-
     claim_tokens = _tokenise_for_overlap(claim_headline)
     if not claim_tokens:
 
         return " ".join(sentences[:n])
-
 
     scored: list[tuple[float, int, str]] = []
     for idx, sent in enumerate(sentences):
@@ -148,10 +159,8 @@ def _select_claim_relevant_sentences(
         overlap = len(claim_tokens & sent_tokens) / len(claim_tokens)
         scored.append((overlap, idx, sent))
 
-
     scored.sort(key=lambda x: (-x[0], x[1]))
     top_n = scored[:n]
-
 
     top_n.sort(key=lambda x: x[1])
 
@@ -169,17 +178,14 @@ def _calibrate_nli_scores(
     if temperature <= 0:
         return scores
 
-
     eps = 1e-9
     log_e = math.log(max(scores.entailment, eps))
     log_c = math.log(max(scores.contradiction, eps))
     log_n = math.log(max(scores.neutral, eps))
 
-
     scaled_e = log_e / temperature
     scaled_c = log_c / temperature
     scaled_n = log_n / temperature
-
 
     max_val = max(scaled_e, scaled_c, scaled_n)
     exp_e = math.exp(scaled_e - max_val)

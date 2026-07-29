@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import numpy as np
@@ -6,24 +5,18 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 
-
-
-
-
 def _make_mock_loader(text_dim: int = 768, img_dim: int = 1792):
     loader = MagicMock()
     loader.device = "cpu"
     loader.is_loaded = True
 
-
     import torch
+
     text_feat = torch.zeros(1, text_dim)
     loader.text_backbone.return_value = text_feat
 
-
     img_feat = torch.ones(1, img_dim)
     loader.img_backbone.return_value = img_feat
-
 
     loader.tokenizer.return_value = {
         "input_ids": torch.zeros(1, 128, dtype=torch.long),
@@ -32,28 +25,30 @@ def _make_mock_loader(text_dim: int = 768, img_dim: int = 1792):
     return loader
 
 
-
-
-
-
 class TestCombinedEmbedding:
 
     def test_output_shape(self):
         from app.features.multimodal.pipeline.embedding_extractor import (
             MultimodalEmbeddingExtractor,
         )
+
         text_emb = np.random.rand(768).astype(np.float32)
         img_emb = np.random.rand(1792).astype(np.float32)
-        combined = MultimodalEmbeddingExtractor._build_combined_embedding(text_emb, img_emb)
+        combined = MultimodalEmbeddingExtractor._build_combined_embedding(
+            text_emb, img_emb
+        )
         assert combined.shape == (2560,)
 
     def test_output_is_unit_norm(self):
         from app.features.multimodal.pipeline.embedding_extractor import (
             MultimodalEmbeddingExtractor,
         )
+
         text_emb = np.random.rand(768).astype(np.float32)
         img_emb = np.random.rand(1792).astype(np.float32)
-        combined = MultimodalEmbeddingExtractor._build_combined_embedding(text_emb, img_emb)
+        combined = MultimodalEmbeddingExtractor._build_combined_embedding(
+            text_emb, img_emb
+        )
         norm = float(np.linalg.norm(combined))
         assert abs(norm - 1.0) < 1e-5, f"Expected unit norm, got {norm}"
 
@@ -61,10 +56,13 @@ class TestCombinedEmbedding:
         from app.features.multimodal.pipeline.embedding_extractor import (
             MultimodalEmbeddingExtractor,
         )
+
         text_emb = np.zeros(768, dtype=np.float32)
         img_emb = np.zeros(1792, dtype=np.float32)
 
-        combined = MultimodalEmbeddingExtractor._build_combined_embedding(text_emb, img_emb)
+        combined = MultimodalEmbeddingExtractor._build_combined_embedding(
+            text_emb, img_emb
+        )
         assert combined.shape == (2560,)
 
 
@@ -74,6 +72,7 @@ class TestCosineSimilarity:
         from app.features.multimodal.pipeline.embedding_extractor import (
             MultimodalEmbeddingExtractor,
         )
+
         v = np.array([1.0, 0.0, 0.0], dtype=np.float32)
         sim = MultimodalEmbeddingExtractor.cosine_similarity(v, v)
         assert abs(sim - 1.0) < 1e-6
@@ -82,6 +81,7 @@ class TestCosineSimilarity:
         from app.features.multimodal.pipeline.embedding_extractor import (
             MultimodalEmbeddingExtractor,
         )
+
         a = np.array([1.0, 0.0], dtype=np.float32)
         b = np.array([0.0, 1.0], dtype=np.float32)
         sim = MultimodalEmbeddingExtractor.cosine_similarity(a, b)
@@ -91,6 +91,7 @@ class TestCosineSimilarity:
         from app.features.multimodal.pipeline.embedding_extractor import (
             MultimodalEmbeddingExtractor,
         )
+
         a = np.array([1.0, 0.0], dtype=np.float32)
         b = np.array([-1.0, 0.0], dtype=np.float32)
         sim = MultimodalEmbeddingExtractor.cosine_similarity(a, b)
@@ -100,6 +101,7 @@ class TestCosineSimilarity:
         from app.features.multimodal.pipeline.embedding_extractor import (
             MultimodalEmbeddingExtractor,
         )
+
         a = np.zeros(10, dtype=np.float32)
         b = np.ones(10, dtype=np.float32)
         sim = MultimodalEmbeddingExtractor.cosine_similarity(a, b)
@@ -112,6 +114,7 @@ class TestIsDuplicate:
         from app.features.multimodal.pipeline.embedding_extractor import (
             MultimodalEmbeddingExtractor,
         )
+
         loader = MagicMock()
         loader.is_loaded = True
         with patch("app.core.config.get_settings") as mock_settings:
@@ -142,19 +145,23 @@ class TestIsDuplicate:
         extractor = self._make_extractor()
         text_emb = np.ones(768, dtype=np.float32)
 
-
         img_q = np.zeros(1792, dtype=np.float32)
         img_q[0] = 1.0
 
         img_c = np.zeros(1792, dtype=np.float32)
         img_c[1] = 1.0
 
-        combined_q = MultimodalEmbeddingExtractor._build_combined_embedding(text_emb, img_q)
-        combined_c = MultimodalEmbeddingExtractor._build_combined_embedding(text_emb, img_c)
+        combined_q = MultimodalEmbeddingExtractor._build_combined_embedding(
+            text_emb, img_q
+        )
+        combined_c = MultimodalEmbeddingExtractor._build_combined_embedding(
+            text_emb, img_c
+        )
 
         from app.features.multimodal.pipeline.embedding_extractor import (
             MultimodalEmbeddingExtractor,
         )
+
         is_dup, scores = extractor.is_duplicate(
             query_text_emb=text_emb,
             query_img_emb=img_q,

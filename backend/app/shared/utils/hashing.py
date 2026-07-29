@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import hashlib
@@ -30,11 +29,6 @@ def compute_text_hash(text: str) -> str:
 
 def compute_search_query_hash(provider: str, query: str) -> str:
     return sha256_hex(f"{provider.lower()}|{_prepare(query)}")
-
-
-
-
-
 
 
 _TRACKING_PARAMS: frozenset[str] = frozenset(

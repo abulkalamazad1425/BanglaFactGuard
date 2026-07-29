@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import structlog
@@ -9,10 +8,15 @@ from Levenshtein import ratio
 from app.core.config import get_settings
 from app.core.constants import PipelineStageID
 from app.features.verification.pipeline.context import PipelineContext
-from app.features.verification.pipeline.stages.cross_encoder_reranker import CrossEncoderReranker
+from app.features.verification.pipeline.stages.cross_encoder_reranker import (
+    CrossEncoderReranker,
+)
 from app.features.articles.schemas import RankedArticleSchema
 from app.features.nlp.embedding_service import EmbeddingService
-from app.shared.utils.keyword_extractor import compute_keyword_overlap, extract_headline_keywords
+from app.shared.utils.keyword_extractor import (
+    compute_keyword_overlap,
+    extract_headline_keywords,
+)
 from app.shared.utils.bangla_normalizer import normalize_bangla_text
 
 logger = structlog.get_logger(__name__)
@@ -44,7 +48,9 @@ class EvidenceRankerStage:
             return context
 
         claim_headline = context.normalized_headline
-        claim_keywords = context.claim_keywords or extract_headline_keywords(claim_headline)
+        claim_keywords = context.claim_keywords or extract_headline_keywords(
+            claim_headline
+        )
 
         scored: list[tuple[float, RankedArticleSchema]] = []
 
@@ -58,9 +64,7 @@ class EvidenceRankerStage:
             )
             scored.append((score, article))
 
-
         scored.sort(key=lambda x: x[0], reverse=True)
-
 
         ranked: list[RankedArticleSchema] = []
         for score, article in scored:
@@ -81,7 +85,6 @@ class EvidenceRankerStage:
             if len(ranked) >= self._max_ranked:
                 break
 
-
         if not ranked and scored:
             best_score, best_article = scored[0]
             ranked = [
@@ -90,10 +93,11 @@ class EvidenceRankerStage:
                 )
             ]
 
-
         if len(ranked) > 3:
             logger.info("s07_reranking_articles", count=len(ranked))
-            ranked = self._reranker.rerank(claim_headline, ranked, top_k=self._max_ranked)
+            ranked = self._reranker.rerank(
+                claim_headline, ranked, top_k=self._max_ranked
+            )
 
         context.ranked_articles = ranked
         context.top_article = ranked[0] if ranked else None
@@ -123,7 +127,6 @@ class EvidenceRankerStage:
                 )
             else:
 
-
                 body_prefix = (article.body or "")[:400]
                 if body_prefix:
                     sem_sim = await self._embedder.compute_similarity(
@@ -135,11 +138,9 @@ class EvidenceRankerStage:
             logger.debug("s07_sem_similarity_failed", error=str(exc))
             sem_sim = 0.0
 
-
         article_text = f"{article.title or ''} {(article.body or '')[:500]}"
         article_keywords = extract_headline_keywords(article_text, top_n=8)
         kw_overlap = compute_keyword_overlap(claim_keywords, article_keywords)
-
 
         if claim_date is None or article.published_date is None:
             date_bonus = 0.5
@@ -150,7 +151,6 @@ class EvidenceRankerStage:
             delta = abs((claim_date - article.published_date).days)
             date_bonus = max(0.0, 1.0 - (delta / 7.0))
 
-
         domain_bonus = self._source_domain_bonus(context, article)
 
         composite = (
@@ -160,9 +160,11 @@ class EvidenceRankerStage:
             + _W_DOMAIN * domain_bonus
         )
 
-
         if article_title:
-            sim = ratio(normalize_bangla_text(claim_headline), normalize_bangla_text(article_title))
+            sim = ratio(
+                normalize_bangla_text(claim_headline),
+                normalize_bangla_text(article_title),
+            )
             if sim > 0.85:
                 composite += 0.15
             elif sim > 0.70:
@@ -170,15 +172,18 @@ class EvidenceRankerStage:
 
         return max(0.0, min(1.0, composite))
 
-    def _source_domain_bonus(self, context: PipelineContext, article: RankedArticleSchema) -> float:
+    def _source_domain_bonus(
+        self, context: PipelineContext, article: RankedArticleSchema
+    ) -> float:
         if not context.normalized_source:
             return 0.0
-        
-        def extract_domain(url: str) -> str:
-            if not url: return ""
 
-            if not url.startswith(('http://', 'https://')):
-                url = 'https://' + url
+        def extract_domain(url: str) -> str:
+            if not url:
+                return ""
+
+            if not url.startswith(("http://", "https://")):
+                url = "https://" + url
             parsed = urlparse(url)
             return parsed.netloc.replace("www.", "")
 
@@ -187,4 +192,3 @@ class EvidenceRankerStage:
         if claim_domain == article_domain:
             return 1.0
         return 0.0
-

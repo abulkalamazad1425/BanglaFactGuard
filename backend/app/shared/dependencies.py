@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
@@ -19,11 +18,6 @@ from app.features.verification.repository import ClaimRepository, ResultReposito
 from app.features.verification.service import VerificationService
 
 
-
-
-
-
-
 async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSessionLocal() as session:
         try:
@@ -32,11 +26,6 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
         except Exception:
             await session.rollback()
             raise
-
-
-
-
-
 
 
 async def get_claim_repo(
@@ -63,11 +52,6 @@ async def get_source_repo(
     return SourceRepository(session)
 
 
-
-
-
-
-
 def get_cache_service(request: Request) -> CacheService:
     return request.app.state.cache_service
 
@@ -86,11 +70,6 @@ def get_nli_service(request: Request) -> NLIService:
 
 def get_http_client(request: Request) -> httpx.AsyncClient:
     return request.app.state.http_client
-
-
-
-
-
 
 
 async def get_verification_service(

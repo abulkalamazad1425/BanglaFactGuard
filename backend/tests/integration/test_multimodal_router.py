@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import io
@@ -21,7 +20,15 @@ def _make_fake_response(prediction: str = "FAKE", is_cached: bool = False):
         confidence_real=0.18 if prediction == "FAKE" else 0.82,
         is_cached=is_cached,
         original_id=str(uuid.uuid4()) if is_cached else None,
-        similarity_scores={"text_similarity": 0.95, "image_similarity": 0.88, "combined_similarity": 0.92} if is_cached else None,
+        similarity_scores=(
+            {
+                "text_similarity": 0.95,
+                "image_similarity": 0.88,
+                "combined_similarity": 0.92,
+            }
+            if is_cached
+            else None
+        ),
         minio_object_key="multimodal/abc/test.jpg",
         model_version="banglabert_efficientnetb4_v1",
         created_at=datetime.now(timezone.utc),
@@ -32,7 +39,6 @@ def _make_test_app():
     from app.main import create_app
 
     app = create_app()
-
 
     mock_loader = MagicMock()
     mock_loader.is_loaded = True
@@ -49,6 +55,7 @@ class TestMultimodalPredictEndpoint:
 
     def _make_image_bytes(self) -> bytes:
         import struct, zlib
+
         def png_chunk(tag, data):
             c = struct.pack(">I", len(data)) + tag + data
             return c + struct.pack(">I", zlib.crc32(c[4:]) & 0xFFFFFFFF)
@@ -75,7 +82,10 @@ class TestMultimodalPredictEndpoint:
             img_bytes = self._make_image_bytes()
             response = client.post(
                 "/api/v1/multimodal/predict",
-                data={"headline": "Test headline", "body_text": "Test body text content"},
+                data={
+                    "headline": "Test headline",
+                    "body_text": "Test body text content",
+                },
                 files={"image": ("test.png", io.BytesIO(img_bytes), "image/png")},
             )
 
@@ -125,7 +135,9 @@ class TestMultimodalPredictEndpoint:
             "app.features.multimodal.router.MultimodalPredictionService"
         ) as mock_service_cls:
             mock_service = AsyncMock()
-            mock_service.predict = AsyncMock(return_value=_make_fake_response("NON_FAKE", is_cached=True))
+            mock_service.predict = AsyncMock(
+                return_value=_make_fake_response("NON_FAKE", is_cached=True)
+            )
             mock_service_cls.return_value = mock_service
 
             app = _make_test_app()

@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import re
@@ -13,11 +12,11 @@ logger = structlog.get_logger(__name__)
 
 
 def _shorten_query(query: str, max_words: int = 8) -> str:
-    clean = re.sub(r'site:\S+\s*', '', query).strip()
-    clean = re.sub(r'[।?!\'"(){}\[\]<>:;,।]', ' ', clean)
-    clean = re.sub(r'\s+', ' ', clean).strip()
+    clean = re.sub(r"site:\S+\s*", "", query).strip()
+    clean = re.sub(r'[।?!\'"(){}\[\]<>:;,।]', " ", clean)
+    clean = re.sub(r"\s+", " ", clean).strip()
     words = clean.split()
-    shortened = ' '.join(words[:max_words])
+    shortened = " ".join(words[:max_words])
     return shortened[:80]
 
 
@@ -36,7 +35,6 @@ class NewsDataClient:
         api_key = self.settings.newsdata_api_key
         if not api_key:
             raise NewsDataError("NewsData API key is not configured.")
-
 
         short_query = _shorten_query(query, max_words=8)
 

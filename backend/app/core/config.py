@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import os
@@ -9,13 +8,7 @@ from dotenv import load_dotenv
 from pydantic import AnyUrl, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
 load_dotenv()
-
-
-
-
-
 
 
 class DatabaseSettings(BaseSettings):
@@ -28,9 +21,15 @@ class DatabaseSettings(BaseSettings):
     user: str = Field(default="postgres", description="Database user")
     password: str = Field(default="postgres", description="Database password")
     pool_size: int = Field(default=10, description="SQLAlchemy connection pool size")
-    max_overflow: int = Field(default=20, description="SQLAlchemy max overflow connections")
-    pool_timeout: int = Field(default=30, description="Connection pool checkout timeout (s)")
-    echo_sql: bool = Field(default=False, description="Log all SQL statements (dev only)")
+    max_overflow: int = Field(
+        default=20, description="SQLAlchemy max overflow connections"
+    )
+    pool_timeout: int = Field(
+        default=30, description="Connection pool checkout timeout (s)"
+    )
+    echo_sql: bool = Field(
+        default=False, description="Log all SQL statements (dev only)"
+    )
 
     @property
     def async_url(self) -> str:
@@ -55,16 +54,27 @@ class RedisSettings(BaseSettings):
     port: int = Field(default=6379)
     db: int = Field(default=0)
     password: str | None = Field(default=None)
-    decode_responses: bool = Field(default=False, description="Keep bytes for msgpack support")
+    decode_responses: bool = Field(
+        default=False, description="Keep bytes for msgpack support"
+    )
     max_connections: int = Field(default=50)
 
-
-    ttl_claim_result: int = Field(default=86_400, description="24 h — full VerificationResponse")
-    ttl_search_result: int = Field(default=21_600, description="6 h — raw search URL lists")
-    ttl_article_content: int = Field(default=43_200, description="12 h — extracted article body")
-    ttl_embedding: int = Field(default=172_800, description="48 h — LaBSE embedding vectors")
+    ttl_claim_result: int = Field(
+        default=86_400, description="24 h — full VerificationResponse"
+    )
+    ttl_search_result: int = Field(
+        default=21_600, description="6 h — raw search URL lists"
+    )
+    ttl_article_content: int = Field(
+        default=43_200, description="12 h — extracted article body"
+    )
+    ttl_embedding: int = Field(
+        default=172_800, description="48 h — LaBSE embedding vectors"
+    )
     ttl_nli_output: int = Field(default=172_800, description="48 h — NLI score triples")
-    ttl_source_lookup: int = Field(default=604_800, description="7 d — resolved canonical domain")
+    ttl_source_lookup: int = Field(
+        default=604_800, description="7 d — resolved canonical domain"
+    )
 
     @property
     def url(self) -> str:
@@ -76,29 +86,31 @@ class MLSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="ML_")
 
-
     embedding_model_name: str = Field(
         default="paraphrase-multilingual-mpnet-base-v2",
         description="HuggingFace model name for semantic similarity",
     )
     embedding_batch_size: int = Field(default=32)
     embedding_max_seq_length: int = Field(default=512)
-    embedding_thread_workers: int = Field(default=4, description="Thread pool workers for embedding encoding")
-
+    embedding_thread_workers: int = Field(
+        default=4, description="Thread pool workers for embedding encoding"
+    )
 
     nli_model_name: str = Field(
         default="cross-encoder/nli-deberta-v3-base",
         description="HuggingFace model name for NLI-based contradiction detection",
     )
-    nli_thread_workers: int = Field(default=2, description="Thread pool workers for NLI prediction")
-
+    nli_thread_workers: int = Field(
+        default=2, description="Thread pool workers for NLI prediction"
+    )
 
     ner_model_name: str = Field(
         default="csebuetnlp/banglabert",
         description="BanglaBERT-based NER model",
     )
-    ner_thread_workers: int = Field(default=2, description="Thread pool workers for NER extraction")
-
+    ner_thread_workers: int = Field(
+        default=2, description="Thread pool workers for NER extraction"
+    )
 
     max_ranked_articles: int = Field(
         default=5,
@@ -109,16 +121,18 @@ class MLSettings(BaseSettings):
         description="Minimum composite rank score required to keep an article",
     )
 
-
     device: str = Field(
         default="cpu",
         description="Compute device: 'cpu', 'cuda', or 'cuda:0'",
     )
-    use_fp16: bool = Field(default=False, description="Use float16 inference (GPU only)")
-
+    use_fp16: bool = Field(
+        default=False, description="Use float16 inference (GPU only)"
+    )
 
     cache_dir: str = Field(
-        default=os.path.join(os.path.expanduser("~"), ".cache", "bangla_fact_guard", "models"),
+        default=os.path.join(
+            os.path.expanduser("~"), ".cache", "bangla_fact_guard", "models"
+        ),
         description="Local directory for downloaded HuggingFace models",
     )
     load_models_on_startup: bool = Field(
@@ -133,14 +147,16 @@ class MLSettings(BaseSettings):
 
 class MultimodalSettings(BaseSettings):
 
-    model_config = SettingsConfigDict(env_prefix="MULTIMODAL_", protected_namespaces=("settings_",))
-
-
-    model_dir: str = Field(
-        default=os.path.join(os.path.expanduser("~"), ".cache", "bangla_fact_guard", "multimodal_model"),
-        description="Directory containing img_backbone.pt, text_backbone.pt, classifier.pt, and tokenizer/",
+    model_config = SettingsConfigDict(
+        env_prefix="MULTIMODAL_", protected_namespaces=("settings_",)
     )
 
+    model_dir: str = Field(
+        default=os.path.join(
+            os.path.expanduser("~"), ".cache", "bangla_fact_guard", "multimodal_model"
+        ),
+        description="Directory containing img_backbone.pt, text_backbone.pt, classifier.pt, and tokenizer/",
+    )
 
     text_model_name: str = Field(
         default="csebuetnlp/banglabert",
@@ -161,7 +177,6 @@ class MultimodalSettings(BaseSettings):
     num_classes: int = Field(default=2)
     dropout: float = Field(default=0.4)
 
-
     device: str = Field(
         default="cpu",
         description="Compute device for inference: 'cpu' or 'cuda'",
@@ -178,7 +193,6 @@ class MultimodalSettings(BaseSettings):
         default="banglabert_efficientnetb4_v1",
         description="Version tag stored with each prediction for traceability",
     )
-
 
     text_sim_threshold: float = Field(
         default=0.92,
@@ -232,7 +246,6 @@ class SearchSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="SEARCH_")
 
-
     newsdata_api_key: str = Field(
         default="",
         description="API key for NewsData.io",
@@ -243,7 +256,6 @@ class SearchSettings(BaseSettings):
     )
     newsdata_timeout_seconds: int = Field(default=15)
     newsdata_max_results: int = Field(default=10)
-
 
     google_cse_api_key: str = Field(
         default="",
@@ -260,10 +272,8 @@ class SearchSettings(BaseSettings):
     google_cse_timeout_seconds: int = Field(default=15)
     google_cse_max_results: int = Field(default=10)
 
-
     pygooglenews_timeout_seconds: int = Field(default=15)
     pygooglenews_max_results: int = Field(default=10)
-
 
     top_k_candidates: int = Field(
         default=15,
@@ -279,13 +289,9 @@ class ClassificationThresholds(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="THRESHOLD_")
 
-
-
-
     true_threshold: float = Field(default=0.65)
     partial_threshold: float = Field(default=0.45)
     false_threshold: float = Field(default=0.25)
-
 
     contradiction_override_threshold: float = Field(default=0.70)
     headline_sim_threshold: float = Field(default=0.55)
@@ -293,32 +299,23 @@ class ClassificationThresholds(BaseSettings):
     body_altered_threshold: float = Field(default=0.50)
     entity_replaced_threshold: float = Field(default=0.45)
 
-
     true_min_semantic_similarity: float = Field(default=0.70)
     true_min_entity_match: float = Field(default=0.65)
     true_max_contradiction: float = Field(default=0.20)
 
-
     false_min_contradiction: float = Field(default=0.70)
 
-
     partial_min_semantic_similarity: float = Field(default=0.40)
-
-
 
     not_found_max_semantic_similarity: float = Field(
         default=0.30,
         description="If best candidate semantic similarity is below this, verdict is NOT_FOUND",
     )
 
-
-
     min_evidence_threshold: float = Field(
         default=0.25,
         description="Articles below this semantic similarity are discarded as evidence",
     )
-
-
 
     body_altered_min_keyword_overlap: float = Field(
         default=0.30,
@@ -401,7 +398,6 @@ class AppSettings(BaseSettings):
         extra="ignore",
     )
 
-
     app_name: str = Field(default="BanglaFactGuard")
     app_version: str = Field(default="0.1.0")
     environment: Literal["development", "staging", "production"] = Field(
@@ -415,13 +411,11 @@ class AppSettings(BaseSettings):
         description="List of origins allowed to make CORS requests",
     )
 
-
     api_key_header: str = Field(default="X-API-Key")
     secret_key: str = Field(
         default="CHANGE_ME_IN_PRODUCTION_USE_STRONG_RANDOM_SECRET",
         description="Used for signing tokens (future auth)",
     )
-
 
     log_level: str = Field(default="INFO", description="Root log level")
     log_format: Literal["json", "console"] = Field(
@@ -429,11 +423,9 @@ class AppSettings(BaseSettings):
         description="'json' for production, 'console' for local dev",
     )
 
-
     request_timeout_seconds: int = Field(default=120)
     max_headline_length: int = Field(default=2000)
     max_body_length: int = Field(default=50_000)
-
 
     db: DatabaseSettings = Field(default_factory=DatabaseSettings)
     redis: RedisSettings = Field(default_factory=RedisSettings)
@@ -460,12 +452,6 @@ class AppSettings(BaseSettings):
         return upper
 
 
-
-
-
-
-
 @lru_cache(maxsize=1)
 def get_settings() -> AppSettings:
     return AppSettings()
-
