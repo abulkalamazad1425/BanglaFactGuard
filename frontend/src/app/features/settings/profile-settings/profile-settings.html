@@ -17,6 +17,13 @@
         </div>
       </div>
 
+      @if (isExpertOnly()) {
+        <div class="readonly-notice">
+          <span>🔒</span>
+          Experts cannot modify their profile information. Contact an administrator to update your details.
+        </div>
+      }
+
       <form [formGroup]="profileForm" (ngSubmit)="saveProfile()" style="margin-top:24px;">
         <div class="form-group">
           <label class="form-label">Full Name</label>
@@ -26,12 +33,44 @@
           <label class="form-label">Bio <span class="text-muted text-xs">(optional)</span></label>
           <textarea formControlName="bio" class="form-control" rows="3" placeholder="Tell us about yourself..."></textarea>
         </div>
-        <button type="submit" class="btn btn-primary" [disabled]="savingProfile()">
-          @if (savingProfile()) { <span class="btn-spinner"></span> }
-          {{ savingProfile() ? 'Saving...' : 'Save Profile' }}
-        </button>
+        @if (!isExpertOnly()) {
+          <button type="submit" class="btn btn-primary" [disabled]="savingProfile()">
+            @if (savingProfile()) { <span class="btn-spinner"></span> }
+            {{ savingProfile() ? 'Saving...' : 'Save Profile' }}
+          </button>
+        }
       </form>
     </div>
+
+    <!-- Expert profile: credibility, review history & assigned responsibilities -->
+    @if (isExpertOnly()) {
+      <div class="card settings-card animate-in" style="margin-top:24px; animation-delay:0.05s;">
+        <h2 class="section-title">Expert Profile</h2>
+        <div class="expert-links">
+          <a routerLink="/expert/stats" class="expert-link">
+            <span class="expert-link-icon">⭐</span>
+            <div>
+              <div class="expert-link-title">Credibility Score</div>
+              <div class="expert-link-desc text-muted text-sm">View your review accuracy and standing</div>
+            </div>
+          </a>
+          <a routerLink="/expert/history" class="expert-link">
+            <span class="expert-link-icon">🗂️</span>
+            <div>
+              <div class="expert-link-title">Review History</div>
+              <div class="expert-link-desc text-muted text-sm">Every verdict you've submitted</div>
+            </div>
+          </a>
+          <a routerLink="/expert/queue" class="expert-link">
+            <span class="expert-link-icon">📋</span>
+            <div>
+              <div class="expert-link-title">Assigned Responsibilities</div>
+              <div class="expert-link-desc text-muted text-sm">Claims currently awaiting your review</div>
+            </div>
+          </a>
+        </div>
+      </div>
+    }
 
     <!-- Change Password Section -->
     <div class="card settings-card animate-in" style="margin-top:24px; animation-delay:0.1s;">

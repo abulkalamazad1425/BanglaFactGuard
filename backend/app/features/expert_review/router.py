@@ -27,6 +27,7 @@ from app.shared.dependencies import get_async_session
 router = APIRouter(prefix="/expert", tags=["Expert Review"])
 
 _EXPERT_OR_ADMIN = require_role("expert", "admin")
+_EXPERT_ONLY = require_role("expert")
 
 
 def _get_service(
@@ -76,7 +77,7 @@ async def get_queue_item(
 async def submit_vote(
     claim_id: uuid.UUID,
     body: ExpertVoteRequest,
-    current_user: User = Depends(_EXPERT_OR_ADMIN),
+    current_user: User = Depends(_EXPERT_ONLY),
     svc: ExpertReviewService = Depends(_get_service),
 ) -> ExpertReviewResponse:
     return await svc.submit_vote(
@@ -95,7 +96,7 @@ async def submit_vote(
 async def edit_vote(
     review_id: uuid.UUID,
     body: ExpertVoteUpdateRequest,
-    current_user: User = Depends(_EXPERT_OR_ADMIN),
+    current_user: User = Depends(_EXPERT_ONLY),
     svc: ExpertReviewService = Depends(_get_service),
 ) -> ExpertReviewResponse:
     return await svc.edit_vote(

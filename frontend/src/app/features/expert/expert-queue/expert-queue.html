@@ -4,9 +4,16 @@
           <div class="header-content">
             <div>
               <h1>Expert Review Queue</h1>
-              <p>Claims awaiting your expert assessment</p>
+              @if (isAdmin()) {
+                <p>Monitoring pending claims — administrators view the queue but do not vote.</p>
+              } @else {
+                <p>Claims awaiting your expert assessment</p>
+              }
             </div>
             <div class="header-actions">
+              @if (isAdmin()) {
+                <span class="badge badge-not-found">👁 View only</span>
+              }
               <span class="badge badge-primary">{{ queue().length }} pending</span>
             </div>
           </div>
@@ -64,38 +71,6 @@
                   <div class="claim-section">
                     <div class="section-label">📄 Submitted News Body</div>
                     <p class="queue-body-snippet">{{ item.news_body }}</p>
-                  </div>
-                }
-
-                <!-- Top Supporting Evidence -->
-                @if (item.top_article) {
-                  <div class="evidence-section">
-                    <div class="section-label" style="margin-bottom: 10px;">🔍 Top Matching Evidence from Source</div>
-                    <div class="evidence-card">
-                      <div class="evidence-header">
-                        <div style="flex: 1;">
-                          <a [href]="item.top_article.url" target="_blank" class="evidence-title">
-                            {{ item.top_article.title || 'View Source Article' }}
-                          </a>
-                        </div>
-                        @if (item.top_article.rank_score != null) {
-                          <span class="evidence-score">
-                            {{ (item.top_article.rank_score * 100).toFixed(1) }}% match
-                          </span>
-                        }
-                      </div>
-                      <div class="evidence-meta">
-                        @if (item.top_article.published_date) {
-                          <span>📅 {{ item.top_article.published_date }}</span>
-                        }
-                        <span>🌐 {{ getHost(item.top_article.url) }}</span>
-                      </div>
-                      @if (item.top_article.body_snippet) {
-                        <a [href]="item.top_article.url" target="_blank" style="text-decoration: none; color: inherit; display: block;">
-                          <p class="evidence-snippet">{{ item.top_article.body_snippet }}</p>
-                        </a>
-                      }
-                    </div>
                   </div>
                 }
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -167,6 +167,16 @@ async def update_my_profile(
     session: AsyncSession = Depends(get_async_session),
 ) -> ProfileResponse:
     from app.features.users.models import UserProfile
+
+    if current_user.role == "expert":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": "expert_profile_readonly",
+                "message": "Experts cannot modify their profile information. "
+                "Contact an administrator to update your account details.",
+            },
+        )
 
     if body.full_name is not None:
         current_user.full_name = body.full_name

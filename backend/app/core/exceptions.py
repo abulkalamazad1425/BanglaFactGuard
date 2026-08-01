@@ -253,6 +253,33 @@ class TokenInvalidError(AuthError):
         super().__init__(message="Authentication token is invalid.")
 
 
+class OtpInvalidError(AuthError):
+
+    def __init__(self) -> None:
+        super().__init__(message="Invalid or expired verification code.")
+
+
+class OtpGenerationError(BanglaFactGuardError):
+
+    http_status_code = 503
+
+    def __init__(self) -> None:
+        super().__init__(
+            message="Could not generate a verification code. Please try again."
+        )
+
+
+class EmailDeliveryError(BanglaFactGuardError):
+
+    http_status_code = 503
+
+    def __init__(self) -> None:
+        super().__init__(
+            message="We couldn't send the verification email right now. "
+            "Please try again in a few minutes."
+        )
+
+
 class InactiveAccountError(AuthError):
 
     http_status_code = 403

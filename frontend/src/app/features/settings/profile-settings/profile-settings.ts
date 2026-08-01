@@ -1,6 +1,7 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { CommonModule } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { AuthService } from '../../../services/auth.service';
 import { ToastService } from '../../../shared/services/toast.service';
 import { UserProfile, UpdateProfileRequest } from '../../../models/user.model';
@@ -8,7 +9,7 @@ import { UserProfile, UpdateProfileRequest } from '../../../models/user.model';
 @Component({
   selector: 'app-profile-settings',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, ReactiveFormsModule, RouterLink],
   templateUrl: './profile-settings.html',
   styleUrls: ['./profile-settings.scss']
 })
@@ -19,6 +20,9 @@ export class ProfileSettingsComponent implements OnInit {
 
   readonly savingProfile = signal(false);
   readonly changingPw = signal(false);
+
+  // Requirement 2.2: experts may VIEW their profile but never modify it.
+  readonly isExpertOnly = computed(() => this.auth.user()?.role === 'expert');
 
   initial = () => (this.auth.user()?.full_name || this.auth.user()?.email || 'U').charAt(0).toUpperCase();
 
@@ -41,9 +45,15 @@ export class ProfileSettingsComponent implements OnInit {
       next: p => this.profileForm.patchValue({ full_name: p.full_name || '', bio: p.bio || '' }),
       error: () => { },
     });
+
+    // Requirement 2.2: experts view but never edit profile information.
+    if (this.isExpertOnly()) {
+      this.profileForm.disable();
+    }
   }
 
   saveProfile(): void {
+    if (this.isExpertOnly()) { return; }
     this.savingProfile.set(true);
     const req: UpdateProfileRequest = {
       full_name: this.profileForm.value.full_name || undefined,

@@ -67,12 +67,19 @@ class SourceService:
         language: str | None = None,
         page: int = 1,
         size: int = 20,
+        include_inactive: bool = False,
     ) -> SourceListSchema:
         offset = (page - 1) * size
-        items = await self.source_repo.list_active(
-            language=language, limit=size, offset=offset
-        )
-        total = await self.source_repo.count_active()
+        if include_inactive:
+            items = await self.source_repo.list_all(
+                language=language, limit=size, offset=offset
+            )
+            total = await self.source_repo.count_all()
+        else:
+            items = await self.source_repo.list_active(
+                language=language, limit=size, offset=offset
+            )
+            total = await self.source_repo.count_active()
         pages = math.ceil(total / size) if size else 0
         return SourceListSchema(
             items=[SourceResponseSchema.model_validate(s) for s in items],

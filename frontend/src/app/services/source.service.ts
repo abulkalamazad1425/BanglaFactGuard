@@ -13,9 +13,15 @@ import {
 export class SourceService {
   private readonly api = inject(ApiService);
 
-  listSources(language?: string, page: number = 1, size: number = 20): Observable<SourceListResponse> {
+  listSources(
+    language?: string,
+    page: number = 1,
+    size: number = 20,
+    includeInactive: boolean = false,
+  ): Observable<SourceListResponse> {
     const params: any = { page, size };
     if (language) params.language = language;
+    if (includeInactive) params.include_inactive = true;
     return this.api.get<SourceListResponse>(API_ENDPOINTS.SOURCES, params);
   }
 

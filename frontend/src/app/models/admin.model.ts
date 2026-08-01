@@ -47,6 +47,7 @@ export interface CreateExpertRequest {
 export interface UpdateExpertRequest {
   full_name?: string | null;
   email?: string | null;
+  expertise_area?: string | null;
   is_active?: boolean;
 }
 

@@ -22,7 +22,7 @@
           @if (emailInvalid) { <span class="form-error">Valid email is required</span> }
         </div>
         <div class="form-group">
-          <label class="form-label">Initial Password <span style="color:var(--error)">*</span></label>
+          <label class="form-label">Password <span style="color:var(--error)">*</span></label>
           <input type="password" formControlName="password" class="form-control"
                  [class.is-invalid]="pwInvalid" placeholder="Min 8 chars, 1 uppercase, 1 digit" />
           @if (pwInvalid) { <span class="form-error">Strong password required (8+ chars, 1 uppercase, 1 digit)</span> }

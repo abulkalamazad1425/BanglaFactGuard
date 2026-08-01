@@ -1,14 +1,15 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { Component, OnInit, inject, signal, computed } from '@angular/core';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { ExpertService } from '../../../services/expert.service';
 import { ToastService } from '../../../shared/services/toast.service';
-import { ExpertQueueItem, ExpertVoteRequest } from '../../../models/expert.model';
-import { VerificationResponse } from '../../../models/verification.model';
+import { ExpertQueueItem } from '../../../models/expert.model';
+import { VerificationResponse, MatchedArticle } from '../../../models/verification.model';
 import { VerdictBadgeComponent } from '../../../shared/components/verdict-badge/verdict-badge.component';
 import { ScoreBarComponent } from '../../../shared/components/score-bar/score-bar.component';
 import { VerificationService } from '../../../services/verification.service';
+import { AuthService } from '../../../services/auth.service';
 
 const LABELS = ['TRUE', 'FALSE', 'PARTIALLY_TRUE', 'NOT_FOUND_IN_CLAIMED_SOURCE'] as const;
 type Label = typeof LABELS[number];
@@ -26,6 +27,9 @@ export class ExpertReviewDetailComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly toast = inject(ToastService);
   private readonly fb = inject(FormBuilder);
+  private readonly auth = inject(AuthService);
+
+  readonly isAdmin = this.auth.isAdmin;
 
   readonly loading = signal(true);
   readonly voting = signal(false);
@@ -34,6 +38,12 @@ export class ExpertReviewDetailComponent implements OnInit {
   readonly aiResult = signal<VerificationResponse | null>(null);
   readonly selectedLabel = signal<Label | null>(null);
   formSubmitted = false;
+
+  // Requirement: at most one top article is ever surfaced on this page, with its full body.
+  readonly topArticle = computed<MatchedArticle | null>(() => {
+    const articles = this.aiResult()?.matched_articles;
+    return articles && articles.length > 0 ? articles[0] : null;
+  });
 
   readonly labels = LABELS;
   readonly labelDisplay: Record<Label, string> = {
@@ -59,8 +69,8 @@ export class ExpertReviewDetailComponent implements OnInit {
     this.expertSvc.getQueueItem(claimId).subscribe({
       next: c => {
         this.claim.set(c);
-        
-        // Also fetch the full AI prediction details
+
+        // Also fetch the full AI prediction details (includes full article bodies)
         this.verificationSvc.getResult(claimId).subscribe({
           next: res => { this.aiResult.set(res); this.loading.set(false); },
           error: () => { this.loading.set(false); }
@@ -71,6 +81,7 @@ export class ExpertReviewDetailComponent implements OnInit {
   }
 
   onSubmit(): void {
+    if (this.isAdmin()) { return; } // administrators may view but never vote
     this.formSubmitted = true;
     if (this.form.invalid || !this.selectedLabel()) {
       this.form.markAllAsTouched();

@@ -45,6 +45,7 @@
                 </td>
                 <td>
                   <div class="action-btns">
+                    <button class="btn btn-ghost btn-sm" (click)="openEdit(exp)">Edit</button>
                     @if (exp.is_active) {
                       <button class="btn btn-danger btn-sm" (click)="deactivate(exp)">Deactivate</button>
                     } @else {
@@ -61,6 +62,37 @@
           </tbody>
         </table>
       </div>
+
+      <!-- Edit expert dialog -->
+      @if (editTarget()) {
+        <div class="modal-overlay" (click)="editTarget.set(null)">
+          <div class="modal-card card" (click)="$event.stopPropagation()">
+            <h3>Edit {{ editTarget()!.full_name }}</h3>
+            <form [formGroup]="editForm" (ngSubmit)="confirmEdit()" style="margin-top:20px;">
+              <div class="form-group">
+                <label class="form-label">Full Name</label>
+                <input type="text" formControlName="full_name" class="form-control"
+                       [class.is-invalid]="editForm.get('full_name')?.invalid && editForm.get('full_name')?.touched" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Email</label>
+                <input type="email" formControlName="email" class="form-control"
+                       [class.is-invalid]="editForm.get('email')?.invalid && editForm.get('email')?.touched" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Expertise Area</label>
+                <input type="text" formControlName="expertise_area" class="form-control" placeholder="e.g., Political Journalism" />
+              </div>
+              <div class="modal-actions">
+                <button type="button" class="btn btn-ghost" (click)="editTarget.set(null)">Cancel</button>
+                <button type="submit" class="btn btn-primary" [disabled]="editForm.invalid || editing()">
+                  {{ editing() ? 'Saving...' : 'Save Changes' }}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      }
 
       <!-- Reset password dialog -->
       @if (resetTarget()) {

@@ -67,7 +67,7 @@
               @if (result()!.scores) {
                 <div class="scores-grid">
                   @if (result()!.scores.semantic_similarity != null) {
-                    <div class="score-item" style="grid-column: 1 / -1; background: rgba(0,0,0,0.15); padding: 16px; border-radius: 8px;">
+                    <div class="score-item" style="grid-column: 1 / -1; background: var(--bg-surface-2); padding: 16px; border-radius: 8px;">
                       <div class="score-info">
                         <span class="score-label" title="Blended score (30% headline, 70% body)">Semantic Similarity ℹ</span>
                         <span class="score-value" style="font-size: 24px;">{{ (result()!.scores.semantic_similarity! * 100).toFixed(1) }}%</span>
@@ -77,11 +77,11 @@
                       </div>
                       @if (result()!.scores.headline_similarity != null && result()!.scores.body_similarity != null) {
                         <div class="score-sub" style="display: flex; gap: 24px; justify-content: flex-start; font-size: 14px;">
-                          <span style="background: rgba(59, 130, 246, 0.1); padding: 4px 12px; border-radius: 4px;">
-                            Headline Match: <strong style="color: #93c5fd">{{ (result()!.scores.headline_similarity! * 100).toFixed(1) }}%</strong>
+                          <span style="background: var(--info-bg); padding: 4px 12px; border-radius: 4px;">
+                            Headline Match: <strong style="color: var(--info)">{{ (result()!.scores.headline_similarity! * 100).toFixed(1) }}%</strong>
                           </span>
-                          <span style="background: rgba(59, 130, 246, 0.1); padding: 4px 12px; border-radius: 4px;">
-                            Body Match: <strong style="color: #93c5fd">{{ (result()!.scores.body_similarity! * 100).toFixed(1) }}%</strong>
+                          <span style="background: var(--info-bg); padding: 4px 12px; border-radius: 4px;">
+                            Body Match: <strong style="color: var(--info)">{{ (result()!.scores.body_similarity! * 100).toFixed(1) }}%</strong>
                           </span>
                         </div>
                       }
@@ -206,31 +206,28 @@
                 </div>
               }
 
-              <!-- Matched Articles -->
+              <!-- Top matching article — at most one, if any was found -->
               @if (result()!.matched_articles && result()!.matched_articles.length) {
                 <div class="articles-section" style="margin-top: 48px;">
                   <h4 style="margin-bottom: 24px; font-size: 18px; display: flex; align-items: center; gap: 8px; color: var(--text-primary);">
-                    <span style="font-size: 24px;">📰</span> Top Supporting Evidence from Source
+                    <span style="font-size: 24px;">📰</span> Top Matching Article from Source
                   </h4>
                   <div class="articles-list">
-                    @for (art of result()!.matched_articles!.slice(0, 3); track art.url; let i = $index) {
-                      <div class="article-card glass-card" style="border-left: 4px solid var(--primary-color); background: rgba(255,255,255,0.03);">
+                    @for (art of result()!.matched_articles!.slice(0, 1); track art.url) {
+                      <div class="article-card" style="border-left: 4px solid var(--primary); background: var(--bg-surface-2);">
                         <div class="article-header" style="align-items: flex-start;">
                           <div style="display: flex; gap: 12px; align-items: flex-start; flex: 1;">
-                            <div class="article-badge" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; white-space: nowrap; margin-top: 2px;">
-                              #{{ i + 1 }} Match
-                            </div>
                             <a [href]="art.url" target="_blank" class="article-title" style="margin: 0; font-size: 16px; line-height: 1.4;">
                               {{ art.title || 'View Source Article' }}
                             </a>
                           </div>
                           @if (art.rank_score != null) {
-                            <div class="article-match" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3);">
+                            <div class="article-match" style="background: var(--success-bg); color: var(--success); border: 1px solid rgba(22, 163, 74, 0.25);">
                               Relevance: {{ (art.rank_score * 100).toFixed(1) }}%
                             </div>
                           }
                         </div>
-                        <div class="article-meta" style="margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); margin-top: 8px;">
+                        <div class="article-meta" style="margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border); margin-top: 8px;">
                           @if (art.author) { <span>👤 {{ art.author }}</span> }
                           @if (art.published_date) { <span>📅 {{ art.published_date }}</span> }
                           <span>🌐 {{ getHost(art.url) }}</span>

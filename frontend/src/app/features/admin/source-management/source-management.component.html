@@ -1,4 +1,5 @@
 <div class="sources-page">
+ <div class="container" style="padding-top:48px; padding-bottom:80px;">
 
   <!-- ══════════ Page Header ══════════ -->
   <div class="page-header">
@@ -90,6 +91,7 @@
     <span class="page-info">Page {{ page() }} of {{ Math.ceil(total() / size) }}</span>
     <button class="btn btn-ghost btn-sm" [disabled]="sources().length < size" (click)="nextPage()">Next →</button>
   </div>
+ </div>
 </div>
 
 <!-- ══════════ Slide-over Drawer ══════════ -->

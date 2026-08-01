@@ -28,9 +28,19 @@ async def list_sources(
     ),
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     size: int = Query(20, ge=1, le=100, description="Results per page"),
+    include_inactive: bool = Query(
+        False,
+        description=(
+            "Include deactivated sources (admin management use). "
+            "Public callers — e.g. the claimed-source dropdown — should omit this "
+            "so only active sources are returned."
+        ),
+    ),
     service: SourceService = Depends(get_source_service),
 ) -> SourceListSchema:
-    return await service.list_sources(language=language, page=page, size=size)
+    return await service.list_sources(
+        language=language, page=page, size=size, include_inactive=include_inactive
+    )
 
 
 @router.post(

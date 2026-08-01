@@ -389,6 +389,30 @@ class AuthSettings(BaseSettings):
     )
 
 
+class EmailSettings(BaseSettings):
+
+    model_config = SettingsConfigDict(env_prefix="EMAIL_")
+
+    smtp_host: str = Field(
+        default="",
+        description="SMTP server host. Empty disables real email sending — "
+        "OTPs are logged to the console instead (local/dev fallback).",
+    )
+    smtp_port: int = Field(default=587)
+    smtp_user: str = Field(default="")
+    smtp_password: str = Field(default="")
+    use_tls: bool = Field(default=True)
+    from_address: str = Field(default="no-reply@banglafactguard.local")
+    from_name: str = Field(default="BanglaFactGuard")
+
+    otp_length: int = Field(default=6)
+    otp_ttl_minutes: int = Field(default=10)
+
+    @property
+    def is_configured(self) -> bool:
+        return bool(self.smtp_host)
+
+
 class AppSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
@@ -437,6 +461,7 @@ class AppSettings(BaseSettings):
     multimodal: MultimodalSettings = Field(default_factory=MultimodalSettings)
     minio: MinioSettings = Field(default_factory=MinioSettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)
+    email: EmailSettings = Field(default_factory=EmailSettings)
 
     @property
     def classification(self) -> ClassificationThresholds:

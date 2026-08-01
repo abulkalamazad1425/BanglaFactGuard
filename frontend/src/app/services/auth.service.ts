@@ -103,9 +103,10 @@ export class AuthService {
     return this.api.post<{ message: string }>(API_ENDPOINTS.AUTH_PASSWORD_RESET_REQUEST, { email });
   }
 
-  confirmPasswordReset(token: string, new_password: string): Observable<{ message: string }> {
+  confirmPasswordReset(email: string, otp: string, new_password: string): Observable<{ message: string }> {
     return this.api.post<{ message: string }>(API_ENDPOINTS.AUTH_PASSWORD_RESET_CONFIRM, {
-      token,
+      email,
+      otp,
       new_password,
     });
   }

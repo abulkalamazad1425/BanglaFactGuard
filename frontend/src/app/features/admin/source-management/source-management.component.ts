@@ -59,7 +59,8 @@ export class SourceManagementComponent implements OnInit {
   }
 
   loadSources() {
-    this.sourceService.listSources(undefined, this.page(), this.size).subscribe({
+    // Admins manage the full registry, including deactivated sources.
+    this.sourceService.listSources(undefined, this.page(), this.size, true).subscribe({
       next: (res) => {
         this.sources.set(res.items);
         this.total.set(res.total);

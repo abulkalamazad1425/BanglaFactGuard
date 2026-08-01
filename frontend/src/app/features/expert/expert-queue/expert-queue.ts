@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 import { ExpertService } from '../../../services/expert.service';
 import { ExpertQueueItem } from '../../../models/expert.model';
 import { VerdictBadgeComponent } from '../../../shared/components/verdict-badge/verdict-badge.component';
+import { AuthService } from '../../../services/auth.service';
 
 @Component({
   selector: 'app-expert-queue',
@@ -14,7 +15,9 @@ import { VerdictBadgeComponent } from '../../../shared/components/verdict-badge/
 })
 export class ExpertQueueComponent implements OnInit {
   private readonly expertSvc = inject(ExpertService);
+  private readonly auth = inject(AuthService);
 
+  readonly isAdmin = this.auth.isAdmin;
   readonly loading = signal(true);
   readonly queue = signal<ExpertQueueItem[]>([]);
   readonly offset = signal(0);

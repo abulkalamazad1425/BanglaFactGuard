@@ -19,8 +19,8 @@ import { NotificationService } from '../../../services/notification.service';
               <path d="M10 10.5L14 8L18 10.5V15.5L14 18L10 15.5V10.5Z" fill="white" opacity="0.9"/>
               <defs>
                 <linearGradient id="grad" x1="4" y1="2" x2="24" y2="26" gradientUnits="userSpaceOnUse">
-                  <stop stop-color="#7c6af7"/>
-                  <stop offset="1" stop-color="#a855f7"/>
+                  <stop stop-color="#5b3df0"/>
+                  <stop offset="1" stop-color="#9333ea"/>
                 </linearGradient>
               </defs>
             </svg>
@@ -127,15 +127,15 @@ import { NotificationService } from '../../../services/notification.service';
   styles: [`
     .navbar {
       position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
-      background: rgba(8,9,13,0.8);
+      background: rgba(255,255,255,0.82);
       backdrop-filter: blur(20px);
       -webkit-backdrop-filter: blur(20px);
       border-bottom: 1px solid var(--border);
       transition: var(--transition);
 
       &.scrolled {
-        background: rgba(8,9,13,0.95);
-        box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+        background: rgba(255,255,255,0.95);
+        box-shadow: var(--shadow-sm);
       }
     }
 

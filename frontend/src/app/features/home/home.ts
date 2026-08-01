@@ -20,19 +20,19 @@ export class HomeComponent implements OnInit {
   readonly isLoggedIn = this.auth.isLoggedIn;
 
   readonly features = [
-    { icon: '🔍', title: 'Source Search', desc: 'Multi-provider search across NewsData.io, Google CSE, and PyGoogleNews to find evidence articles.' },
-    { icon: '🧠', title: 'NLP Analysis', desc: 'BanglaBERT-powered semantic similarity, NER entity matching, and DeBERTa NLI contradiction detection.' },
-    { icon: '👁️', title: 'Multimodal Check', desc: 'EfficientNet-B4 + BanglaBERT fusion model for detecting fake news from image-text pairs.' },
-    { icon: '⚖️', title: 'Expert Review', desc: 'Credibility-weighted expert panel review system that refines AI predictions.' },
-    { icon: '📊', title: '12-Stage Pipeline', desc: 'Sequential verification stages from claim normalization to weighted verdict finalization.' },
-    { icon: '🔒', title: 'Secure & Private', desc: 'JWT authentication, refresh token rotation, bcrypt hashing, and RBAC role system.' },
+    { icon: '🔎', title: 'Source-Based Verification', desc: 'Submit a headline, body text and a claimed news source. A 12-stage pipeline searches that outlet, retrieves the matching article, and checks it with LaBSE semantic similarity and DeBERTa contradiction detection.' },
+    { icon: '🧠', title: 'Multimodal Verification', desc: 'Submit body text with an image. A BanglaBERT + EfficientNet-B4 fusion model analyzes text and image together to flag content as Fake or Non-Fake.' },
+    { icon: '⚖️', title: 'Expert Credibility Voting', desc: 'Registered experts review flagged claims — with full access to the AI prediction and evidence — and cast credibility-weighted votes toward a final verdict.' },
+    { icon: '📊', title: 'Fact Explorer', desc: 'A public, searchable archive of every verified claim, filterable by keyword, verdict, verification type, source and publication date.' },
+    { icon: '🗂️', title: 'Verified Source Registry', desc: 'Administrators curate the list of trusted Bangla news outlets — only active, verified sources are ever eligible for source-based checks.' },
+    { icon: '🔔', title: 'Live Notifications', desc: 'Registered users and experts are notified the moment a submitted claim is resolved, or a new claim is assigned for their review.' },
   ];
 
   readonly verdicts = [
     { label: 'True', icon: '✓', cls: 'badge-true', desc: 'The claimed source actually published this article. High semantic similarity and entity match confirmed.' },
     { label: 'False', icon: '✗', cls: 'badge-false', desc: 'The claimed source did not publish this article, or the content contradicts what was published.' },
     { label: 'Partially True', icon: '◑', cls: 'badge-partial', desc: 'The source published a related article, but key facts have been altered or exaggerated.' },
-    { label: 'Not Found', icon: '?', cls: 'badge-not-found', desc: 'No relevant evidence was found in the claimed source or any related news outlets.' },
+    { label: 'Not Found', icon: '?', cls: 'badge-not-found', desc: 'No matching article could be located on the claimed source after an exhaustive search.' },
   ];
 
   ngOnInit(): void {

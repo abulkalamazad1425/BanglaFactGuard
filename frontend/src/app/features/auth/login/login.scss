@@ -1,7 +1,8 @@
     .auth-card {
       width: 100%;
-      background: rgba(16,18,26,0.8);
+      background: rgba(255,255,255,0.8);
       backdrop-filter: blur(24px);
+      box-shadow: var(--shadow-lg);
     }
     .auth-header {
       text-align: center; margin-bottom: 32px;

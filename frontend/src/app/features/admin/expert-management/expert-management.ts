@@ -4,7 +4,7 @@ import { RouterLink } from '@angular/router';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { AdminService } from '../../../services/admin.service';
 import { ToastService } from '../../../shared/services/toast.service';
-import { ExpertResponse, CreateExpertRequest, UpdateExpertRequest } from '../../../models/admin.model';
+import { ExpertResponse, UpdateExpertRequest } from '../../../models/admin.model';
 
 @Component({
   selector: 'app-expert-management',
@@ -22,8 +22,16 @@ export class ExpertManagementComponent implements OnInit {
   readonly experts = signal<ExpertResponse[]>([]);
   readonly resetTarget = signal<ExpertResponse | null>(null);
   readonly resetting = signal(false);
+  readonly editTarget = signal<ExpertResponse | null>(null);
+  readonly editing = signal(false);
 
   pwForm = this.fb.group({ password: ['', [Validators.required, Validators.minLength(8)]] });
+
+  editForm = this.fb.group({
+    full_name: ['', Validators.required],
+    email: ['', [Validators.required, Validators.email]],
+    expertise_area: [''],
+  });
 
   credColor = (s: number) => s >= 0.7 ? 'var(--success)' : s >= 0.4 ? 'var(--warning)' : 'var(--error)';
 
@@ -45,6 +53,37 @@ export class ExpertManagementComponent implements OnInit {
     this.adminSvc.activateExpert(exp.id).subscribe({
       next: (updated: any) => { this.experts.update(list => list.map(e => e.id === exp.id ? updated : e)); this.toast.success('Expert activated.'); },
       error: () => this.toast.error('Failed to activate expert.'),
+    });
+  }
+
+  openEdit(exp: ExpertResponse): void {
+    this.editTarget.set(exp);
+    this.editForm.reset({
+      full_name: exp.full_name || '',
+      email: exp.email,
+      expertise_area: exp.expertise_area || '',
+    });
+  }
+
+  confirmEdit(): void {
+    if (this.editForm.invalid) { this.editForm.markAllAsTouched(); return; }
+    this.editing.set(true);
+    const body: UpdateExpertRequest = {
+      full_name: this.editForm.value.full_name || undefined,
+      email: this.editForm.value.email || undefined,
+      expertise_area: this.editForm.value.expertise_area || undefined,
+    };
+    this.adminSvc.updateExpert(this.editTarget()!.id, body).subscribe({
+      next: (updated) => {
+        this.experts.update(list => list.map(e => e.id === updated.id ? updated : e));
+        this.editing.set(false);
+        this.editTarget.set(null);
+        this.toast.success('Expert account updated.');
+      },
+      error: (err) => {
+        this.editing.set(false);
+        this.toast.error(err.error?.detail?.message || 'Failed to update expert.');
+      },
     });
   }
 

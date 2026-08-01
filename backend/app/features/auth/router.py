@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import structlog
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,7 +23,6 @@ from app.features.auth.security import get_current_user
 from app.features.auth.service import AuthService
 from app.shared.dependencies import get_async_session
 
-logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
@@ -117,30 +115,28 @@ async def me(
 @router.post(
     "/password-reset/request",
     status_code=status.HTTP_200_OK,
-    summary="Request a password reset email",
+    summary="Request a password-reset OTP by email",
 )
 async def request_password_reset(
     body: PasswordResetRequest,
     svc: AuthService = Depends(_get_auth_service),
 ) -> dict:
-    raw_token = await svc.request_password_reset(email=body.email)
-    if raw_token:
-
-        logger.info("password_reset_token_issued", token=raw_token[:8] + "…")
-    return {"message": "If the email is registered, a reset link has been sent."}
+    await svc.request_password_reset(email=body.email)
+    return {"message": "If the email is registered, a verification code has been sent."}
 
 
 @router.post(
     "/password-reset/confirm",
     status_code=status.HTTP_200_OK,
-    summary="Confirm password reset with token",
+    summary="Confirm password reset with the emailed OTP",
 )
 async def confirm_password_reset(
     body: PasswordResetConfirm,
     svc: AuthService = Depends(_get_auth_service),
 ) -> dict:
     await svc.confirm_password_reset(
-        raw_token=body.token,
+        email=body.email,
+        otp=body.otp,
         new_password=body.new_password,
     )
     return {"message": "Password has been reset successfully."}

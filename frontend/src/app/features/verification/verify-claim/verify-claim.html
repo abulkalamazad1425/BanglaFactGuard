@@ -31,11 +31,23 @@
 
           <div class="form-group">
             <label class="form-label">Claimed Source <span class="required">*</span></label>
-            <input type="text" formControlName="claimed_source" class="form-control"
-                   [class.is-invalid]="sourceInvalid"
-                   placeholder="যেমন: prothomalo.com বা প্রথম আলো" />
+            <select formControlName="claimed_source" class="form-control"
+                    [class.is-invalid]="sourceInvalid">
+              <option value="" disabled>
+                {{ sourcesLoading ? 'Loading verified sources…' : 'Select a verified news source' }}
+              </option>
+              @for (src of sources; track src.canonical_name) {
+                <option [value]="src.canonical_name">
+                  {{ src.display_name }}{{ src.display_name_en ? ' — ' + src.display_name_en : '' }}
+                </option>
+              }
+            </select>
+            <span class="source-hint">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              Only active verified sources can be checked against.
+            </span>
             @if (sourceInvalid) {
-              <span class="form-error">Source is required</span>
+              <span class="form-error">Please select a claimed source</span>
             }
           </div>
 
@@ -279,12 +291,12 @@
               </div>
             }
 
-            <!-- Matched Articles -->
+            <!-- Top matching article — at most one, if any was found -->
             @if (result.matched_articles && result.matched_articles.length) {
               <div class="articles-section">
-                <h4>📰 Supporting Evidence from Source</h4>
+                <h4>📰 Top Matching Article from Source</h4>
                 <div class="articles-list">
-                  @for (art of result.matched_articles!; track art.url) {
+                  @for (art of result.matched_articles!.slice(0, 1); track art.url) {
                     <div class="article-card">
                       <div class="article-header">
                         <a [href]="art.url" target="_blank" class="article-title">

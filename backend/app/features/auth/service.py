@@ -12,6 +12,8 @@ from app.core.exceptions import (
     DuplicateRecordError,
     InactiveAccountError,
     InvalidCredentialsError,
+    OtpGenerationError,
+    OtpInvalidError,
     TokenInvalidError,
     WeakPasswordError,
 )
@@ -29,6 +31,7 @@ from app.features.auth.security import (
     verify_password,
 )
 from app.features.users.models import UserProfile
+from app.shared.email_service import EmailService
 
 logger = structlog.get_logger(__name__)
 _SETTINGS = get_settings()
@@ -37,6 +40,10 @@ _AUTH = _SETTINGS.auth
 
 def _sha256(value: str) -> str:
     return hashlib.sha256(value.encode()).hexdigest()
+
+
+def _generate_otp(length: int) -> str:
+    return "".join(str(secrets.randbelow(10)) for _ in range(length))
 
 
 def _validate_password_strength(password: str) -> None:
@@ -55,10 +62,12 @@ class AuthService:
         user_repo: UserRepository,
         token_repo: RefreshTokenRepository,
         reset_token_repo: PasswordResetTokenRepository,
+        email_service: EmailService | None = None,
     ) -> None:
         self._users = user_repo
         self._tokens = token_repo
         self._reset_tokens = reset_token_repo
+        self._email = email_service or EmailService()
 
     async def register(
         self,
@@ -141,14 +150,36 @@ class AuthService:
         return _to_me_response(user)
 
     async def request_password_reset(self, email: str) -> str | None:
+        """
+        Issue a numeric OTP and email it to the user (req. 1.4: OTP through
+        Email service). Returns the raw OTP only for dev-console logging by
+        the caller — never exposed to the HTTP response.
+        """
         user = await self._users.get_by_email(email)
         if user is None:
             logger.debug("password_reset_email_not_found", email=email)
             return None
 
-        raw_token = secrets.token_urlsafe(48)
-        token_hash = _sha256(raw_token)
-        expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+        otp_settings = _SETTINGS.email
+        expires_at = datetime.now(timezone.utc) + timedelta(
+            minutes=otp_settings.otp_ttl_minutes
+        )
+
+        # token_hash carries a DB-level unique constraint; with a short
+        # numeric OTP a collision against any past row is rare but possible,
+        # so pre-check uniqueness rather than let the insert fail.
+        raw_otp: str | None = None
+        token_hash: str = ""
+        for _ in range(5):
+            candidate = _generate_otp(otp_settings.otp_length)
+            candidate_hash = _sha256(candidate)
+            if not await self._reset_tokens.hash_in_use(candidate_hash):
+                raw_otp = candidate
+                token_hash = candidate_hash
+                break
+
+        if raw_otp is None:
+            raise OtpGenerationError()
 
         reset_token = PasswordResetToken(
             user_id=user.id,
@@ -159,20 +190,28 @@ class AuthService:
         self._users.session.add(reset_token)
         await self._users.session.flush()
 
-        logger.info("password_reset_token_created", user_id=str(user.id))
-        return raw_token
+        logger.info("password_reset_otp_created", user_id=str(user.id))
+        await self._email.send_otp_email(
+            to_email=user.email, otp=raw_otp, purpose="password_reset"
+        )
+        return raw_otp
 
-    async def confirm_password_reset(self, raw_token: str, new_password: str) -> None:
+    async def confirm_password_reset(
+        self, email: str, otp: str, new_password: str
+    ) -> None:
         _validate_password_strength(new_password)
 
-        reset_token = await self._reset_tokens.get_valid_by_raw_token(raw_token)
-        if reset_token is None:
-            raise TokenInvalidError()
+        user = await self._users.get_by_email(email)
+        if user is None:
+            raise OtpInvalidError()
+
+        reset_token = await self._reset_tokens.get_valid_by_raw_token(otp)
+        if reset_token is None or reset_token.user_id != user.id:
+            raise OtpInvalidError()
 
         reset_token.used = True
         self._users.session.add(reset_token)
 
-        user = await self._users.get_by_id(reset_token.user_id)
         user.hashed_password = hash_password(new_password)
         self._users.session.add(user)
 

@@ -17,7 +17,7 @@ import { RouterLink } from '@angular/router';
                 <path d="M10 10.5L14 8L18 10.5V15.5L14 18L10 15.5V10.5Z" fill="white" opacity="0.9"/>
                 <defs>
                   <linearGradient id="fg" x1="4" y1="2" x2="24" y2="26" gradientUnits="userSpaceOnUse">
-                    <stop stop-color="#7c6af7"/><stop offset="1" stop-color="#a855f7"/>
+                    <stop stop-color="#5b3df0"/><stop offset="1" stop-color="#9333ea"/>
                   </linearGradient>
                 </defs>
               </svg>

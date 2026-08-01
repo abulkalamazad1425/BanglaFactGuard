@@ -1,6 +1,6 @@
 // ============================================================
 // BanglaFactGuard — Global Styles
-// Dark mode premium design system
+// Light, accessible design system
 // ============================================================
 
 @use '@angular/material' as mat;
@@ -10,42 +10,42 @@
 
 // ── CSS Custom Properties ─────────────────────────────────────
 :root {
-  // Color palette
-  --bg-base:         #08090d;
-  --bg-surface:      #10121a;
-  --bg-surface-2:    #161923;
-  --bg-surface-3:    #1d2130;
-  --bg-elevated:     #222639;
+  // Color palette — soft lavender-tinted paper, not stark white
+  --bg-base:         #f6f6fb;
+  --bg-surface:      #ffffff;
+  --bg-surface-2:    #f2f2f8;
+  --bg-surface-3:    #e9e9f3;
+  --bg-elevated:     #ffffff;
 
-  --primary:         #7c6af7;
-  --primary-light:   #a08cf9;
-  --primary-dark:    #5a4bd4;
-  --accent:          #a855f7;
-  --accent-light:    #c084fc;
+  --primary:         #5b3df0;
+  --primary-light:   #7c5cff;
+  --primary-dark:    #4527c9;
+  --accent:          #9333ea;
+  --accent-light:    #a855f7;
 
-  --success:         #22c55e;
-  --success-bg:      rgba(34,197,94,0.12);
-  --error:           #ef4444;
-  --error-bg:        rgba(239,68,68,0.12);
-  --warning:         #f59e0b;
-  --warning-bg:      rgba(245,158,11,0.12);
-  --info:            #3b82f6;
-  --info-bg:         rgba(59,130,246,0.12);
+  --success:         #16a34a;
+  --success-bg:      rgba(22,163,74,0.10);
+  --error:           #dc2626;
+  --error-bg:        rgba(220,38,38,0.10);
+  --warning:         #c2760a;
+  --warning-bg:      rgba(194,118,10,0.10);
+  --info:            #2563eb;
+  --info-bg:         rgba(37,99,235,0.10);
 
-  --text-primary:    #f1f3f9;
-  --text-secondary:  #8b92a9;
-  --text-muted:      #555e78;
-  --text-disabled:   #3d4460;
+  --text-primary:    #191a2e;
+  --text-secondary:  #52546f;
+  --text-muted:      #83869e;
+  --text-disabled:   #b7b9cc;
 
-  --border:          rgba(255,255,255,0.07);
-  --border-hover:    rgba(255,255,255,0.15);
-  --border-focus:    rgba(124,106,247,0.6);
+  --border:          rgba(25,26,46,0.10);
+  --border-hover:    rgba(25,26,46,0.22);
+  --border-focus:    rgba(91,61,240,0.5);
 
-  --gradient-primary: linear-gradient(135deg, #7c6af7 0%, #a855f7 50%, #ec4899 100%);
-  --gradient-dark:    linear-gradient(135deg, #1a1d2e 0%, #0d0f18 100%);
-  --gradient-card:    linear-gradient(145deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%);
-  --glass-bg:         rgba(255,255,255,0.03);
-  --glass-border:     rgba(255,255,255,0.06);
+  --gradient-primary: linear-gradient(135deg, #5b3df0 0%, #9333ea 50%, #db2777 100%);
+  --gradient-dark:    linear-gradient(135deg, #241f38 0%, #14101f 100%);
+  --gradient-card:    linear-gradient(145deg, rgba(25,26,46,0.035) 0%, rgba(25,26,46,0.01) 100%);
+  --glass-bg:         rgba(255,255,255,0.65);
+  --glass-border:     rgba(25,26,46,0.08);
 
   // Typography
   --font-sans:  'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -58,11 +58,11 @@
   --radius-xl:   24px;
   --radius-full: 9999px;
 
-  // Shadows
-  --shadow-sm:  0 1px 3px rgba(0,0,0,0.4);
-  --shadow-md:  0 4px 16px rgba(0,0,0,0.4);
-  --shadow-lg:  0 8px 32px rgba(0,0,0,0.5);
-  --shadow-glow: 0 0 24px rgba(124,106,247,0.25);
+  // Shadows — light-theme shadows are soft and low-opacity
+  --shadow-sm:  0 1px 3px rgba(25,26,46,0.07);
+  --shadow-md:  0 4px 16px rgba(25,26,46,0.08);
+  --shadow-lg:  0 12px 32px rgba(25,26,46,0.12);
+  --shadow-glow: 0 0 24px rgba(91,61,240,0.18);
 
   // Transitions
   --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);

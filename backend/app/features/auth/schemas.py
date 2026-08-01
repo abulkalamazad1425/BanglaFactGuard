@@ -30,7 +30,8 @@ class PasswordResetRequest(BaseModel):
 
 
 class PasswordResetConfirm(BaseModel):
-    token: str
+    email: EmailStr
+    otp: str = Field(..., min_length=4, max_length=10, description="OTP emailed to the user")
     new_password: str = Field(..., min_length=8, max_length=128)
 
 

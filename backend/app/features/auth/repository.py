@@ -132,3 +132,14 @@ class PasswordResetTokenRepository(BaseRepository[PasswordResetToken]):
         )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def hash_in_use(self, token_hash: str) -> bool:
+        """True if any row (used or unused, expired or not) already has this
+        hash — token_hash carries a DB-level unique constraint, so this must
+        be checked before inserting a newly generated OTP to avoid a
+        collision on the (rare) matching digit string."""
+        stmt = select(PasswordResetToken.id).where(
+            PasswordResetToken.token_hash == token_hash
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none() is not None

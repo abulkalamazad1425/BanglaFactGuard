@@ -86,11 +86,9 @@ class ExpertReviewService:
         return ExpertQueueItemResponse(
             claim_id=str(claim.id),
             headline=claim.headline,
-            news_body=(
-                (claim.news_body[:600] + "…")
-                if claim.news_body and len(claim.news_body) > 600
-                else claim.news_body
-            ),
+            # Full, untruncated body — the review-detail page needs the
+            # complete submitted claim text, unlike the queue list preview.
+            news_body=claim.news_body,
             claimed_source=claim.claimed_source,
             ai_label=result.label.value if result else None,
             ai_confidence=result.confidence if result else None,

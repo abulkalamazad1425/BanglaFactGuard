@@ -1,10 +1,12 @@
-import { Component, inject } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { ToastService } from '../../../shared/services/toast.service';
 import { VerificationService } from '../../../services/verification.service';
 import { VerificationResponse } from '../../../models/verification.model';
+import { SourceService } from '../../../services/source.service';
+import { SourceResponse } from '../../../models/source.model';
 
 
 @Component({
@@ -14,15 +16,19 @@ import { VerificationResponse } from '../../../models/verification.model';
   templateUrl: './verify-claim.html',
   styleUrls: ['./verify-claim.scss'],
 })
-export class VerifyClaimComponent {
+export class VerifyClaimComponent implements OnInit {
   private readonly fb = inject(FormBuilder);
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
   private readonly svc = inject(VerificationService);
+  private readonly sourceSvc = inject(SourceService);
 
   loading = false;
   error: string | null = null;
   result: VerificationResponse | null = null;
+
+  sources: SourceResponse[] = [];
+  sourcesLoading = true;
 
   form = this.fb.group({
     headline: ['', [Validators.required, Validators.minLength(10)]],
@@ -31,6 +37,17 @@ export class VerifyClaimComponent {
     published_date: [''],
     force_refresh: [false],
   });
+
+  ngOnInit(): void {
+    // Only active verified sources are ever eligible for selection here.
+    this.sourceSvc.listSources(undefined, 1, 100).subscribe({
+      next: (res) => {
+        this.sources = [...res.items].sort((a, b) => a.display_name.localeCompare(b.display_name, 'bn'));
+        this.sourcesLoading = false;
+      },
+      error: () => { this.sourcesLoading = false; },
+    });
+  }
 
   get headlineInvalid() {
     return this.form.get('headline')?.invalid && this.form.get('headline')?.touched;

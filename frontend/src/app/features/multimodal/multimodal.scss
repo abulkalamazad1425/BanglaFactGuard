@@ -3,10 +3,10 @@
 }
 
 .mm-page {
-  background-color: #0f172a;
+  background-color: var(--bg-base);
   background-image:
-    radial-gradient(at 0% 0%, rgba(56, 189, 248, 0.12) 0px, transparent 50%),
-    radial-gradient(at 100% 100%, rgba(129, 140, 248, 0.12) 0px, transparent 50%);
+    radial-gradient(at 0% 0%, rgba(91, 61, 240, 0.06) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(147, 51, 234, 0.06) 0px, transparent 50%);
   min-height: 100%;
   padding: 48px 16px;
 }
@@ -30,13 +30,11 @@
 
 /* ─── Glass Panel ─── */
 .glass-panel {
-  background: rgba(30, 41, 59, 0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
   border-radius: 1.5rem;
   padding: 2rem;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-md);
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
@@ -45,17 +43,18 @@
 /* ─── Panel Header ─── */
 .panel-header {
   h1 {
-    font-family: 'Outfit', sans-serif;
+    font-family: var(--font-display);
     font-size: 2rem;
     font-weight: 700;
-    background: linear-gradient(135deg, #38bdf8, #818cf8);
+    background: var(--gradient-primary);
     -webkit-background-clip: text;
+    background-clip: text;
     -webkit-text-fill-color: transparent;
     margin-bottom: 0.4rem;
   }
 
   .subtitle {
-    color: #94a3b8;
+    color: var(--text-secondary);
     font-size: 0.9rem;
     line-height: 1.5;
   }
@@ -70,8 +69,8 @@
 
 label {
   font-size: 0.8rem;
-  font-weight: 500;
-  color: #94a3b8;
+  font-weight: 600;
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -79,23 +78,24 @@ label {
 input[type="text"],
 textarea {
   width: 100%;
-  background: rgba(15, 23, 42, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #f8fafc;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
   border-radius: 0.75rem;
   padding: 0.75rem 1rem;
   font-family: inherit;
   font-size: 1rem;
   outline: none;
-  transition: all 0.2s ease;
+  transition: var(--transition);
 
   &::placeholder {
-    color: #475569;
+    color: var(--text-muted);
   }
 
   &:focus {
-    border-color: #0ea5e9;
-    box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.2);
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(91, 61, 240, 0.15);
+    background: var(--bg-surface);
   }
 }
 
@@ -105,7 +105,7 @@ textarea {
 }
 
 .form-error {
-  color: #ef4444;
+  color: var(--error);
   font-size: 0.8rem;
 }
 
@@ -117,35 +117,35 @@ textarea {
   align-items: center;
   justify-content: center;
   padding: 2rem;
-  background: rgba(15, 23, 42, 0.6);
-  border: 2px dashed rgba(255, 255, 255, 0.1);
+  background: var(--bg-surface-2);
+  border: 2px dashed var(--border);
   border-radius: 0.75rem;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: var(--transition);
   overflow: hidden;
   min-height: 160px;
   text-align: center;
 
   &:hover {
-    border-color: #0ea5e9;
-    background: rgba(14, 165, 233, 0.05);
+    border-color: var(--primary);
+    background: rgba(91, 61, 240, 0.04);
   }
 }
 
 .file-icon {
   font-size: 2.5rem;
   margin-bottom: 0.5rem;
-  opacity: 0.5;
+  opacity: 0.6;
 }
 
 .file-label {
   font-size: 0.95rem;
-  color: #cbd5e1;
+  color: var(--text-secondary);
 }
 
 .file-hint {
   font-size: 0.75rem;
-  color: #64748b;
+  color: var(--text-muted);
   margin-top: 0.25rem;
 }
 
@@ -159,7 +159,7 @@ textarea {
 .preview-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(25, 26, 46, 0.55);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -188,12 +188,12 @@ textarea {
 /* ─── Submit Button ─── */
 .btn-submit {
   width: 100%;
-  background: linear-gradient(135deg, #38bdf8, #818cf8);
+  background: var(--gradient-primary);
   color: white;
   border: none;
   border-radius: 0.75rem;
   padding: 1rem;
-  font-family: 'Outfit', sans-serif;
+  font-family: var(--font-display);
   font-weight: 600;
   font-size: 1.1rem;
   cursor: pointer;
@@ -202,10 +202,11 @@ textarea {
   justify-content: center;
   align-items: center;
   gap: 0.75rem;
+  box-shadow: 0 4px 16px rgba(91, 61, 240, 0.25);
 
   &:hover:not(:disabled) {
     transform: translateY(-2px);
-    box-shadow: 0 10px 15px -3px rgba(14, 165, 233, 0.3);
+    box-shadow: 0 10px 20px rgba(91, 61, 240, 0.35);
   }
 
   &:active:not(:disabled) {
@@ -213,7 +214,7 @@ textarea {
   }
 
   &:disabled {
-    opacity: 0.7;
+    opacity: 0.6;
     cursor: not-allowed;
     transform: none;
   }
@@ -223,7 +224,7 @@ textarea {
 .spinner {
   width: 20px;
   height: 20px;
-  border: 3px solid rgba(255, 255, 255, 0.3);
+  border: 3px solid rgba(255, 255, 255, 0.35);
   border-radius: 50%;
   border-top-color: white;
   animation: spin 1s ease-in-out infinite;
@@ -232,9 +233,9 @@ textarea {
 .spinner-lg {
   width: 48px;
   height: 48px;
-  border: 3px solid rgba(255, 255, 255, 0.15);
+  border: 3px solid var(--bg-surface-3);
   border-radius: 50%;
-  border-top-color: #0ea5e9;
+  border-top-color: var(--primary);
   animation: spin 1s ease-in-out infinite;
   margin: 0 auto 24px;
 }
@@ -245,9 +246,9 @@ textarea {
 
 /* ─── Error Message ─── */
 .error-message {
-  background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: var(--error-bg);
+  color: var(--error);
+  border: 1px solid rgba(220, 38, 38, 0.25);
   padding: 1rem;
   border-radius: 0.75rem;
   font-size: 0.9rem;
@@ -270,12 +271,12 @@ textarea {
   align-items: center;
   justify-content: center;
   text-align: center;
-  color: #64748b;
+  color: var(--text-muted);
   min-height: 300px;
   gap: 1rem;
 
   svg {
-    opacity: 0.4;
+    opacity: 0.5;
   }
 
   p {
@@ -296,8 +297,8 @@ textarea {
   align-items: center;
   gap: 0.5rem;
   padding: 0.3rem 0.9rem;
-  background: rgba(14, 165, 233, 0.15);
-  color: #0ea5e9;
+  background: var(--info-bg);
+  color: var(--info);
   border-radius: 1rem;
   font-size: 0.8rem;
   font-weight: 600;
@@ -308,28 +309,28 @@ textarea {
   display: inline-block;
   padding: 0.5rem 1.5rem;
   border-radius: 2rem;
-  font-family: 'Outfit', sans-serif;
+  font-family: var(--font-display);
   font-weight: 700;
   font-size: 1.5rem;
   letter-spacing: 0.05em;
 
   &.badge-fake {
-    background: rgba(239, 68, 68, 0.1);
-    color: #ef4444;
-    border: 1px solid rgba(239, 68, 68, 0.3);
+    background: var(--error-bg);
+    color: var(--error);
+    border: 1px solid rgba(220, 38, 38, 0.25);
   }
 
   &.badge-real {
-    background: rgba(34, 197, 94, 0.1);
-    color: #22c55e;
-    border: 1px solid rgba(34, 197, 94, 0.3);
+    background: var(--success-bg);
+    color: var(--success);
+    border: 1px solid rgba(22, 163, 74, 0.25);
   }
 }
 
 /* ─── Confidence Bars ─── */
 .confidence-bar-container {
   width: 100%;
-  background: rgba(15, 23, 42, 0.6);
+  background: var(--bg-surface-3);
   border-radius: 1rem;
   height: 1.5rem;
   overflow: hidden;
@@ -338,13 +339,13 @@ textarea {
 
 .confidence-fake {
   height: 100%;
-  background: #ef4444;
+  background: var(--error);
   transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .confidence-real {
   height: 100%;
-  background: #22c55e;
+  background: var(--success);
   transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -355,8 +356,8 @@ textarea {
   font-weight: 500;
   margin-top: 0.5rem;
 
-  .label-fake { color: #ef4444; }
-  .label-real { color: #22c55e; }
+  .label-fake { color: var(--error); }
+  .label-real { color: var(--success); }
 }
 
 /* ─── Metadata Grids ─── */
@@ -364,7 +365,7 @@ textarea {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1rem;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg-surface-2);
   padding: 1.25rem;
   border-radius: 1rem;
   font-size: 0.9rem;
@@ -374,8 +375,8 @@ textarea {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1rem;
-  background: rgba(14, 165, 233, 0.05);
-  border: 1px solid rgba(14, 165, 233, 0.2);
+  background: var(--info-bg);
+  border: 1px solid rgba(37, 99, 235, 0.2);
   padding: 1.25rem;
   border-radius: 1rem;
   font-size: 0.9rem;
@@ -383,7 +384,7 @@ textarea {
   .sim-title {
     grid-column: span 2;
     font-weight: 600;
-    color: #0ea5e9;
+    color: var(--info);
     font-size: 0.8rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -397,7 +398,7 @@ textarea {
 }
 
 .meta-label {
-  color: #64748b;
+  color: var(--text-muted);
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -406,7 +407,7 @@ textarea {
 .meta-value {
   font-weight: 500;
   word-break: break-all;
-  color: #f8fafc;
+  color: var(--text-primary);
 
   &.mono {
     font-family: monospace;
@@ -414,7 +415,7 @@ textarea {
   }
 
   &.minio-key {
-    color: #0ea5e9;
+    color: var(--info);
     font-size: 0.85rem;
   }
 }

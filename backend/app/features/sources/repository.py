@@ -88,6 +88,31 @@ class SourceRepository(BaseRepository[VerifiedSource]):
         result = await self.session.execute(stmt)
         return result.scalar_one()
 
+    async def list_all(
+        self,
+        *,
+        language: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[VerifiedSource]:
+        stmt = select(VerifiedSource)
+        if language:
+            stmt = stmt.where(VerifiedSource.language == language.lower())
+        stmt = (
+            stmt.order_by(VerifiedSource.canonical_name.asc())
+            .offset(offset)
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def count_all(self) -> int:
+        from sqlalchemy import func
+
+        stmt = select(func.count()).select_from(VerifiedSource)
+        result = await self.session.execute(stmt)
+        return result.scalar_one()
+
     async def add_alias(self, source: VerifiedSource, alias: str) -> VerifiedSource:
         current: list[str] = source.aliases or []
         if alias not in current:
