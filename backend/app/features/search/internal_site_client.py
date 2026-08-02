@@ -6,6 +6,8 @@ import structlog
 from urllib.parse import urljoin, urlparse
 from datetime import date
 
+from app.shared.utils.article_url_heuristics import is_probable_article
+
 logger = structlog.get_logger(__name__)
 
 _HEADERS = {
@@ -95,7 +97,7 @@ class InternalSiteSearchClient:
 
             full_url = urljoin(search_url, href)
 
-            if not patterns or any(re.search(pat, full_url) for pat in patterns):
+            if is_probable_article(full_url, patterns):
                 if full_url in seen_urls:
                     continue
 

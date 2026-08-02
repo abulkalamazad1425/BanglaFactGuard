@@ -59,6 +59,25 @@ class NewsDataClient:
         )
 
         try:
+            return await self._request(params)
+        except NewsDataError as exc:
+            if domain and exc.details.get("code") == "UnsupportedFilter":
+                # NewsData's domain registry doesn't cover every Bangla
+                # outlet (kalerkantho.com, jugantor.com, etc. are absent).
+                # Degrade to an un-scoped keyword search — the caller
+                # (SourceSearchStage) already filters every candidate URL
+                # down to the target domain afterwards, so this still only
+                # surfaces on-domain results, just without NewsData's own
+                # filtering doing that work for us.
+                logger.info(
+                    "newsdata_domain_unsupported_retrying_unscoped", domain=domain
+                )
+                params.pop("domain", None)
+                return await self._request(params)
+            raise
+
+    async def _request(self, params: dict[str, str | int]) -> list[tuple[str, str]]:
+        try:
             response = await self.client.get(
                 self.settings.newsdata_base_url,
                 params=params,
@@ -68,8 +87,11 @@ class NewsDataClient:
             data = response.json()
 
             if data.get("status") == "error":
-                err = data.get("results", {})
-                raise NewsDataError(f"NewsData.io API error: {err}")
+                err = data.get("results", {}) or {}
+                raise NewsDataError(
+                    f"NewsData.io API error: {err}",
+                    details={"code": err.get("code")},
+                )
 
             results = data.get("results", [])
             entries: list[tuple[str, str]] = []
@@ -82,9 +104,19 @@ class NewsDataClient:
             return entries
 
         except httpx.HTTPStatusError as exc:
+            # NewsData reports domain-unsupported (and similar) errors via a
+            # non-2xx status *and* a JSON body with a `code` field — parse it
+            # out so callers (e.g. the domain-fallback retry above) can act
+            # on the specific failure reason instead of just the status code.
+            code = None
+            try:
+                code = (exc.response.json().get("results") or {}).get("code")
+            except Exception:
+                pass
             raise NewsDataError(
                 f"NewsData API returned {exc.response.status_code}: {exc.response.text[:200]}",
                 status_code=exc.response.status_code,
+                details={"code": code} if code else None,
             ) from exc
         except httpx.RequestError as exc:
             raise NewsDataError(f"NewsData network error: {exc}") from exc

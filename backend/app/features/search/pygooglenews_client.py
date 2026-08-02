@@ -130,25 +130,32 @@ class PyGoogleNewsClient:
                     lambda route: route.abort(),
                 )
 
+                # Resolving several redirect pages at once on one browser
+                # context causes enough contention that some navigations
+                # miss a 12s timeout even though a single page resolves in
+                # ~2-3s — cap concurrency and give each page more headroom.
+                semaphore = asyncio.Semaphore(4)
+
                 async def resolve_one(url: str) -> tuple[str, str]:
-                    page = await context.new_page()
-                    try:
-                        await page.goto(
-                            url, wait_until="domcontentloaded", timeout=12000
-                        )
-                        await page.wait_for_timeout(2000)
-                        final_url = page.url
-                        logger.debug(
-                            "pgn_resolved_url", orig=url[:60], final=final_url[:60]
-                        )
-                        return url, final_url
-                    except Exception as exc:
-                        logger.warning(
-                            "pgn_resolve_failed", url=url[:60], error=str(exc)
-                        )
-                        return url, url
-                    finally:
-                        await page.close()
+                    async with semaphore:
+                        page = await context.new_page()
+                        try:
+                            await page.goto(
+                                url, wait_until="domcontentloaded", timeout=20000
+                            )
+                            await page.wait_for_timeout(2500)
+                            final_url = page.url
+                            logger.debug(
+                                "pgn_resolved_url", orig=url[:60], final=final_url[:60]
+                            )
+                            return url, final_url
+                        except Exception as exc:
+                            logger.warning(
+                                "pgn_resolve_failed", url=url[:60], error=str(exc)
+                            )
+                            return url, url
+                        finally:
+                            await page.close()
 
                 tasks = [resolve_one(u) for u in urls]
                 results = await asyncio.gather(*tasks)

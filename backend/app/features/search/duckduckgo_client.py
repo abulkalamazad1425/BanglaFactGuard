@@ -7,7 +7,7 @@ from urllib.parse import unquote
 
 import httpx
 from bs4 import BeautifulSoup
-from app.core.exceptions import SearchError
+from app.core.exceptions import DDGError
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +95,6 @@ class DuckDuckGoClient:
 
         except Exception as exc:
             logger.warning(
-                "DuckDuckGo search failed for query '%s': %s", search_q[:60], exc
+                "DuckDuckGo search failed for query '%s': %r", search_q[:60], exc
             )
-            raise SearchError(f"DuckDuckGo search failed: {exc}") from exc
+            raise DDGError(f"DuckDuckGo search failed: {exc!r}") from exc

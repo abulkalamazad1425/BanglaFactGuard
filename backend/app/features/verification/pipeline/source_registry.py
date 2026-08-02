@@ -1,3 +1,12 @@
+"""
+Reference/seed data for known Bangla news sources.
+
+Not read at request time — the live pipeline resolves per-source scraping
+config (selectors, search URL, URL patterns) from the `verified_sources` DB
+table via `SourceRepository`. Keep this file in sync with that table by
+hand when either changes, so it stays useful as seed data / documentation.
+"""
+
 from typing import TypedDict
 
 
@@ -142,7 +151,7 @@ SOURCE_REGISTRY: dict[str, SourceConfig] = {
             "time[datetime]",
             "time",
         ],
-        "internal_search_url": "",
+        "internal_search_url": "https://bangla.thedailystar.net/search?q={query}",
         "article_url_patterns": [
             r"bangla\.thedailystar\.net/[a-zA-Z0-9-]+/.*news-\d+",
             r"bangla\.thedailystar\.net/node/\d+",
@@ -186,10 +195,13 @@ SOURCE_REGISTRY: dict[str, SourceConfig] = {
             "span[class*='date']",
             "time",
         ],
-        "internal_search_url": "https://www.kalerkantho.com/search?q={query}",
+        # The site's own search results are populated client-side via XHR —
+        # a plain HTTP GET returns page chrome with no result links.
+        "internal_search_url": None,
         "article_url_patterns": [
             r"kalerkantho\.com/online/[^/]+/\d{4}/\d{2}/\d{2}/\d+",
             r"kalerkantho\.com/print-edition/[^/]+/\d{4}/\d{2}/\d{2}/\d+",
+            r"kalerkantho\.com/[^/]+/[^/]+/\d{4}/\d{2}/\d{2}/\d+",
             r"kalerkantho\.com/[^/]+/\d{4}/\d{2}/\d{2}/\d+",
         ],
         "rss_url": "https://www.kalerkantho.com/rss.xml",
@@ -207,6 +219,9 @@ SOURCE_REGISTRY: dict[str, SourceConfig] = {
             "jugantor.com",
         ],
         "body_selectors": [
+            # Real body container as of the current site redesign — old
+            # #myText / .news-details wrappers are gone but kept as fallbacks.
+            ".detailBody p",
             "div#myText p",
             "#myText",
             "div[id='myText'] p",
@@ -228,7 +243,8 @@ SOURCE_REGISTRY: dict[str, SourceConfig] = {
             "span[class*='date']",
             "time",
         ],
-        "internal_search_url": "https://www.jugantor.com/search?q={query}",
+        # Search results are populated client-side via XHR, same as kalerkantho.
+        "internal_search_url": None,
         "article_url_patterns": [
             r"jugantor\.com/[^/]+/\d{4}/\d{2}/\d{2}/\d+",
             r"jugantor\.com/[^/]+/\d{6,}$",
@@ -270,7 +286,9 @@ SOURCE_REGISTRY: dict[str, SourceConfig] = {
         ],
         "internal_search_url": "https://www.ittefaq.com.bd/search?q={query}",
         "article_url_patterns": [
-            r"ittefaq\.com\.bd/\d{5,}$",
+            # Real URLs are /{id}/{bangla-slug} — the ID is the first path
+            # segment, not the end of the string.
+            r"ittefaq\.com\.bd/\d{5,}(?:/|$)",
             r"ittefaq\.com\.bd/[a-z-]+/\d{4}-\d{2}-\d{2}/\d+",
             r"ittefaq\.com\.bd/[a-z-]+/\d+",
         ],
@@ -350,8 +368,12 @@ SOURCE_REGISTRY: dict[str, SourceConfig] = {
             "span[class*='date']",
             "time",
         ],
-        "internal_search_url": "https://mzamin.com/search.php?q={query}",
+        # /search.php is dead (returns an empty response); /search is the
+        # live endpoint on the redesigned site.
+        "internal_search_url": "https://www.mzamin.com/search?q={query}",
         "article_url_patterns": [
+            # Site moved from /article.php?mzamin={id} to a clean /article/{id}.
+            r"mzamin\.com/article/\d+",
             r"mzamin\.com/article\.php\?mzamin=\d+",
             r"mzamin\.com/news/\d+",
         ],
@@ -391,6 +413,9 @@ SOURCE_REGISTRY: dict[str, SourceConfig] = {
         ],
         "internal_search_url": "https://dailyinqilab.com/search?q={query}",
         "article_url_patterns": [
+            # Real URLs are /{category}/news/{id} — old pattern required
+            # "news" immediately after the domain, missing the category segment.
+            r"dailyinqilab\.com/[^/]+/news/\d+",
             r"dailyinqilab\.com/article/\d+",
             r"dailyinqilab\.com/news/\d+",
         ],
@@ -432,6 +457,10 @@ SOURCE_REGISTRY: dict[str, SourceConfig] = {
         ],
         "internal_search_url": "https://www.dailynayadiganta.com/search?q={query}",
         "article_url_patterns": [
+            # Site moved to short opaque alphanumeric slugs
+            # (/{category}[/{subcategory}]/{slug}/) instead of numeric IDs.
+            r"dailynayadiganta\.com/[^/]+/[^/]+/[a-zA-Z0-9]{8,}/?$",
+            r"dailynayadiganta\.com/[^/]+/[a-zA-Z0-9]{8,}/?$",
             r"dailynayadiganta\.com/detail/news/\d+",
             r"dailynayadiganta\.com/[^/]+/\d+[a-z]*$",
             r"dailynayadiganta\.com/[^/]+/[a-zA-Z0-9]{6,}$",

@@ -16,6 +16,7 @@ from app.features.search.duckduckgo_client import DuckDuckGoClient
 from app.features.search.internal_site_client import InternalSiteSearchClient
 from app.features.cache.cache_service import CacheService
 from app.shared.utils.hashing import compute_search_query_hash
+from app.shared.utils.article_url_heuristics import is_probable_article
 
 logger = structlog.get_logger(__name__)
 
@@ -27,23 +28,6 @@ _PROVIDER_PRIORITY: dict[SearchProvider, int] = {
     SearchProvider.DDG: 3,
     SearchProvider.PY_GOOGLE_NEWS: 4,
 }
-
-_NON_ARTICLE_PATTERNS = [
-    r"/tag/",
-    r"/tags/",
-    r"/author/",
-    r"/feed",
-    r"\.rss$",
-    r"\.xml$",
-    r"\.atom$",
-    r"/amp/$",
-    r"\?s=",
-    r"#comments$",
-    r"news\.google\.com/search",
-    r"google\.com/search",
-    r"/search\?[^/]*$",
-]
-_NON_ARTICLE_RE = re.compile("|".join(_NON_ARTICLE_PATTERNS))
 
 _STRIP_PARAMS = frozenset(
     [
@@ -91,13 +75,6 @@ def _canonicalise_url(url: str) -> str:
         return canonical
     except Exception:
         return url
-
-
-def _is_probable_article(url: str, source_patterns: list[str] | None) -> bool:
-    if source_patterns:
-        return any(re.search(pat, url) for pat in source_patterns)
-
-    return not _NON_ARTICLE_RE.search(url)
 
 
 def _build_keyword_query(text: str, max_words: int) -> str:
@@ -212,7 +189,7 @@ class SourceSearchStage:
                     ):
                         continue
 
-                if not _is_probable_article(url, article_url_patterns):
+                if not is_probable_article(url, article_url_patterns):
                     continue
 
                 canon = _canonicalise_url(url)

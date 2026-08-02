@@ -77,7 +77,14 @@ class QueryGenerationError(StageError):
 
 
 class SearchError(StageError):
-    pass
+
+    def __init__(self, message: str, details: dict[str, Any] | None = None) -> None:
+        # Raised by search clients (currently: DuckDuckGoClient) that don't
+        # carry a stage_id of their own — StageError requires one, so it's
+        # hardcoded to the only stage that constructs this error.
+        super().__init__(
+            stage_id="s04_source_search", message=message, details=details
+        )
 
 
 class ExtractionError(StageError):
@@ -181,8 +188,18 @@ class DDGError(ExternalAPIError):
 
 class NewsDataError(ExternalAPIError):
 
-    def __init__(self, message: str, status_code: int | None = None) -> None:
-        super().__init__(provider="newsdata", message=message, status_code=status_code)
+    def __init__(
+        self,
+        message: str,
+        status_code: int | None = None,
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(
+            provider="newsdata",
+            message=message,
+            status_code=status_code,
+            details=details,
+        )
 
 
 class GoogleCSEError(ExternalAPIError):
