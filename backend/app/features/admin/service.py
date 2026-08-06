@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.constants import ClaimStatus, VerificationLabel
+from app.core.constants import SubmissionStatus, VerificationLabel
 from app.core.exceptions import (
     DuplicateRecordError,
     RecordNotFoundError,
@@ -17,6 +17,9 @@ from app.core.exceptions import (
 from app.features.admin.schemas import (
     AdminStatsResponse,
     CreateExpertRequest,
+    CredibilityWeightTierRequest,
+    CredibilityWeightTierResponse,
+    CredibilityWeightTierUpdateRequest,
     ExpertResponse,
     ResetExpertPasswordRequest,
     UpdateExpertRequest,
@@ -25,10 +28,13 @@ from app.features.admin.schemas import (
 from app.features.auth.models import User
 from app.features.auth.repository import RefreshTokenRepository, UserRepository
 from app.features.auth.security import hash_password
-from app.features.expert_review.models import CredibilityScore
-from app.features.expert_review.repository import CredibilityScoreRepository
-from app.features.users.models import UserProfile
-from app.features.verification.models import VerificationResult, VerifiedClaim
+from app.features.expert_review.models import CredibilityWeightTier
+from app.features.expert_review.repository import (
+    CredibilityWeightTierRepository,
+    ExpertProfileRepository,
+)
+from app.features.submissions.models import Submission
+from app.features.verification.models import VerificationResultV2
 
 logger = structlog.get_logger(__name__)
 _SETTINGS = get_settings()
@@ -46,12 +52,14 @@ class AdminService:
         self,
         session: AsyncSession,
         user_repo: UserRepository,
-        credibility_repo: CredibilityScoreRepository,
+        profile_repo: ExpertProfileRepository,
+        tier_repo: CredibilityWeightTierRepository,
         token_repo: RefreshTokenRepository,
     ) -> None:
         self._session = session
         self._users = user_repo
-        self._credibility = credibility_repo
+        self._profiles = profile_repo
+        self._tiers = tier_repo
         self._tokens = token_repo
 
     async def create_expert(self, req: CreateExpertRequest) -> ExpertResponse:
@@ -70,24 +78,15 @@ class AdminService:
         )
         user = await self._users.create(user)
 
-        profile = UserProfile(
-            user_id=user.id,
-            bio=req.expertise_area,
+        profile = await self._profiles.get_or_create(
+            user.id,
+            initial_score=_SETTINGS.auth.initial_expert_credibility,
+            area_of_expertise=req.expertise_area or "General",
         )
-        self._session.add(profile)
-
-        cred = CredibilityScore(
-            user_id=user.id,
-            score=_SETTINGS.auth.initial_expert_credibility,
-            total_votes=0,
-            correct_votes=0,
-        )
-        self._session.add(cred)
-        await self._session.flush()
 
         logger.info("expert_created", user_id=str(user.id), email=req.email)
         return _expert_to_response(
-            user, req.expertise_area, _SETTINGS.auth.initial_expert_credibility, 0
+            user, profile.area_of_expertise, profile.credibility_score, 0
         )
 
     async def list_experts(
@@ -96,18 +95,13 @@ class AdminService:
         users = await self._users.list_by_role("expert", limit=limit, offset=offset)
         results = []
         for u in users:
-            cred = await self._credibility.get_by_user_id(u.id)
-            profile_stmt = (
-                select(UserProfile).where(UserProfile.user_id == u.id).limit(1)
-            )
-            profile_result = await self._session.execute(profile_stmt)
-            profile = profile_result.scalar_one_or_none()
+            profile = await self._profiles.get_by_user_id(u.id)
             results.append(
                 _expert_to_response(
                     u,
-                    expertise_area=profile.bio if profile else None,
-                    credibility_score=cred.score if cred else None,
-                    total_votes=cred.total_votes if cred else 0,
+                    expertise_area=profile.area_of_expertise if profile else None,
+                    credibility_score=profile.credibility_score if profile else None,
+                    total_votes=profile.total_votes if profile else 0,
                 )
             )
         return results
@@ -116,17 +110,12 @@ class AdminService:
         user = await self._users.get_by_id(user_id)
         if user.role != "expert":
             raise RecordNotFoundError(model="Expert", identifier=str(user_id))
-        cred = await self._credibility.get_by_user_id(user_id)
-        profile_stmt = (
-            select(UserProfile).where(UserProfile.user_id == user_id).limit(1)
-        )
-        profile_result = await self._session.execute(profile_stmt)
-        profile = profile_result.scalar_one_or_none()
+        profile = await self._profiles.get_by_user_id(user_id)
         return _expert_to_response(
             user,
-            expertise_area=profile.bio if profile else None,
-            credibility_score=cred.score if cred else None,
-            total_votes=cred.total_votes if cred else 0,
+            expertise_area=profile.area_of_expertise if profile else None,
+            credibility_score=profile.credibility_score if profile else None,
+            total_votes=profile.total_votes if profile else 0,
         )
 
     async def update_expert(
@@ -145,23 +134,17 @@ class AdminService:
         if updates:
             user = await self._users.update(user, **updates)
 
-        if req.expertise_area is not None:
-            profile_stmt = (
-                select(UserProfile).where(UserProfile.user_id == user_id).limit(1)
+        profile = await self._profiles.get_by_user_id(user_id)
+        if req.expertise_area is not None and profile is not None:
+            profile = await self._profiles.update(
+                profile, area_of_expertise=req.expertise_area
             )
-            profile_result = await self._session.execute(profile_stmt)
-            profile = profile_result.scalar_one_or_none()
-            if profile:
-                profile.bio = req.expertise_area
-                self._session.add(profile)
-                await self._session.flush()
 
-        cred = await self._credibility.get_by_user_id(user_id)
         return _expert_to_response(
             user,
-            expertise_area=req.expertise_area,
-            credibility_score=cred.score if cred else None,
-            total_votes=cred.total_votes if cred else 0,
+            expertise_area=profile.area_of_expertise if profile else req.expertise_area,
+            credibility_score=profile.credibility_score if profile else None,
+            total_votes=profile.total_votes if profile else 0,
         )
 
     async def reset_expert_password(
@@ -192,21 +175,21 @@ class AdminService:
     async def get_platform_stats(self) -> AdminStatsResponse:
         thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
 
-        total_stmt = select(func.count()).select_from(VerifiedClaim)
+        total_stmt = select(func.count()).select_from(Submission)
         total = (await self._session.execute(total_stmt)).scalar_one()
 
         recent_stmt = (
             select(func.count())
-            .select_from(VerifiedClaim)
-            .where(VerifiedClaim.created_at >= thirty_days_ago)
+            .select_from(Submission)
+            .where(Submission.created_at >= thirty_days_ago)
         )
         recent = (await self._session.execute(recent_stmt)).scalar_one()
 
         def _count_label(lbl: VerificationLabel):
             return (
                 select(func.count())
-                .select_from(VerificationResult)
-                .where(VerificationResult.label == lbl)
+                .select_from(VerificationResultV2)
+                .where(VerificationResultV2.final_label == lbl)
             )
 
         true_c = (
@@ -232,14 +215,20 @@ class AdminService:
         )
         active_experts = (await self._session.execute(active_experts_stmt)).scalar_one()
 
-        from app.features.expert_review.models import ExpertReview
+        from app.features.expert_review.models import ExpertReviewV2
 
         pending_stmt = (
             select(func.count())
-            .select_from(ExpertReview)
-            .where(ExpertReview.status == "pending")
+            .select_from(ExpertReviewV2)
+            .where(ExpertReviewV2.status == "pending")
         )
         pending = (await self._session.execute(pending_stmt)).scalar_one()
+
+        avg_ms_stmt = select(func.avg(VerificationResultV2.avg_verification_time_ms)).where(
+            VerificationResultV2.avg_verification_time_ms.is_not(None)
+        )
+        avg_ms = (await self._session.execute(avg_ms_stmt)).scalar_one()
+        avg_seconds = round(avg_ms / 1000, 2) if avg_ms is not None else None
 
         return AdminStatsResponse(
             total_submissions=total,
@@ -253,8 +242,64 @@ class AdminService:
             pending_expert_reviews=pending,
             total_experts=total_experts,
             active_experts=active_experts,
-            avg_verification_time_seconds=None,
+            avg_verification_time_seconds=avg_seconds,
         )
+
+    async def list_credibility_tiers(self) -> list[CredibilityWeightTierResponse]:
+        stmt = select(CredibilityWeightTier).order_by(
+            CredibilityWeightTier.min_accuracy_pct.asc()
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return [_tier_to_response(t) for t in rows]
+
+    async def create_credibility_tier(
+        self, req: CredibilityWeightTierRequest
+    ) -> CredibilityWeightTierResponse:
+        tier = CredibilityWeightTier(
+            label=req.label,
+            min_accuracy_pct=req.min_accuracy_pct,
+            max_accuracy_pct=req.max_accuracy_pct,
+            weight=req.weight,
+            is_active=req.is_active,
+        )
+        self._session.add(tier)
+        await self._session.flush()
+        await self._session.refresh(tier)
+        logger.info("credibility_tier_created", tier_id=str(tier.id), label=tier.label)
+        return _tier_to_response(tier)
+
+    async def update_credibility_tier(
+        self, tier_id: uuid.UUID, req: CredibilityWeightTierUpdateRequest
+    ) -> CredibilityWeightTierResponse:
+        tier = await self._session.get(CredibilityWeightTier, tier_id)
+        if tier is None:
+            raise RecordNotFoundError(model="CredibilityWeightTier", identifier=str(tier_id))
+
+        updates = req.model_dump(exclude_unset=True)
+        for field, value in updates.items():
+            setattr(tier, field, value)
+        self._session.add(tier)
+        await self._session.flush()
+        await self._session.refresh(tier)
+        return _tier_to_response(tier)
+
+    async def delete_credibility_tier(self, tier_id: uuid.UUID) -> None:
+        tier = await self._session.get(CredibilityWeightTier, tier_id)
+        if tier is None:
+            raise RecordNotFoundError(model="CredibilityWeightTier", identifier=str(tier_id))
+        await self._session.delete(tier)
+        await self._session.flush()
+
+
+def _tier_to_response(t: CredibilityWeightTier) -> CredibilityWeightTierResponse:
+    return CredibilityWeightTierResponse(
+        id=str(t.id),
+        label=t.label,
+        min_accuracy_pct=t.min_accuracy_pct,
+        max_accuracy_pct=t.max_accuracy_pct,
+        weight=t.weight,
+        is_active=t.is_active,
+    )
 
 
 def _expert_to_response(

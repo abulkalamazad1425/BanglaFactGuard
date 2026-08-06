@@ -43,9 +43,11 @@ from app.features.verification.pipeline.stages.s10_manipulation_detector import 
 )
 from app.features.verification.pipeline.stages.s11_classifier import ClassifierStage
 from app.features.verification.pipeline.stages.s12_persistence import PersistenceStage
-from app.features.articles.repository import ArticleRepository
-from app.features.verification.repository import ClaimRepository
-from app.features.verification.repository import ResultRepository
+from app.features.submissions.repository import (
+    RetrievedArticleV2Repository,
+    SubmissionRepository,
+)
+from app.features.verification.repository import ResultV2Repository
 from app.features.sources.repository import SourceRepository
 from app.features.verification.schemas import VerificationRequest, VerificationResponse
 from app.features.cache.cache_service import CacheService
@@ -61,9 +63,9 @@ class VerificationService:
 
     def __init__(
         self,
-        claim_repo: ClaimRepository,
-        result_repo: ResultRepository,
-        article_repo: ArticleRepository,
+        submission_repo: SubmissionRepository,
+        result_repo: ResultV2Repository,
+        article_repo: RetrievedArticleV2Repository,
         source_repo: SourceRepository,
         cache_service: CacheService,
         embedding_service: EmbeddingService,
@@ -71,7 +73,7 @@ class VerificationService:
         nli_service: NLIService,
         http_client: httpx.AsyncClient,
     ) -> None:
-        self.claim_repo = claim_repo
+        self.submission_repo = submission_repo
         self.result_repo = result_repo
         self.article_repo = article_repo
         self.source_repo = source_repo
@@ -84,12 +86,12 @@ class VerificationService:
     async def verify(
         self, request: VerificationRequest, *, submitter_id: uuid.UUID | None = None
     ) -> VerificationResponse:
-        log = logger.bind(claimed_source=request.claimed_source)
+        log = logger.bind(claimed_source_text=request.claimed_source_text)
 
         context = build_context(
             headline=request.headline,
-            claimed_source=request.claimed_source,
-            news_body=request.news_body,
+            claimed_source=request.claimed_source_text,
+            news_body=request.body_text,
             published_date=request.published_date,
             force_refresh=request.force_refresh,
             submitter_id=submitter_id,
@@ -105,20 +107,20 @@ class VerificationService:
 
         orchestrator = PipelineOrchestrator(
             stages=stages,
-            claim_repo=self.claim_repo,
+            submission_repo=self.submission_repo,
         )
 
         context = await orchestrator.run(context)
 
         return self._build_response(context)
 
-    async def get_result(self, claim_id: uuid.UUID) -> VerificationResponse | None:
-        result = await self.result_repo.get_by_claim_id(claim_id)
+    async def get_result(self, submission_id: uuid.UUID) -> VerificationResponse | None:
+        result = await self.result_repo.get_by_submission_id(submission_id)
         if result is None:
             return None
 
-        claim = await self.claim_repo.get_by_id_or_none(claim_id)
-        if claim is None:
+        submission = await self.submission_repo.get_by_id_or_none(submission_id)
+        if submission is None:
             return None
 
         from app.core.constants import VerificationLabel
@@ -128,15 +130,15 @@ class VerificationService:
         )
         from app.features.articles.schemas import RankedArticleSchema
         from sqlalchemy import select
-        from app.features.articles.models import RetrievedArticle
+        from app.features.submissions.models import RetrievedArticleV2
 
         art_stmt = (
-            select(RetrievedArticle)
+            select(RetrievedArticleV2)
             .where(
-                RetrievedArticle.claim_id == claim_id,
-                RetrievedArticle.extraction_success.is_(True),
+                RetrievedArticleV2.submission_id == submission_id,
+                RetrievedArticleV2.extraction_success.is_(True),
             )
-            .order_by(RetrievedArticle.rank_score.desc())
+            .order_by(RetrievedArticleV2.rank_score.desc())
             .limit(3)
         )
         art_rows = list(
@@ -163,8 +165,8 @@ class VerificationService:
         try:
             import json
 
-            if claim.claim_hash:
-                raw = await self.cache_service.get_claim_result(claim.claim_hash)
+            if submission.content_hash:
+                raw = await self.cache_service.get_claim_result(submission.content_hash)
                 if raw:
                     cached_data = json.loads(raw)
                     s = cached_data.get("scores", {})
@@ -197,14 +199,14 @@ class VerificationService:
         flags = cached_flags or ManipulationFlagsSchema()
 
         return VerificationResponse(
-            claim_id=claim_id,
-            label=VerificationLabel(result.label),
-            confidence=result.confidence,
+            submission_id=submission_id,
+            label=VerificationLabel(result.final_label),
+            confidence=result.confidence or 0.0,
             reasoning=result.reasoning or "",
             matched_articles=matched_articles,
             scores=scores,
             manipulation_flags=flags,
-            normalized_source=claim.normalized_source,
+            normalized_source=submission.claimed_source_text,
             cached=True,
             processing_time_ms=None,
             created_at=result.created_at,
@@ -220,7 +222,7 @@ class VerificationService:
             InputNormalizerStage(source_repo=self.source_repo),
             CacheLookupStage(
                 cache_service=self.cache_service,
-                claim_repo=self.claim_repo,
+                submission_repo=self.submission_repo,
                 result_repo=self.result_repo,
             ),
             QueryGeneratorStage(),
@@ -243,11 +245,11 @@ class VerificationService:
             ManipulationDetectorStage(embedding_service=self.embedding_service),
             ClassifierStage(),
             PersistenceStage(
-                claim_repo=self.claim_repo,
+                submission_repo=self.submission_repo,
                 result_repo=self.result_repo,
                 article_repo=self.article_repo,
                 cache_service=self.cache_service,
-                session=self.claim_repo.session,
+                session=self.submission_repo.session,
             ),
         ]
 
@@ -257,7 +259,7 @@ class VerificationService:
 
         if context.cache_hit:
             return VerificationResponse(
-                claim_id=context.claim_id or uuid.uuid4(),
+                submission_id=context.submission_id or uuid.uuid4(),
                 label=context.cached_label
                 or VerificationLabel.NOT_FOUND_IN_CLAIMED_SOURCE,
                 confidence=context.cached_confidence or 0.0,
@@ -275,7 +277,7 @@ class VerificationService:
             )
 
         return VerificationResponse(
-            claim_id=context.claim_id or uuid.uuid4(),
+            submission_id=context.submission_id or uuid.uuid4(),
             label=context.label or VerificationLabel.NOT_FOUND_IN_CLAIMED_SOURCE,
             confidence=context.confidence,
             reasoning=context.reasoning,

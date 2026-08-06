@@ -54,3 +54,30 @@ class AdminStatsResponse(BaseModel):
     total_experts: int
     active_experts: int
     avg_verification_time_seconds: float | None
+
+
+class CredibilityWeightTierRequest(BaseModel):
+    label: str = Field(..., max_length=100)
+    min_accuracy_pct: float = Field(..., ge=0.0, le=100.0)
+    max_accuracy_pct: float = Field(..., ge=0.0, le=100.0)
+    weight: float = Field(..., gt=0.0)
+    is_active: bool = Field(default=True)
+
+
+class CredibilityWeightTierUpdateRequest(BaseModel):
+    label: str | None = Field(default=None, max_length=100)
+    min_accuracy_pct: float | None = Field(default=None, ge=0.0, le=100.0)
+    max_accuracy_pct: float | None = Field(default=None, ge=0.0, le=100.0)
+    weight: float | None = Field(default=None, gt=0.0)
+    is_active: bool | None = None
+
+
+class CredibilityWeightTierResponse(BaseModel):
+    id: str
+    label: str
+    min_accuracy_pct: float
+    max_accuracy_pct: float
+    weight: float
+    is_active: bool
+
+    model_config = {"from_attributes": True}

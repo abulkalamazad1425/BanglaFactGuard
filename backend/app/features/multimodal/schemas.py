@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 class MultimodalPredictionResponse(BaseModel):
 
     prediction_id: str = Field(..., description="UUID of the stored prediction record")
+    submission_id: str = Field(..., description="UUID of the paired submissions row")
     prediction: str = Field(..., description="'FAKE' or 'NON_FAKE'")
     confidence_fake: float = Field(
         ..., ge=0.0, le=1.0, description="P(FAKE) from softmax"
@@ -38,8 +39,9 @@ class MultimodalPredictionResponse(BaseModel):
 class MultimodalPredictionDetail(BaseModel):
 
     prediction_id: str
-    headline: str
-    body_text: str
+    submission_id: str
+    headline: str | None
+    body_text: str | None
     prediction: str
     confidence_fake: float
     confidence_real: float

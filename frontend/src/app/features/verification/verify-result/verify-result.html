@@ -17,7 +17,7 @@
             <div class="result-topbar">
               <a routerLink="/verify" class="btn btn-ghost btn-sm">← New Verification</a>
               <div class="share-actions">
-                <span class="claim-id">ID: {{ result()!.claim_id }}</span>
+                <span class="claim-id">ID: {{ result()!.submission_id }}</span>
                 <button class="btn btn-secondary btn-sm" (click)="copyUrl()">{{ copied ? '✓ Copied' : '🔗 Copy Link' }}</button>
               </div>
             </div>

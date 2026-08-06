@@ -11,6 +11,7 @@ from app.core.constants import ClaimStatus, LogLevel, PipelineStageID, Verificat
 from app.features.verification.models import (
     VerificationLog,
     VerificationResult,
+    VerificationResultV2,
     VerifiedClaim,
 )
 from app.shared.base_repository import BaseRepository
@@ -204,9 +205,88 @@ class ResultRepository(BaseRepository[VerificationResult]):
         )
         return await self.create(new_result)
 
+    # NOTE: log_stage_event/bulk_log/get_logs_for_claim/get_error_logs used to live
+    # here but VerificationLog is now submission-scoped (see ResultV2Repository
+    # below) since it was repointed off verified_claims during the PDF-schema
+    # cutover. This legacy repository is frozen — nothing calls these anymore.
+
+
+class ResultV2Repository(BaseRepository[VerificationResultV2]):
+
+    model_class = VerificationResultV2
+
+    def __init__(self, session: AsyncSession) -> None:
+        super().__init__(session)
+
+    async def get_by_submission_id(
+        self, submission_id: uuid.UUID
+    ) -> VerificationResultV2 | None:
+        stmt = (
+            select(VerificationResultV2)
+            .where(VerificationResultV2.submission_id == submission_id)
+            .limit(1)
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def get_results_by_label(
+        self,
+        label: VerificationLabel,
+        *,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[VerificationResultV2]:
+        stmt = (
+            select(VerificationResultV2)
+            .where(VerificationResultV2.final_label == label)
+            .order_by(VerificationResultV2.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def upsert_result(
+        self,
+        submission_id: uuid.UUID,
+        *,
+        label: VerificationLabel,
+        confidence: float,
+        reasoning: str,
+        semantic_similarity: float | None,
+        entity_match: float | None,
+        contradiction_score: float | None,
+        keyword_overlap: float | None,
+        numerical_consistency: float | None,
+        top_article_id: uuid.UUID | None = None,
+        ai_preliminary_label: str | None = None,
+        avg_verification_time_ms: int | None = None,
+    ) -> VerificationResultV2:
+        existing = await self.get_by_submission_id(submission_id)
+
+        fields = dict(
+            final_label=label,
+            confidence=confidence,
+            reasoning=reasoning,
+            semantic_similarity=semantic_similarity,
+            entity_match=entity_match,
+            contradiction_score=contradiction_score,
+            keyword_overlap=keyword_overlap,
+            numerical_consistency=numerical_consistency,
+            top_article_id=top_article_id,
+            ai_preliminary_label=ai_preliminary_label,
+            avg_verification_time_ms=avg_verification_time_ms,
+        )
+
+        if existing is not None:
+            return await self.update(existing, **fields)
+
+        new_result = VerificationResultV2(submission_id=submission_id, **fields)
+        return await self.create(new_result)
+
     async def log_stage_event(
         self,
-        claim_id: uuid.UUID,
+        submission_id: uuid.UUID,
         stage: PipelineStageID,
         message: str,
         *,
@@ -215,7 +295,7 @@ class ResultRepository(BaseRepository[VerificationResult]):
         duration_ms: int | None = None,
     ) -> VerificationLog:
         log_entry = VerificationLog(
-            claim_id=claim_id,
+            submission_id=submission_id,
             stage=stage,
             level=level,
             message=message,
@@ -236,15 +316,15 @@ class ResultRepository(BaseRepository[VerificationResult]):
         await self.session.flush()
         return entries
 
-    async def get_logs_for_claim(
+    async def get_logs_for_submission(
         self,
-        claim_id: uuid.UUID,
+        submission_id: uuid.UUID,
         *,
         stage: PipelineStageID | None = None,
         level: LogLevel | None = None,
         limit: int = 100,
     ) -> list[VerificationLog]:
-        conditions = [VerificationLog.claim_id == claim_id]
+        conditions = [VerificationLog.submission_id == submission_id]
         if stage is not None:
             conditions.append(VerificationLog.stage == stage)
         if level is not None:
@@ -259,5 +339,7 @@ class ResultRepository(BaseRepository[VerificationResult]):
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
-    async def get_error_logs(self, claim_id: uuid.UUID) -> list[VerificationLog]:
-        return await self.get_logs_for_claim(claim_id, level=LogLevel.ERROR, limit=50)
+    async def get_error_logs(self, submission_id: uuid.UUID) -> list[VerificationLog]:
+        return await self.get_logs_for_submission(
+            submission_id, level=LogLevel.ERROR, limit=50
+        )

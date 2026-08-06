@@ -8,13 +8,15 @@ export type VerificationLabel =
   | 'PARTIALLY_TRUE'
   | 'NOT_FOUND_IN_CLAIMED_SOURCE';
 
-export type ClaimStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+export type SubmissionStatus = 'PENDING' | 'PROCESSING' | 'EXPERT_REVIEW' | 'FINALIZED' | 'FAILED';
+
+export type SubmissionType = 'SOURCE_BASED' | 'MULTIMODAL' | 'PHOTO_CARD';
 
 // ── Request ──────────────────────────────────────────────────────────
 export interface VerificationRequest {
   headline: string;
-  claimed_source: string;
-  news_body?: string | null;
+  claimed_source_text: string;
+  body_text?: string | null;
   published_date?: string | null;  // YYYY-MM-DD
   force_refresh?: boolean;
 }
@@ -48,7 +50,7 @@ export interface MatchedArticle {
 
 // ── Full response from POST /verify or GET /verify/{id} ─────────────
 export interface VerificationResponse {
-  claim_id: string;
+  submission_id: string;
   label: VerificationLabel;
   confidence: number;
   reasoning: string;
@@ -63,9 +65,9 @@ export interface VerificationResponse {
 
 // ── Submission history item from GET /users/me/submissions ───────────
 export interface SubmissionSummary {
-  claim_id: string;
+  submission_id: string;
   headline: string;
-  claimed_source: string;
+  claimed_source_text: string;
   status: string;
   ai_label: VerificationLabel | null;
   ai_confidence: number | null;
@@ -84,6 +86,7 @@ export interface SubmissionStats {
 // ── Multimodal prediction from POST /multimodal/predict ─────────────
 export interface MultimodalPredictionResult {
   prediction_id: string;
+  submission_id: string;
   prediction: string;          // 'FAKE' | 'NON_FAKE'
   confidence_fake: number;
   confidence_real: number;
@@ -114,7 +117,7 @@ export interface VerificationCheck {
 
 // Kept for verify-result component compatibility
 export interface VerificationResult {
-  claim_id: string;
+  submission_id: string;
   label: VerificationLabel;
   confidence: number;
   explanation?: string;
@@ -122,5 +125,5 @@ export interface VerificationResult {
   checks?: VerificationCheck[];
   processing_time_ms?: number;
   created_at?: string;
-  status?: ClaimStatus;
+  status?: SubmissionStatus;
 }

@@ -26,9 +26,13 @@ export class ProfileSettingsComponent implements OnInit {
 
   initial = () => (this.auth.user()?.full_name || this.auth.user()?.email || 'U').charAt(0).toUpperCase();
 
+  readonly profile = signal<{ avatar_url: string | null; phone: string | null; total_submissions: number; is_email_verified: boolean } | null>(null);
+
   profileForm = this.fb.group({
     full_name: [''],
     bio: [''],
+    avatar_url: [''],
+    phone: [''],
   });
 
   pwForm = this.fb.group({
@@ -42,7 +46,20 @@ export class ProfileSettingsComponent implements OnInit {
       this.profileForm.patchValue({ full_name: user.full_name || '' });
     }
     this.auth.getProfile().subscribe({
-      next: p => this.profileForm.patchValue({ full_name: p.full_name || '', bio: p.bio || '' }),
+      next: (p: UserProfile) => {
+        this.profileForm.patchValue({
+          full_name: p.full_name || '',
+          bio: p.bio || '',
+          avatar_url: p.avatar_url || '',
+          phone: p.phone || '',
+        });
+        this.profile.set({
+          avatar_url: p.avatar_url,
+          phone: p.phone,
+          total_submissions: p.total_submissions,
+          is_email_verified: p.is_email_verified,
+        });
+      },
       error: () => { },
     });
 
@@ -58,6 +75,8 @@ export class ProfileSettingsComponent implements OnInit {
     const req: UpdateProfileRequest = {
       full_name: this.profileForm.value.full_name || undefined,
       bio: this.profileForm.value.bio || undefined,
+      avatar_url: this.profileForm.value.avatar_url || undefined,
+      phone: this.profileForm.value.phone || undefined,
     };
     this.auth.updateProfile(req).subscribe({
       next: () => { this.savingProfile.set(false); this.toast.success('Profile updated.'); },

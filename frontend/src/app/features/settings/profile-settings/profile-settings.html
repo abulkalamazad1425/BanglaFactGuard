@@ -33,6 +33,14 @@
           <label class="form-label">Bio <span class="text-muted text-xs">(optional)</span></label>
           <textarea formControlName="bio" class="form-control" rows="3" placeholder="Tell us about yourself..."></textarea>
         </div>
+        <div class="form-group">
+          <label class="form-label">Phone <span class="text-muted text-xs">(optional)</span></label>
+          <input type="tel" formControlName="phone" class="form-control" placeholder="+880..." />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Avatar URL <span class="text-muted text-xs">(optional)</span></label>
+          <input type="text" formControlName="avatar_url" class="form-control" placeholder="https://..." />
+        </div>
         @if (!isExpertOnly()) {
           <button type="submit" class="btn btn-primary" [disabled]="savingProfile()">
             @if (savingProfile()) { <span class="btn-spinner"></span> }
@@ -119,6 +127,18 @@
             {{ auth.user()?.is_active ? 'Active' : 'Inactive' }}
           </span>
         </div>
+        @if (profile()) {
+          <div class="info-row">
+            <span class="info-key">Email Verified</span>
+            <span class="badge" [class]="profile()!.is_email_verified ? 'badge-true' : 'badge-not-found'">
+              {{ profile()!.is_email_verified ? 'Verified' : 'Unverified' }}
+            </span>
+          </div>
+          <div class="info-row">
+            <span class="info-key">Total Submissions</span>
+            <span class="info-val font-medium">{{ profile()!.total_submissions }}</span>
+          </div>
+        }
       </div>
     </div>
   </div>

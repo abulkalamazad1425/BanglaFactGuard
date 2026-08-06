@@ -24,3 +24,21 @@
     .source-name { flex: 1; font-size: 14px; }
     .source-count { flex-shrink: 0; }
     .loading-overlay { display: flex; justify-content: center; padding: 80px; }
+
+    .explorer-filters {
+      display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px;
+      .form-control { flex: 1 1 160px; min-width: 140px; }
+    }
+    .explorer-list { display: flex; flex-direction: column; gap: 8px; }
+    .explorer-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+      padding: 14px 16px; border-radius: 12px; background: var(--bg-surface-2);
+      text-decoration: none; color: inherit; transition: background 0.15s;
+      &:hover { background: var(--bg-surface-3); }
+    }
+    .explorer-row-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    .explorer-headline {
+      font-size: 14px; font-weight: 500;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 520px;
+    }
+    .pagination-controls { display: flex; align-items: center; justify-content: center; gap: 16px; }

@@ -23,15 +23,15 @@ export class ExpertService {
     return this.api.get<ExpertQueueItem[]>(API_ENDPOINTS.EXPERT_QUEUE, { limit, offset });
   }
 
-  /** GET /api/v1/expert/queue/{claim_id} — not in current router but reserved */
-  getQueueItem(claimId: string): Observable<ExpertQueueItem> {
-    return this.api.get<ExpertQueueItem>(`${API_ENDPOINTS.EXPERT_QUEUE}/${claimId}`);
+  /** GET /api/v1/expert/queue/{submission_id} */
+  getQueueItem(submissionId: string): Observable<ExpertQueueItem> {
+    return this.api.get<ExpertQueueItem>(`${API_ENDPOINTS.EXPERT_QUEUE}/${submissionId}`);
   }
 
-  /** POST /api/v1/expert/queue/{claim_id}/vote */
-  submitVote(claimId: string, body: ExpertVoteRequest): Observable<ExpertReviewResponse> {
+  /** POST /api/v1/expert/queue/{submission_id}/vote */
+  submitVote(submissionId: string, body: ExpertVoteRequest): Observable<ExpertReviewResponse> {
     return this.api.post<ExpertReviewResponse>(
-      `${API_ENDPOINTS.EXPERT_QUEUE}/${claimId}/vote`,
+      `${API_ENDPOINTS.EXPERT_QUEUE}/${submissionId}/vote`,
       body
     );
   }

@@ -23,6 +23,9 @@ from app.core.exceptions import (
     RecordNotFoundError,
 )
 from app.db.engine import get_async_session
+from app.features.auth.models import User
+from app.features.auth.security import get_current_user_optional
+from app.features.multimodal.models import MultimodalAnalysis
 from app.features.multimodal.schemas import (
     MultimodalPredictionDetail,
     MultimodalPredictionResponse,
@@ -30,6 +33,7 @@ from app.features.multimodal.schemas import (
 )
 from app.features.multimodal.service import MultimodalPredictionService
 from app.features.multimodal.storage_service import MultimodalStorageService
+from app.features.submissions.repository import SubmissionRepository
 
 logger = structlog.get_logger(__name__)
 _SETTINGS = get_settings()
@@ -58,6 +62,29 @@ def _get_storage(request: Request) -> MultimodalStorageService:
     if storage is None:
         raise ModelNotLoadedError("MultimodalStorageService")
     return storage
+
+
+async def _to_detail(
+    record: MultimodalAnalysis, submission_repo: SubmissionRepository
+) -> MultimodalPredictionDetail:
+    submission = await submission_repo.get_by_id_or_none(record.submission_id)
+    return MultimodalPredictionDetail(
+        prediction_id=str(record.id),
+        submission_id=str(record.submission_id),
+        headline=submission.headline if submission else None,
+        body_text=submission.body_text if submission else None,
+        prediction=record.prediction,
+        confidence_fake=record.confidence_fake,
+        confidence_real=record.confidence_real,
+        is_cached=record.is_duplicate_of_id is not None,
+        original_id=(
+            str(record.is_duplicate_of_id) if record.is_duplicate_of_id else None
+        ),
+        minio_object_key=record.image_object_key,
+        model_version=record.model_version,
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+    )
 
 
 @router.post(
@@ -99,6 +126,7 @@ async def predict(
         description="News article image (JPEG/PNG/WebP, max 10 MB)",
     ),
     db: AsyncSession = Depends(get_async_session),
+    current_user: User | None = Depends(get_current_user_optional),
 ) -> MultimodalPredictionResponse:
 
     if image.content_type not in _ALLOWED_CONTENT_TYPES:
@@ -133,6 +161,7 @@ async def predict(
             body_text=body_text,
             image_bytes=image_bytes,
             original_filename=image.filename or "upload.jpg",
+            submitter_id=current_user.id if current_user else None,
         )
     except ModelNotLoadedError as exc:
         raise HTTPException(
@@ -170,22 +199,7 @@ async def get_prediction(
             status_code=status.HTTP_404_NOT_FOUND, detail=exc.message
         ) from exc
 
-    return MultimodalPredictionDetail(
-        prediction_id=str(record.id),
-        headline=record.headline,
-        body_text=record.body_text,
-        prediction=record.prediction,
-        confidence_fake=record.confidence_fake,
-        confidence_real=record.confidence_real,
-        is_cached=record.is_duplicate_of_id is not None,
-        original_id=(
-            str(record.is_duplicate_of_id) if record.is_duplicate_of_id else None
-        ),
-        minio_object_key=record.minio_object_key,
-        model_version=record.model_version,
-        created_at=record.created_at,
-        updated_at=record.updated_at,
-    )
+    return await _to_detail(record, SubmissionRepository(db))
 
 
 @router.get(
@@ -208,22 +222,7 @@ async def list_predictions(
 
     records, total = await service.list_predictions(limit=limit, offset=offset)
 
-    items = [
-        MultimodalPredictionDetail(
-            prediction_id=str(r.id),
-            headline=r.headline,
-            body_text=r.body_text,
-            prediction=r.prediction,
-            confidence_fake=r.confidence_fake,
-            confidence_real=r.confidence_real,
-            is_cached=r.is_duplicate_of_id is not None,
-            original_id=str(r.is_duplicate_of_id) if r.is_duplicate_of_id else None,
-            minio_object_key=r.minio_object_key,
-            model_version=r.model_version,
-            created_at=r.created_at,
-            updated_at=r.updated_at,
-        )
-        for r in records
-    ]
+    submission_repo = SubmissionRepository(db)
+    items = [await _to_detail(r, submission_repo) for r in records]
 
     return PredictionListResponse(items=items, total=total, limit=limit, offset=offset)

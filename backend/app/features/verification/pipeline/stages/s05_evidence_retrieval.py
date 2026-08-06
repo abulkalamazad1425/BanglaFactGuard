@@ -90,7 +90,7 @@ class EvidenceRetrievalStage:
         logger.info(
             "s05_fetching_evidence",
             url_count=len(urls),
-            claim_id=str(context.claim_id) if context.claim_id else "pending",
+            submission_id=str(context.submission_id) if context.submission_id else "pending",
         )
 
         tier1_tasks = [self._fetch_httpx(url) for url in urls]

@@ -1,0 +1,116 @@
+<div class="tiers-page">
+  <div class="container" style="padding-top:48px; padding-bottom:80px;">
+
+    <div class="page-header">
+      <div class="header-text">
+        <h1>Credibility Weight Tiers</h1>
+        <p>
+          Admin-configurable accuracy% bands that determine how much weight an expert's vote
+          carries when a claim is finalized. Edit these instead of changing code.
+        </p>
+      </div>
+      <div class="header-actions">
+        <a routerLink="/admin" class="btn btn-ghost">← Back to Admin</a>
+        <button class="btn btn-primary" (click)="openCreateDrawer()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          New Tier
+        </button>
+      </div>
+    </div>
+
+    @if (loading()) {
+      <div class="loading-overlay"><div class="spinner"></div></div>
+    } @else if (tiers().length === 0) {
+      <div class="empty-state">
+        <div class="empty-icon">⚖️</div>
+        <h3>No Credibility Tiers Configured</h3>
+        <p>Create tiers to control how expert votes are weighted during finalization.</p>
+        <button class="btn btn-primary" (click)="openCreateDrawer()">Create a Tier</button>
+      </div>
+    } @else {
+      <div class="table-card card">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Label</th>
+              <th>Accuracy Range</th>
+              <th>Weight</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (tier of tiers(); track tier.id) {
+              <tr [class.inactive-row]="!tier.is_active">
+                <td class="font-semibold">{{ tier.label }}</td>
+                <td>{{ tier.min_accuracy_pct }}% – {{ tier.max_accuracy_pct }}%</td>
+                <td><span class="badge badge-primary">×{{ tier.weight }}</span></td>
+                <td>
+                  <span class="status-badge" [class.active]="tier.is_active" [class.inactive]="!tier.is_active">
+                    {{ tier.is_active ? 'Active' : 'Disabled' }}
+                  </span>
+                </td>
+                <td class="actions-cell">
+                  <button class="btn btn-ghost btn-sm" (click)="openEditDrawer(tier)">Edit</button>
+                  <button class="btn btn-ghost btn-sm text-error" (click)="deleteTier(tier)">Delete</button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+</div>
+
+<!-- Drawer -->
+<div class="drawer-overlay" [class.open]="drawerOpen()" (click)="closeDrawer()"></div>
+<div class="drawer" [class.open]="drawerOpen()">
+  <div class="drawer-header">
+    <div>
+      <h2>{{ isEditMode() ? 'Edit Tier' : 'New Credibility Tier' }}</h2>
+      <p>Define an accuracy% band and the voting weight it grants.</p>
+    </div>
+    <button class="drawer-close" (click)="closeDrawer()">✕</button>
+  </div>
+
+  <div class="drawer-body">
+    <form [formGroup]="form" class="drawer-form" (ngSubmit)="onSubmit()">
+      <div class="form-section">
+        <div class="form-group">
+          <label class="form-label">Label <span class="required">*</span></label>
+          <input type="text" formControlName="label" class="form-control" placeholder="e.g. Expert" />
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Min Accuracy % <span class="required">*</span></label>
+            <input type="number" formControlName="min_accuracy_pct" class="form-control" min="0" max="100" step="0.1" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Max Accuracy % <span class="required">*</span></label>
+            <input type="number" formControlName="max_accuracy_pct" class="form-control" min="0" max="100" step="0.1" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Weight <span class="required">*</span></label>
+          <input type="number" formControlName="weight" class="form-control" min="0.01" step="0.05" />
+          <span class="source-hint">Multiplier applied to this expert's vote during finalization (1.0 = neutral).</span>
+        </div>
+        <div class="form-group checkbox-group">
+          <label class="checkbox-label">
+            <input type="checkbox" formControlName="is_active" />
+            <span>Active</span>
+          </label>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <div class="drawer-footer">
+    <button class="btn btn-ghost" (click)="closeDrawer()">Cancel</button>
+    <button class="btn btn-primary" [disabled]="saving()" (click)="onSubmit()">
+      @if (saving()) { <span class="btn-spinner"></span> }
+      {{ saving() ? 'Saving...' : (isEditMode() ? 'Save Changes' : 'Create Tier') }}
+    </button>
+  </div>
+</div>

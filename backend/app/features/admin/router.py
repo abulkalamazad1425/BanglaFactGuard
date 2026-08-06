@@ -8,6 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.features.admin.schemas import (
     AdminStatsResponse,
     CreateExpertRequest,
+    CredibilityWeightTierRequest,
+    CredibilityWeightTierResponse,
+    CredibilityWeightTierUpdateRequest,
     ExpertResponse,
     ResetExpertPasswordRequest,
     UpdateExpertRequest,
@@ -16,7 +19,10 @@ from app.features.admin.service import AdminService
 from app.features.auth.models import User
 from app.features.auth.repository import RefreshTokenRepository, UserRepository
 from app.features.auth.security import require_role
-from app.features.expert_review.repository import CredibilityScoreRepository
+from app.features.expert_review.repository import (
+    CredibilityWeightTierRepository,
+    ExpertProfileRepository,
+)
 from app.shared.dependencies import get_async_session
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
@@ -27,7 +33,8 @@ def _get_service(session: AsyncSession = Depends(get_async_session)) -> AdminSer
     return AdminService(
         session=session,
         user_repo=UserRepository(session),
-        credibility_repo=CredibilityScoreRepository(session),
+        profile_repo=ExpertProfileRepository(session),
+        tier_repo=CredibilityWeightTierRepository(session),
         token_repo=RefreshTokenRepository(session),
     )
 
@@ -136,3 +143,61 @@ async def get_platform_stats(
     svc: AdminService = Depends(_get_service),
 ) -> AdminStatsResponse:
     return await svc.get_platform_stats()
+
+
+@router.get(
+    "/credibility-tiers",
+    response_model=list[CredibilityWeightTierResponse],
+    summary="List credibility weight tiers",
+    description=(
+        "Admin-configurable accuracy% bands that determine how much weight an "
+        "expert's vote carries during claim finalization — the mechanism behind "
+        "'administrator-defined rules... without changing system code' (PDF §2.2)."
+    ),
+)
+async def list_credibility_tiers(
+    _: User = Depends(_ADMIN_ONLY),
+    svc: AdminService = Depends(_get_service),
+) -> list[CredibilityWeightTierResponse]:
+    return await svc.list_credibility_tiers()
+
+
+@router.post(
+    "/credibility-tiers",
+    response_model=CredibilityWeightTierResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a credibility weight tier",
+)
+async def create_credibility_tier(
+    body: CredibilityWeightTierRequest,
+    _: User = Depends(_ADMIN_ONLY),
+    svc: AdminService = Depends(_get_service),
+) -> CredibilityWeightTierResponse:
+    return await svc.create_credibility_tier(body)
+
+
+@router.put(
+    "/credibility-tiers/{tier_id}",
+    response_model=CredibilityWeightTierResponse,
+    summary="Update a credibility weight tier",
+)
+async def update_credibility_tier(
+    tier_id: uuid.UUID,
+    body: CredibilityWeightTierUpdateRequest,
+    _: User = Depends(_ADMIN_ONLY),
+    svc: AdminService = Depends(_get_service),
+) -> CredibilityWeightTierResponse:
+    return await svc.update_credibility_tier(tier_id, body)
+
+
+@router.delete(
+    "/credibility-tiers/{tier_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a credibility weight tier",
+)
+async def delete_credibility_tier(
+    tier_id: uuid.UUID,
+    _: User = Depends(_ADMIN_ONLY),
+    svc: AdminService = Depends(_get_service),
+) -> None:
+    await svc.delete_credibility_tier(tier_id)

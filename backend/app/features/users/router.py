@@ -8,19 +8,20 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.constants import ClaimStatus, VerificationLabel
+from app.core.constants import SubmissionStatus, VerificationLabel
 from app.features.auth.models import User
 from app.features.auth.security import get_current_user
-from app.features.verification.models import VerificationResult, VerifiedClaim
+from app.features.submissions.models import Submission
+from app.features.verification.models import VerificationResultV2
 from app.shared.dependencies import get_async_session
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
 
 class SubmissionSummary(BaseModel):
-    claim_id: str
-    headline: str
-    claimed_source: str
+    submission_id: str
+    headline: str | None
+    claimed_source_text: str | None
     status: str
     ai_label: str | None
     ai_confidence: float | None
@@ -42,6 +43,10 @@ class ProfileResponse(BaseModel):
     role: str
     is_active: bool
     is_verified: bool
+    is_email_verified: bool
+    avatar_url: str | None
+    phone: str | None
+    total_submissions: int
     bio: str | None
     verification_count: int
 
@@ -49,6 +54,8 @@ class ProfileResponse(BaseModel):
 class UpdateProfileRequest(BaseModel):
     full_name: str | None = Field(default=None, max_length=255)
     bio: str | None = Field(default=None, max_length=1000)
+    avatar_url: str | None = Field(default=None, max_length=512)
+    phone: str | None = Field(default=None, max_length=20)
 
 
 @router.get("/me/submissions", response_model=list[SubmissionSummary])
@@ -59,30 +66,30 @@ async def get_my_submissions(
     session: AsyncSession = Depends(get_async_session),
 ) -> list[SubmissionSummary]:
     stmt = (
-        select(VerifiedClaim)
-        .where(VerifiedClaim.submitter_id == current_user.id)
-        .order_by(VerifiedClaim.created_at.desc())
+        select(Submission)
+        .where(Submission.submitter_id == current_user.id)
+        .order_by(Submission.created_at.desc())
         .offset(offset)
         .limit(limit)
     )
-    claims = (await session.execute(stmt)).scalars().all()
+    submissions = (await session.execute(stmt)).scalars().all()
     items = []
-    for claim in claims:
+    for submission in submissions:
         result_stmt = (
-            select(VerificationResult)
-            .where(VerificationResult.claim_id == claim.id)
+            select(VerificationResultV2)
+            .where(VerificationResultV2.submission_id == submission.id)
             .limit(1)
         )
         result = (await session.execute(result_stmt)).scalar_one_or_none()
         items.append(
             SubmissionSummary(
-                claim_id=str(claim.id),
-                headline=claim.headline,
-                claimed_source=claim.claimed_source,
-                status=claim.status.value,
-                ai_label=result.label.value if result else None,
+                submission_id=str(submission.id),
+                headline=submission.headline,
+                claimed_source_text=submission.claimed_source_text,
+                status=submission.status.value,
+                ai_label=result.final_label.value if result and result.final_label else None,
                 ai_confidence=result.confidence if result else None,
-                submitted_at=claim.created_at,
+                submitted_at=submission.created_at,
             )
         )
     return items
@@ -96,18 +103,20 @@ async def get_my_submission_stats(
     total = (
         await session.execute(
             select(func.count())
-            .select_from(VerifiedClaim)
-            .where(VerifiedClaim.submitter_id == current_user.id)
+            .select_from(Submission)
+            .where(Submission.submitter_id == current_user.id)
         )
     ).scalar_one()
 
     pending = (
         await session.execute(
             select(func.count())
-            .select_from(VerifiedClaim)
+            .select_from(Submission)
             .where(
-                VerifiedClaim.submitter_id == current_user.id,
-                VerifiedClaim.status == ClaimStatus.PENDING,
+                Submission.submitter_id == current_user.id,
+                Submission.status.in_(
+                    (SubmissionStatus.PENDING, SubmissionStatus.PROCESSING)
+                ),
             )
         )
     ).scalar_one()
@@ -115,11 +124,11 @@ async def get_my_submission_stats(
     def _lc(lbl):
         return (
             select(func.count())
-            .select_from(VerificationResult)
-            .join(VerifiedClaim, VerificationResult.claim_id == VerifiedClaim.id)
+            .select_from(VerificationResultV2)
+            .join(Submission, VerificationResultV2.submission_id == Submission.id)
             .where(
-                VerifiedClaim.submitter_id == current_user.id,
-                VerificationResult.label == lbl,
+                Submission.submitter_id == current_user.id,
+                VerificationResultV2.final_label == lbl,
             )
         )
 
@@ -155,6 +164,10 @@ async def get_my_profile(
         role=current_user.role,
         is_active=current_user.is_active,
         is_verified=current_user.is_verified,
+        is_email_verified=current_user.is_email_verified,
+        avatar_url=current_user.avatar_url,
+        phone=current_user.phone,
+        total_submissions=current_user.total_submissions,
         bio=profile.bio if profile else None,
         verification_count=profile.verification_count if profile else 0,
     )
@@ -180,7 +193,12 @@ async def update_my_profile(
 
     if body.full_name is not None:
         current_user.full_name = body.full_name
-        session.add(current_user)
+    if body.avatar_url is not None:
+        current_user.avatar_url = body.avatar_url
+    if body.phone is not None:
+        current_user.phone = body.phone
+    session.add(current_user)
+
     profile = (
         await session.execute(
             select(UserProfile).where(UserProfile.user_id == current_user.id).limit(1)

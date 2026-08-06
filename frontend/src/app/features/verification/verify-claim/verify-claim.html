@@ -31,7 +31,7 @@
 
           <div class="form-group">
             <label class="form-label">Claimed Source <span class="required">*</span></label>
-            <select formControlName="claimed_source" class="form-control"
+            <select formControlName="claimed_source_text" class="form-control"
                     [class.is-invalid]="sourceInvalid">
               <option value="" disabled>
                 {{ sourcesLoading ? 'Loading verified sources…' : 'Select a verified news source' }}
@@ -53,7 +53,7 @@
 
           <div class="form-group">
             <label class="form-label">News Body Text <span class="optional">(optional)</span></label>
-            <textarea formControlName="news_body" class="form-control" rows="4"
+            <textarea formControlName="body_text" class="form-control" rows="4"
                       placeholder="নিউজ বডি এখানে পেস্ট করুন..."></textarea>
           </div>
 
@@ -128,9 +128,15 @@
                 <div class="source-info">
                   Source: <strong>{{ result.normalized_source || '' }}</strong>
                   @if (result.cached) {
-                    <span class="cache-tag">⚡ Cached</span>
+                    <span class="cache-tag">⚡ Previously Verified</span>
                   }
                 </div>
+                @if (result.cached) {
+                  <div class="reused-notice">
+                    <span>ℹ️</span>
+                    This exact claim was already verified{{ result.created_at ? ' on ' + (result.created_at | date:'MMM d, y, HH:mm') : '' }} — showing that result instead of re-running the pipeline.
+                  </div>
+                }
               </div>
 
               <!-- Confidence Meter -->

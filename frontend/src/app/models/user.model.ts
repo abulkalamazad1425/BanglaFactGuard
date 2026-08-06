@@ -48,6 +48,10 @@ export interface UserProfile {
   role: UserRole;
   is_active: boolean;
   is_verified: boolean;
+  is_email_verified: boolean;
+  avatar_url: string | null;
+  phone: string | null;
+  total_submissions: number;
   bio: string | null;
   verification_count: number;
 }
@@ -55,4 +59,6 @@ export interface UserProfile {
 export interface UpdateProfileRequest {
   full_name?: string;
   bio?: string;
+  avatar_url?: string;
+  phone?: string;
 }

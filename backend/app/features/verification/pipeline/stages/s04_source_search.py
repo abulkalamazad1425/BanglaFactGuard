@@ -107,7 +107,7 @@ class SourceSearchStage:
     async def execute(self, context: PipelineContext) -> PipelineContext:
         log = logger.bind(
             stage=self.stage_id.value,
-            claim_id=str(context.claim_id) if context.claim_id else "pending",
+            submission_id=str(context.submission_id) if context.submission_id else "pending",
             domain=context.normalized_source,
         )
 

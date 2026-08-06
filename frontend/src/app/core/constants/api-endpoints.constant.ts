@@ -33,6 +33,7 @@ export const API_ENDPOINTS = {
   // Admin
   ADMIN_EXPERTS: '/admin/experts',
   ADMIN_STATS: '/admin/stats',
+  ADMIN_CREDIBILITY_TIERS: '/admin/credibility-tiers',
 
   // Notifications
   NOTIFICATIONS: '/notifications',
@@ -42,6 +43,7 @@ export const API_ENDPOINTS = {
   // Dashboard (public)
   DASHBOARD_STATS: '/dashboard/stats',
   DASHBOARD_TOP_SOURCES: '/dashboard/top-sources',
+  DASHBOARD_EXPLORER: '/dashboard/explorer',
 
   // Sources
   SOURCES: '/sources',

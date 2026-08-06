@@ -32,8 +32,8 @@ export class VerifyClaimComponent implements OnInit {
 
   form = this.fb.group({
     headline: ['', [Validators.required, Validators.minLength(10)]],
-    claimed_source: ['', [Validators.required]],
-    news_body: [''],
+    claimed_source_text: ['', [Validators.required]],
+    body_text: [''],
     published_date: [''],
     force_refresh: [false],
   });
@@ -54,7 +54,7 @@ export class VerifyClaimComponent implements OnInit {
   }
 
   get sourceInvalid() {
-    return this.form.get('claimed_source')?.invalid && this.form.get('claimed_source')?.touched;
+    return this.form.get('claimed_source_text')?.invalid && this.form.get('claimed_source_text')?.touched;
   }
 
   onSubmit(): void {
@@ -70,16 +70,16 @@ export class VerifyClaimComponent implements OnInit {
     const v = this.form.value;
     const payload: any = {
       headline: v.headline,
-      claimed_source: v.claimed_source,
+      claimed_source_text: v.claimed_source_text,
       force_refresh: v.force_refresh ?? false,
     };
-    if (v.news_body?.trim()) payload.news_body = v.news_body;
+    if (v.body_text?.trim()) payload.body_text = v.body_text;
     if (v.published_date) payload.published_date = v.published_date;
 
     this.svc.submit(payload).subscribe({
       next: (res) => {
         this.loading = false;
-        this.svc.getResult(res.claim_id).subscribe({
+        this.svc.getResult(res.submission_id).subscribe({
           next: (result) => { this.result = result; },
           error: () => { this.toast.error('Failed to load result.'); },
         });

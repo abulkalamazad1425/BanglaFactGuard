@@ -15,9 +15,10 @@ def _make_fake_record(
 ):
     record = MagicMock()
     record.id = uuid.uuid4()
+    record.submission_id = uuid.uuid4()
     record.headline = "Test headline"
     record.body_text = "Test body text"
-    record.minio_object_key = "multimodal/abc/test.jpg"
+    record.image_object_key = "multimodal/abc/test.jpg"
     record.prediction = prediction
     record.confidence_fake = confidence_fake
     record.confidence_real = confidence_real

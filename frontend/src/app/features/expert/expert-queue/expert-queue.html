@@ -31,7 +31,7 @@
 
         @if (!loading() && queue().length > 0) {
           <div class="queue-list animate-in">
-            @for (item of queue(); track item.claim_id) {
+            @for (item of queue(); track item.submission_id) {
               <div class="queue-card card">
                 <!-- Card Header: Metadata + Verdict Badge -->
                 <div class="queue-header">
@@ -57,7 +57,7 @@
                 <!-- Source -->
                 <div class="queue-source-row">
                   <span class="source-icon">🌐</span>
-                  <span class="queue-source text-muted text-sm">{{ item.claimed_source }}</span>
+                  <span class="queue-source text-muted text-sm">{{ item.claimed_source_text }}</span>
                 </div>
 
                 <!-- Submitted Headline -->
@@ -67,16 +67,16 @@
                 </div>
 
                 <!-- Submitted News Body (if available) -->
-                @if (item.news_body) {
+                @if (item.body_text) {
                   <div class="claim-section">
                     <div class="section-label">📄 Submitted News Body</div>
-                    <p class="queue-body-snippet">{{ item.news_body }}</p>
+                    <p class="queue-body-snippet">{{ item.body_text }}</p>
                   </div>
                 }
 
                 <!-- Footer Actions -->
                 <div class="queue-footer">
-                  <a [routerLink]="['/expert/queue', item.claim_id]" class="btn btn-primary btn-sm" style="margin-left: auto;">
+                  <a [routerLink]="['/expert/queue', item.submission_id]" class="btn btn-primary btn-sm" style="margin-left: auto;">
                     Review in Detail →
                   </a>
                 </div>

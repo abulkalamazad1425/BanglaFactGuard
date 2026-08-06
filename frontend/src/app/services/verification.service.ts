@@ -17,13 +17,13 @@ export class VerificationService {
   private readonly api = inject(ApiService);
 
   /** POST /api/v1/verify — submit a verification request */
-  submit(request: VerificationRequest): Observable<{ claim_id: string }> {
-    return this.api.post<{ claim_id: string }>(API_ENDPOINTS.VERIFICATION, request);
+  submit(request: VerificationRequest): Observable<{ submission_id: string }> {
+    return this.api.post<{ submission_id: string }>(API_ENDPOINTS.VERIFICATION, request);
   }
 
-  /** GET /api/v1/verify/{claim_id} — fetch the full result */
-  getResult(claimId: string): Observable<VerificationResponse> {
-    return this.api.get<VerificationResponse>(`${API_ENDPOINTS.VERIFICATION}/${claimId}`);
+  /** GET /api/v1/verify/{submission_id} — fetch the full result */
+  getResult(submissionId: string): Observable<VerificationResponse> {
+    return this.api.get<VerificationResponse>(`${API_ENDPOINTS.VERIFICATION}/${submissionId}`);
   }
 
   /** GET /api/v1/users/me/submissions — submission history */

@@ -65,7 +65,7 @@ export class VerifyResultComponent implements OnInit {
     }
   }
 
-  shareUrl = () => `${window.location.origin}/verify/${this.result()?.claim_id}`;
+  shareUrl = () => `${window.location.origin}/verify/${this.result()?.submission_id}`;
 
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');

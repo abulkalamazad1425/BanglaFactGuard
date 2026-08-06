@@ -22,7 +22,7 @@ from app.features.verification.schemas import (
 class PipelineContext:
 
     request_id: uuid.UUID = field(default_factory=uuid.uuid4)
-    claim_id: uuid.UUID | None = None
+    submission_id: uuid.UUID | None = None
     submitter_id: uuid.UUID | None = None
     raw_headline: str = ""
     raw_news_body: str | None = None
@@ -34,7 +34,7 @@ class PipelineContext:
     normalized_body: str | None = None
     normalized_source: str | None = None
     source_config: dict | None = None
-    claim_hash: str | None = None
+    content_hash: str | None = None
 
     cache_hit: bool = False
     cached_label: VerificationLabel | None = None
@@ -140,12 +140,12 @@ def build_context(
     news_body: str | None = None,
     published_date: date | None = None,
     force_refresh: bool = False,
-    claim_id: uuid.UUID | None = None,
+    submission_id: uuid.UUID | None = None,
     submitter_id: uuid.UUID | None = None,
 ) -> PipelineContext:
     return PipelineContext(
         request_id=uuid.uuid4(),
-        claim_id=claim_id,
+        submission_id=submission_id,
         submitter_id=submitter_id,
         raw_headline=headline,
         raw_news_body=news_body,

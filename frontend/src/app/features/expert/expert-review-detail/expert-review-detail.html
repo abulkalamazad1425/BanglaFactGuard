@@ -19,11 +19,11 @@
                   <app-verdict-badge [label]="claim()!.ai_label" />
                 </div>
                 <p class="claim-headline">{{ claim()!.headline }}</p>
-                @if (claim()!.news_body) {
-                  <p class="claim-body">{{ claim()!.news_body }}</p>
+                @if (claim()!.body_text) {
+                  <p class="claim-body">{{ claim()!.body_text }}</p>
                 }
                 <div class="claim-meta">
-                  <span class="text-muted text-sm">Source: <a [href]="claim()!.claimed_source" target="_blank">{{ claim()!.claimed_source }}</a></span>
+                  <span class="text-muted text-sm">Source: <a [href]="claim()!.claimed_source_text" target="_blank">{{ claim()!.claimed_source_text }}</a></span>
                   <span class="text-muted text-sm">Submitted: {{ claim()!.submitted_at | date:'MMM d, y, HH:mm' }}</span>
                 </div>
               </div>

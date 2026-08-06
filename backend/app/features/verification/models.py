@@ -32,6 +32,7 @@ from app.shared.base_model import Base, ReprMixin, TimestampMixin, UUIDMixin
 if TYPE_CHECKING:
     from app.features.articles.models import RetrievedArticle, SearchQuery
     from app.features.sources.models import VerifiedSource
+    from app.features.submissions.models import RetrievedArticleV2, Submission
 
 
 class VerifiedClaim(UUIDMixin, TimestampMixin, ReprMixin, Base):
@@ -128,13 +129,6 @@ class VerifiedClaim(UUIDMixin, TimestampMixin, ReprMixin, Base):
         lazy="select",
         cascade="all, delete-orphan",
         uselist=False,
-    )
-
-    logs: Mapped[list["VerificationLog"]] = relationship(
-        "VerificationLog",
-        back_populates="claim",
-        lazy="select",
-        cascade="all, delete-orphan",
     )
 
     __table_args__ = (
@@ -243,15 +237,18 @@ class VerificationResult(UUIDMixin, TimestampMixin, ReprMixin, Base):
 
 
 class VerificationLog(UUIDMixin, ReprMixin, Base):
+    """Pipeline-internal observability log — no DatabaseDescription.pdf counterpart.
+    Repointed from verified_claims to submissions (column renamed claim_id ->
+    submission_id) since it's actively written on every live pipeline run."""
 
     __tablename__ = "verification_logs"
 
-    claim_id: Mapped[uuid.UUID] = mapped_column(
+    submission_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("verified_claims.id", ondelete="CASCADE"),
+        ForeignKey("submissions.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
-        comment="FK to verified_claims — the claim this log entry belongs to",
+        comment="FK to submissions — the submission this log entry belongs to",
     )
 
     stage: Mapped[PipelineStageID] = mapped_column(
@@ -296,19 +293,99 @@ class VerificationLog(UUIDMixin, ReprMixin, Base):
         comment="Log entry timestamp (UTC)",
     )
 
-    claim: Mapped["VerifiedClaim"] = relationship(
-        "VerifiedClaim",
-        back_populates="logs",
+    submission: Mapped["Submission"] = relationship(
+        "Submission",
+        primaryjoin="VerificationLog.submission_id == Submission.id",
+        viewonly=True,
         lazy="select",
     )
 
     __table_args__ = (
-        Index("ix_verification_logs_claim_stage", claim_id, stage),
-        Index("ix_verification_logs_claim_level", claim_id, level),
+        Index("ix_verification_logs_submission_stage", submission_id, stage),
+        Index("ix_verification_logs_submission_level", submission_id, level),
         Index("ix_verification_logs_stage_level", stage, level),
         Index(
             "ix_verification_logs_metadata_gin",
             metadata_,
             postgresql_using="gin",
         ),
+    )
+
+
+class VerificationResultV2(UUIDMixin, TimestampMixin, ReprMixin, Base):
+    """DatabaseDescription.pdf Table 4.10 — verification_results (suffixed `_v2` in the
+    DB because the legacy `verification_results` table, still used by the live
+    pipeline, already owns that name)."""
+
+    __tablename__ = "verification_results_v2"
+
+    submission_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("submissions.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+
+    ai_preliminary_label: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+    )
+
+    final_label: Mapped[VerificationLabel | None] = mapped_column(
+        Enum(VerificationLabel, name="verification_label_enum", create_type=False),
+        nullable=True,
+        index=True,
+    )
+
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    top_article_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("retrieved_articles_v2.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    semantic_similarity: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    entity_match: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    contradiction_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    keyword_overlap: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    numerical_consistency: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    avg_verification_time_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    submission: Mapped["Submission"] = relationship(
+        "Submission",
+        primaryjoin="VerificationResultV2.submission_id == Submission.id",
+        viewonly=True,
+        lazy="select",
+    )
+
+    top_article: Mapped["RetrievedArticleV2 | None"] = relationship(
+        "RetrievedArticleV2",
+        primaryjoin="VerificationResultV2.top_article_id == RetrievedArticleV2.id",
+        viewonly=True,
+        lazy="select",
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "confidence IS NULL OR (confidence >= 0.0 AND confidence <= 1.0)",
+            name="ck_verification_results_v2_confidence_range",
+        ),
+        CheckConstraint(
+            "semantic_similarity IS NULL OR (semantic_similarity >= 0.0 AND semantic_similarity <= 1.0)",
+            name="ck_verification_results_v2_semantic_similarity_range",
+        ),
+        CheckConstraint(
+            "contradiction_score IS NULL OR (contradiction_score >= 0.0 AND contradiction_score <= 1.0)",
+            name="ck_verification_results_v2_contradiction_score_range",
+        ),
+        Index("ix_verification_results_v2_label_created", final_label, "created_at"),
     )

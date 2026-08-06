@@ -26,7 +26,7 @@ class InputNormalizerStage:
     async def execute(self, context: PipelineContext) -> PipelineContext:
         log = logger.bind(
             stage=self.stage_id.value,
-            claim_id=str(context.claim_id) if context.claim_id else "pending",
+            submission_id=str(context.submission_id) if context.submission_id else "pending",
         )
 
         normalised_headline = normalize_bangla_text(
@@ -71,12 +71,12 @@ class InputNormalizerStage:
                 }
 
         source_for_hash = context.normalized_source or context.raw_claimed_source
-        context.claim_hash = compute_claim_hash(
+        context.content_hash = compute_claim_hash(
             context.normalized_headline, source_for_hash
         )
         log.info(
-            "claim_hash_computed",
-            claim_hash=context.claim_hash[:16] + "...",
+            "content_hash_computed",
+            content_hash=context.content_hash[:16] + "...",
             normalized_source=context.normalized_source,
         )
 

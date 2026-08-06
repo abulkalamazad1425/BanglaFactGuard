@@ -5,6 +5,8 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.core.exceptions import DuplicateRecordError, RecordNotFoundError
+from app.features.auth.models import User
+from app.features.auth.security import require_role
 from app.features.sources.schemas import (
     SourceCreateSchema,
     SourceListSchema,
@@ -15,6 +17,7 @@ from app.features.sources.service import SourceService
 from app.shared.dependencies import get_source_service
 
 router = APIRouter(prefix="/sources", tags=["Sources"])
+_ADMIN_ONLY = require_role("admin")
 
 
 @router.get(
@@ -51,6 +54,7 @@ async def list_sources(
 )
 async def create_source(
     payload: SourceCreateSchema,
+    _: User = Depends(_ADMIN_ONLY),
     service: SourceService = Depends(get_source_service),
 ) -> SourceResponseSchema:
     try:
@@ -88,6 +92,7 @@ async def get_source(
 async def update_source(
     source_id: uuid.UUID,
     payload: SourceUpdateSchema,
+    _: User = Depends(_ADMIN_ONLY),
     service: SourceService = Depends(get_source_service),
 ) -> SourceResponseSchema:
     try:
@@ -106,6 +111,7 @@ async def update_source(
 )
 async def delete_source(
     source_id: uuid.UUID,
+    _: User = Depends(_ADMIN_ONLY),
     service: SourceService = Depends(get_source_service),
 ) -> None:
     try:

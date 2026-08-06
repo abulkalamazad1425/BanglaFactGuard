@@ -322,6 +322,20 @@ select.form-control {
   }
 }
 
+.reused-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: var(--info-bg);
+  border: 1px solid var(--info);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
 /* ─── Confidence Meter ─── */
 .confidence-meter {
   position: relative;

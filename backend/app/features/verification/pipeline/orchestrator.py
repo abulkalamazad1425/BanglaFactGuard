@@ -63,7 +63,7 @@ from app.core.logging import bind_pipeline_context
 from app.features.verification.pipeline.context import PipelineContext, PipelineStage
 
 if TYPE_CHECKING:
-    from app.features.verification.repository import ClaimRepository
+    from app.features.submissions.repository import SubmissionRepository
 
 logger = structlog.get_logger(__name__)
 
@@ -104,25 +104,25 @@ class PipelineOrchestrator:
 
     Attributes:
         stages: Ordered list of PipelineStage implementations (S01–S12).
-        claim_repo: ClaimRepository for status lifecycle management.
+        submission_repo: SubmissionRepository for status lifecycle management.
     """
 
     def __init__(
         self,
         stages: list[PipelineStage],
-        claim_repo: ClaimRepository,
+        submission_repo: SubmissionRepository,
     ) -> None:
         """
         Initialise the orchestrator with an ordered list of stages.
 
         Args:
-            stages:     Ordered list of S01–S12 stage implementations.
-            claim_repo: Repository used to update claim status during the run.
+            stages:          Ordered list of S01–S12 stage implementations.
+            submission_repo: Repository used to update submission status during the run.
         """
         if not stages:
             raise ValueError("PipelineOrchestrator requires at least one stage.")
         self.stages = stages
-        self.claim_repo = claim_repo
+        self.submission_repo = submission_repo
 
     async def run(self, context: PipelineContext) -> PipelineContext:
         """
@@ -150,19 +150,19 @@ class PipelineOrchestrator:
             PipelineError: If a CRITICAL stage fails (S01, S11, or S12).
         """
         log = logger.bind(
-            claim_id=str(context.claim_id) if context.claim_id else "pending",
+            submission_id=str(context.submission_id) if context.submission_id else "pending",
             request_id=str(context.request_id),
         )
 
         log.info("pipeline_started", stage_count=len(self.stages))
 
-        if context.claim_id:
-            bind_pipeline_context(str(context.claim_id))
+        if context.submission_id:
+            bind_pipeline_context(str(context.submission_id))
             try:
-                await self.claim_repo.mark_processing(context.claim_id)
+                await self.submission_repo.mark_processing(context.submission_id)
             except Exception as exc:
 
-                log.warning("claim_status_update_failed", error=str(exc))
+                log.warning("submission_status_update_failed", error=str(exc))
 
         for stage in self.stages:
             stage_id = stage.stage_id
@@ -265,28 +265,28 @@ class PipelineOrchestrator:
 
     async def _handle_fatal_failure(self, context: PipelineContext) -> None:
         """
-        Mark the claim as FAILED in the database after a critical stage error.
+        Mark the submission as FAILED in the database after a critical stage error.
 
         This is a best-effort operation — if the DB call itself fails, the
         exception is swallowed and only logged, because we are already
         in an error-handling path.
 
         Args:
-            context: The pipeline context with `claim_id` set (may be None
+            context: The pipeline context with `submission_id` set (may be None
                      if failure occurred in Stage 1 before DB insert).
         """
-        if context.claim_id is None:
+        if context.submission_id is None:
             return
         try:
-            await self.claim_repo.mark_failed(context.claim_id)
+            await self.submission_repo.mark_failed(context.submission_id)
             logger.error(
-                "claim_marked_failed",
-                claim_id=str(context.claim_id),
+                "submission_marked_failed",
+                submission_id=str(context.submission_id),
                 fatal_error=context.fatal_error,
             )
         except Exception as exc:
             logger.error(
-                "failed_to_mark_claim_failed",
-                claim_id=str(context.claim_id),
+                "failed_to_mark_submission_failed",
+                submission_id=str(context.submission_id),
                 error=str(exc),
             )

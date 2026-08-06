@@ -74,6 +74,28 @@ class LogLevel(str, Enum):
     ERROR = "ERROR"
 
 
+class SubmissionType(str, Enum):
+
+    MULTIMODAL = "MULTIMODAL"
+    SOURCE_BASED = "SOURCE_BASED"
+    PHOTO_CARD = "PHOTO_CARD"
+
+
+class SubmissionStatus(str, Enum):
+
+    PENDING = "PENDING"
+    PROCESSING = "PROCESSING"
+    EXPERT_REVIEW = "EXPERT_REVIEW"
+    FINALIZED = "FINALIZED"
+    FAILED = "FAILED"
+
+
+class MultimodalPredictionLabel(str, Enum):
+
+    FAKE = "FAKE"
+    NON_FAKE = "NON_FAKE"
+
+
 class PipelineStageID(str, Enum):
 
     S01_NORMALIZER = "s01_normalizer"

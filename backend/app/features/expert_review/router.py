@@ -8,8 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.features.auth.models import User
 from app.features.auth.security import require_role
 from app.features.expert_review.repository import (
-    CredibilityScoreRepository,
-    ExpertReviewRepository,
+    CredibilityWeightTierRepository,
+    ExpertProfileRepository,
+    ExpertReviewV2Repository,
 )
 from app.features.expert_review.schemas import (
     CredibilityScoreResponse,
@@ -21,7 +22,8 @@ from app.features.expert_review.schemas import (
     ExpertVoteUpdateRequest,
 )
 from app.features.expert_review.service import ExpertReviewService
-from app.features.verification.repository import ClaimRepository, ResultRepository
+from app.features.submissions.repository import SubmissionRepository
+from app.features.verification.repository import ResultV2Repository
 from app.shared.dependencies import get_async_session
 
 router = APIRouter(prefix="/expert", tags=["Expert Review"])
@@ -34,10 +36,11 @@ def _get_service(
     session: AsyncSession = Depends(get_async_session),
 ) -> ExpertReviewService:
     return ExpertReviewService(
-        review_repo=ExpertReviewRepository(session),
-        credibility_repo=CredibilityScoreRepository(session),
-        claim_repo=ClaimRepository(session),
-        result_repo=ResultRepository(session),
+        review_repo=ExpertReviewV2Repository(session),
+        profile_repo=ExpertProfileRepository(session),
+        tier_repo=CredibilityWeightTierRepository(session),
+        submission_repo=SubmissionRepository(session),
+        result_repo=ResultV2Repository(session),
     )
 
 
@@ -56,32 +59,32 @@ async def get_queue(
 
 
 @router.get(
-    "/queue/{claim_id}",
+    "/queue/{submission_id}",
     response_model=ExpertQueueItemResponse,
     summary="Get a single claim for review",
 )
 async def get_queue_item(
-    claim_id: uuid.UUID,
+    submission_id: uuid.UUID,
     current_user: User = Depends(_EXPERT_OR_ADMIN),
     svc: ExpertReviewService = Depends(_get_service),
 ) -> ExpertQueueItemResponse:
-    return await svc.get_queue_item(claim_id)
+    return await svc.get_queue_item(submission_id)
 
 
 @router.post(
-    "/queue/{claim_id}/vote",
+    "/queue/{submission_id}/vote",
     response_model=ExpertReviewResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Submit expert vote on a claim",
 )
 async def submit_vote(
-    claim_id: uuid.UUID,
+    submission_id: uuid.UUID,
     body: ExpertVoteRequest,
     current_user: User = Depends(_EXPERT_ONLY),
     svc: ExpertReviewService = Depends(_get_service),
 ) -> ExpertReviewResponse:
     return await svc.submit_vote(
-        claim_id=claim_id,
+        submission_id=submission_id,
         expert_id=current_user.id,
         expert_label=body.expert_label,
         justification=body.justification,
@@ -142,19 +145,17 @@ async def get_credibility(
     current_user: User = Depends(_EXPERT_OR_ADMIN),
     session: AsyncSession = Depends(get_async_session),
 ) -> CredibilityScoreResponse:
-    from app.features.expert_review.repository import CredibilityScoreRepository
-
-    repo = CredibilityScoreRepository(session)
     from app.core.config import get_settings
 
-    cred = await repo.get_or_create(
+    repo = ExpertProfileRepository(session)
+    profile = await repo.get_or_create(
         current_user.id,
         initial_score=get_settings().auth.initial_expert_credibility,
     )
     return CredibilityScoreResponse(
-        user_id=str(cred.user_id),
-        score=cred.score,
-        total_votes=cred.total_votes,
-        correct_votes=cred.correct_votes,
-        updated_at=cred.updated_at,
+        user_id=str(profile.user_id),
+        score=profile.credibility_score,
+        total_votes=profile.total_votes,
+        correct_votes=profile.correct_votes,
+        updated_at=profile.updated_at,
     )

@@ -25,7 +25,7 @@ class ExpertVoteUpdateRequest(BaseModel):
 
 class ExpertReviewResponse(BaseModel):
     id: str
-    claim_id: str
+    submission_id: str
     reviewer_id: str | None
     ai_label: str
     expert_label: str
@@ -47,10 +47,10 @@ class ExpertTopArticle(BaseModel):
 
 
 class ExpertQueueItemResponse(BaseModel):
-    claim_id: str
+    submission_id: str
     headline: str | None
-    news_body: str | None = None
-    claimed_source: str | None
+    body_text: str | None = None
+    claimed_source_text: str | None
     ai_label: str | None
     ai_confidence: float | None
     submitted_at: datetime
@@ -60,9 +60,9 @@ class ExpertQueueItemResponse(BaseModel):
 
 class ExpertHistoryItemResponse(BaseModel):
     review_id: str
-    claim_id: str
+    submission_id: str
     headline: str | None
-    claimed_source: str | None
+    claimed_source_text: str | None
     expert_label: str
     ai_label: str
     final_label: str | None

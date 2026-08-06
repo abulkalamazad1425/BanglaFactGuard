@@ -15,6 +15,7 @@ def _make_fake_response(prediction: str = "FAKE", is_cached: bool = False):
 
     return MultimodalPredictionResponse(
         prediction_id=str(uuid.uuid4()),
+        submission_id=str(uuid.uuid4()),
         prediction=prediction,
         confidence_fake=0.82 if prediction == "FAKE" else 0.18,
         confidence_real=0.18 if prediction == "FAKE" else 0.82,

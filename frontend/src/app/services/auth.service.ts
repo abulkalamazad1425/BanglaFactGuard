@@ -85,7 +85,7 @@ export class AuthService {
   }
 
   updateProfile(data: UpdateProfileRequest): Observable<UserProfile> {
-    return this.api.patch<UserProfile>(API_ENDPOINTS.USERS_PROFILE, data).pipe(
+    return this.api.put<UserProfile>(API_ENDPOINTS.USERS_PROFILE, data).pipe(
       tap(() => this._loadMe()) // Reload user to reflect changes (e.g. full_name)
     );
   }

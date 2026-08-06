@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 
@@ -6,8 +6,8 @@ import structlog
 
 from app.core.constants import PipelineStageID, VerificationLabel
 from app.features.verification.pipeline.context import PipelineContext
-from app.features.verification.repository import ClaimRepository
-from app.features.verification.repository import ResultRepository
+from app.features.submissions.repository import SubmissionRepository
+from app.features.verification.repository import ResultV2Repository
 from app.features.articles.schemas import RankedArticleSchema
 from app.features.verification.schemas import (
     ManipulationFlagsSchema,
@@ -25,19 +25,19 @@ class CacheLookupStage:
     def __init__(
         self,
         cache_service: CacheService,
-        claim_repo: ClaimRepository,
-        result_repo: ResultRepository,
+        submission_repo: SubmissionRepository,
+        result_repo: ResultV2Repository,
     ) -> None:
 
         self.cache_service = cache_service
-        self.claim_repo = claim_repo
+        self.submission_repo = submission_repo
         self.result_repo = result_repo
 
     async def execute(self, context: PipelineContext) -> PipelineContext:
 
         log = logger.bind(
             stage=self.stage_id.value,
-            claim_hash=context.claim_hash,
+            content_hash=context.content_hash,
         )
 
         if context.force_refresh:
@@ -45,8 +45,8 @@ class CacheLookupStage:
             context.cache_hit = False
             return context
 
-        if not context.claim_hash:
-            log.warning("claim_hash_missing_skipping_cache")
+        if not context.content_hash:
+            log.warning("content_hash_missing_skipping_cache")
             context.cache_hit = False
             return context
 
@@ -74,7 +74,7 @@ class CacheLookupStage:
         log: structlog.BoundLogger,
     ) -> bool:
 
-        cached_bytes = await self.cache_service.get_claim_result(context.claim_hash)
+        cached_bytes = await self.cache_service.get_claim_result(context.content_hash)
 
         if cached_bytes is None:
             log.debug("redis_miss")
@@ -96,19 +96,21 @@ class CacheLookupStage:
         log: structlog.BoundLogger,
     ) -> bool:
 
-        claim = await self.claim_repo.get_completed_by_hash(context.claim_hash)
-        if claim is None:
+        submission = await self.submission_repo.get_verified_by_content_hash(
+            context.content_hash
+        )
+        if submission is None:
             log.debug("db_miss")
             return False
 
-        result = await self.result_repo.get_by_claim_id(claim.id)
-        if result is None:
-            log.debug("db_claim_found_but_no_result", claim_id=str(claim.id))
+        result = await self.result_repo.get_by_submission_id(submission.id)
+        if result is None or result.final_label is None:
+            log.debug("db_submission_found_but_no_result", submission_id=str(submission.id))
             return False
 
-        context.claim_id = claim.id
-        context.normalized_source = claim.normalized_source
-        context.cached_label = VerificationLabel(result.label)
+        context.submission_id = submission.id
+        context.normalized_source = context.normalized_source
+        context.cached_label = VerificationLabel(result.final_label)
         context.cached_confidence = result.confidence
         context.cached_reasoning = result.reasoning or ""
         context.cached_scores = VerificationScoresSchema(
@@ -123,7 +125,7 @@ class CacheLookupStage:
 
         log.info(
             "db_hit",
-            claim_id=str(claim.id),
+            submission_id=str(submission.id),
             label=context.cached_label.value,
         )
 
@@ -151,10 +153,10 @@ class CacheLookupStage:
         context.cached_matched_articles = [
             RankedArticleSchema(**a) for a in raw_articles
         ]
-        if data.get("claim_id"):
+        if data.get("submission_id"):
             import uuid as _uuid
 
-            context.claim_id = _uuid.UUID(data["claim_id"])
+            context.submission_id = _uuid.UUID(data["submission_id"])
         if data.get("normalized_source"):
             context.normalized_source = data["normalized_source"]
 
@@ -175,10 +177,10 @@ class CacheLookupStage:
             "matched_articles": [
                 a.model_dump(mode="json") for a in context.cached_matched_articles
             ],
-            "claim_id": str(context.claim_id) if context.claim_id else None,
+            "submission_id": str(context.submission_id) if context.submission_id else None,
             "normalized_source": context.normalized_source,
         }
         await self.cache_service.set_claim_result(
-            context.claim_hash,
+            context.content_hash,
             json.dumps(payload, ensure_ascii=False),
         )

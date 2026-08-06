@@ -14,10 +14,10 @@ export interface ExpertTopArticle {
 }
 
 export interface ExpertQueueItem {
-  claim_id: string;
+  submission_id: string;
   headline: string;
-  news_body?: string | null;
-  claimed_source: string;
+  body_text?: string | null;
+  claimed_source_text: string;
   normalized_source?: string | null;
   ai_label?: string | null;
   ai_confidence?: number | null;
@@ -27,33 +27,37 @@ export interface ExpertQueueItem {
   top_article?: ExpertTopArticle | null;
 }
 
-// ── Review detail from GET /expert/queue/{claim_id} ─────────────────
+// ── Review detail from GET /expert/queue/{submission_id} ────────────
 export interface ExpertReviewDetail {
-  claim_id: string;
+  submission_id: string;
   headline: string;
-  claimed_source: string;
-  news_body?: string | null;
+  claimed_source_text: string;
+  body_text?: string | null;
   ai_label?: string | null;
   ai_confidence?: number | null;
   reasoning?: string | null;
 }
 
-// ── Submitted vote response ──────────────────────────────────────────
+// ── Submitted vote response — matches backend ExpertReviewResponse ──
 export interface ExpertReviewResponse {
-  review_id: string;
-  claim_id: string;
-  expert_id: string;
+  id: string;
+  submission_id: string;
+  reviewer_id: string | null;
+  ai_label: string;
   expert_label: ExpertLabel;
   justification?: string | null;
+  credibility_weight: number;
+  status: string;
   created_at: string;
+  updated_at: string;
 }
 
 // ── History item from GET /expert/history ───────────────────────────
 export interface ExpertHistoryItem {
   review_id: string;
-  claim_id: string;
+  submission_id: string;
   headline: string;
-  claimed_source: string;
+  claimed_source_text: string;
   expert_label: ExpertLabel;
   justification?: string | null;
   final_label?: string | null;
@@ -86,7 +90,7 @@ export interface CredibilityScore {
   updated_at: string;
 }
 
-// ── Request to POST /expert/queue/{claim_id}/vote ───────────────────
+// ── Request to POST /expert/queue/{submission_id}/vote ──────────────
 export interface ExpertVoteRequest {
   expert_label: ExpertLabel;
   justification?: string | null;

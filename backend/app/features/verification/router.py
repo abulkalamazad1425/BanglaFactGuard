@@ -4,9 +4,9 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.core.constants import ClaimStatus
+from app.core.constants import SubmissionStatus
 from app.core.exceptions import PipelineError, RecordNotFoundError
-from app.features.verification.repository import ClaimRepository
+from app.features.submissions.repository import SubmissionRepository
 from app.features.verification.schemas import (
     VerificationRequest,
     VerificationResponse,
@@ -15,7 +15,7 @@ from app.features.verification.schemas import (
 from app.features.verification.service import VerificationService
 from app.features.auth.security import get_current_user_optional
 from app.features.auth.models import User
-from app.shared.dependencies import get_claim_repo, get_verification_service
+from app.shared.dependencies import get_submission_repo, get_verification_service
 
 router = APIRouter(prefix="/verify", tags=["Verification"])
 
@@ -57,58 +57,58 @@ async def verify_claim(
 
 
 @router.get(
-    "/{claim_id}",
+    "/{submission_id}",
     response_model=VerificationResponse,
-    summary="Get a verification result by claim ID",
+    summary="Get a verification result by submission ID",
     responses={
         200: {"description": "Verification result"},
-        404: {"description": "Claim not found or not yet completed"},
+        404: {"description": "Submission not found or not yet completed"},
     },
 )
 async def get_verification_result(
-    claim_id: uuid.UUID,
+    submission_id: uuid.UUID,
     service: VerificationService = Depends(get_verification_service),
 ) -> VerificationResponse:
-    result = await service.get_result(claim_id)
+    result = await service.get_result(submission_id)
     if result is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail={"error": "not_found", "claim_id": str(claim_id)},
+            detail={"error": "not_found", "submission_id": str(submission_id)},
         )
     return result
 
 
 @router.get(
-    "/{claim_id}/status",
+    "/{submission_id}/status",
     response_model=VerificationStatusResponse,
     summary="Poll the status of a verification request",
     responses={
         200: {"description": "Current pipeline status"},
-        404: {"description": "Claim not found"},
+        404: {"description": "Submission not found"},
     },
 )
 async def get_verification_status(
-    claim_id: uuid.UUID,
-    claim_repo: ClaimRepository = Depends(get_claim_repo),
+    submission_id: uuid.UUID,
+    submission_repo: SubmissionRepository = Depends(get_submission_repo),
     service: VerificationService = Depends(get_verification_service),
 ) -> VerificationStatusResponse:
     try:
-        claim = await claim_repo.get_by_id(claim_id)
+        submission = await submission_repo.get_by_id(submission_id)
     except RecordNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail={"error": "not_found", "claim_id": str(claim_id)},
+            detail={"error": "not_found", "submission_id": str(submission_id)},
         )
 
     result = None
-    if claim.status == ClaimStatus.COMPLETED:
-        result = await service.get_result(claim_id)
+    if submission.status in (SubmissionStatus.EXPERT_REVIEW, SubmissionStatus.FINALIZED):
+        result = await service.get_result(submission_id)
 
     return VerificationStatusResponse(
-        claim_id=claim_id,
-        status=claim.status,
+        submission_id=submission_id,
+        status=submission.status,
         result=result,
         error=None,
-        queued_at=claim.created_at,
-        updated_at=claim.updated_at,
+        queued_at=submission.created_at,
+        updated_at=submission.updated_at,
     )

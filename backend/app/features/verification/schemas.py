@@ -5,7 +5,7 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.core.constants import ClaimStatus, VerificationLabel
+from app.core.constants import SubmissionStatus, VerificationLabel
 from app.features.articles.schemas import RankedArticleSchema
 
 
@@ -99,8 +99,8 @@ class VerificationRequest(BaseModel):
         description="The article headline being claimed.",
         examples=["বাংলাদেশে নতুন ডিজিটাল নিরাপত্তা আইন পাস হয়েছে"],
     )
-    news_body: str | None = Field(default=None, max_length=50_000)
-    claimed_source: str = Field(..., min_length=1, max_length=255)
+    body_text: str | None = Field(default=None, max_length=50_000)
+    claimed_source_text: str = Field(..., min_length=1, max_length=255)
     published_date: date | None = Field(default=None, examples=["2024-03-15"])
     force_refresh: bool = Field(default=False)
 
@@ -112,17 +112,17 @@ class VerificationRequest(BaseModel):
             raise ValueError("headline must not be blank after stripping whitespace")
         return stripped
 
-    @field_validator("claimed_source")
+    @field_validator("claimed_source_text")
     @classmethod
     def _strip_claimed_source(cls, v: str) -> str:
         stripped = v.strip()
         if not stripped:
-            raise ValueError("claimed_source must not be blank")
+            raise ValueError("claimed_source_text must not be blank")
         return stripped
 
-    @field_validator("news_body")
+    @field_validator("body_text")
     @classmethod
-    def _strip_news_body(cls, v: str | None) -> str | None:
+    def _strip_body_text(cls, v: str | None) -> str | None:
         if v is None:
             return None
         stripped = v.strip()
@@ -132,8 +132,8 @@ class VerificationRequest(BaseModel):
         "json_schema_extra": {
             "example": {
                 "headline": "বাংলাদেশে নতুন ডিজিটাল নিরাপত্তা আইন পাস হয়েছে",
-                "news_body": "জাতীয় সংসদে আজ বিকেলে ডিজিটাল নিরাপত্তা আইনের সংশোধনী প্রস্তাব সর্বসম্মতিক্রমে পাস হয়েছে।",
-                "claimed_source": "প্রথম আলো",
+                "body_text": "জাতীয় সংসদে আজ বিকেলে ডিজিটাল নিরাপত্তা আইনের সংশোধনী প্রস্তাব সর্বসম্মতিক্রমে পাস হয়েছে।",
+                "claimed_source_text": "প্রথম আলো",
                 "published_date": "2024-03-15",
                 "force_refresh": False,
             }
@@ -147,7 +147,7 @@ class VerificationScoresResponse(VerificationScoresSchema):
 
 class VerificationResponse(BaseModel):
 
-    claim_id: uuid.UUID
+    submission_id: uuid.UUID
     label: VerificationLabel
     confidence: float = Field(..., ge=0.0, le=1.0)
     reasoning: str
@@ -164,7 +164,7 @@ class VerificationResponse(BaseModel):
     model_config = {
         "json_schema_extra": {
             "example": {
-                "claim_id": "550e8400-e29b-41d4-a716-446655440000",
+                "submission_id": "550e8400-e29b-41d4-a716-446655440000",
                 "label": "TRUE",
                 "confidence": 0.92,
                 "reasoning": "Prothom Alo published a matching article on 2024-03-15.",
@@ -193,11 +193,11 @@ class VerificationResponse(BaseModel):
 
 class VerificationResultSummary(BaseModel):
 
-    claim_id: uuid.UUID
+    submission_id: uuid.UUID
     headline: str = Field(..., max_length=200)
     label: VerificationLabel
     confidence: float = Field(..., ge=0.0, le=1.0)
-    claimed_source: str
+    claimed_source_text: str
     normalized_source: str | None = None
     created_at: datetime
 
@@ -206,8 +206,8 @@ class VerificationResultSummary(BaseModel):
 
 class VerificationStatusResponse(BaseModel):
 
-    claim_id: uuid.UUID
-    status: ClaimStatus
+    submission_id: uuid.UUID
+    status: SubmissionStatus
     result: VerificationResponse | None = None
     error: str | None = None
     queued_at: datetime
@@ -216,8 +216,8 @@ class VerificationStatusResponse(BaseModel):
     model_config = {
         "json_schema_extra": {
             "example": {
-                "claim_id": "550e8400-e29b-41d4-a716-446655440000",
-                "status": "processing",
+                "submission_id": "550e8400-e29b-41d4-a716-446655440000",
+                "status": "PROCESSING",
                 "result": None,
                 "error": None,
                 "queued_at": "2024-03-15T12:00:00Z",

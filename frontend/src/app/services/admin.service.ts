@@ -8,6 +8,9 @@ import {
   CreateExpertRequest,
   UpdateExpertRequest,
   ResetExpertPasswordRequest,
+  CredibilityWeightTier,
+  CredibilityWeightTierRequest,
+  CredibilityWeightTierUpdateRequest,
 } from '../models/admin.model';
 
 // ── Admin Service ─────────────────────────────────────────────────────
@@ -57,5 +60,31 @@ export class AdminService {
   /** GET /api/v1/admin/stats */
   getStats(): Observable<AdminStats> {
     return this.api.get<AdminStats>(API_ENDPOINTS.ADMIN_STATS);
+  }
+
+  /** GET /api/v1/admin/credibility-tiers */
+  listCredibilityTiers(): Observable<CredibilityWeightTier[]> {
+    return this.api.get<CredibilityWeightTier[]>(API_ENDPOINTS.ADMIN_CREDIBILITY_TIERS);
+  }
+
+  /** POST /api/v1/admin/credibility-tiers */
+  createCredibilityTier(body: CredibilityWeightTierRequest): Observable<CredibilityWeightTier> {
+    return this.api.post<CredibilityWeightTier>(API_ENDPOINTS.ADMIN_CREDIBILITY_TIERS, body);
+  }
+
+  /** PUT /api/v1/admin/credibility-tiers/{id} */
+  updateCredibilityTier(
+    id: string,
+    body: CredibilityWeightTierUpdateRequest
+  ): Observable<CredibilityWeightTier> {
+    return this.api.put<CredibilityWeightTier>(
+      `${API_ENDPOINTS.ADMIN_CREDIBILITY_TIERS}/${id}`,
+      body
+    );
+  }
+
+  /** DELETE /api/v1/admin/credibility-tiers/{id} */
+  deleteCredibilityTier(id: string): Observable<void> {
+    return this.api.delete<void>(`${API_ENDPOINTS.ADMIN_CREDIBILITY_TIERS}/${id}`);
   }
 }

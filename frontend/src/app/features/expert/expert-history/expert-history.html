@@ -30,7 +30,7 @@
               <tbody>
                 @for (h of history(); track h.review_id) {
                   <tr>
-                    <td class="headline-cell">{{ h.headline || h.claim_id | slice:0:70 }}...</td>
+                    <td class="headline-cell">{{ h.headline || h.submission_id | slice:0:70 }}...</td>
                     <td><app-verdict-badge [label]="h.expert_label" /></td>
                     <td><app-verdict-badge [label]="h.ai_label" /></td>
                     <td>

@@ -7,14 +7,17 @@ from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.engine import AsyncSessionLocal
-from app.features.articles.repository import ArticleRepository
+from app.features.submissions.repository import (
+    RetrievedArticleV2Repository,
+    SubmissionRepository,
+)
 from app.features.cache.cache_service import CacheService
 from app.features.nlp.embedding_service import EmbeddingService
 from app.features.nlp.ner_service import NERService
 from app.features.nlp.nli_service import NLIService
 from app.features.sources.repository import SourceRepository
 from app.features.sources.service import SourceService
-from app.features.verification.repository import ClaimRepository, ResultRepository
+from app.features.verification.repository import ResultV2Repository
 from app.features.verification.service import VerificationService
 
 
@@ -28,22 +31,22 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
             raise
 
 
-async def get_claim_repo(
+async def get_submission_repo(
     session: AsyncSession = Depends(get_async_session),
-) -> ClaimRepository:
-    return ClaimRepository(session)
+) -> SubmissionRepository:
+    return SubmissionRepository(session)
 
 
 async def get_result_repo(
     session: AsyncSession = Depends(get_async_session),
-) -> ResultRepository:
-    return ResultRepository(session)
+) -> ResultV2Repository:
+    return ResultV2Repository(session)
 
 
 async def get_article_repo(
     session: AsyncSession = Depends(get_async_session),
-) -> ArticleRepository:
-    return ArticleRepository(session)
+) -> RetrievedArticleV2Repository:
+    return RetrievedArticleV2Repository(session)
 
 
 async def get_source_repo(
@@ -73,9 +76,9 @@ def get_http_client(request: Request) -> httpx.AsyncClient:
 
 
 async def get_verification_service(
-    claim_repo: ClaimRepository = Depends(get_claim_repo),
-    result_repo: ResultRepository = Depends(get_result_repo),
-    article_repo: ArticleRepository = Depends(get_article_repo),
+    submission_repo: SubmissionRepository = Depends(get_submission_repo),
+    result_repo: ResultV2Repository = Depends(get_result_repo),
+    article_repo: RetrievedArticleV2Repository = Depends(get_article_repo),
     source_repo: SourceRepository = Depends(get_source_repo),
     cache_service: CacheService = Depends(get_cache_service),
     embedding_service: EmbeddingService = Depends(get_embedding_service),
@@ -84,7 +87,7 @@ async def get_verification_service(
     http_client: httpx.AsyncClient = Depends(get_http_client),
 ) -> VerificationService:
     return VerificationService(
-        claim_repo=claim_repo,
+        submission_repo=submission_repo,
         result_repo=result_repo,
         article_repo=article_repo,
         source_repo=source_repo,
