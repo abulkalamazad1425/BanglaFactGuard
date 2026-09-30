@@ -28,6 +28,7 @@ export const APP_ROUTES: Routes = [
       { path: 'verify',    loadComponent: () => import('../features/verification/verify-claim/verify-claim').then(m => m.VerifyClaimComponent) },
       { path: 'verify/:id',loadComponent: () => import('../features/verification/verify-result/verify-result').then(m => m.VerifyResultComponent) },
       { path: 'multimodal',loadComponent: () => import('../features/multimodal/multimodal').then(m => m.MultimodalComponent) },
+      { path: 'photo-card',loadComponent: () => import('../features/photocard/photocard').then(m => m.PhotoCardComponent) },
 
       // Authenticated
       {

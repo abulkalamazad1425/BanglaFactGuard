@@ -204,6 +204,35 @@ class VerificationResultSummary(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class VerificationQueuedResponse(BaseModel):
+    """Acknowledgement for a claim accepted for background verification.
+
+    The pipeline takes up to a minute or so, which is far too long to hold a
+    user on the form. The claim is registered immediately and this identifier
+    is what the caller polls (or revisits from their history) for the result.
+    """
+
+    submission_id: uuid.UUID
+    status: SubmissionStatus
+    cached: bool = Field(
+        default=False,
+        description=(
+            "True when this exact claim had already been verified and the "
+            "stored result is being reused instead of re-running the pipeline."
+        ),
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "submission_id": "550e8400-e29b-41d4-a716-446655440000",
+                "status": "PENDING",
+                "cached": False,
+            }
+        }
+    }
+
+
 class VerificationStatusResponse(BaseModel):
 
     submission_id: uuid.UUID

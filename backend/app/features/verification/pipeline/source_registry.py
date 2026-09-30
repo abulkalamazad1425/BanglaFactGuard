@@ -128,6 +128,8 @@ SOURCE_REGISTRY: dict[str, SourceConfig] = {
             "দ্য ডেইলি স্টার",
             "the daily star bangla",
             "the daily star",
+            "daily star",
+            "dailystar",
             "bangla.thedailystar.net",
             "thedailystar",
         ],
@@ -151,7 +153,13 @@ SOURCE_REGISTRY: dict[str, SourceConfig] = {
             "time[datetime]",
             "time",
         ],
-        "internal_search_url": "https://bangla.thedailystar.net/search?q={query}",
+        # /search is a client-side Google CSE widget (the form posts ?t=,
+        # but no parameter is honoured server-side). It returns the SAME
+        # eight "latest news" chrome links for every query — including
+        # nonsense ones — and those links match article_url_patterns, so
+        # they were being injected as top-priority candidates and crowding
+        # the real article out of the evidence budget. Verified live.
+        "internal_search_url": None,
         "article_url_patterns": [
             r"bangla\.thedailystar\.net/[a-zA-Z0-9-]+/.*news-\d+",
             r"bangla\.thedailystar\.net/node/\d+",
@@ -327,10 +335,16 @@ SOURCE_REGISTRY: dict[str, SourceConfig] = {
             "span[class*='date']",
             "time",
         ],
-        "internal_search_url": "https://samakal.com/search?q={query}",
+        # The search page renders results client-side (no real result links
+        # in the server response for any query) — verified live.
+        "internal_search_url": None,
         "article_url_patterns": [
+            # Real shape is /{section}/article/{id}/{bangla-slug}.
+            r"samakal\.com/[^/]+/article/\d+",
             r"samakal\.com/[^/]+/article/[a-zA-Z0-9_-]+",
-            r"samakal\.com/[^/]+/[^/?#]{8,}$",
+            # A bare /{section}/{slug} rule used to live here, but it also
+            # matched section fronts such as /divisions/chattogram and fed
+            # listing pages into the evidence set as if they were articles.
         ],
         "rss_url": "https://samakal.com/feed",
         "js_rendered": False,
@@ -344,11 +358,18 @@ SOURCE_REGISTRY: dict[str, SourceConfig] = {
             "মানবজমিন",
             "manab zamin",
             "manabzamin",
+            "manabzamin.com",
             "mzamin",
             "www.mzamin.com",
             "mzamin.com",
         ],
         "body_selectors": [
+            # Current (2026) redesign: the whole article body lives in one
+            # <p> inside #articleContent, with <br><br> as the paragraph
+            # separator rather than distinct <p> tags. Verified live.
+            "#articleContent p",
+            "#articleContent",
+            ".prose p",
             ".details-text p",
             "div.details-text p",
             ".news-details p",
@@ -357,6 +378,9 @@ SOURCE_REGISTRY: dict[str, SourceConfig] = {
             "article p",
         ],
         "title_selectors": [
+            # Current redesign has no semantic "title" class on the h1 —
+            # only Tailwind utility classes, which are too unstable to key
+            # off of. The bare "h1" fallback is what actually matches.
             "h1.title",
             "h2.title",
             "h1[class*='title']",
@@ -368,9 +392,14 @@ SOURCE_REGISTRY: dict[str, SourceConfig] = {
             "span[class*='date']",
             "time",
         ],
-        # /search.php is dead (returns an empty response); /search is the
-        # live endpoint on the redesigned site.
-        "internal_search_url": "https://www.mzamin.com/search?q={query}",
+        # The /search endpoint is behind Cloudflare bot-protection and
+        # returns a 403 "Sorry, you have been blocked" page for any
+        # non-browser request — verified live, not fixable via headers.
+        # Article pages themselves are NOT behind this block, so external
+        # search providers (which already have mzamin.com indexed) can
+        # still discover and fetch real articles; only our own internal
+        # search request is dead.
+        "internal_search_url": None,
         "article_url_patterns": [
             # Site moved from /article.php?mzamin={id} to a clean /article/{id}.
             r"mzamin\.com/article/\d+",
@@ -411,7 +440,9 @@ SOURCE_REGISTRY: dict[str, SourceConfig] = {
             "span[class*='date']",
             "time",
         ],
-        "internal_search_url": "https://dailyinqilab.com/search?q={query}",
+        # The search page renders results client-side (no real result links
+        # in the server response for any query) — verified live.
+        "internal_search_url": None,
         "article_url_patterns": [
             # Real URLs are /{category}/news/{id} — old pattern required
             # "news" immediately after the domain, missing the category segment.
@@ -455,15 +486,16 @@ SOURCE_REGISTRY: dict[str, SourceConfig] = {
             "span[class*='date']",
             "time",
         ],
-        "internal_search_url": "https://www.dailynayadiganta.com/search?q={query}",
+        # The site's "search" page is just a Google Custom Search embed
+        # (<div class="gcse-search">) — the server response never contains
+        # real result links, only the CSE widget's placeholder markup and
+        # its localized "no results" string. Verified live.
+        "internal_search_url": None,
         "article_url_patterns": [
-            # Site moved to short opaque alphanumeric slugs
-            # (/{category}[/{subcategory}]/{slug}/) instead of numeric IDs.
-            r"dailynayadiganta\.com/[^/]+/[^/]+/[a-zA-Z0-9]{8,}/?$",
-            r"dailynayadiganta\.com/[^/]+/[a-zA-Z0-9]{8,}/?$",
+            # Current shape is /post/{section}/{id} — the older opaque-slug
+            # and /detail/news/{id} rules matched nothing on the live site.
+            r"dailynayadiganta\.com/post/[a-z0-9-]+/\d+",
             r"dailynayadiganta\.com/detail/news/\d+",
-            r"dailynayadiganta\.com/[^/]+/\d+[a-z]*$",
-            r"dailynayadiganta\.com/[^/]+/[a-zA-Z0-9]{6,}$",
         ],
         "rss_url": None,
         "js_rendered": False,

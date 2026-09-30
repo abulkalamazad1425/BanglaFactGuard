@@ -27,6 +27,10 @@ _HEADERS = {
 
 _MAX_RESULTS = 15
 
+# Shorter tokens ("এই", "ও") match almost any headline and would let page
+# chrome pass the query-relevance check below.
+_MIN_TOKEN_CHARS = 3
+
 
 def _build_keyword_query(raw: str, max_words: int = 8) -> str:
 
@@ -88,7 +92,7 @@ class InternalSiteSearchClient:
 
         soup = BeautifulSoup(html, "html.parser")
         results: list[tuple[str, str]] = []
-        seen_urls: set[str] = set()
+        index_by_url: dict[str, int] = {}
 
         for a_tag in soup.find_all("a", href=True):
             href = a_tag["href"].strip()
@@ -98,9 +102,6 @@ class InternalSiteSearchClient:
             full_url = urljoin(search_url, href)
 
             if is_probable_article(full_url, patterns):
-                if full_url in seen_urls:
-                    continue
-
                 url_domain = urlparse(full_url).netloc.replace("www.", "")
                 if (
                     domain
@@ -108,8 +109,6 @@ class InternalSiteSearchClient:
                     and domain.replace("www.", "") not in url_domain
                 ):
                     continue
-
-                seen_urls.add(full_url)
 
                 link_text = a_tag.get_text(strip=True)
                 if len(link_text) < 8:
@@ -119,13 +118,28 @@ class InternalSiteSearchClient:
                         if parent is None:
                             break
                         if parent.name in ("h1", "h2", "h3", "h4", "li"):
-                            link_text = parent.get_text(strip=True)
+                            parent_text = parent.get_text(strip=True)
+                            if len(parent_text) > len(link_text):
+                                link_text = parent_text
                             break
                         parent = parent.parent
 
+                existing = index_by_url.get(full_url)
+                if existing is not None:
+                    # Result cards usually link the same article twice — once
+                    # from the thumbnail (no text) and once from the headline.
+                    # Keep whichever anchor actually carries the headline,
+                    # otherwise the title is lost for every result.
+                    if len(link_text) > len(results[existing][1]):
+                        results[existing] = (full_url, link_text)
+                    continue
+
+                index_by_url[full_url] = len(results)
                 results.append((full_url, link_text))
                 if len(results) >= _MAX_RESULTS:
                     break
+
+        results = _drop_if_query_independent(results, kw_query, domain)
 
         logger.debug(
             "internal_site_search_done",
@@ -133,3 +147,48 @@ class InternalSiteSearchClient:
             result_count=len(results),
         )
         return results
+
+
+def _query_tokens(query: str) -> set[str]:
+    """Content words from the query, long enough to be worth matching on."""
+    return {w for w in re.split(r"\s+", query) if len(w) >= _MIN_TOKEN_CHARS}
+
+
+def _drop_if_query_independent(
+    results: list[tuple[str, str]],
+    kw_query: str,
+    domain: str | None,
+) -> list[tuple[str, str]]:
+    """Discard a result set that is really just the page's own chrome.
+
+    Several Bangla outlets serve a `/search` page whose results are filled in
+    client-side (a Google CSE embed, or an XHR). A plain GET still returns a
+    full page of "latest news" links, and those links match the source's
+    `article_url_patterns` perfectly — so they were being accepted as search
+    hits. Because this client is the highest-priority provider, that quietly
+    pushed a handful of unrelated articles to the front of the evidence
+    budget and crowded out the real match from the other providers.
+
+    A genuine result set mentions the query somewhere; page chrome does not.
+    So require at least one result whose link text shares a content word with
+    the query, and keep only the results that do. If nothing matches, the
+    response carried no search results at all and is dropped entirely.
+    """
+    tokens = _query_tokens(kw_query)
+    if not tokens or not results:
+        return results
+
+    matched = [
+        (url, text) for url, text in results if tokens & _query_tokens(text or "")
+    ]
+
+    if not matched:
+        logger.warning(
+            "internal_site_search_query_independent",
+            domain=domain,
+            discarded=len(results),
+            hint="site /search appears to render results client-side",
+        )
+        return []
+
+    return matched

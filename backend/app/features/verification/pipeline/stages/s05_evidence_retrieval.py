@@ -50,13 +50,74 @@ _JS_SHELL_MARKERS = re.compile(
     re.I,
 )
 
+_BOT_WALL_MARKERS = re.compile(
+    r"(Just a moment\.\.\.|Attention Required!|cf-browser-verification|"
+    r"challenge-platform|Checking your browser|Enable JavaScript and cookies)",
+    re.I,
+)
+
+# Statuses an anti-bot layer returns for a page a browser can load fine.
+_RETRY_IN_BROWSER_STATUSES = frozenset({401, 403, 406, 429, 503})
+
+# Cloudflare's managed challenge on these outlets takes the best part of ten
+# seconds to hand over the real page; a shorter budget captures the
+# interstitial and the article is scored as if it had no content.
+_BOT_WALL_RETRIES = 5
+_BOT_WALL_WAIT_MS = 3000
+
+# Pages open in one shared browser context; a handful at a time keeps the
+# challenge wait overlapping without starving each page of CPU.
+_PLAYWRIGHT_CONCURRENCY = 4
+
+
+_SCRIPT_STYLE_RE = re.compile(
+    r"<(script|style|noscript)\b[^>]*>.*?</\1>", re.I | re.S
+)
+
+
+def _visible_text_len(html: str) -> int:
+    """Length of the text a reader would actually see.
+
+    Stripping tags alone leaves the *contents* of <script>/<style> behind,
+    which on a challenge page runs to tens of thousands of characters and
+    makes an almost text-free interstitial look like a full article.
+    """
+    without_code = _SCRIPT_STYLE_RE.sub(" ", html)
+    return len(re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", without_code)).strip())
+
 
 def _is_shell_html(html: str) -> bool:
     if not _JS_SHELL_MARKERS.search(html):
         return False
 
-    body_text_len = len(re.sub(r"<[^>]+>", "", html))
-    return body_text_len < 2000
+    return _visible_text_len(html) < 2000
+
+
+def _is_bot_wall(html: str) -> bool:
+    """Detect an anti-bot interstitial served with a 200.
+
+    Cloudflare leaves its challenge script on ordinary pages too, so the
+    marker alone is not enough — a real article would be re-fetched in a
+    browser for nothing. An interstitial also carries almost no text, so
+    require both signals.
+    """
+    if not _BOT_WALL_MARKERS.search(html):
+        return False
+    return _visible_text_len(html) < 2000
+
+
+class _OriginBlocked(Exception):
+    """The origin refused the plain HTTP client, not the URL itself.
+
+    Several outlets (bd-pratidin, kalerkantho, jugantor) sit behind Cloudflare
+    bot protection that rejects httpx on its TLS fingerprint alone — the same
+    URL loads fine in a real browser. Treated as "retry in Playwright" rather
+    than a dead URL, which is what it looked like before.
+    """
+
+    def __init__(self, status: int) -> None:
+        super().__init__(f"origin blocked request (HTTP {status})")
+        self.status = status
 
 
 class EvidenceRetrievalStage:
@@ -101,10 +162,13 @@ class EvidenceRetrievalStage:
 
         for url, result in zip(urls, tier1_results):
             if isinstance(result, str) and result:
-                if _is_shell_html(result):
+                if _is_shell_html(result) or _is_bot_wall(result):
                     shell_urls.append(url)
                 else:
                     raw_html_cache[url] = result
+            elif isinstance(result, _OriginBlocked):
+                # A browser can still load this — don't write the URL off.
+                shell_urls.append(url)
             else:
                 context.failed_extraction_urls.append(url)
 
@@ -119,12 +183,13 @@ class EvidenceRetrievalStage:
 
         context._raw_html_cache = raw_html_cache
 
+        tier2_success = sum(1 for u in shell_urls if u in raw_html_cache)
         logger.info(
             "s05_retrieval_complete",
             attempted=len(urls),
-            tier1_success=len(raw_html_cache) - len(shell_urls),
+            tier1_success=len(raw_html_cache) - tier2_success,
             tier2_needed=len(shell_urls),
-            tier2_success=sum(1 for u in shell_urls if u in raw_html_cache),
+            tier2_success=tier2_success,
             failed=len(context.failed_extraction_urls),
         )
         return context
@@ -148,6 +213,8 @@ class EvidenceRetrievalStage:
                 )
                 if 200 <= resp.status_code < 300:
                     return resp.text
+                if resp.status_code in _RETRY_IN_BROWSER_STATUSES:
+                    return _OriginBlocked(resp.status_code)
                 return Exception(f"HTTP {resp.status_code}")
             except httpx.TimeoutException as exc:
                 return exc
@@ -199,31 +266,62 @@ class EvidenceRetrievalStage:
                 extra_http_headers={"Accept-Language": "bn-BD,bn;q=0.9,en;q=0.8"},
             )
 
+            # Only audio/video is blocked. Aborting images and fonts as well
+            # looked like a free bandwidth saving, but Cloudflare's managed
+            # challenge needs those assets to complete: with them blocked the
+            # challenge never cleared and every protected article came back
+            # as the "Just a moment..." page; with them allowed it cleared in
+            # about three seconds and returned the real article.
             await context_pw.route(
-                "**/*.{png,jpg,jpeg,gif,webp,svg,ico,woff,woff2,ttf,mp4,mp3}",
+                "**/*.{mp4,mp3,webm,ogg,avi,mov,m4a}",
                 lambda route: route.abort(),
             )
 
-            for url in urls:
-                page = await context_pw.new_page()
-                try:
-                    await page.goto(
-                        url,
-                        wait_until="domcontentloaded",
-                        timeout=int(_FETCH_TIMEOUT_PLAYWRIGHT * 1000),
-                    )
+            # Every candidate from a Cloudflare-protected outlet lands here,
+            # and each one now waits out a challenge — fetching them one
+            # after another put whole verifications into the minutes. Run a
+            # few at a time instead; the per-domain courtesy delay in tier 1
+            # still applies to the HTTP path.
+            semaphore = asyncio.Semaphore(_PLAYWRIGHT_CONCURRENCY)
 
-                    await page.wait_for_timeout(1500)
-                    html = await page.content()
-                    results[url] = html if html else None
-                    logger.debug("s05_playwright_success", url=url[:80])
-                except Exception as exc:
-                    logger.warning(
-                        "s05_playwright_failed", url=url[:80], error=str(exc)[:80]
-                    )
-                    results[url] = None
-                finally:
-                    await page.close()
+            async def fetch_one(url: str) -> tuple[str, str | None]:
+                async with semaphore:
+                    page = await context_pw.new_page()
+                    try:
+                        await page.goto(
+                            url,
+                            wait_until="domcontentloaded",
+                            timeout=int(_FETCH_TIMEOUT_PLAYWRIGHT * 1000),
+                        )
+
+                        await page.wait_for_timeout(1500)
+                        html = await page.content()
+
+                        # A Cloudflare interstitial clears itself after a few
+                        # seconds; grabbing the DOM too early captures the
+                        # "Just a moment..." page instead of the article.
+                        if _is_bot_wall(html):
+                            for _ in range(_BOT_WALL_RETRIES):
+                                await page.wait_for_timeout(_BOT_WALL_WAIT_MS)
+                                html = await page.content()
+                                if not _is_bot_wall(html):
+                                    break
+                            else:
+                                logger.warning("s05_bot_wall_unresolved", url=url[:80])
+                                return url, None
+
+                        logger.debug("s05_playwright_success", url=url[:80])
+                        return url, (html if html else None)
+                    except Exception as exc:
+                        logger.warning(
+                            "s05_playwright_failed", url=url[:80], error=str(exc)[:80]
+                        )
+                        return url, None
+                    finally:
+                        await page.close()
+
+            for url, html in await asyncio.gather(*(fetch_one(u) for u in urls)):
+                results[url] = html
 
             await context_pw.close()
             await browser.close()

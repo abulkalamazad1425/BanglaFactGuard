@@ -16,6 +16,7 @@ from app.features.submissions.models import (
 from app.shared.base_repository import BaseRepository
 
 _VERIFIED_STATUSES = (SubmissionStatus.EXPERT_REVIEW, SubmissionStatus.FINALIZED)
+_IN_FLIGHT_STATUSES = (SubmissionStatus.PENDING, SubmissionStatus.PROCESSING)
 
 
 class SubmissionRepository(BaseRepository[Submission]):
@@ -43,6 +44,24 @@ class SubmissionRepository(BaseRepository[Submission]):
                     Submission.status.in_(_VERIFIED_STATUSES),
                 )
             )
+            .limit(1)
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def get_in_flight_by_content_hash(
+        self, content_hash: str
+    ) -> Submission | None:
+        """A submission for this claim that is queued or still running."""
+        stmt = (
+            select(Submission)
+            .where(
+                and_(
+                    Submission.content_hash == content_hash,
+                    Submission.status.in_(_IN_FLIGHT_STATUSES),
+                )
+            )
+            .order_by(Submission.created_at.desc())
             .limit(1)
         )
         result = await self.session.execute(stmt)

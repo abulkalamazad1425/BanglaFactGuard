@@ -20,9 +20,15 @@ export const API_ENDPOINTS = {
 
   // Verification
   VERIFICATION: '/verify',
+  VERIFICATION_ASYNC: '/verify/async',
 
   // Multimodal
   MULTIMODAL_PREDICT: '/multimodal/predict',
+
+  // Photo Card
+  PHOTOCARD: '/photocard',
+  PHOTOCARD_EXTRACT: '/photocard/extract',
+  PHOTOCARD_VERIFY: '/photocard/verify',
 
   // Expert
   EXPERT_QUEUE: '/expert/queue',

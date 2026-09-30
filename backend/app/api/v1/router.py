@@ -10,6 +10,7 @@ from app.features.feedback.router import router as feedback_router
 from app.features.health.router import router as health_router
 from app.features.multimodal.router import router as multimodal_router
 from app.features.notifications.router import router as notifications_router
+from app.features.photocard.router import router as photocard_router
 from app.features.sources.router import router as sources_router
 from app.features.users.router import router as users_router
 from app.features.verification.router import router as verification_router
@@ -24,6 +25,7 @@ api_router.include_router(feedback_router)
 api_router.include_router(health_router)
 api_router.include_router(multimodal_router)
 api_router.include_router(notifications_router)
+api_router.include_router(photocard_router)
 api_router.include_router(sources_router)
 api_router.include_router(users_router)
 api_router.include_router(verification_router)

@@ -212,6 +212,98 @@ class MultimodalSettings(BaseSettings):
     )
 
 
+class OcrSettings(BaseSettings):
+    """Photo-card OCR configuration.
+
+    Two engines are supported. Neither is imported at module load — the
+    service probes them lazily so the app still boots when only one (or
+    neither) is installed:
+
+      * ``tesseract``  — pytesseract + the ``ben`` traineddata. Best accuracy
+        on printed Bangla photo cards, but needs the Tesseract binary.
+      * ``easyocr``    — pure-pip, reuses the torch install already required
+        by the ML stack. Slower and needs a one-off model download.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="OCR_")
+
+    engine: Literal["auto", "tesseract", "easyocr"] = Field(
+        default="auto",
+        description="'auto' prefers Tesseract and falls back to EasyOCR",
+    )
+
+    tesseract_cmd: str = Field(
+        default="",
+        description=(
+            "Absolute path to the tesseract binary. Leave empty when it is on "
+            r"PATH. Typical Windows value: C:\Program Files\Tesseract-OCR\tesseract.exe"
+        ),
+    )
+    tesseract_lang: str = Field(
+        default="ben",
+        description="Tesseract language code(s). 'ben' = Bangla traineddata.",
+    )
+    tesseract_psm_modes: list[int] = Field(
+        default=[6, 4, 3],
+        description=(
+            "Page segmentation modes to try. 6 = uniform block (typical photo "
+            "card), 4 = variable-size columns, 3 = fully automatic."
+        ),
+    )
+
+    easyocr_languages: list[str] = Field(
+        default=["bn"],
+        description="EasyOCR language list. 'bn' is the Bangla recogniser.",
+    )
+    easyocr_use_gpu: bool = Field(default=False)
+
+    thread_workers: int = Field(
+        default=2, description="Thread pool workers for blocking OCR calls"
+    )
+    load_on_startup: bool = Field(
+        default=False,
+        description=(
+            "Initialise the OCR engine during app startup. EasyOCR downloads "
+            "~100 MB of weights on first load, so this is off by default and "
+            "the engine is initialised on the first request instead."
+        ),
+    )
+
+    max_image_bytes: int = Field(default=10 * 1024 * 1024)
+    upscale_min_width: int = Field(
+        default=1600,
+        description="Small photo cards are upscaled to at least this width before OCR",
+    )
+    max_dimension: int = Field(
+        default=4000, description="Images larger than this are downscaled before OCR"
+    )
+
+    min_line_bangla_ratio: float = Field(
+        default=0.45,
+        description=(
+            "A recognised line is dropped as non-Bangla noise when fewer than "
+            "this fraction of its letters are Bangla. Keeps English watermarks, "
+            "handles and URLs out of the claim."
+        ),
+    )
+    min_line_confidence: float = Field(
+        default=0.30,
+        description="Lines recognised below this confidence are dropped as OCR noise",
+    )
+    source_match_threshold: float = Field(
+        default=0.82,
+        description=(
+            "Minimum fuzzy similarity for an OCR fragment to be accepted as a "
+            "verified-source mention. OCR routinely garbles one or two Bangla "
+            "glyphs, so exact matching alone misses real banners."
+        ),
+    )
+    source_autoselect_threshold: float = Field(
+        default=0.90,
+        description="Detected source is pre-selected for the user above this confidence",
+    )
+
+
 class MinioSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="MINIO_")
@@ -459,6 +551,7 @@ class AppSettings(BaseSettings):
         default_factory=ClassificationThresholds
     )
     multimodal: MultimodalSettings = Field(default_factory=MultimodalSettings)
+    ocr: OcrSettings = Field(default_factory=OcrSettings)
     minio: MinioSettings = Field(default_factory=MinioSettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)
     email: EmailSettings = Field(default_factory=EmailSettings)

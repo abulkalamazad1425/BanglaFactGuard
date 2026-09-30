@@ -3,7 +3,14 @@ from __future__ import annotations
 import asyncio
 import re
 from datetime import date, timedelta
-from urllib.parse import unquote, urlparse, parse_qs
+from urllib.parse import (
+    parse_qs,
+    parse_qsl,
+    unquote,
+    urlencode,
+    urlparse,
+    urlunparse,
+)
 
 import structlog
 from pygooglenews import GoogleNews
@@ -12,6 +19,29 @@ from app.core.config import get_settings
 from app.core.exceptions import PyGoogleNewsError
 
 logger = structlog.get_logger(__name__)
+
+_SITE_OPERATOR_RE = re.compile(r"\bsite:", re.IGNORECASE)
+
+# Google News indexes a story under its own crawl date, which routinely sits
+# a few days off the date printed on the article — and for older stories the
+# feed is sparse enough that a tight window returns almost nothing. A +/-7 day
+# window cut a 10-result query down to a single hit in testing, so keep the
+# window wide enough to survive that skew.
+_DATE_WINDOW = timedelta(days=45)
+
+# How long to wait for the Google News interstitial to hop to the publisher.
+_REDIRECT_WAIT_MS = 8000
+
+# Date-bounded Google News queries only behave on reasonably fresh stories.
+# Past this age the feed answers a bounded query with a near-empty set even
+# when the unbounded one returns the article — a claim dated Feb 2025 went
+# from ten results to one, losing the article being verified. Older claims
+# are better served by an unbounded query, with the date used for ranking.
+_DATE_FILTER_MAX_AGE = timedelta(days=180)
+
+
+def _date_filter_is_useful(published_date: date) -> bool:
+    return (date.today() - published_date) <= _DATE_FILTER_MAX_AGE
 
 
 def _unwrap_google_url(url: str) -> str:
@@ -22,6 +52,27 @@ def _unwrap_google_url(url: str) -> str:
         if "url" in qs:
             return unquote(qs["url"][0])
     return url
+
+
+def _strip_challenge_params(url: str) -> str:
+    """Drop the one-shot token Cloudflare appends after clearing a challenge.
+
+    Landing on a protected article through a browser leaves the URL as
+    ...?__cf_chl_rt_tk=<token>. Kept as-is it becomes a second, unusable
+    copy of an article already in the candidate set, and is what the user
+    would be shown as the source link.
+    """
+    parsed = urlparse(url)
+    if not parsed.query:
+        return url
+    kept = [
+        (k, v)
+        for k, v in parse_qsl(parsed.query, keep_blank_values=True)
+        if not k.lower().startswith("__cf_")
+    ]
+    if len(kept) == len(parse_qsl(parsed.query, keep_blank_values=True)):
+        return url
+    return urlunparse(parsed._replace(query=urlencode(kept)))
 
 
 class PyGoogleNewsClient:
@@ -36,12 +87,18 @@ class PyGoogleNewsClient:
         domain: str | None,
         published_date: date | None,
     ) -> list[tuple[str, str]]:
-        search_q = f"site:{domain} {query}" if domain else query
+        # S04 already site-restricts the query before handing it over. Adding
+        # the operator again produced "site:x site:x ...", which Google News
+        # scores worse than the single-operator form.
+        if domain and not _SITE_OPERATOR_RE.search(query):
+            search_q = f"site:{domain} {query}"
+        else:
+            search_q = query
 
         kwargs: dict[str, str] = {}
-        if published_date:
-            after = (published_date - timedelta(days=7)).strftime("%Y-%m-%d")
-            before = (published_date + timedelta(days=7)).strftime("%Y-%m-%d")
+        if published_date and _date_filter_is_useful(published_date):
+            after = (published_date - _DATE_WINDOW).strftime("%Y-%m-%d")
+            before = (published_date + _DATE_WINDOW).strftime("%Y-%m-%d")
             kwargs["from_"] = after
             kwargs["to_"] = before
 
@@ -143,8 +200,24 @@ class PyGoogleNewsClient:
                             await page.goto(
                                 url, wait_until="domcontentloaded", timeout=20000
                             )
-                            await page.wait_for_timeout(2500)
-                            final_url = page.url
+                            # Google News hands back an interstitial that
+                            # redirects to the publisher from JS. A fixed
+                            # pause races that redirect — when it loses, the
+                            # unresolved news.google.com URL flows on to S04,
+                            # where the domain filter silently drops it and
+                            # the real article is lost. Wait for the hop.
+                            try:
+                                await page.wait_for_url(
+                                    lambda u: "news.google.com" not in u,
+                                    timeout=_REDIRECT_WAIT_MS,
+                                )
+                            except Exception:
+                                await page.wait_for_timeout(2500)
+                            final_url = _strip_challenge_params(page.url)
+                            if "news.google.com" in final_url:
+                                logger.warning(
+                                    "pgn_resolve_incomplete", url=url[:60]
+                                )
                             logger.debug(
                                 "pgn_resolved_url", orig=url[:60], final=final_url[:60]
                             )

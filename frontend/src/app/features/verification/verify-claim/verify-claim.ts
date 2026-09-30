@@ -1,10 +1,11 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { ToastService } from '../../../shared/services/toast.service';
 import { VerificationService } from '../../../services/verification.service';
-import { VerificationResponse } from '../../../models/verification.model';
+import { PendingVerificationsService } from '../../../services/pending-verifications.service';
+import { SubmissionStatus, VerificationResponse } from '../../../models/verification.model';
 import { SourceService } from '../../../services/source.service';
 import { SourceResponse } from '../../../models/source.model';
 
@@ -12,23 +13,33 @@ import { SourceResponse } from '../../../models/source.model';
 @Component({
   selector: 'app-verify-claim',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, ReactiveFormsModule, RouterLink],
   templateUrl: './verify-claim.html',
   styleUrls: ['./verify-claim.scss'],
 })
-export class VerifyClaimComponent implements OnInit {
+export class VerifyClaimComponent implements OnInit, OnDestroy {
   private readonly fb = inject(FormBuilder);
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
   private readonly svc = inject(VerificationService);
   private readonly sourceSvc = inject(SourceService);
+  readonly pending = inject(PendingVerificationsService);
 
   loading = false;
   error: string | null = null;
   result: VerificationResponse | null = null;
 
+  /** Set when this particular result was reused rather than freshly computed. */
+  servedFromCache = false;
+  /** Id of the claim currently being verified, while we wait on it. */
+  pendingSubmissionId: string | null = null;
+  pendingStatus: SubmissionStatus | null = null;
+  pendingHeadline = '';
+
   sources: SourceResponse[] = [];
   sourcesLoading = true;
+
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
 
   form = this.fb.group({
     headline: ['', [Validators.required, Validators.minLength(10)]],
@@ -66,6 +77,7 @@ export class VerifyClaimComponent implements OnInit {
     this.loading = true;
     this.error = null;
     this.result = null;
+    this.servedFromCache = false;
 
     const v = this.form.value;
     const payload: any = {
@@ -76,16 +88,33 @@ export class VerifyClaimComponent implements OnInit {
     if (v.body_text?.trim()) payload.body_text = v.body_text;
     if (v.published_date) payload.published_date = v.published_date;
 
-    this.svc.submit(payload).subscribe({
-      next: (res) => {
+    this.pendingHeadline = v.headline ?? '';
+
+    this.svc.submitAsync(payload).subscribe({
+      next: (queued) => {
         this.loading = false;
-        this.svc.getResult(res.submission_id).subscribe({
-          next: (result) => { this.result = result; },
-          error: () => { this.toast.error('Failed to load result.'); },
-        });
+        this.pendingSubmissionId = queued.submission_id;
+        this.pendingStatus = queued.status;
+
+        if (queued.cached) {
+          // Already verified before — the stored verdict is available now.
+          this.servedFromCache = true;
+          this.loadResult(queued.submission_id);
+          return;
+        }
+
+        // Registered and running on the server. Follow it here for anyone who
+        // stays, and hand it to the tracker so leaving the page is safe.
+        this.pending.track(
+          queued.submission_id,
+          this.pendingHeadline,
+          v.claimed_source_text ?? '',
+        );
+        this.startPolling(queued.submission_id);
       },
       error: (err) => {
         this.loading = false;
+        this.pendingSubmissionId = null;
         this.error = err.error?.detail?.message
           || err.error?.message
           || 'Failed to connect to backend engine. Ensure the API server is running on port 8000.';
@@ -94,9 +123,63 @@ export class VerifyClaimComponent implements OnInit {
     });
   }
 
+  /** Watch a queued verification while the user is still on this page. */
+  private startPolling(submissionId: string): void {
+    this.stopPolling();
+    this.pollTimer = setInterval(() => {
+      this.svc.getStatus(submissionId).subscribe({
+        next: (res) => {
+          this.pendingStatus = res.status;
+          if (res.status === 'EXPERT_REVIEW' || res.status === 'FINALIZED') {
+            this.stopPolling();
+            if (res.result) {
+              this.result = res.result;
+              this.pendingSubmissionId = null;
+            } else {
+              this.loadResult(submissionId);
+            }
+            this.pending.dismiss(submissionId);
+          } else if (res.status === 'FAILED') {
+            this.stopPolling();
+            this.pendingSubmissionId = null;
+            this.error = 'Verification could not be completed for this claim.';
+            this.pending.dismiss(submissionId);
+          }
+        },
+        // Transient poll failures resolve themselves on the next tick.
+        error: () => undefined,
+      });
+    }, 4000);
+  }
+
+  private stopPolling(): void {
+    if (this.pollTimer === null) return;
+    clearInterval(this.pollTimer);
+    this.pollTimer = null;
+  }
+
+  private loadResult(submissionId: string): void {
+    this.svc.getResult(submissionId).subscribe({
+      next: (result) => {
+        this.result = result;
+        this.pendingSubmissionId = null;
+      },
+      error: () => { this.toast.error('Failed to load result.'); },
+    });
+  }
+
+  ngOnDestroy(): void {
+    // The tracker keeps following it app-wide; this page just stops its own.
+    this.stopPolling();
+  }
+
   reset(): void {
     this.error = null;
     this.result = null;
+    this.servedFromCache = false;
+    this.pendingSubmissionId = null;
+    this.pendingStatus = null;
+    this.stopPolling();
   }
 
   /* ─── Template helpers ─── */

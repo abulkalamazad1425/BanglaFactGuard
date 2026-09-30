@@ -10,6 +10,7 @@ from app.features.search.google_cse_client import GoogleCSEClient
 from app.features.search.pygooglenews_client import PyGoogleNewsClient
 from app.features.search.duckduckgo_client import DuckDuckGoClient
 from app.features.search.internal_site_client import InternalSiteSearchClient
+from app.core.constants import SubmissionStatus
 from app.core.exceptions import PipelineError
 from app.features.verification.pipeline.context import PipelineContext, build_context
 from app.features.verification.pipeline.orchestrator import PipelineOrchestrator
@@ -84,7 +85,11 @@ class VerificationService:
         self.http_client = http_client
 
     async def verify(
-        self, request: VerificationRequest, *, submitter_id: uuid.UUID | None = None
+        self,
+        request: VerificationRequest,
+        *,
+        submitter_id: uuid.UUID | None = None,
+        submission_id: uuid.UUID | None = None,
     ) -> VerificationResponse:
         log = logger.bind(claimed_source_text=request.claimed_source_text)
 
@@ -95,6 +100,7 @@ class VerificationService:
             published_date=request.published_date,
             force_refresh=request.force_refresh,
             submitter_id=submitter_id,
+            submission_id=submission_id,
         )
 
         log.info(
@@ -113,6 +119,85 @@ class VerificationService:
         context = await orchestrator.run(context)
 
         return self._build_response(context)
+
+    async def register_claim(
+        self,
+        request: VerificationRequest,
+        *,
+        submitter_id: uuid.UUID | None = None,
+    ) -> tuple[uuid.UUID, SubmissionStatus, bool]:
+        """Accept a claim for verification without running the pipeline.
+
+        Returns ``(submission_id, status, served_from_cache)``. When the same
+        claim has already been verified the existing submission is handed back
+        as-is, so the caller can show the stored result straight away rather
+        than queueing identical work.
+        """
+        from app.core.constants import SubmissionStatus, SubmissionType
+        from app.features.submissions.models import Submission
+        from app.shared.utils.bangla_normalizer import (
+            extract_canonical_domain,
+            normalize_bangla_text,
+            normalize_source_name,
+        )
+        from app.shared.utils.hashing import compute_claim_hash
+
+        normalised_headline = normalize_bangla_text(request.headline)
+        canonical = extract_canonical_domain(
+            request.claimed_source_text
+        ) or normalize_source_name(request.claimed_source_text)
+        content_hash = compute_claim_hash(
+            normalised_headline, canonical or request.claimed_source_text
+        )
+
+        if not request.force_refresh:
+            existing = await self.submission_repo.get_verified_by_content_hash(
+                content_hash
+            )
+            if existing is not None:
+                result = await self.result_repo.get_by_submission_id(existing.id)
+                if result is not None and result.final_label is not None:
+                    logger.info(
+                        "claim_served_from_existing_verification",
+                        submission_id=str(existing.id),
+                    )
+                    return existing.id, existing.status, True
+
+            in_flight = await self.submission_repo.get_in_flight_by_content_hash(
+                content_hash
+            )
+            if in_flight is not None:
+                # Someone (often the same person, double-clicking) already has
+                # this exact claim running. Hand back that job rather than
+                # paying for the pipeline twice.
+                logger.info(
+                    "claim_already_in_flight", submission_id=str(in_flight.id)
+                )
+                return in_flight.id, in_flight.status, False
+
+        submission = await self.submission_repo.create(
+            Submission(
+                submission_type=SubmissionType.SOURCE_BASED,
+                headline=request.headline[:2000],
+                body_text=request.body_text or None,
+                claimed_source_text=request.claimed_source_text[:255],
+                published_date=request.published_date,
+                submitter_id=submitter_id,
+                content_hash=content_hash,
+                status=SubmissionStatus.PENDING,
+            )
+        )
+        # Commit here rather than leaving it to request teardown: the
+        # background job opens its own session and looks this row up by id,
+        # and the caller starts polling the moment the response lands. Both
+        # race an uncommitted row — the job would then create a duplicate
+        # submission and the poll would 404 on an id it had just been given.
+        await self.submission_repo.session.commit()
+
+        logger.info(
+            "claim_queued_for_verification", submission_id=str(submission.id)
+        )
+        return submission.id, SubmissionStatus.PENDING, False
 
     async def get_result(self, submission_id: uuid.UUID) -> VerificationResponse | None:
         result = await self.result_repo.get_by_submission_id(submission_id)
@@ -207,7 +292,11 @@ class VerificationService:
             scores=scores,
             manipulation_flags=flags,
             normalized_source=submission.claimed_source_text,
-            cached=True,
+            # Reuse is a property of the submission, not of reading it back.
+            # This endpoint is how a caller collects their own result once the
+            # pipeline has finished, so flagging it as cached put a
+            # "previously verified" notice on every first-time verification.
+            cached=False,
             processing_time_ms=None,
             created_at=result.created_at,
         )

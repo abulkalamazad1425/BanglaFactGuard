@@ -95,7 +95,7 @@ class EvidenceRankerStage:
 
         if len(ranked) > 3:
             logger.info("s07_reranking_articles", count=len(ranked))
-            ranked = self._reranker.rerank(
+            ranked = await self._reranker.rerank(
                 claim_headline, ranked, top_k=self._max_ranked
             )
 

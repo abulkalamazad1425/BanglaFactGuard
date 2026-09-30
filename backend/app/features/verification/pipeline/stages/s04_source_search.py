@@ -57,7 +57,11 @@ def _canonicalise_url(url: str) -> str:
             qs = {
                 k: v
                 for k, v in parse_qs(p.query, keep_blank_values=False).items()
+                # __cf_* is Cloudflare's post-challenge token: the same article
+                # reached through a challenge would otherwise canonicalise to a
+                # different URL and survive dedup as a duplicate candidate.
                 if k.lower() not in _STRIP_PARAMS
+                and not k.lower().startswith("__cf_")
             }
             query = urlencode(sorted(qs.items()), doseq=True)
         else:
@@ -240,7 +244,14 @@ class SourceSearchStage:
                 return False
 
         if provider == SearchProvider.PY_GOOGLE_NEWS:
-            if qt in ("KEYWORDS", "DATE_BOUND"):
+            # KEYWORDS used to be withheld here on the assumption that the
+            # web-index providers would cover it. In practice this is often
+            # the only provider answering, and a keyword query is what finds
+            # a story whose headline was reworded after publication — an
+            # exact-headline query returns nothing for those, while the
+            # keyword form found the article. Date strings inside the query
+            # text remain unhelpful; the date is applied as a range instead.
+            if qt == "DATE_BOUND":
                 return False
 
         return True

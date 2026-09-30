@@ -1,4 +1,7 @@
+import asyncio
+import threading
 from typing import List
+
 import structlog
 from sentence_transformers import CrossEncoder
 
@@ -11,21 +14,45 @@ class CrossEncoderReranker:
 
     MODEL_NAME = "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
 
-    def __init__(self) -> None:
-        try:
-            self.model = CrossEncoder(self.MODEL_NAME)
-            logger.info("cross_encoder_loaded", model=self.MODEL_NAME)
-        except Exception as exc:
-            logger.error("cross_encoder_load_failed", error=str(exc))
-            self.model = None
+    # The ranker stage is rebuilt for every verification, and loading a
+    # transformer each time cost seconds of wall clock on the API's event
+    # loop. The weights are read-only, so share one instance process-wide.
+    _model: CrossEncoder | None = None
+    _load_lock = threading.Lock()
+    _load_failed = False
 
-    def rerank(
+    @classmethod
+    def _get_model(cls) -> CrossEncoder | None:
+        if cls._model is not None or cls._load_failed:
+            return cls._model
+        with cls._load_lock:
+            if cls._model is None and not cls._load_failed:
+                try:
+                    cls._model = CrossEncoder(cls.MODEL_NAME)
+                    logger.info("cross_encoder_loaded", model=cls.MODEL_NAME)
+                except Exception as exc:
+                    cls._load_failed = True
+                    logger.error("cross_encoder_load_failed", error=str(exc))
+        return cls._model
+
+    @property
+    def model(self) -> CrossEncoder | None:
+        return self._get_model()
+
+    async def rerank(
         self, claim_headline: str, articles: List[RankedArticleSchema], top_k: int = 3
     ) -> List[RankedArticleSchema]:
-        if not self.model or not articles:
+        """Re-order candidates with a cross-encoder.
+
+        Awaitable because the forward pass is CPU-bound: run inline it froze
+        the whole API for the duration, so a queued verification could delay
+        unrelated requests by seconds. It runs on a worker thread instead.
+        """
+        if not articles or len(articles) <= 3:
             return articles
 
-        if len(articles) <= 3:
+        model = self._get_model()
+        if model is None:
             return articles
 
         pairs = []
@@ -36,7 +63,7 @@ class CrossEncoderReranker:
             pairs.append((claim_headline, article_text))
 
         try:
-            scores = self.model.predict(pairs)
+            scores = await asyncio.to_thread(model.predict, pairs)
 
             scored_articles = list(zip(scores, articles))
             scored_articles.sort(key=lambda x: x[0], reverse=True)

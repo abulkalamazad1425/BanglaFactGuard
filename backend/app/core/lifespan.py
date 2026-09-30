@@ -16,6 +16,8 @@ from app.features.multimodal.storage_service import MultimodalStorageService
 from app.features.nlp.embedding_service import EmbeddingService
 from app.features.nlp.ner_service import NERService
 from app.features.nlp.nli_service import NLIService
+from app.features.photocard.ocr_service import BanglaOcrService
+from app.features.photocard.storage_service import PhotoCardStorageService
 
 _SETTINGS = get_settings()
 
@@ -97,6 +99,34 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         log.warning("minio_bucket_ensure_failed", error=str(exc))
 
     app.state.multimodal_storage = multimodal_storage
+
+    photocard_ocr = BanglaOcrService()
+    if _SETTINGS.ocr.load_on_startup:
+        try:
+            await photocard_ocr.load()
+        except Exception as exc:
+            log.error(
+                "photocard_ocr_load_failed",
+                error=str(exc),
+                hint=(
+                    "Install Tesseract with the 'ben' traineddata (and set "
+                    "OCR_TESSERACT_CMD if it is not on PATH), or `pip install "
+                    "easyocr`. Photo-card endpoints stay unavailable until one "
+                    "engine loads; every other feature is unaffected."
+                ),
+            )
+    else:
+        # The engine loads on first use instead — EasyOCR downloads ~100 MB of
+        # weights the first time, which should not block application startup.
+        log.info("photocard_ocr_lazy_load")
+    app.state.photocard_ocr = photocard_ocr
+
+    photocard_storage = PhotoCardStorageService()
+    try:
+        await photocard_storage.ensure_bucket()
+    except Exception as exc:
+        log.warning("photocard_bucket_ensure_failed", error=str(exc))
+    app.state.photocard_storage = photocard_storage
 
     log.info("bangla_fact_guard_ready")
 

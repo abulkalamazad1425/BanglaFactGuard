@@ -336,6 +336,46 @@ select.form-control {
   line-height: 1.5;
 }
 
+/* ── Queued verification (user is free to navigate away) ───────────── */
+.queued-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: 420px;
+  margin: 18px auto 0;
+  padding: 12px 14px;
+  background: var(--info-bg);
+  border: 1px solid var(--info);
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  text-align: left;
+
+  strong { color: var(--text-primary); }
+}
+
+.queued-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.queued-meta {
+  margin-top: 14px;
+  font-size: 12px;
+  color: var(--text-muted, var(--text-secondary));
+
+  code {
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: var(--bg-muted, rgba(127, 127, 127, 0.12));
+    font-size: 11px;
+  }
+}
+
 /* ─── Confidence Meter ─── */
 .confidence-meter {
   position: relative;

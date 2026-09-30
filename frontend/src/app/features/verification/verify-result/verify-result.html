@@ -251,7 +251,32 @@
           </div>
         }
 
-        @if (!loading() && !result()) {
+        @if (!loading() && !result() && stillRunning()) {
+          <div class="not-found card text-center">
+            <div class="spinner" style="margin: 0 auto 20px;"></div>
+            <h2>Verification in progress</h2>
+            <p>
+              This claim is still being checked against its source. The page
+              updates by itself as soon as the verdict is ready — you can also
+              come back to this link later.
+            </p>
+            <p style="margin-top:10px; font-size:12px; opacity:.75;">
+              Status: <strong>{{ status() }}</strong>
+            </p>
+            <a routerLink="/dashboard" class="btn btn-secondary mt-4">Browse Fact Explorer</a>
+          </div>
+        }
+
+        @if (!loading() && !result() && status() === 'FAILED') {
+          <div class="not-found card text-center">
+            <div style="font-size:64px; margin-bottom:20px;">⚠️</div>
+            <h2>Verification failed</h2>
+            <p>Something went wrong while checking this claim. Please try submitting it again.</p>
+            <a routerLink="/verify" class="btn btn-primary mt-4">Submit New Claim</a>
+          </div>
+        }
+
+        @if (!loading() && !result() && !stillRunning() && status() !== 'FAILED') {
           <div class="not-found card text-center">
             <div style="font-size:64px; margin-bottom:20px;">🔎</div>
             <h2>Result not found</h2>

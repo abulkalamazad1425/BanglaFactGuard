@@ -5,6 +5,8 @@ import { API_ENDPOINTS } from '../core/constants/api-endpoints.constant';
 import {
   VerificationRequest,
   VerificationResponse,
+  VerificationQueued,
+  VerificationStatus,
   SubmissionSummary,
   SubmissionStats,
 } from '../models/verification.model';
@@ -19,6 +21,22 @@ export class VerificationService {
   /** POST /api/v1/verify — submit a verification request */
   submit(request: VerificationRequest): Observable<{ submission_id: string }> {
     return this.api.post<{ submission_id: string }>(API_ENDPOINTS.VERIFICATION, request);
+  }
+
+  /**
+   * POST /api/v1/verify/async — queue the claim and return straight away.
+   * The pipeline takes up to a minute, so the caller polls `getStatus` (or
+   * simply leaves the page and picks the result up from their history).
+   */
+  submitAsync(request: VerificationRequest): Observable<VerificationQueued> {
+    return this.api.post<VerificationQueued>(API_ENDPOINTS.VERIFICATION_ASYNC, request);
+  }
+
+  /** GET /api/v1/verify/{submission_id}/status — poll a queued verification */
+  getStatus(submissionId: string): Observable<VerificationStatus> {
+    return this.api.get<VerificationStatus>(
+      `${API_ENDPOINTS.VERIFICATION}/${submissionId}/status`,
+    );
   }
 
   /** GET /api/v1/verify/{submission_id} — fetch the full result */

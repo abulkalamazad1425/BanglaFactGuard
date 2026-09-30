@@ -69,10 +69,14 @@
             </label>
           </div>
 
-          <button type="submit" class="btn btn-primary btn-full btn-lg" [disabled]="loading">
+          <button type="submit" class="btn btn-primary btn-full btn-lg"
+                  [disabled]="loading || !!pendingSubmissionId">
             @if (loading) {
               <span class="btn-spinner"></span>
-              Verifying... (up to 60s)
+              Submitting...
+            } @else if (pendingSubmissionId) {
+              <span class="btn-spinner"></span>
+              Verification running...
             } @else {
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polyline points="20 6 9 17 4 12"/>
@@ -87,7 +91,7 @@
       <div class="card result-panel">
 
         <!-- Empty State -->
-        @if (!loading && !result && !error) {
+        @if (!loading && !pendingSubmissionId && !result && !error) {
           <div class="empty-state">
             <div class="empty-icon">📋</div>
             <h3>No Verification Yet</h3>
@@ -95,12 +99,44 @@
           </div>
         }
 
-        <!-- Loading State -->
+        <!-- Submitting -->
         @if (loading) {
           <div class="empty-state loading-state">
             <div class="spinner-lg"></div>
-            <h3>Verifying News Claim</h3>
-            <p>Executing 12-stage pipeline: normalizing inputs, searching target source, extracting body text, running semantic similarity and NLI contradiction analysis...</p>
+            <h3>Submitting Claim</h3>
+            <p>Registering your claim for verification…</p>
+          </div>
+        }
+
+        <!-- Queued: running on the server, the user is free to leave -->
+        @if (!loading && pendingSubmissionId && !result) {
+          <div class="empty-state loading-state">
+            <div class="spinner-lg"></div>
+            <h3>Verification in Progress</h3>
+            <p>
+              Running the 12-stage pipeline against
+              <strong>{{ form.value.claimed_source_text }}</strong>. This usually takes
+              under a minute.
+            </p>
+            <div class="queued-notice">
+              <span>✅</span>
+              <div>
+                <strong>You don't have to wait here.</strong>
+                This claim is being verified on the server — you can browse elsewhere
+                and the verdict will be waiting for you. We'll notify you when it's ready.
+              </div>
+            </div>
+            <div class="queued-actions">
+              <a class="btn btn-secondary" [routerLink]="['/verify', pendingSubmissionId]">
+                Open result page
+              </a>
+              <a class="btn btn-secondary" routerLink="/history">My submissions</a>
+              <a class="btn btn-secondary" routerLink="/dashboard">Fact Explorer</a>
+            </div>
+            <p class="queued-meta">
+              Status: <strong>{{ pendingStatus || 'PENDING' }}</strong>
+              · Reference: <code>{{ pendingSubmissionId.slice(0, 8) }}</code>
+            </p>
           </div>
         }
 
@@ -127,14 +163,14 @@
                 </div>
                 <div class="source-info">
                   Source: <strong>{{ result.normalized_source || '' }}</strong>
-                  @if (result.cached) {
+                  @if (servedFromCache) {
                     <span class="cache-tag">⚡ Previously Verified</span>
                   }
                 </div>
-                @if (result.cached) {
+                @if (servedFromCache) {
                   <div class="reused-notice">
                     <span>ℹ️</span>
-                    This exact claim was already verified{{ result.created_at ? ' on ' + (result.created_at | date:'MMM d, y, HH:mm') : '' }} — showing that result instead of re-running the pipeline.
+                    This exact claim had already been verified — showing that result instead of re-running the pipeline.
                   </div>
                 }
               </div>

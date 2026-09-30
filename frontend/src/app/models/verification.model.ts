@@ -48,6 +48,25 @@ export interface MatchedArticle {
   rank_score?: number | null;
 }
 
+// ── Acknowledgement from POST /verify/async ─────────────────────────
+export interface VerificationQueued {
+  submission_id: string;
+  status: SubmissionStatus;
+  /** True when this exact claim was already verified and the stored
+   *  result is being reused instead of re-running the pipeline. */
+  cached: boolean;
+}
+
+// ── Response from GET /verify/{id}/status ───────────────────────────
+export interface VerificationStatus {
+  submission_id: string;
+  status: SubmissionStatus;
+  result?: VerificationResponse | null;
+  error?: string | null;
+  queued_at: string;
+  updated_at: string;
+}
+
 // ── Full response from POST /verify or GET /verify/{id} ─────────────
 export interface VerificationResponse {
   submission_id: string;

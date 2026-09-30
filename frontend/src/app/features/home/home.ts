@@ -22,6 +22,7 @@ export class HomeComponent implements OnInit {
   readonly features = [
     { icon: '🔎', title: 'Source-Based Verification', desc: 'Submit a headline, body text and a claimed news source. A 12-stage pipeline searches that outlet, retrieves the matching article, and checks it with LaBSE semantic similarity and DeBERTa contradiction detection.' },
     { icon: '🧠', title: 'Multimodal Verification', desc: 'Submit body text with an image. A BanglaBERT + EfficientNet-B4 fusion model analyzes text and image together to flag content as Fake or Non-Fake.' },
+    { icon: '🖼️', title: 'Photo Card Verification', desc: 'Upload a Bangla photo card or screenshot. OCR reads the Bangla text, card chrome and branding are stripped away, the claimed outlet is detected automatically — then you confirm the claim before it is checked against that source.' },
     { icon: '⚖️', title: 'Expert Credibility Voting', desc: 'Registered experts review flagged claims — with full access to the AI prediction and evidence — and cast credibility-weighted votes toward a final verdict.' },
     { icon: '📊', title: 'Fact Explorer', desc: 'A public, searchable archive of every verified claim, filterable by keyword, verdict, verification type, source and publication date.' },
     { icon: '🗂️', title: 'Verified Source Registry', desc: 'Administrators curate the list of trusted Bangla news outlets — only active, verified sources are ever eligible for source-based checks.' },
