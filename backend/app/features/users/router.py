@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.constants import SubmissionStatus, VerificationLabel
+from app.core.constants import ContentStatus, SourceStatus, SubmissionStatus
 from app.features.auth.models import User
 from app.features.auth.security import get_current_user
 from app.features.submissions.models import Submission
@@ -23,16 +23,18 @@ class SubmissionSummary(BaseModel):
     headline: str | None
     claimed_source_text: str | None
     status: str
-    ai_label: str | None
+    source_status: SourceStatus | None
+    content_status: ContentStatus | None
     ai_confidence: float | None
     submitted_at: datetime
 
 
 class SubmissionStatsResponse(BaseModel):
     total: int
-    finalized_true: int
-    finalized_false: int
-    finalized_partially_true: int
+    source_confirmed: int
+    source_not_found: int
+    content_matched: int
+    content_altered: int
     pending: int
 
 
@@ -87,7 +89,8 @@ async def get_my_submissions(
                 headline=submission.headline,
                 claimed_source_text=submission.claimed_source_text,
                 status=submission.status.value,
-                ai_label=result.final_label.value if result and result.final_label else None,
+                source_status=result.source_status if result else None,
+                content_status=result.content_status if result else None,
                 ai_confidence=result.confidence if result else None,
                 submitted_at=submission.created_at,
             )
@@ -121,26 +124,47 @@ async def get_my_submission_stats(
         )
     ).scalar_one()
 
-    def _lc(lbl):
+    def _sc(status: SourceStatus):
         return (
             select(func.count())
             .select_from(VerificationResultV2)
             .join(Submission, VerificationResultV2.submission_id == Submission.id)
             .where(
                 Submission.submitter_id == current_user.id,
-                VerificationResultV2.final_label == lbl,
+                VerificationResultV2.source_status == status,
             )
         )
 
-    tc = (await session.execute(_lc(VerificationLabel.TRUE))).scalar_one()
-    fc = (await session.execute(_lc(VerificationLabel.FALSE))).scalar_one()
-    pc = (await session.execute(_lc(VerificationLabel.PARTIALLY_TRUE))).scalar_one()
+    def _cc(status: ContentStatus):
+        return (
+            select(func.count())
+            .select_from(VerificationResultV2)
+            .join(Submission, VerificationResultV2.submission_id == Submission.id)
+            .where(
+                Submission.submitter_id == current_user.id,
+                VerificationResultV2.content_status == status,
+            )
+        )
+
+    source_confirmed = (
+        await session.execute(_sc(SourceStatus.CONFIRMED))
+    ).scalar_one()
+    source_not_found = (
+        await session.execute(_sc(SourceStatus.NOT_FOUND))
+    ).scalar_one()
+    content_matched = (
+        await session.execute(_cc(ContentStatus.MATCHED))
+    ).scalar_one()
+    content_altered = (
+        await session.execute(_cc(ContentStatus.ALTERED))
+    ).scalar_one()
 
     return SubmissionStatsResponse(
         total=total,
-        finalized_true=tc,
-        finalized_false=fc,
-        finalized_partially_true=pc,
+        source_confirmed=source_confirmed,
+        source_not_found=source_not_found,
+        content_matched=content_matched,
+        content_altered=content_altered,
         pending=pending,
     )
 

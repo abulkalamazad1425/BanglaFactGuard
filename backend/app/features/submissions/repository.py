@@ -6,7 +6,13 @@ from datetime import date
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.constants import SubmissionStatus, SubmissionType, VerificationLabel
+from app.core.constants import (
+    ContentStatus,
+    DateStatus,
+    SourceStatus,
+    SubmissionStatus,
+    SubmissionType,
+)
 from app.features.submissions.models import (
     OcrExtraction,
     RetrievedArticleV2,
@@ -135,7 +141,9 @@ class SubmissionRepository(BaseRepository[Submission]):
         self,
         *,
         keyword: str | None = None,
-        verdict: VerificationLabel | None = None,
+        source_status: SourceStatus | None = None,
+        content_status: ContentStatus | None = None,
+        date_status: DateStatus | None = None,
         method: SubmissionType | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
@@ -168,7 +176,12 @@ class SubmissionRepository(BaseRepository[Submission]):
         base = select(Submission)
         count_base = select(func.count(func.distinct(Submission.id)))
 
-        if verdict is not None:
+        needs_result_join = (
+            source_status is not None
+            or content_status is not None
+            or date_status is not None
+        )
+        if needs_result_join:
             base = base.join(
                 VerificationResultV2,
                 VerificationResultV2.submission_id == Submission.id,
@@ -177,7 +190,12 @@ class SubmissionRepository(BaseRepository[Submission]):
                 VerificationResultV2,
                 VerificationResultV2.submission_id == Submission.id,
             )
-            conditions.append(VerificationResultV2.final_label == verdict)
+            if source_status is not None:
+                conditions.append(VerificationResultV2.source_status == source_status)
+            if content_status is not None:
+                conditions.append(VerificationResultV2.content_status == content_status)
+            if date_status is not None:
+                conditions.append(VerificationResultV2.date_status == date_status)
 
         stmt = (
             base.where(and_(*conditions))

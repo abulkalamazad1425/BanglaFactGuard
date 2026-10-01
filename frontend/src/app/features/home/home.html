@@ -41,18 +41,18 @@
               </div>
               <div class="stat-divider"></div>
               <div class="stat-item">
-                <span class="stat-num text-success">{{ stats()!.true_count | number }}</span>
-                <span class="stat-lbl">Verified True</span>
+                <span class="stat-num text-success">{{ stats()!.source_confirmed_count | number }}</span>
+                <span class="stat-lbl">Source Confirmed</span>
               </div>
               <div class="stat-divider"></div>
               <div class="stat-item">
-                <span class="stat-num text-error">{{ stats()!.false_count | number }}</span>
-                <span class="stat-lbl">Found False</span>
+                <span class="stat-num text-error">{{ stats()!.source_not_found_count | number }}</span>
+                <span class="stat-lbl">Source Not Found</span>
               </div>
               <div class="stat-divider"></div>
               <div class="stat-item">
-                <span class="stat-num text-warning">{{ stats()!.partially_true_count | number }}</span>
-                <span class="stat-lbl">Partially True</span>
+                <span class="stat-num text-warning">{{ stats()!.content_altered_count | number }}</span>
+                <span class="stat-lbl">Content Altered</span>
               </div>
             </div>
           }
@@ -83,7 +83,7 @@
         <div class="container">
           <div class="section-header">
             <h2>Verdict Classifications</h2>
-            <p>Our NLP cross-encoders analyze contradictions to output one of four precise verdicts.</p>
+            <p>Source, content and date are checked independently — a date mismatch never implies false content.</p>
           </div>
           <div class="grid-2">
             @for (v of verdicts; track v.label) {

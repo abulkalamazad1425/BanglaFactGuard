@@ -5,7 +5,7 @@ import uuid
 import structlog
 
 from app.core.config import get_settings
-from app.core.constants import SubmissionStatus, VerificationLabel
+from app.core.constants import ExpertVerdict, SubmissionStatus
 from app.core.exceptions import (
     DomainValidationError,
     PermissionDeniedError,
@@ -26,6 +26,7 @@ from app.features.expert_review.schemas import (
 )
 from app.features.submissions.repository import SubmissionRepository
 from app.features.verification.repository import ResultV2Repository
+from app.features.verification.verdict_compat import format_verdict_display
 
 logger = structlog.get_logger(__name__)
 _SETTINGS = get_settings()
@@ -89,7 +90,10 @@ class ExpertReviewService:
             # complete submitted claim text, unlike the queue list preview.
             body_text=submission.body_text,
             claimed_source_text=submission.claimed_source_text,
-            ai_label=result.final_label.value if result and result.final_label else None,
+            ai_label=_ai_label_display(result),
+            source_status=result.source_status if result else None,
+            content_status=result.content_status if result else None,
+            date_status=result.date_status if result else None,
             ai_confidence=result.confidence if result else None,
             submitted_at=submission.created_at,
             vote_count=vote_count,
@@ -130,11 +134,10 @@ class ExpertReviewService:
                         else submission.body_text
                     ),
                     claimed_source_text=submission.claimed_source_text,
-                    ai_label=(
-                        result.final_label.value
-                        if result and result.final_label
-                        else None
-                    ),
+                    ai_label=_ai_label_display(result),
+                    source_status=result.source_status if result else None,
+                    content_status=result.content_status if result else None,
+                    date_status=result.date_status if result else None,
                     ai_confidence=result.confidence if result else None,
                     submitted_at=submission.created_at,
                     vote_count=vote_count,
@@ -149,7 +152,7 @@ class ExpertReviewService:
         self,
         submission_id: uuid.UUID,
         expert_id: uuid.UUID,
-        expert_label: VerificationLabel,
+        expert_label: ExpertVerdict,
         justification: str,
     ) -> ExpertReviewResponse:
         await self._submissions.get_by_id(submission_id)
@@ -170,9 +173,9 @@ class ExpertReviewService:
 
         result = await self._results.get_by_submission_id(submission_id)
         ai_label = (
-            result.final_label
-            if result and result.final_label
-            else VerificationLabel.NOT_FOUND_IN_CLAIMED_SOURCE
+            result.ai_consensus_label
+            if result and result.ai_consensus_label
+            else ExpertVerdict.NOT_FOUND_IN_CLAIMED_SOURCE
         )
 
         review = ExpertReviewV2(
@@ -219,7 +222,7 @@ class ExpertReviewService:
         self,
         review_id: uuid.UUID,
         expert_id: uuid.UUID,
-        expert_label: VerificationLabel | None,
+        expert_label: ExpertVerdict | None,
         justification: str | None,
     ) -> ExpertReviewResponse:
         review = await self._reviews.get_by_id(review_id)
@@ -257,7 +260,11 @@ class ExpertReviewService:
         for r in reviews:
             submission = await self._submissions.get_by_id_or_none(r.submission_id)
             result = await self._results.get_by_submission_id(r.submission_id)
-            final_label = result.final_label.value if result and result.final_label else None
+            final_label = (
+                result.ai_consensus_label.value
+                if result and result.ai_consensus_label
+                else None
+            )
             matched: bool | None = None
             if final_label and r.status == "finalized":
                 matched = r.expert_label.value == final_label
@@ -303,17 +310,17 @@ class ExpertReviewService:
             return
 
         result = await self._results.get_by_submission_id(submission_id)
-        if result is None or result.final_label is None:
+        if result is None or result.ai_consensus_label is None:
             return
 
-        weighted_totals: dict[VerificationLabel, float] = {}
+        weighted_totals: dict[ExpertVerdict, float] = {}
         for review in reviews:
             lbl = review.expert_label
             weighted_totals[lbl] = (
                 weighted_totals.get(lbl, 0.0) + review.credibility_weight
             )
 
-        ai_lbl = result.final_label
+        ai_lbl = result.ai_consensus_label
         ai_weight = result.confidence or 0.0
         weighted_totals[ai_lbl] = weighted_totals.get(ai_lbl, 0.0) + ai_weight
 
@@ -321,7 +328,7 @@ class ExpertReviewService:
         winners = [l for l, w in weighted_totals.items() if w == max_weight]
         final_label = ai_lbl if ai_lbl in winners else winners[0]
 
-        await self._results.update(result, final_label=final_label)
+        await self._results.update(result, ai_consensus_label=final_label)
         await self._submissions.mark_finalized(submission_id)
 
         for review in reviews:
@@ -339,7 +346,7 @@ class ExpertReviewService:
     async def _update_expert_profiles(
         self,
         reviews: list[ExpertReviewV2],
-        final_label: VerificationLabel,
+        final_label: ExpertVerdict,
     ) -> None:
         for review in reviews:
             if review.reviewer_id is None:
@@ -356,6 +363,21 @@ class ExpertReviewService:
                 credibility_score=new_score,
                 completed_reviews_count=new_total,
             )
+
+
+def _ai_label_display(result) -> str | None:
+    """What the expert queue shows as "the AI's verdict" for this claim.
+
+    Built from the pipeline's real (source_status, content_status,
+    date_status) rather than the internal ai_consensus_label proxy, so
+    experts see the actual granular verdict, not the single-category
+    projection that only exists to feed the weighted-consensus vote below.
+    """
+    if result is None:
+        return None
+    return format_verdict_display(
+        result.source_status, result.content_status, result.date_status
+    )
 
 
 def _review_to_response(r: ExpertReviewV2) -> ExpertReviewResponse:

@@ -2,8 +2,6 @@ import pytest
 import uuid
 from unittest.mock import AsyncMock, patch
 
-from app.core.constants import VerificationLabel
-
 
 @pytest.mark.asyncio
 async def test_health_endpoint(client):

@@ -15,12 +15,30 @@ from app.features.verification.models import VerificationLog
 from app.features.verification.pipeline.context import PipelineContext
 from app.features.submissions.repository import RetrievedArticleV2Repository, SubmissionRepository
 from app.features.verification.repository import ResultV2Repository
+from app.features.verification.verdict_compat import derive_expert_verdict
 from app.features.cache.cache_service import CacheService
 from app.shared.utils.hashing import compute_url_hash
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = structlog.get_logger(__name__)
+
+
+def _format_notification_verdict(context: PipelineContext) -> str:
+    if context.source_status and context.source_status.value == "NOT_FOUND":
+        return "🔍 Not Found in Source"
+
+    content_display = {
+        "MATCHED": "✅ Content Matched",
+        "ALTERED": "⚠️ Content Altered",
+    }.get(
+        context.content_status.value if context.content_status else "",
+        "✅ Source Confirmed",
+    )
+
+    if context.date_status and context.date_status.value == "MISMATCHED":
+        return f"{content_display} · 📅 Date Mismatch"
+    return content_display
 
 
 class PersistenceStage:
@@ -51,9 +69,17 @@ class PersistenceStage:
 
             top_article_db_id = await self._persist_articles(context, submission.id)
 
+            ai_consensus_label = derive_expert_verdict(
+                context.source_status,
+                context.content_status,
+                contradiction_score=scores.contradiction_score,
+            )
+
             result = await self.result_repo.upsert_result(
                 submission_id=submission.id,
-                label=context.label,
+                source_status=context.source_status,
+                content_status=context.content_status,
+                date_status=context.date_status,
                 confidence=context.confidence,
                 reasoning=context.reasoning,
                 semantic_similarity=scores.semantic_similarity,
@@ -63,6 +89,7 @@ class PersistenceStage:
                 numerical_consistency=scores.numerical_consistency,
                 top_article_id=top_article_db_id,
                 avg_verification_time_ms=context.elapsed_ms,
+                ai_consensus_label=ai_consensus_label,
             )
             context.result_id = result.id
 
@@ -88,7 +115,9 @@ class PersistenceStage:
                 "s12_persistence_complete",
                 submission_id=str(submission.id),
                 result_id=str(result.id),
-                label=context.label.value if context.label else None,
+                source_status=context.source_status.value if context.source_status else None,
+                content_status=context.content_status.value if context.content_status else None,
+                date_status=context.date_status.value if context.date_status else None,
             )
             return context
 
@@ -102,14 +131,9 @@ class PersistenceStage:
         self, submission: Submission, context: PipelineContext
     ) -> None:
         try:
-            if not submission.submitter_id or not context.label:
+            if not submission.submitter_id or not context.source_status:
                 return
-            label_display = {
-                "TRUE": "✅ True",
-                "FALSE": "❌ False",
-                "PARTIALLY_TRUE": "⚠️ Partially True",
-                "NOT_FOUND_IN_CLAIMED_SOURCE": "🔍 Not Found in Source",
-            }.get(context.label.value, context.label.value)
+            label_display = _format_notification_verdict(context)
             confidence_pct = f"{(context.confidence or 0) * 100:.0f}%"
             headline_preview = (context.raw_headline or "")[:80]
             if len(context.raw_headline or "") > 80:
@@ -345,11 +369,17 @@ class PersistenceStage:
             await self.result_repo.bulk_log(log_entries)
 
     async def _update_redis_cache(self, context: PipelineContext) -> None:
-        if not context.content_hash or not context.label:
+        if not context.content_hash or not context.source_status:
             return
         try:
             payload = {
-                "label": context.label.value,
+                "source_status": context.source_status.value,
+                "content_status": (
+                    context.content_status.value if context.content_status else None
+                ),
+                "date_status": (
+                    context.date_status.value if context.date_status else None
+                ),
                 "confidence": context.confidence,
                 "reasoning": context.reasoning,
                 "scores": context.scores.model_dump(),

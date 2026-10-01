@@ -436,15 +436,14 @@ class PhotoCardService:
 
     @staticmethod
     def _build_verification_response(context: PipelineContext) -> VerificationResponse:
-        from app.core.constants import VerificationLabel
+        from app.core.constants import SourceStatus
 
         if context.cache_hit:
             return VerificationResponse(
                 submission_id=context.submission_id or uuid.uuid4(),
-                label=(
-                    context.cached_label
-                    or VerificationLabel.NOT_FOUND_IN_CLAIMED_SOURCE
-                ),
+                source_status=context.cached_source_status or SourceStatus.NOT_FOUND,
+                content_status=context.cached_content_status,
+                date_status=context.cached_date_status,
                 confidence=context.cached_confidence or 0.0,
                 reasoning=context.cached_reasoning or "",
                 matched_articles=context.cached_matched_articles,
@@ -462,7 +461,9 @@ class PhotoCardService:
 
         return VerificationResponse(
             submission_id=context.submission_id or uuid.uuid4(),
-            label=context.label or VerificationLabel.NOT_FOUND_IN_CLAIMED_SOURCE,
+            source_status=context.source_status or SourceStatus.NOT_FOUND,
+            content_status=context.content_status,
+            date_status=context.date_status,
             confidence=context.confidence,
             reasoning=context.reasoning,
             matched_articles=context.ranked_articles[:3],
@@ -508,11 +509,11 @@ class PhotoCardService:
     async def _load_verification(
         self, submission: Submission
     ) -> VerificationResponse | None:
-        from app.core.constants import SearchProvider, VerificationLabel
+        from app.core.constants import SearchProvider
         from app.features.articles.schemas import RankedArticleSchema
 
         result = await self.result_repo.get_by_submission_id(submission.id)
-        if result is None or result.final_label is None:
+        if result is None or result.source_status is None:
             return None
 
         articles = await self.article_repo.get_for_submission(
@@ -521,7 +522,9 @@ class PhotoCardService:
 
         return VerificationResponse(
             submission_id=submission.id,
-            label=VerificationLabel(result.final_label),
+            source_status=result.source_status,
+            content_status=result.content_status,
+            date_status=result.date_status,
             confidence=result.confidence or 0.0,
             reasoning=result.reasoning or "",
             matched_articles=[

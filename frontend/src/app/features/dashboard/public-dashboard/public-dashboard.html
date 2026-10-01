@@ -21,12 +21,12 @@
                 <span class="stat-lbl">Total Verified Claims</span>
               </div>
               <div class="stat-card card text-center text-success">
-                <span class="stat-num">{{ stats()!.true_count | number }}</span>
-                <span class="stat-lbl">Non-Fake Claims</span>
+                <span class="stat-num">{{ stats()!.source_confirmed_count | number }}</span>
+                <span class="stat-lbl">Source Confirmed</span>
               </div>
               <div class="stat-card card text-center text-error">
-                <span class="stat-num">{{ stats()!.false_count | number }}</span>
-                <span class="stat-lbl">Fake Claims Detected</span>
+                <span class="stat-num">{{ stats()!.source_not_found_count | number }}</span>
+                <span class="stat-lbl">Source Not Found</span>
               </div>
               <div class="stat-card card text-center" style="color: var(--warning);">
                 <span class="stat-num">{{ stats()!.pending_count | number }}</span>
@@ -38,12 +38,13 @@
             <div class="grid-2">
               <div class="card">
                 <h3 class="card-title">Misinformation Trends</h3>
-                <p class="card-subtitle">Verdict distribution across all verified claims</p>
+                <p class="card-subtitle">Verdict distribution across all verified claims — source, content and date are independent checks</p>
                 <div class="bar-list">
-                  <app-score-bar label="True ✓" [value]="ratio(stats()!.true_count)" color="var(--success)" />
-                  <app-score-bar label="False ✗" [value]="ratio(stats()!.false_count)" color="var(--error)" />
-                  <app-score-bar label="Partially True ◑" [value]="ratio(stats()!.partially_true_count)" color="var(--warning)" />
-                  <app-score-bar label="Uncertain ?" [value]="ratio(stats()!.not_found_count)" color="var(--text-secondary)" />
+                  <app-score-bar label="Source Confirmed ✓" [value]="ratio(stats()!.source_confirmed_count)" color="var(--success)" />
+                  <app-score-bar label="Source Not Found ?" [value]="ratio(stats()!.source_not_found_count)" color="var(--text-secondary)" />
+                  <app-score-bar label="Content Matched ✓" [value]="ratio(stats()!.content_matched_count)" color="var(--success)" />
+                  <app-score-bar label="Content Altered ◑" [value]="ratio(stats()!.content_altered_count)" color="var(--warning)" />
+                  <app-score-bar label="Date Mismatch 📅" [value]="ratio(stats()!.date_mismatched_count)" color="var(--text-secondary)" />
                 </div>
                 <p class="text-muted text-xs mt-4">Excludes {{ stats()!.pending_count }} pending submissions</p>
               </div>
@@ -97,12 +98,15 @@
 
           <form [formGroup]="filterForm" (ngSubmit)="search()" class="explorer-filters">
             <input type="text" formControlName="keyword" class="form-control" placeholder="Search by keyword..." />
-            <select formControlName="verdict" class="form-control">
-              <option value="">Any verdict</option>
-              <option value="TRUE">True</option>
-              <option value="FALSE">False</option>
-              <option value="PARTIALLY_TRUE">Partially True</option>
-              <option value="NOT_FOUND_IN_CLAIMED_SOURCE">Not Found</option>
+            <select formControlName="source_status" class="form-control">
+              <option value="">Any source status</option>
+              <option value="CONFIRMED">Source Confirmed</option>
+              <option value="NOT_FOUND">Source Not Found</option>
+            </select>
+            <select formControlName="content_status" class="form-control">
+              <option value="">Any content status</option>
+              <option value="MATCHED">Content Matched</option>
+              <option value="ALTERED">Content Altered</option>
             </select>
             <select formControlName="method" class="form-control">
               <option value="">Any method</option>
@@ -131,7 +135,10 @@
                       · {{ item.created_at | date:'MMM d, y' }}
                     </span>
                   </div>
-                  <app-verdict-badge [label]="item.final_label" />
+                  <app-verdict-badge
+                    [sourceStatus]="item.source_status"
+                    [contentStatus]="item.content_status"
+                    [dateStatus]="item.date_status" />
                 </a>
               }
             </div>

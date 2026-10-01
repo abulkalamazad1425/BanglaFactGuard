@@ -3,7 +3,57 @@ from __future__ import annotations
 from enum import Enum
 
 
-class VerificationLabel(str, Enum):
+class SourceStatus(str, Enum):
+    """Does the claimed source actually carry this story at all?
+
+    Checked first, independently of content or date: a story the source
+    never published is NOT_FOUND regardless of what the claim says, and a
+    story it did publish is CONFIRMED regardless of how the claim words it.
+    """
+
+    CONFIRMED = "CONFIRMED"
+    NOT_FOUND = "NOT_FOUND"
+
+
+class ContentStatus(str, Enum):
+    """How the claimed content compares to the source once CONFIRMED.
+
+    Only meaningful when source_status is CONFIRMED — there is nothing to
+    compare content against when the source never published the story.
+    MATCHED covers paraphrase and reordering that preserve the same facts;
+    ALTERED is reserved for material factual changes (numbers, names,
+    outcomes) or outright contradiction.
+    """
+
+    MATCHED = "MATCHED"
+    ALTERED = "ALTERED"
+
+
+class DateStatus(str, Enum):
+    """Does the claimed publication date match the source's actual date?
+
+    Only meaningful when both a claimed date and the source article's date
+    are known. A mismatch here is informational, not a verdict on the
+    content — a claim can be MISMATCHED on date while its content is still
+    MATCHED (e.g. a screenshot circulated years after original publication).
+    """
+
+    MATCHED = "MATCHED"
+    MISMATCHED = "MISMATCHED"
+
+
+class ExpertVerdict(str, Enum):
+    """A human expert's own single-category judgment call on a claim.
+
+    Deliberately separate from the AI pipeline's (SourceStatus, ContentStatus,
+    DateStatus) triple: expert review is a credibility-weighted consensus vote
+    that predates and is independent of this task's 3-dimensional verdict
+    model, and collapsing three experts' votes across three independent axes
+    into one weighted consensus is a distinct, unspecified design problem.
+    This enum keeps that existing voting/credibility-scoring subsystem
+    working unchanged. It is never returned as "the verdict" from the
+    verification pipeline itself — see VerificationResponse.
+    """
 
     TRUE = "TRUE"
     FALSE = "FALSE"

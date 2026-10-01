@@ -7,7 +7,15 @@ from datetime import date
 from sqlalchemy import and_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.constants import ClaimStatus, LogLevel, PipelineStageID, VerificationLabel
+from app.core.constants import (
+    ClaimStatus,
+    ContentStatus,
+    DateStatus,
+    ExpertVerdict,
+    LogLevel,
+    PipelineStageID,
+    SourceStatus,
+)
 from app.features.verification.models import (
     VerificationLog,
     VerificationResult,
@@ -146,7 +154,7 @@ class ResultRepository(BaseRepository[VerificationResult]):
 
     async def get_results_by_label(
         self,
-        label: VerificationLabel,
+        label: ExpertVerdict,
         *,
         limit: int = 50,
         offset: int = 0,
@@ -165,7 +173,7 @@ class ResultRepository(BaseRepository[VerificationResult]):
         self,
         claim_id: uuid.UUID,
         *,
-        label: VerificationLabel,
+        label: ExpertVerdict,
         confidence: float,
         reasoning: str,
         semantic_similarity: float | None,
@@ -229,16 +237,16 @@ class ResultV2Repository(BaseRepository[VerificationResultV2]):
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def get_results_by_label(
+    async def get_results_by_source_status(
         self,
-        label: VerificationLabel,
+        source_status: SourceStatus,
         *,
         limit: int = 50,
         offset: int = 0,
     ) -> list[VerificationResultV2]:
         stmt = (
             select(VerificationResultV2)
-            .where(VerificationResultV2.final_label == label)
+            .where(VerificationResultV2.source_status == source_status)
             .order_by(VerificationResultV2.created_at.desc())
             .offset(offset)
             .limit(limit)
@@ -250,7 +258,9 @@ class ResultV2Repository(BaseRepository[VerificationResultV2]):
         self,
         submission_id: uuid.UUID,
         *,
-        label: VerificationLabel,
+        source_status: SourceStatus | None,
+        content_status: ContentStatus | None,
+        date_status: DateStatus | None,
         confidence: float,
         reasoning: str,
         semantic_similarity: float | None,
@@ -260,12 +270,15 @@ class ResultV2Repository(BaseRepository[VerificationResultV2]):
         numerical_consistency: float | None,
         top_article_id: uuid.UUID | None = None,
         ai_preliminary_label: str | None = None,
+        ai_consensus_label: ExpertVerdict | None = None,
         avg_verification_time_ms: int | None = None,
     ) -> VerificationResultV2:
         existing = await self.get_by_submission_id(submission_id)
 
         fields = dict(
-            final_label=label,
+            source_status=source_status,
+            content_status=content_status,
+            date_status=date_status,
             confidence=confidence,
             reasoning=reasoning,
             semantic_similarity=semantic_similarity,
@@ -275,6 +288,7 @@ class ResultV2Repository(BaseRepository[VerificationResultV2]):
             numerical_consistency=numerical_consistency,
             top_article_id=top_article_id,
             ai_preliminary_label=ai_preliminary_label,
+            ai_consensus_label=ai_consensus_label,
             avg_verification_time_ms=avg_verification_time_ms,
         )
 

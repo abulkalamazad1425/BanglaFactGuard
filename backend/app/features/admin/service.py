@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.constants import SubmissionStatus, VerificationLabel
+from app.core.constants import ContentStatus, DateStatus, SourceStatus, SubmissionStatus
 from app.core.exceptions import (
     DuplicateRecordError,
     RecordNotFoundError,
@@ -185,26 +185,44 @@ class AdminService:
         )
         recent = (await self._session.execute(recent_stmt)).scalar_one()
 
-        def _count_label(lbl: VerificationLabel):
+        def _count_source(status: SourceStatus):
             return (
                 select(func.count())
                 .select_from(VerificationResultV2)
-                .where(VerificationResultV2.final_label == lbl)
+                .where(VerificationResultV2.source_status == status)
             )
 
-        true_c = (
-            await self._session.execute(_count_label(VerificationLabel.TRUE))
-        ).scalar_one()
-        false_c = (
-            await self._session.execute(_count_label(VerificationLabel.FALSE))
-        ).scalar_one()
-        partial_c = (
-            await self._session.execute(_count_label(VerificationLabel.PARTIALLY_TRUE))
-        ).scalar_one()
-        nf_c = (
-            await self._session.execute(
-                _count_label(VerificationLabel.NOT_FOUND_IN_CLAIMED_SOURCE)
+        def _count_content(status: ContentStatus):
+            return (
+                select(func.count())
+                .select_from(VerificationResultV2)
+                .where(VerificationResultV2.content_status == status)
             )
+
+        def _count_date(status: DateStatus):
+            return (
+                select(func.count())
+                .select_from(VerificationResultV2)
+                .where(VerificationResultV2.date_status == status)
+            )
+
+        source_confirmed_c = (
+            await self._session.execute(_count_source(SourceStatus.CONFIRMED))
+        ).scalar_one()
+        source_not_found_c = (
+            await self._session.execute(_count_source(SourceStatus.NOT_FOUND))
+        ).scalar_one()
+        content_matched_c = (
+            await self._session.execute(_count_content(ContentStatus.MATCHED))
+        ).scalar_one()
+        content_altered_c = (
+            await self._session.execute(_count_content(ContentStatus.ALTERED))
+        ).scalar_one()
+        date_matched_c = (
+            await self._session.execute(_count_date(DateStatus.MATCHED))
+        ).scalar_one()
+        date_mismatched_c = (
+            await self._session.execute(_count_date(DateStatus.MISMATCHED))
         ).scalar_one()
 
         total_experts = await self._users.count_by_role("expert")
@@ -234,10 +252,12 @@ class AdminService:
             total_submissions=total,
             submissions_last_30_days=recent,
             verdict_breakdown=VerdictBreakdown(
-                true_count=true_c,
-                false_count=false_c,
-                partially_true_count=partial_c,
-                not_found_count=nf_c,
+                source_confirmed_count=source_confirmed_c,
+                source_not_found_count=source_not_found_c,
+                content_matched_count=content_matched_c,
+                content_altered_count=content_altered_c,
+                date_matched_count=date_matched_c,
+                date_mismatched_count=date_mismatched_c,
             ),
             pending_expert_reviews=pending,
             total_experts=total_experts,

@@ -16,7 +16,10 @@
               <div class="card claim-card">
                 <div class="claim-header">
                   <h2>Claim Details</h2>
-                  <app-verdict-badge [label]="claim()!.ai_label" />
+                  <app-verdict-badge
+                    [sourceStatus]="claim()!.source_status"
+                    [contentStatus]="claim()!.content_status"
+                    [dateStatus]="claim()!.date_status" />
                 </div>
                 <p class="claim-headline">{{ claim()!.headline }}</p>
                 @if (claim()!.body_text) {

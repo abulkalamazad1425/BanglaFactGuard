@@ -1,14 +1,15 @@
 import pytest
-import uuid
 import json
 from unittest.mock import AsyncMock, patch
 
 from app.features.verification.schemas import VerificationRequest
 from app.features.verification.service import VerificationService
-from app.core.constants import VerificationLabel, ClaimStatus
-from app.features.verification.repository import ClaimRepository
-from app.features.verification.repository import ResultRepository
-from app.features.articles.repository import ArticleRepository
+from app.core.constants import ContentStatus, SourceStatus
+from app.features.submissions.repository import (
+    RetrievedArticleV2Repository,
+    SubmissionRepository,
+)
+from app.features.verification.repository import ResultV2Repository
 from app.features.sources.repository import SourceRepository
 
 
@@ -20,19 +21,16 @@ async def test_full_pipeline_execution(
     mock_ner_service,
     mock_nli_service,
 ):
-    claim_repo = ClaimRepository(db_session)
-    result_repo = ResultRepository(db_session)
-    article_repo = ArticleRepository(db_session)
+    submission_repo = SubmissionRepository(db_session)
+    result_repo = ResultV2Repository(db_session)
+    article_repo = RetrievedArticleV2Repository(db_session)
     source_repo = SourceRepository(db_session)
 
-    from app.features.search.newsdata_client import NewsDataClient
-    from app.features.search.google_cse_client import GoogleCSEClient
-    from app.features.search.duckduckgo_client import DuckDuckGoClient
     import httpx
 
     async with httpx.AsyncClient() as http_client:
         service = VerificationService(
-            claim_repo=claim_repo,
+            submission_repo=submission_repo,
             result_repo=result_repo,
             article_repo=article_repo,
             source_repo=source_repo,
@@ -45,8 +43,8 @@ async def test_full_pipeline_execution(
 
         request_payload = VerificationRequest(
             headline="শেখ হাসিনা নতুন উড়ালসড়ক উদ্বোধন করলেন",
-            claimed_source="https://prothomalo.com",
-            news_body=None,
+            claimed_source_text="https://prothomalo.com",
+            body_text=None,
             published_date=None,
             force_refresh=True,
         )
@@ -96,12 +94,14 @@ async def test_full_pipeline_execution(
 
             response = await service.verify(request_payload)
 
-            assert response.label == VerificationLabel.TRUE
+            assert response.source_status == SourceStatus.CONFIRMED
+            assert response.content_status == ContentStatus.MATCHED
             assert response.confidence > 0.8
             assert response.cached is False
+            assert response.submission_id is not None
 
-            claim = await claim_repo.get_completed_by_hash(response.claim_id)
-            assert claim is not None or response.claim_id is not None
+            submission = await submission_repo.get_by_id_or_none(response.submission_id)
+            assert submission is not None
 
 
 @pytest.mark.asyncio
@@ -112,14 +112,16 @@ async def test_pipeline_cache_hit(
     mock_ner_service,
     mock_nli_service,
 ):
-    claim_repo = ClaimRepository(db_session)
-    result_repo = ResultRepository(db_session)
-    article_repo = ArticleRepository(db_session)
+    submission_repo = SubmissionRepository(db_session)
+    result_repo = ResultV2Repository(db_session)
+    article_repo = RetrievedArticleV2Repository(db_session)
     source_repo = SourceRepository(db_session)
 
     claim_hash = "f35a646c2eb5387b328a9b3a0bb21897e930bc22998a442e97a3eb17b7a0d1e2"
     cached_payload = {
-        "label": "TRUE",
+        "source_status": "CONFIRMED",
+        "content_status": "MATCHED",
+        "date_status": None,
         "confidence": 0.94,
         "reasoning": "Cached reason",
         "scores": {
@@ -136,7 +138,7 @@ async def test_pipeline_cache_hit(
             "entities_replaced": False,
         },
         "matched_articles": [],
-        "claim_id": str(uuid.uuid4()),
+        "submission_id": None,
         "normalized_source": "prothomalo.com",
     }
 
@@ -146,7 +148,7 @@ async def test_pipeline_cache_hit(
 
     async with httpx.AsyncClient() as http_client:
         service = VerificationService(
-            claim_repo=claim_repo,
+            submission_repo=submission_repo,
             result_repo=result_repo,
             article_repo=article_repo,
             source_repo=source_repo,
@@ -159,7 +161,7 @@ async def test_pipeline_cache_hit(
 
         request_payload = VerificationRequest(
             headline="শেখ হাসিনা নতুন উড়ালসড়ক উদ্বোধন করলেন",
-            claimed_source="https://prothomalo.com",
+            claimed_source_text="https://prothomalo.com",
             force_refresh=False,
         )
 
@@ -173,7 +175,8 @@ async def test_pipeline_cache_hit(
             ) as mock_s03:
                 response = await service.verify(request_payload)
 
-                assert response.label == VerificationLabel.TRUE
+                assert response.source_status == SourceStatus.CONFIRMED
+                assert response.content_status == ContentStatus.MATCHED
                 assert response.confidence == 0.94
                 assert response.cached is True
 

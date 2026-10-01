@@ -5,7 +5,7 @@ import math
 import structlog
 
 from app.core.config import get_settings
-from app.core.constants import ManipulationType, PipelineStageID, VerificationLabel
+from app.core.constants import ContentStatus, DateStatus, PipelineStageID, SourceStatus
 from app.core.exceptions import ClassificationError
 from app.features.verification.pipeline.context import PipelineContext
 
@@ -25,6 +25,21 @@ assert (
 
 
 class ClassifierStage:
+    """Produces the three-dimensional verdict: source, content, date.
+
+    The three checks run in order and each is independent of the others:
+
+    1. Source — does the claimed source carry this story at all? If not,
+       content and date are left unset: there is nothing to compare a claim's
+       wording or date against when the source never published it.
+    2. Content — once the source is CONFIRMED, does the claimed content
+       carry the same facts as the source (MATCHED), or have material facts
+       changed (ALTERED)? Paraphrase and reordering are MATCHED; changed
+       numbers, names, outcomes, or outright contradiction are ALTERED.
+    3. Date — does the claimed publication date match the source's actual
+       date? This is purely informational: a date mismatch never demotes
+       content_status, and is left unset when either date is unknown.
+    """
 
     stage_id = PipelineStageID.S11_CLASSIFIER
 
@@ -34,15 +49,7 @@ class ClassifierStage:
         try:
 
             if not context.has_evidence:
-                context.label = VerificationLabel.NOT_FOUND_IN_CLAIMED_SOURCE
-                context.confidence = 0.95
-                context.reasoning = self._build_not_found_reasoning(context)
-                logger.info(
-                    "s11_verdict",
-                    label=context.label.value,
-                    confidence=context.confidence,
-                    reason="no_evidence",
-                )
+                self._set_not_found(context, reason="no_evidence")
                 return context
 
             sem_sim = context.scores.semantic_similarity
@@ -50,48 +57,22 @@ class ClassifierStage:
                 sem_sim is not None
                 and sem_sim < thresholds.not_found_max_semantic_similarity
             ):
-
-                raw_conf = (
-                    0.5 + (thresholds.not_found_max_semantic_similarity - sem_sim) * 2
-                )
-                context.label = VerificationLabel.NOT_FOUND_IN_CLAIMED_SOURCE
-                context.confidence = round(max(0.55, min(0.90, raw_conf)), 3)
-                context.reasoning = (
-                    f"An article was retrieved from {context.normalized_source or 'the claimed source'}, "
-                    f"but its semantic similarity to the claim is too low ({sem_sim:.2f}), "
-                    "indicating the retrieved article is unrelated to the claim. "
-                    "Verdict: NOT FOUND IN CLAIMED SOURCE."
-                )
-                logger.info(
-                    "s11_verdict",
-                    label=context.label.value,
-                    confidence=context.confidence,
+                self._set_not_found(
+                    context,
                     reason="sem_sim_below_not_found_gate",
-                    sem_sim=round(sem_sim, 3),
+                    sem_sim=sem_sim,
                 )
                 return context
+
+            context.source_status = SourceStatus.CONFIRMED
 
             scores = context.scores
             evidence_score = _compute_weighted_score(scores, thresholds)
 
             contradiction = scores.contradiction_score or 0.0
-            if contradiction > thresholds.contradiction_override_threshold:
+            contradiction_override = contradiction > thresholds.contradiction_override_threshold
 
-                context.label = VerificationLabel.FALSE
-                context.confidence = round(min(0.95, 0.6 + contradiction * 0.35), 3)
-                context.reasoning = self._build_reasoning(
-                    context, VerificationLabel.FALSE, evidence_score
-                )
-                logger.info(
-                    "s11_verdict",
-                    label=context.label.value,
-                    confidence=context.confidence,
-                    reason="contradiction_override",
-                    contradiction=round(contradiction, 3),
-                )
-                return context
-
-            if contradiction > 0.5:
+            if contradiction > 0.5 and not contradiction_override:
                 penalty = (contradiction - 0.5) * 0.4
                 evidence_score = max(0.0, evidence_score - penalty)
 
@@ -100,20 +81,24 @@ class ClassifierStage:
                 evidence_score = max(0.0, evidence_score - degradation)
 
             manipulation = context.manipulation_flags
-            label = _assign_label(evidence_score, manipulation, thresholds)
+            content_status = _assign_content_status(
+                evidence_score, manipulation, contradiction_override, thresholds
+            )
+            context.content_status = content_status
 
-            confidence = _compute_confidence(evidence_score, label, thresholds)
+            context.date_status = _compare_dates(context)
 
-            reasoning = self._build_reasoning(context, label, evidence_score)
-
-            context.label = label
-            context.confidence = confidence
-            context.reasoning = reasoning
+            context.confidence = _compute_confidence(
+                evidence_score, contradiction, contradiction_override, thresholds
+            )
+            context.reasoning = self._build_reasoning(context, evidence_score)
 
             logger.info(
                 "s11_verdict",
-                label=label.value,
-                confidence=confidence,
+                source_status=context.source_status.value,
+                content_status=content_status.value,
+                date_status=context.date_status.value if context.date_status else None,
+                confidence=context.confidence,
                 evidence_score=round(evidence_score, 3),
                 manipulation=manipulation.any_manipulation_detected,
             )
@@ -125,10 +110,52 @@ class ClassifierStage:
                 message=f"Classification failed: {exc}",
             ) from exc
 
+    def _set_not_found(
+        self,
+        context: PipelineContext,
+        *,
+        reason: str,
+        sem_sim: float | None = None,
+    ) -> None:
+        context.source_status = SourceStatus.NOT_FOUND
+        context.content_status = None
+        context.date_status = None
+
+        source = context.normalized_source or context.raw_claimed_source
+
+        if reason == "no_evidence":
+            queries_tried = len(context.search_queries)
+            context.confidence = 0.95
+            context.reasoning = (
+                f"No article matching the claim headline was found on {source or 'the claimed source'} "
+                f"after executing {queries_tried} search query variant(s) across multiple providers. "
+                "Verdict: source NOT_FOUND."
+            )
+        else:
+            # Confidence rises the further below the gate the similarity sits.
+            gate = _SETTINGS.classification.not_found_max_semantic_similarity
+            raw_conf = 0.5 + (gate - (sem_sim or 0.0)) * 2
+            context.confidence = round(max(0.55, min(0.90, raw_conf)), 3)
+            context.reasoning = (
+                f"An article was retrieved from {source or 'the claimed source'}, "
+                f"but its semantic similarity to the claim is too low ({(sem_sim or 0.0):.2f}), "
+                "indicating the retrieved article is unrelated to the claim. "
+                "Verdict: source NOT_FOUND."
+            )
+
+        logger.info(
+            "s11_verdict",
+            source_status=context.source_status.value,
+            content_status=None,
+            date_status=None,
+            confidence=context.confidence,
+            reason=reason,
+            sem_sim=round(sem_sim, 3) if sem_sim is not None else None,
+        )
+
     def _build_reasoning(
         self,
         context: PipelineContext,
-        label: VerificationLabel,
         evidence_score: float,
     ) -> str:
         parts: list[str] = []
@@ -140,10 +167,6 @@ class ClassifierStage:
         if article:
             parts.append(
                 f"A matching article was found on {source or 'the claimed source'}."
-            )
-        else:
-            parts.append(
-                f"No matching article was found on {source or 'the claimed source'}."
             )
 
         if scores.semantic_similarity is not None:
@@ -193,24 +216,38 @@ class ClassifierStage:
                 "Named entities (persons/places/organisations) may have been substituted."
             )
 
-        label_summary = {
-            VerificationLabel.TRUE: "Verdict: The claim is TRUE — the source published matching content.",
-            VerificationLabel.FALSE: "Verdict: The claim is FALSE — the article contradicts or significantly differs.",
-            VerificationLabel.PARTIALLY_TRUE: "Verdict: The claim is PARTIALLY TRUE — the source published related content with alterations.",
-            VerificationLabel.NOT_FOUND_IN_CLAIMED_SOURCE: "Verdict: NOT FOUND IN CLAIMED SOURCE — no matching article was retrieved.",
-        }
-        parts.append(label_summary.get(label, ""))
+        date_note = (
+            {
+                DateStatus.MATCHED: "The claimed publication date matches the source.",
+                DateStatus.MISMATCHED: (
+                    "The claimed publication date does not match the source's actual "
+                    "publication date — this does not affect whether the content itself matches."
+                ),
+            }.get(context.date_status)
+            if context.date_status
+            else None
+        )
+        if date_note:
+            parts.append(date_note)
+
+        source_status = context.source_status.value if context.source_status else "UNKNOWN"
+        content_status = context.content_status.value if context.content_status else "N/A"
+        date_status = context.date_status.value if context.date_status else "UNKNOWN"
+        verdict_line = f"Verdict: source {source_status}, content {content_status}, date {date_status}."
+        parts.append(verdict_line)
 
         return " ".join(p for p in parts if p)
 
-    def _build_not_found_reasoning(self, context: PipelineContext) -> str:
-        source = context.normalized_source or context.raw_claimed_source
-        queries_tried = len(context.search_queries)
-        return (
-            f"No article matching the claim headline was found on {source or 'the claimed source'} "
-            f"after executing {queries_tried} search query variant(s) across multiple providers. "
-            "Verdict: NOT FOUND IN CLAIMED SOURCE."
-        )
+
+def _compare_dates(context: PipelineContext) -> DateStatus | None:
+    claimed = context.published_date
+    article = context.top_article
+    actual = article.published_date if article else None
+
+    if claimed is None or actual is None:
+        return None
+
+    return DateStatus.MATCHED if claimed == actual else DateStatus.MISMATCHED
 
 
 def _compute_weighted_score(scores, thresholds) -> float:
@@ -272,40 +309,48 @@ def _compute_weighted_score(scores, thresholds) -> float:
     return max(0.0, min(1.0, result))
 
 
-def _assign_label(evidence_score: float, manipulation, thresholds) -> VerificationLabel:
-    any_manip = manipulation.any_manipulation_detected
+def _assign_content_status(
+    evidence_score: float,
+    manipulation,
+    contradiction_override: bool,
+    thresholds,
+) -> ContentStatus:
+    """MATCHED requires strong evidence AND no sign of alteration.
 
-    if evidence_score >= thresholds.true_threshold:
-        if any_manip:
-            return VerificationLabel.PARTIALLY_TRUE
-        return VerificationLabel.TRUE
+    Outright contradiction (contradiction_override) and detected manipulation
+    both fall through to ALTERED regardless of the raw evidence score — a
+    headline can score well on similarity while still being a manipulated
+    version of the source article.
+    """
+    if contradiction_override:
+        return ContentStatus.ALTERED
+
+    if manipulation.any_manipulation_detected:
+        return ContentStatus.ALTERED
 
     soft_true_threshold = (
         thresholds.partial_threshold + thresholds.true_threshold
     ) / 2.0
 
     if evidence_score >= soft_true_threshold:
-        if any_manip:
-            return VerificationLabel.PARTIALLY_TRUE
-        return VerificationLabel.TRUE
+        return ContentStatus.MATCHED
 
-    if evidence_score >= thresholds.partial_threshold:
-        return VerificationLabel.PARTIALLY_TRUE
-
-    return VerificationLabel.FALSE
+    return ContentStatus.ALTERED
 
 
 def _compute_confidence(
-    evidence_score: float, label: VerificationLabel, thresholds
+    evidence_score: float,
+    contradiction: float,
+    contradiction_override: bool,
+    thresholds,
 ) -> float:
+    if contradiction_override:
+        return round(min(0.95, 0.6 + contradiction * 0.35), 3)
 
-    boundaries = [
-        thresholds.true_threshold,
-        thresholds.partial_threshold,
-        thresholds.false_threshold,
-    ]
-    min_distance = min(abs(evidence_score - b) for b in boundaries)
+    soft_true_threshold = (
+        thresholds.partial_threshold + thresholds.true_threshold
+    ) / 2.0
+    distance = abs(evidence_score - soft_true_threshold)
 
-    base = 0.5 + 0.47 * (1.0 - math.exp(-15.0 * min_distance))
-    confidence = round(min(0.97, max(0.50, base)), 3)
-    return confidence
+    base = 0.5 + 0.47 * (1.0 - math.exp(-15.0 * distance))
+    return round(min(0.97, max(0.50, base)), 3)

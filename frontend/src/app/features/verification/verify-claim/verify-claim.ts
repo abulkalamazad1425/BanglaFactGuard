@@ -5,7 +5,13 @@ import { CommonModule } from '@angular/common';
 import { ToastService } from '../../../shared/services/toast.service';
 import { VerificationService } from '../../../services/verification.service';
 import { PendingVerificationsService } from '../../../services/pending-verifications.service';
-import { SubmissionStatus, VerificationResponse } from '../../../models/verification.model';
+import {
+  ContentStatus,
+  SourceStatus,
+  SubmissionStatus,
+  VerificationResponse,
+} from '../../../models/verification.model';
+import { VerdictBadgeComponent } from '../../../shared/components/verdict-badge/verdict-badge.component';
 import { SourceService } from '../../../services/source.service';
 import { SourceResponse } from '../../../models/source.model';
 
@@ -13,7 +19,7 @@ import { SourceResponse } from '../../../models/source.model';
 @Component({
   selector: 'app-verify-claim',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterLink],
+  imports: [CommonModule, ReactiveFormsModule, RouterLink, VerdictBadgeComponent],
   templateUrl: './verify-claim.html',
   styleUrls: ['./verify-claim.scss'],
 })
@@ -184,37 +190,13 @@ export class VerifyClaimComponent implements OnInit, OnDestroy {
 
   /* ─── Template helpers ─── */
 
-  verdictColor(label: string): string {
-    const map: Record<string, string> = {
-      TRUE: '#10b981',
-      FALSE: '#ef4444',
-      PARTIALLY_TRUE: '#f59e0b',
-      NOT_FOUND_IN_CLAIMED_SOURCE: '#6b7280',
-    };
-    return map[label] ?? '#6b7280';
-  }
-
-  getBadgeClass(label: string): string {
-    switch (label?.toUpperCase()) {
-      case 'TRUE': return 'true';
-      case 'FALSE': return 'false';
-      case 'PARTIALLY_TRUE': return 'partial';
-      default: return 'notfound';
-    }
-  }
-
-  getBadgeIcon(label: string): string {
-    switch (label?.toUpperCase()) {
-      case 'TRUE': return '✓';
-      case 'FALSE': return '✗';
-      case 'PARTIALLY_TRUE': return '⚠';
-      default: return '?';
-    }
-  }
-
-  formatVerdict(label: string): string {
-    if (!label) return '';
-    return label.replace(/_/g, ' ');
+  /** Ring/accent colour for the overall verdict — content status wins once
+   *  the source is confirmed; a date mismatch never changes this colour. */
+  verdictColor(sourceStatus: SourceStatus | null | undefined, contentStatus?: ContentStatus | null): string {
+    if (sourceStatus === 'NOT_FOUND') return '#6b7280';
+    if (contentStatus === 'MATCHED') return '#10b981';
+    if (contentStatus === 'ALTERED') return '#f59e0b';
+    return '#6b7280';
   }
 
   getDashOffset(confidence: number): number {

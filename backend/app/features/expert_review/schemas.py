@@ -5,11 +5,11 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from app.core.constants import VerificationLabel
+from app.core.constants import ContentStatus, DateStatus, ExpertVerdict, SourceStatus
 
 
 class ExpertVoteRequest(BaseModel):
-    expert_label: VerificationLabel
+    expert_label: ExpertVerdict
     justification: str = Field(
         ...,
         min_length=50,
@@ -19,7 +19,7 @@ class ExpertVoteRequest(BaseModel):
 
 
 class ExpertVoteUpdateRequest(BaseModel):
-    expert_label: VerificationLabel | None = None
+    expert_label: ExpertVerdict | None = None
     justification: str | None = Field(default=None, min_length=50, max_length=5000)
 
 
@@ -51,7 +51,13 @@ class ExpertQueueItemResponse(BaseModel):
     headline: str | None
     body_text: str | None = None
     claimed_source_text: str | None
-    ai_label: str | None
+    ai_label: str | None = Field(
+        default=None,
+        description="Human-readable summary of source/content/date_status, for display.",
+    )
+    source_status: SourceStatus | None = None
+    content_status: ContentStatus | None = None
+    date_status: DateStatus | None = None
     ai_confidence: float | None
     submitted_at: datetime
     vote_count: int

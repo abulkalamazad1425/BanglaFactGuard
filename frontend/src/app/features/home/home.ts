@@ -30,10 +30,11 @@ export class HomeComponent implements OnInit {
   ];
 
   readonly verdicts = [
-    { label: 'True', icon: '✓', cls: 'badge-true', desc: 'The claimed source actually published this article. High semantic similarity and entity match confirmed.' },
-    { label: 'False', icon: '✗', cls: 'badge-false', desc: 'The claimed source did not publish this article, or the content contradicts what was published.' },
-    { label: 'Partially True', icon: '◑', cls: 'badge-partial', desc: 'The source published a related article, but key facts have been altered or exaggerated.' },
-    { label: 'Not Found', icon: '?', cls: 'badge-not-found', desc: 'No matching article could be located on the claimed source after an exhaustive search.' },
+    { label: 'Source Confirmed', icon: '✓', cls: 'badge-true', desc: 'The claimed source actually published a matching story. Checked independently of content or date.' },
+    { label: 'Source Not Found', icon: '?', cls: 'badge-not-found', desc: 'No matching article could be located on the claimed source after an exhaustive search.' },
+    { label: 'Content Matched', icon: '✓', cls: 'badge-true', desc: 'Once the source is confirmed, the claimed content carries the same facts — paraphrase and reordering included.' },
+    { label: 'Content Altered', icon: '◑', cls: 'badge-partial', desc: 'Material facts changed, or the claim contradicts what the source actually published.' },
+    { label: 'Date Matched / Mismatched', icon: '📅', cls: 'badge-partial', desc: 'Whether the claimed publication date matches the source’s actual date — informational only, never a verdict on the content.' },
   ];
 
   ngOnInit(): void {

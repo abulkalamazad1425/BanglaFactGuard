@@ -32,7 +32,8 @@ export class PublicDashboardComponent implements OnInit {
 
   filterForm = this.fb.group({
     keyword: [''],
-    verdict: [''],
+    source_status: [''],
+    content_status: [''],
     method: [''],
     date_from: [''],
     date_to: [''],
@@ -69,7 +70,8 @@ export class PublicDashboardComponent implements OnInit {
     const v = this.filterForm.value;
     this.dashboardSvc.searchExplorer({
       keyword: v.keyword || undefined,
-      verdict: v.verdict || undefined,
+      source_status: v.source_status || undefined,
+      content_status: v.content_status || undefined,
       method: v.method || undefined,
       date_from: v.date_from || undefined,
       date_to: v.date_to || undefined,
@@ -86,7 +88,7 @@ export class PublicDashboardComponent implements OnInit {
   }
 
   resetFilters(): void {
-    this.filterForm.reset({ keyword: '', verdict: '', method: '', date_from: '', date_to: '' });
+    this.filterForm.reset({ keyword: '', source_status: '', content_status: '', method: '', date_from: '', date_to: '' });
     this.search();
   }
 

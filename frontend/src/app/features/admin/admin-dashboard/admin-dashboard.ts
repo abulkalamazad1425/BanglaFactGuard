@@ -18,11 +18,14 @@ export class AdminDashboardComponent implements OnInit {
   readonly loading = signal(true);
   readonly stats = signal<AdminStats | null>(null);
 
-  get total() { const bd = this.stats()?.verdict_breakdown; return bd ? bd.true_count + bd.false_count + bd.partially_true_count + bd.not_found_count : 1; }
-  trueRatio = () => (this.stats()?.verdict_breakdown.true_count ?? 0) / this.total;
-  falseRatio = () => (this.stats()?.verdict_breakdown.false_count ?? 0) / this.total;
-  partialRatio = () => (this.stats()?.verdict_breakdown.partially_true_count ?? 0) / this.total;
-  nfRatio = () => (this.stats()?.verdict_breakdown.not_found_count ?? 0) / this.total;
+  // Source and content are independent checks, so each pair gets its own
+  // total rather than sharing one 4-way denominator.
+  get sourceTotal() { const bd = this.stats()?.verdict_breakdown; return bd ? bd.source_confirmed_count + bd.source_not_found_count : 1; }
+  get contentTotal() { const bd = this.stats()?.verdict_breakdown; return bd ? bd.content_matched_count + bd.content_altered_count : 1; }
+  sourceConfirmedRatio = () => (this.stats()?.verdict_breakdown.source_confirmed_count ?? 0) / this.sourceTotal;
+  sourceNotFoundRatio = () => (this.stats()?.verdict_breakdown.source_not_found_count ?? 0) / this.sourceTotal;
+  contentMatchedRatio = () => (this.stats()?.verdict_breakdown.content_matched_count ?? 0) / this.contentTotal;
+  contentAlteredRatio = () => (this.stats()?.verdict_breakdown.content_altered_count ?? 0) / this.contentTotal;
 
   ngOnInit(): void {
     this.adminSvc.getStats().subscribe({

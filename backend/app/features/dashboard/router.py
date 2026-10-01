@@ -8,7 +8,13 @@ from pydantic import BaseModel
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.constants import SubmissionStatus, SubmissionType, VerificationLabel
+from app.core.constants import (
+    ContentStatus,
+    DateStatus,
+    SourceStatus,
+    SubmissionStatus,
+    SubmissionType,
+)
 from app.features.submissions.models import Submission
 from app.features.submissions.repository import SubmissionRepository
 from app.features.verification.models import VerificationResultV2
@@ -27,10 +33,12 @@ class MethodDistribution(BaseModel):
 
 class PublicStatsResponse(BaseModel):
     total_submissions: int
-    true_count: int
-    false_count: int
-    partially_true_count: int
-    not_found_count: int
+    source_confirmed_count: int
+    source_not_found_count: int
+    content_matched_count: int
+    content_altered_count: int
+    date_matched_count: int
+    date_mismatched_count: int
     pending_count: int
     method_distribution: MethodDistribution
     avg_verification_time_seconds: float | None
@@ -46,7 +54,9 @@ class ExplorerItem(BaseModel):
     headline: str | None
     submission_type: SubmissionType
     claimed_source_text: str | None
-    final_label: VerificationLabel | None
+    source_status: SourceStatus | None
+    content_status: ContentStatus | None
+    date_status: DateStatus | None
     confidence: float | None
     published_date: date | None
     created_at: datetime
@@ -78,18 +88,42 @@ async def get_public_stats(
         )
     ).scalar_one()
 
-    def _lc(lbl: VerificationLabel) -> int:
+    def _sc(status: SourceStatus) -> int:
         return (
             select(func.count())
             .select_from(VerificationResultV2)
-            .where(VerificationResultV2.final_label == lbl)
+            .where(VerificationResultV2.source_status == status)
         )
 
-    tc = (await session.execute(_lc(VerificationLabel.TRUE))).scalar_one()
-    fc = (await session.execute(_lc(VerificationLabel.FALSE))).scalar_one()
-    pc = (await session.execute(_lc(VerificationLabel.PARTIALLY_TRUE))).scalar_one()
-    nc = (
-        await session.execute(_lc(VerificationLabel.NOT_FOUND_IN_CLAIMED_SOURCE))
+    def _cc(status: ContentStatus) -> int:
+        return (
+            select(func.count())
+            .select_from(VerificationResultV2)
+            .where(VerificationResultV2.content_status == status)
+        )
+
+    def _dc(status: DateStatus) -> int:
+        return (
+            select(func.count())
+            .select_from(VerificationResultV2)
+            .where(VerificationResultV2.date_status == status)
+        )
+
+    source_confirmed = (
+        await session.execute(_sc(SourceStatus.CONFIRMED))
+    ).scalar_one()
+    source_not_found = (
+        await session.execute(_sc(SourceStatus.NOT_FOUND))
+    ).scalar_one()
+    content_matched = (
+        await session.execute(_cc(ContentStatus.MATCHED))
+    ).scalar_one()
+    content_altered = (
+        await session.execute(_cc(ContentStatus.ALTERED))
+    ).scalar_one()
+    date_matched = (await session.execute(_dc(DateStatus.MATCHED))).scalar_one()
+    date_mismatched = (
+        await session.execute(_dc(DateStatus.MISMATCHED))
     ).scalar_one()
 
     def _mc(t: SubmissionType) -> int:
@@ -114,10 +148,12 @@ async def get_public_stats(
 
     return PublicStatsResponse(
         total_submissions=total,
-        true_count=tc,
-        false_count=fc,
-        partially_true_count=pc,
-        not_found_count=nc,
+        source_confirmed_count=source_confirmed,
+        source_not_found_count=source_not_found,
+        content_matched_count=content_matched,
+        content_altered_count=content_altered,
+        date_matched_count=date_matched,
+        date_mismatched_count=date_mismatched,
         pending_count=pending,
         method_distribution=MethodDistribution(
             source_based=source_based_c,
@@ -161,7 +197,9 @@ async def get_top_sources(
 )
 async def search_explorer(
     keyword: str | None = Query(default=None, max_length=255),
-    verdict: VerificationLabel | None = Query(default=None),
+    source_status: SourceStatus | None = Query(default=None),
+    content_status: ContentStatus | None = Query(default=None),
+    date_status: DateStatus | None = Query(default=None),
     method: SubmissionType | None = Query(default=None),
     date_from: date | None = Query(default=None),
     date_to: date | None = Query(default=None),
@@ -173,7 +211,9 @@ async def search_explorer(
     repo = SubmissionRepository(session)
     rows, total = await repo.search(
         keyword=keyword,
-        verdict=verdict,
+        source_status=source_status,
+        content_status=content_status,
+        date_status=date_status,
         method=method,
         date_from=date_from,
         date_to=date_to,
@@ -194,7 +234,9 @@ async def search_explorer(
                 headline=submission.headline,
                 submission_type=submission.submission_type,
                 claimed_source_text=submission.claimed_source_text,
-                final_label=result.final_label if result else None,
+                source_status=result.source_status if result else None,
+                content_status=result.content_status if result else None,
+                date_status=result.date_status if result else None,
                 confidence=result.confidence if result else None,
                 published_date=submission.published_date,
                 created_at=submission.created_at,

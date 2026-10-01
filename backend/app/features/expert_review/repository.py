@@ -5,7 +5,6 @@ import uuid
 
 from sqlalchemy import and_, func, select
 
-from app.core.constants import VerificationLabel
 from app.features.expert_review.models import (
     CredibilityScore,
     CredibilityWeightTier,

@@ -157,10 +157,10 @@
             <!-- Verdict Header -->
             <div class="verdict-header">
               <div class="verdict-left">
-                <div class="verdict-badge" [ngClass]="getBadgeClass(result.label)">
-                  <span class="badge-icon">{{ getBadgeIcon(result.label) }}</span>
-                  {{ formatVerdict(result.label) }}
-                </div>
+                <app-verdict-badge
+                  [sourceStatus]="result.source_status"
+                  [contentStatus]="result.content_status"
+                  [dateStatus]="result.date_status" />
                 <div class="source-info">
                   Source: <strong>{{ result.normalized_source || '' }}</strong>
                   @if (servedFromCache) {
@@ -181,7 +181,7 @@
                   <circle class="bg-ring" cx="50" cy="50" r="45"></circle>
                   <circle class="progress-ring" cx="50" cy="50" r="45"
                           [style.stroke-dashoffset]="getDashOffset(result.confidence)"
-                          [style.stroke]="verdictColor(result.label)"></circle>
+                          [style.stroke]="verdictColor(result.source_status, result.content_status)"></circle>
                 </svg>
                 <div class="confidence-text">
                   <span class="confidence-val">{{ (result.confidence * 100).toFixed(0) }}%</span>

@@ -28,10 +28,10 @@
               <!-- Verdict Header -->
               <div class="verdict-header">
                 <div class="verdict-left">
-                  <div class="verdict-badge" [ngClass]="getBadgeClass(result()!.label)">
-                    <span class="badge-icon">{{ getBadgeIcon(result()!.label) }}</span>
-                    {{ formatVerdict(result()!.label) }}
-                  </div>
+                  <app-verdict-badge
+                    [sourceStatus]="result()!.source_status"
+                    [contentStatus]="result()!.content_status"
+                    [dateStatus]="result()!.date_status" />
                   <div class="source-info">
                     Source: <strong>{{ result()!.normalized_source || '' }}</strong>
                     @if (result()!.cached) {

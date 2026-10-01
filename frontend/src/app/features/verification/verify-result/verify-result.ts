@@ -3,11 +3,12 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { VerificationService } from '../../../services/verification.service';
 import { SubmissionStatus, VerificationResponse } from '../../../models/verification.model';
+import { VerdictBadgeComponent } from '../../../shared/components/verdict-badge/verdict-badge.component';
 
 @Component({
   selector: 'app-verify-result',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, RouterLink, VerdictBadgeComponent],
   templateUrl: './verify-result.html',
   styleUrls: ['./verify-result.scss']
 })
@@ -28,38 +29,14 @@ export class VerifyResultComponent implements OnInit, OnDestroy {
     () => this.status() === 'PENDING' || this.status() === 'PROCESSING',
   );
 
+  /** Ring/accent colour for the overall verdict — content status wins once
+   *  the source is confirmed; a date mismatch never changes this colour. */
   verdictColor(): string {
-    const label = this.result()?.label;
-    const map: Record<string, string> = {
-      TRUE: '#10b981',
-      FALSE: '#ef4444',
-      PARTIALLY_TRUE: '#f59e0b',
-      NOT_FOUND_IN_CLAIMED_SOURCE: '#6b7280',
-    };
-    return map[label || ''] ?? '#6b7280';
-  }
-
-  getBadgeClass(label: string): string {
-    switch (label?.toUpperCase()) {
-      case 'TRUE': return 'true';
-      case 'FALSE': return 'false';
-      case 'PARTIALLY_TRUE': return 'partial';
-      default: return 'notfound';
-    }
-  }
-
-  getBadgeIcon(label: string): string {
-    switch (label?.toUpperCase()) {
-      case 'TRUE': return '✓';
-      case 'FALSE': return '✗';
-      case 'PARTIALLY_TRUE': return '⚠';
-      default: return '?';
-    }
-  }
-
-  formatVerdict(label: string): string {
-    if (!label) return '';
-    return label.replace(/_/g, ' ');
+    const r = this.result();
+    if (!r || r.source_status === 'NOT_FOUND') return '#6b7280';
+    if (r.content_status === 'MATCHED') return '#10b981';
+    if (r.content_status === 'ALTERED') return '#f59e0b';
+    return '#6b7280';
   }
 
   getDashOffset(confidence: number): number {

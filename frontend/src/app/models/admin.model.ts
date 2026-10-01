@@ -2,6 +2,8 @@
 // Admin Models — synced with backend admin/schemas.py
 // ============================================================
 
+import { ContentStatus, DateStatus, SourceStatus } from './verification.model';
+
 // ── Expert account response from GET /admin/experts ──────────────────
 export interface ExpertResponse {
   id: string;
@@ -18,11 +20,15 @@ export interface ExpertResponse {
 }
 
 // ── Verdict breakdown sub-object in AdminStats ───────────────────────
+// Source, content and date are independent dimensions — each gets its own
+// pair of counts rather than being collapsed into one 4-way tally.
 export interface VerdictBreakdown {
-  true_count: number;
-  false_count: number;
-  partially_true_count: number;
-  not_found_count: number;
+  source_confirmed_count: number;
+  source_not_found_count: number;
+  content_matched_count: number;
+  content_altered_count: number;
+  date_matched_count: number;
+  date_mismatched_count: number;
 }
 
 // ── Platform-wide admin stats from GET /admin/stats ─────────────────
@@ -68,11 +74,13 @@ export interface MethodDistribution {
 // (used by home component; also available in admin context)
 export interface PublicStats {
   total_submissions: number;
-  true_count: number;
-  false_count: number;
-  partially_true_count: number;
+  source_confirmed_count: number;
+  source_not_found_count: number;
+  content_matched_count: number;
+  content_altered_count: number;
+  date_matched_count: number;
+  date_mismatched_count: number;
   pending_count: number;
-  not_found_count: number;
   method_distribution: MethodDistribution;
   avg_verification_time_seconds?: number | null;
 }
@@ -89,7 +97,9 @@ export interface ExplorerItem {
   headline: string | null;
   submission_type: 'SOURCE_BASED' | 'MULTIMODAL' | 'PHOTO_CARD';
   claimed_source_text: string | null;
-  final_label: 'TRUE' | 'FALSE' | 'PARTIALLY_TRUE' | 'NOT_FOUND_IN_CLAIMED_SOURCE' | null;
+  source_status: SourceStatus | null;
+  content_status: ContentStatus | null;
+  date_status: DateStatus | null;
   confidence: number | null;
   published_date: string | null;
   created_at: string;
@@ -97,7 +107,9 @@ export interface ExplorerItem {
 
 export interface ExplorerSearchParams {
   keyword?: string;
-  verdict?: string;
+  source_status?: string;
+  content_status?: string;
+  date_status?: string;
   method?: string;
   date_from?: string;
   date_to?: string;

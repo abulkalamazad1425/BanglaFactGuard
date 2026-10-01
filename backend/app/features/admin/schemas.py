@@ -40,10 +40,21 @@ class ExpertResponse(BaseModel):
 
 
 class VerdictBreakdown(BaseModel):
-    true_count: int
-    false_count: int
-    partially_true_count: int
-    not_found_count: int
+    """Counts across the 3 independent verdict dimensions.
+
+    Not a single TRUE/FALSE/PARTIALLY_TRUE/NOT_FOUND tally — source, content
+    and date are checked independently, so each gets its own pair of counts.
+    content_* and date_* only count submissions where that dimension was
+    actually evaluated (source CONFIRMED, and — for date — both a claimed and
+    an actual publication date known).
+    """
+
+    source_confirmed_count: int
+    source_not_found_count: int
+    content_matched_count: int
+    content_altered_count: int
+    date_matched_count: int
+    date_mismatched_count: int
 
 
 class AdminStatsResponse(BaseModel):

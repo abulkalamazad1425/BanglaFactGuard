@@ -107,7 +107,16 @@ async def run_verification_job(
                     submission_id=submission_id,
                 )
                 await session.commit()
-                log.info("verification_job_completed", label=response.label.value)
+                log.info(
+                    "verification_job_completed",
+                    source_status=response.source_status.value,
+                    content_status=(
+                        response.content_status.value if response.content_status else None
+                    ),
+                    date_status=(
+                        response.date_status.value if response.date_status else None
+                    ),
+                )
             except Exception as exc:
                 await session.rollback()
                 log.error("verification_job_failed", error=str(exc)[:200])

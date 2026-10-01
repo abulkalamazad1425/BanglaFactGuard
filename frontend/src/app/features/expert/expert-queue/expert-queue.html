@@ -48,8 +48,11 @@
                         AI: <strong>{{ (item.ai_confidence! * 100).toFixed(1) }}%</strong>
                       </span>
                     }
-                    @if (item.ai_label) {
-                      <app-verdict-badge [label]="item.ai_label" />
+                    @if (item.source_status) {
+                      <app-verdict-badge
+                        [sourceStatus]="item.source_status"
+                        [contentStatus]="item.content_status"
+                        [dateStatus]="item.date_status" />
                     }
                   </div>
                 </div>

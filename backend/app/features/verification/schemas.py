@@ -5,7 +5,7 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.core.constants import SubmissionStatus, VerificationLabel
+from app.core.constants import ContentStatus, DateStatus, SourceStatus, SubmissionStatus
 from app.features.articles.schemas import RankedArticleSchema
 
 
@@ -148,7 +148,25 @@ class VerificationScoresResponse(VerificationScoresSchema):
 class VerificationResponse(BaseModel):
 
     submission_id: uuid.UUID
-    label: VerificationLabel
+    source_status: SourceStatus = Field(
+        ..., description="Does the claimed source carry this story at all?"
+    )
+    content_status: ContentStatus | None = Field(
+        default=None,
+        description=(
+            "How the claimed content compares to the source. Only set when "
+            "source_status is CONFIRMED — there is nothing to compare "
+            "against when the source never published the story."
+        ),
+    )
+    date_status: DateStatus | None = Field(
+        default=None,
+        description=(
+            "Whether the claimed publication date matches the source "
+            "article's actual date. Only set when both dates are known; a "
+            "mismatch does not imply the content itself is false."
+        ),
+    )
     confidence: float = Field(..., ge=0.0, le=1.0)
     reasoning: str
     matched_articles: list[RankedArticleSchema] = Field(default_factory=list)
@@ -165,9 +183,14 @@ class VerificationResponse(BaseModel):
         "json_schema_extra": {
             "example": {
                 "submission_id": "550e8400-e29b-41d4-a716-446655440000",
-                "label": "TRUE",
+                "source_status": "CONFIRMED",
+                "content_status": "MATCHED",
+                "date_status": "MISMATCHED",
                 "confidence": 0.92,
-                "reasoning": "Prothom Alo published a matching article on 2024-03-15.",
+                "reasoning": (
+                    "Prothom Alo published a matching article, but on a "
+                    "different date than claimed."
+                ),
                 "matched_articles": [],
                 "scores": {
                     "semantic_similarity": 0.91,
@@ -195,7 +218,9 @@ class VerificationResultSummary(BaseModel):
 
     submission_id: uuid.UUID
     headline: str = Field(..., max_length=200)
-    label: VerificationLabel
+    source_status: SourceStatus
+    content_status: ContentStatus | None = None
+    date_status: DateStatus | None = None
     confidence: float = Field(..., ge=0.0, le=1.0)
     claimed_source_text: str
     normalized_source: str | None = None

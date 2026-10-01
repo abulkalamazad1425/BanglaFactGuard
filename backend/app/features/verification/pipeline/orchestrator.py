@@ -256,7 +256,9 @@ class PipelineOrchestrator:
             "pipeline_completed",
             total_ms=total_ms,
             cache_hit=context.cache_hit,
-            label=context.label.value if context.label else None,
+            source_status=context.source_status.value if context.source_status else None,
+            content_status=context.content_status.value if context.content_status else None,
+            date_status=context.date_status.value if context.date_status else None,
             confidence=context.confidence,
             stage_errors=context.stage_error_count,
         )

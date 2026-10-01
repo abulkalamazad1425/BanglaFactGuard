@@ -6,9 +6,11 @@ from datetime import date, datetime
 from typing import Any, Protocol, runtime_checkable
 
 from app.core.constants import (
+    ContentStatus,
+    DateStatus,
     ManipulationType,
     PipelineStageID,
-    VerificationLabel,
+    SourceStatus,
 )
 from app.features.articles.schemas import CandidateArticleSchema, RankedArticleSchema
 from app.features.verification.schemas import (
@@ -37,7 +39,9 @@ class PipelineContext:
     content_hash: str | None = None
 
     cache_hit: bool = False
-    cached_label: VerificationLabel | None = None
+    cached_source_status: SourceStatus | None = None
+    cached_content_status: ContentStatus | None = None
+    cached_date_status: DateStatus | None = None
     cached_confidence: float | None = None
     cached_reasoning: str | None = None
     cached_scores: VerificationScoresSchema | None = None
@@ -74,7 +78,9 @@ class PipelineContext:
     )
     detected_manipulations: list[ManipulationType] = field(default_factory=list)
 
-    label: VerificationLabel | None = None
+    source_status: SourceStatus | None = None
+    content_status: ContentStatus | None = None
+    date_status: DateStatus | None = None
     confidence: float = 0.0
     reasoning: str = ""
 

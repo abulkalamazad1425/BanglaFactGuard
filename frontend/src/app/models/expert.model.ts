@@ -2,6 +2,8 @@
 // Expert Models — synced with backend expert_review/schemas.py
 // ============================================================
 
+import { ContentStatus, DateStatus, SourceStatus } from './verification.model';
+
 export type ExpertLabel = 'TRUE' | 'FALSE' | 'PARTIALLY_TRUE' | 'NOT_FOUND_IN_CLAIMED_SOURCE';
 
 // ── Queue item from GET /expert/queue ────────────────────────────────
@@ -20,6 +22,9 @@ export interface ExpertQueueItem {
   claimed_source_text: string;
   normalized_source?: string | null;
   ai_label?: string | null;
+  source_status?: SourceStatus | null;
+  content_status?: ContentStatus | null;
+  date_status?: DateStatus | null;
   ai_confidence?: number | null;
   submitted_at: string;
   has_voted: boolean;
@@ -34,6 +39,9 @@ export interface ExpertReviewDetail {
   claimed_source_text: string;
   body_text?: string | null;
   ai_label?: string | null;
+  source_status?: SourceStatus | null;
+  content_status?: ContentStatus | null;
+  date_status?: DateStatus | null;
   ai_confidence?: number | null;
   reasoning?: string | null;
 }

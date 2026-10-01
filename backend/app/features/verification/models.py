@@ -23,9 +23,12 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.constants import (
     ClaimStatus,
+    ContentStatus,
+    DateStatus,
+    ExpertVerdict,
     LogLevel,
     PipelineStageID,
-    VerificationLabel,
+    SourceStatus,
 )
 from app.shared.base_model import Base, ReprMixin, TimestampMixin, UUIDMixin
 
@@ -157,11 +160,16 @@ class VerificationResult(UUIDMixin, TimestampMixin, ReprMixin, Base):
         comment="FK to the highest-ranked supporting evidence article",
     )
 
-    label: Mapped[VerificationLabel] = mapped_column(
-        Enum(VerificationLabel, name="verification_label_enum", create_type=True),
+    label: Mapped[ExpertVerdict] = mapped_column(
+        Enum(ExpertVerdict, name="verification_label_enum", create_type=True),
         nullable=False,
         index=True,
-        comment="Final verdict: TRUE | FALSE | PARTIALLY_TRUE | NOT_FOUND_IN_CLAIMED_SOURCE",
+        comment=(
+            "Legacy single-category verdict: TRUE | FALSE | PARTIALLY_TRUE | "
+            "NOT_FOUND_IN_CLAIMED_SOURCE. This table predates the pipeline's "
+            "current (source_status, content_status, date_status) model — see "
+            "VerificationResultV2 for the live schema."
+        ),
     )
 
     confidence: Mapped[float] = mapped_column(
@@ -332,10 +340,44 @@ class VerificationResultV2(UUIDMixin, TimestampMixin, ReprMixin, Base):
         nullable=True,
     )
 
-    final_label: Mapped[VerificationLabel | None] = mapped_column(
-        Enum(VerificationLabel, name="verification_label_enum", create_type=False),
+    source_status: Mapped[SourceStatus | None] = mapped_column(
+        Enum(SourceStatus, name="source_status_enum", create_type=True),
         nullable=True,
         index=True,
+        comment="Does the claimed source carry this story at all?",
+    )
+
+    content_status: Mapped[ContentStatus | None] = mapped_column(
+        Enum(ContentStatus, name="content_status_enum", create_type=True),
+        nullable=True,
+        comment=(
+            "How claimed content compares to the source. Only set when "
+            "source_status is CONFIRMED."
+        ),
+    )
+
+    date_status: Mapped[DateStatus | None] = mapped_column(
+        Enum(DateStatus, name="date_status_enum", create_type=True),
+        nullable=True,
+        comment=(
+            "Whether the claimed publication date matches the source's actual "
+            "date. Only set when both dates are known; independent of "
+            "content_status — a mismatch here does not imply false content."
+        ),
+    )
+
+    ai_consensus_label: Mapped[ExpertVerdict | None] = mapped_column(
+        Enum(ExpertVerdict, name="verification_label_enum", create_type=False),
+        nullable=True,
+        index=True,
+        comment=(
+            "Single-category projection of (source_status, content_status) used "
+            "only to feed the pre-existing expert-review weighted-consensus "
+            "voting system (see verdict_compat.derive_expert_verdict). Not the "
+            "verdict shown to end users — see source_status/content_status/"
+            "date_status for that. Renamed from final_label during the "
+            "3-dimensional verdict migration."
+        ),
     )
 
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -387,5 +429,10 @@ class VerificationResultV2(UUIDMixin, TimestampMixin, ReprMixin, Base):
             "contradiction_score IS NULL OR (contradiction_score >= 0.0 AND contradiction_score <= 1.0)",
             name="ck_verification_results_v2_contradiction_score_range",
         ),
-        Index("ix_verification_results_v2_label_created", final_label, "created_at"),
+        Index(
+            "ix_verification_results_v2_status_created",
+            source_status,
+            content_status,
+            "created_at",
+        ),
     )

@@ -5,6 +5,8 @@ import { ToastService } from '../../shared/services/toast.service';
 import { PhotoCardService } from '../../services/photocard.service';
 import { SourceService } from '../../services/source.service';
 import { SourceResponse } from '../../models/source.model';
+import { ContentStatus, SourceStatus } from '../../models/verification.model';
+import { VerdictBadgeComponent } from '../../shared/components/verdict-badge/verdict-badge.component';
 import {
   NOISE_REASON_LABELS,
   OcrLine,
@@ -25,7 +27,7 @@ type Step = 'upload' | 'review' | 'result';
 @Component({
   selector: 'app-photocard',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, VerdictBadgeComponent],
   templateUrl: './photocard.html',
   styleUrls: ['./photocard.scss'],
 })
@@ -222,44 +224,13 @@ export class PhotoCardComponent implements OnInit {
     return value == null ? '—' : `${(value * 100).toFixed(0)}%`;
   }
 
-  verdictColor(label: string): string {
-    const map: Record<string, string> = {
-      TRUE: '#16a34a',
-      FALSE: '#dc2626',
-      PARTIALLY_TRUE: '#c2760a',
-      NOT_FOUND_IN_CLAIMED_SOURCE: '#6b7280',
-    };
-    return map[label] ?? '#6b7280';
-  }
-
-  getBadgeClass(label: string): string {
-    switch (label?.toUpperCase()) {
-      case 'TRUE':
-        return 'true';
-      case 'FALSE':
-        return 'false';
-      case 'PARTIALLY_TRUE':
-        return 'partial';
-      default:
-        return 'notfound';
-    }
-  }
-
-  getBadgeIcon(label: string): string {
-    switch (label?.toUpperCase()) {
-      case 'TRUE':
-        return '✓';
-      case 'FALSE':
-        return '✗';
-      case 'PARTIALLY_TRUE':
-        return '⚠';
-      default:
-        return '?';
-    }
-  }
-
-  formatVerdict(label: string): string {
-    return label ? label.replace(/_/g, ' ') : '';
+  /** Ring/accent colour for the overall verdict — content status wins once
+   *  the source is confirmed; a date mismatch never changes this colour. */
+  verdictColor(sourceStatus: SourceStatus | null | undefined, contentStatus?: ContentStatus | null): string {
+    if (sourceStatus === 'NOT_FOUND') return '#6b7280';
+    if (contentStatus === 'MATCHED') return '#16a34a';
+    if (contentStatus === 'ALTERED') return '#c2760a';
+    return '#6b7280';
   }
 
   /** Circumference of the r=45 confidence ring is ~283. */

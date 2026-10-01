@@ -2,11 +2,13 @@
 // Verification Models — synced with backend schemas.py
 // ============================================================
 
-export type VerificationLabel =
-  | 'TRUE'
-  | 'FALSE'
-  | 'PARTIALLY_TRUE'
-  | 'NOT_FOUND_IN_CLAIMED_SOURCE';
+// ── 3-dimensional verdict ────────────────────────────────────────────
+// Source, content and date are checked independently: a date mismatch
+// never implies false content, and content is only evaluated once the
+// source is CONFIRMED.
+export type SourceStatus = 'CONFIRMED' | 'NOT_FOUND';
+export type ContentStatus = 'MATCHED' | 'ALTERED';
+export type DateStatus = 'MATCHED' | 'MISMATCHED';
 
 export type SubmissionStatus = 'PENDING' | 'PROCESSING' | 'EXPERT_REVIEW' | 'FINALIZED' | 'FAILED';
 
@@ -70,7 +72,9 @@ export interface VerificationStatus {
 // ── Full response from POST /verify or GET /verify/{id} ─────────────
 export interface VerificationResponse {
   submission_id: string;
-  label: VerificationLabel;
+  source_status: SourceStatus;
+  content_status?: ContentStatus | null;
+  date_status?: DateStatus | null;
   confidence: number;
   reasoning: string;
   matched_articles: MatchedArticle[];
@@ -88,7 +92,8 @@ export interface SubmissionSummary {
   headline: string;
   claimed_source_text: string;
   status: string;
-  ai_label: VerificationLabel | null;
+  source_status: SourceStatus | null;
+  content_status: ContentStatus | null;
   ai_confidence: number | null;
   submitted_at: string;
 }
@@ -96,9 +101,10 @@ export interface SubmissionSummary {
 // ── Stats from GET /users/me/submissions/stats ───────────────────────
 export interface SubmissionStats {
   total: number;
-  finalized_true: number;
-  finalized_false: number;
-  finalized_partially_true: number;
+  source_confirmed: number;
+  source_not_found: number;
+  content_matched: number;
+  content_altered: number;
   pending: number;
 }
 
@@ -137,7 +143,9 @@ export interface VerificationCheck {
 // Kept for verify-result component compatibility
 export interface VerificationResult {
   submission_id: string;
-  label: VerificationLabel;
+  source_status: SourceStatus;
+  content_status?: ContentStatus | null;
+  date_status?: DateStatus | null;
   confidence: number;
   explanation?: string;
   evidence_articles?: EvidenceArticle[];

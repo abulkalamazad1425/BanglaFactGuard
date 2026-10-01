@@ -47,17 +47,18 @@
         <div class="grid-2" style="margin-bottom:32px;">
           <div class="card">
             <h3 class="card-title">Verdict Breakdown</h3>
+            <p class="card-subtitle">Source and content are checked independently</p>
             <div class="breakdown-list">
-              <app-score-bar label="True ✓" [value]="trueRatio()" color="var(--success)" />
-              <app-score-bar label="False ✗" [value]="falseRatio()" color="var(--error)" />
-              <app-score-bar label="Partially True ◑" [value]="partialRatio()" color="var(--warning)" />
-              <app-score-bar label="Not Found ?" [value]="nfRatio()" color="var(--text-muted)" />
+              <app-score-bar label="Source Confirmed ✓" [value]="sourceConfirmedRatio()" color="var(--success)" />
+              <app-score-bar label="Source Not Found ?" [value]="sourceNotFoundRatio()" color="var(--text-muted)" />
+              <app-score-bar label="Content Matched ✓" [value]="contentMatchedRatio()" color="var(--success)" />
+              <app-score-bar label="Content Altered ◑" [value]="contentAlteredRatio()" color="var(--warning)" />
             </div>
             <div class="breakdown-counts">
-              <span class="text-success">{{ stats()!.verdict_breakdown.true_count }} TRUE</span>
-              <span class="text-error">{{ stats()!.verdict_breakdown.false_count }} FALSE</span>
-              <span class="text-warning">{{ stats()!.verdict_breakdown.partially_true_count }} PARTIAL</span>
-              <span class="text-muted">{{ stats()!.verdict_breakdown.not_found_count }} NF</span>
+              <span class="text-success">{{ stats()!.verdict_breakdown.source_confirmed_count }} CONFIRMED</span>
+              <span class="text-muted">{{ stats()!.verdict_breakdown.source_not_found_count }} NOT FOUND</span>
+              <span class="text-success">{{ stats()!.verdict_breakdown.content_matched_count }} MATCHED</span>
+              <span class="text-warning">{{ stats()!.verdict_breakdown.content_altered_count }} ALTERED</span>
             </div>
           </div>
 

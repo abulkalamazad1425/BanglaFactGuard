@@ -4,7 +4,7 @@ import json
 
 import structlog
 
-from app.core.constants import PipelineStageID, VerificationLabel
+from app.core.constants import ContentStatus, DateStatus, PipelineStageID, SourceStatus
 from app.features.verification.pipeline.context import PipelineContext
 from app.features.submissions.repository import SubmissionRepository
 from app.features.verification.repository import ResultV2Repository
@@ -83,7 +83,12 @@ class CacheLookupStage:
         try:
             cached_data: dict = json.loads(cached_bytes)
             self._populate_context_from_cache(context, cached_data)
-            log.info("redis_hit", label=context.cached_label)
+            log.info(
+                "redis_hit",
+                source_status=context.cached_source_status,
+                content_status=context.cached_content_status,
+                date_status=context.cached_date_status,
+            )
             return True
         except (json.JSONDecodeError, KeyError, ValueError) as exc:
             log.warning("redis_cache_deserialisation_error", error=str(exc))
@@ -104,13 +109,19 @@ class CacheLookupStage:
             return False
 
         result = await self.result_repo.get_by_submission_id(submission.id)
-        if result is None or result.final_label is None:
+        if result is None or result.source_status is None:
             log.debug("db_submission_found_but_no_result", submission_id=str(submission.id))
             return False
 
         context.submission_id = submission.id
         context.normalized_source = context.normalized_source
-        context.cached_label = VerificationLabel(result.final_label)
+        context.cached_source_status = SourceStatus(result.source_status)
+        context.cached_content_status = (
+            ContentStatus(result.content_status) if result.content_status else None
+        )
+        context.cached_date_status = (
+            DateStatus(result.date_status) if result.date_status else None
+        )
         context.cached_confidence = result.confidence
         context.cached_reasoning = result.reasoning or ""
         context.cached_scores = VerificationScoresSchema(
@@ -126,7 +137,15 @@ class CacheLookupStage:
         log.info(
             "db_hit",
             submission_id=str(submission.id),
-            label=context.cached_label.value,
+            source_status=context.cached_source_status.value,
+            content_status=(
+                context.cached_content_status.value
+                if context.cached_content_status
+                else None
+            ),
+            date_status=(
+                context.cached_date_status.value if context.cached_date_status else None
+            ),
         )
 
         try:
@@ -141,7 +160,13 @@ class CacheLookupStage:
     ) -> None:
 
         context.cache_hit = True
-        context.cached_label = VerificationLabel(data["label"])
+        context.cached_source_status = SourceStatus(data["source_status"])
+        context.cached_content_status = (
+            ContentStatus(data["content_status"]) if data.get("content_status") else None
+        )
+        context.cached_date_status = (
+            DateStatus(data["date_status"]) if data.get("date_status") else None
+        )
         context.cached_confidence = float(data["confidence"])
         context.cached_reasoning = data.get("reasoning", "")
         context.cached_scores = VerificationScoresSchema(**data.get("scores", {}))
@@ -163,7 +188,19 @@ class CacheLookupStage:
     async def _write_to_redis(self, context: PipelineContext) -> None:
 
         payload = {
-            "label": context.cached_label.value if context.cached_label else None,
+            "source_status": (
+                context.cached_source_status.value
+                if context.cached_source_status
+                else None
+            ),
+            "content_status": (
+                context.cached_content_status.value
+                if context.cached_content_status
+                else None
+            ),
+            "date_status": (
+                context.cached_date_status.value if context.cached_date_status else None
+            ),
             "confidence": context.cached_confidence,
             "reasoning": context.cached_reasoning,
             "scores": (

@@ -156,7 +156,7 @@ class VerificationService:
             )
             if existing is not None:
                 result = await self.result_repo.get_by_submission_id(existing.id)
-                if result is not None and result.final_label is not None:
+                if result is not None and result.source_status is not None:
                     logger.info(
                         "claim_served_from_existing_verification",
                         submission_id=str(existing.id),
@@ -208,7 +208,6 @@ class VerificationService:
         if submission is None:
             return None
 
-        from app.core.constants import VerificationLabel
         from app.features.verification.schemas import (
             ManipulationFlagsSchema,
             VerificationScoresResponse,
@@ -285,7 +284,9 @@ class VerificationService:
 
         return VerificationResponse(
             submission_id=submission_id,
-            label=VerificationLabel(result.final_label),
+            source_status=result.source_status,
+            content_status=result.content_status,
+            date_status=result.date_status,
             confidence=result.confidence or 0.0,
             reasoning=result.reasoning or "",
             matched_articles=matched_articles,
@@ -343,14 +344,15 @@ class VerificationService:
         ]
 
     def _build_response(self, context: PipelineContext) -> VerificationResponse:
-        from app.core.constants import VerificationLabel
+        from app.core.constants import SourceStatus
         from app.features.verification.schemas import VerificationScoresResponse
 
         if context.cache_hit:
             return VerificationResponse(
                 submission_id=context.submission_id or uuid.uuid4(),
-                label=context.cached_label
-                or VerificationLabel.NOT_FOUND_IN_CLAIMED_SOURCE,
+                source_status=context.cached_source_status or SourceStatus.NOT_FOUND,
+                content_status=context.cached_content_status,
+                date_status=context.cached_date_status,
                 confidence=context.cached_confidence or 0.0,
                 reasoning=context.cached_reasoning or "",
                 matched_articles=context.cached_matched_articles,
@@ -367,7 +369,9 @@ class VerificationService:
 
         return VerificationResponse(
             submission_id=context.submission_id or uuid.uuid4(),
-            label=context.label or VerificationLabel.NOT_FOUND_IN_CLAIMED_SOURCE,
+            source_status=context.source_status or SourceStatus.NOT_FOUND,
+            content_status=context.content_status,
+            date_status=context.date_status,
             confidence=context.confidence,
             reasoning=context.reasoning,
             matched_articles=context.ranked_articles[:3],

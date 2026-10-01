@@ -118,8 +118,8 @@ async def extract_photocard(
         "source. The claim runs through the same source-based verification "
         "pipeline used by `POST /verify` — evidence search restricted to the "
         "claimed source, article extraction, multi-dimensional similarity, "
-        "contradiction detection and manipulation checks — and returns "
-        "TRUE | FALSE | PARTIALLY_TRUE | NOT_FOUND_IN_CLAIMED_SOURCE.\n\n"
+        "contradiction detection and manipulation checks — and returns a "
+        "3-dimensional verdict: source_status, content_status, date_status.\n\n"
         "If the confirmed claim matches one already verified, the earlier "
         "result is reused and flagged with `reused_previous_result`."
     ),
