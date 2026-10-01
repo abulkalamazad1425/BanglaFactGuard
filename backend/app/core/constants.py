@@ -149,12 +149,21 @@ class SubmissionType(str, Enum):
 
 
 class SubmissionStatus(str, Enum):
+    """SUBMITTED/AI_PROCESSING/AI_PRELIMINARY/UNDER_REVIEW/EXPERT_VERIFIED in
+    the SRS state-machine map to PENDING/PROCESSING/EXPERT_REVIEW/FINALIZED
+    here — same lifecycle, pre-existing names kept rather than renamed across
+    the whole codebase. ESCALATED is the one genuinely new terminal state:
+    a claim that hit its configured review window/vote cap without reaching
+    consensus, now awaiting an admin's manual resolution instead of further
+    expert votes.
+    """
 
     PENDING = "PENDING"
     PROCESSING = "PROCESSING"
     EXPERT_REVIEW = "EXPERT_REVIEW"
     FINALIZED = "FINALIZED"
     FAILED = "FAILED"
+    ESCALATED = "ESCALATED"
 
 
 class MultimodalPredictionLabel(str, Enum):

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import uuid
-from typing import TypeVar
+from datetime import datetime, timedelta, timezone
+from typing import Callable, TypeVar
 
 import structlog
 
@@ -20,12 +21,13 @@ from app.core.exceptions import (
     PermissionDeniedError,
     RecordNotFoundError,
 )
-from app.features.expert_review.models import ExpertReviewV2
+from app.features.expert_review.models import ExpertReviewV2, VotingConfig
 from app.features.expert_review.overall_verdict import (
     derive_ai_overall_verdict,
     derive_ai_overall_verdict_multimodal,
 )
 from app.features.expert_review.repository import (
+    AuditLogRepository,
     CredibilityWeightTierRepository,
     ExpertProfileRepository,
     ExpertReviewV2Repository,
@@ -58,14 +60,39 @@ _STRUCTURED_TYPES = (SubmissionType.SOURCE_BASED, SubmissionType.PHOTO_CARD)
 _T = TypeVar("_T")
 
 
-def _pick_winner(weights: dict[_T, float], tie_break: _T | None) -> _T:
-    """Highest total weight wins; among ties, the AI's own call wins (ties
-    favor the status quo rather than an arbitrary dict-ordering pick)."""
-    max_weight = max(weights.values())
-    winners = [k for k, w in weights.items() if w == max_weight]
-    if tie_break is not None and tie_break in winners:
-        return tie_break
-    return winners[0]
+def _tally(reviews: list[ExpertReviewV2], get_vote: Callable[[ExpertReviewV2], _T | None]) -> dict[_T, float]:
+    """Weighted vote counts for one dimension — experts only. The AI's own
+    call is never added here: per the finalization spec, T/M/margin are
+    evaluated against expert consensus alone, with the AI's call used only
+    as a tie-break preference (see _evaluate)."""
+    weights: dict[_T, float] = {}
+    for review in reviews:
+        vote = get_vote(review)
+        if vote is not None:
+            weights[vote] = weights.get(vote, 0.0) + review.credibility_weight
+    return weights
+
+
+def _evaluate(
+    weights: dict[_T, float], voters: int, config: VotingConfig, tie_break: _T | None
+) -> tuple[bool, _T | None]:
+    """Does this dimension clear ALL of: leader >= T, voters >= M,
+    leader - runner_up >= margin? Returns (passes, leader) — leader is the
+    current front-runner even when passes is False, so callers can still
+    show "leading toward X" while a claim is under review."""
+    if not weights:
+        return False, tie_break
+    sorted_weights = sorted(weights.values(), reverse=True)
+    leader_weight = sorted_weights[0]
+    runner_up_weight = sorted_weights[1] if len(sorted_weights) > 1 else 0.0
+    leaders = [k for k, w in weights.items() if w == leader_weight]
+    leader = tie_break if (tie_break is not None and tie_break in leaders) else leaders[0]
+    passes = (
+        leader_weight >= config.verified_threshold
+        and voters >= config.min_expert_votes
+        and (leader_weight - runner_up_weight) >= config.lead_margin
+    )
+    return passes, leader
 
 
 class ExpertReviewService:
@@ -81,6 +108,7 @@ class ExpertReviewService:
         voting_config_repo: VotingConfigRepository,
         storage: MultimodalStorageService | None = None,
         photocard_storage: PhotoCardStorageService | None = None,
+        audit_repo: AuditLogRepository | None = None,
     ) -> None:
         self._reviews = review_repo
         self._profiles = profile_repo
@@ -91,8 +119,23 @@ class ExpertReviewService:
         self._voting_config = voting_config_repo
         self._storage = storage
         self._photocard_storage = photocard_storage
+        self._audit = audit_repo
 
         self._session = review_repo.session
+
+    async def _record_audit(
+        self,
+        *,
+        action: str,
+        actor_id: uuid.UUID | None,
+        submission_id: uuid.UUID | None = None,
+        details: dict | None = None,
+    ) -> None:
+        if self._audit is None:
+            return
+        await self._audit.record(
+            action=action, actor_id=actor_id, submission_id=submission_id, details=details
+        )
 
     async def _fetch_photocard_image_url(self, submission_id: uuid.UUID) -> str | None:
         if self._photocard_storage is None:
@@ -222,7 +265,20 @@ class ExpertReviewService:
         date_status: DateStatus | None,
         justification: str,
     ) -> ExpertReviewResponse:
-        submission = await self._submissions.get_by_id(submission_id)
+        # Row-locks the submission for the rest of this transaction — a
+        # concurrent vote on the same claim blocks here until this one
+        # commits, so two simultaneous finalizing votes can't race.
+        submission = await self._submissions.get_by_id_locked(submission_id)
+
+        if submission.status != SubmissionStatus.EXPERT_REVIEW:
+            raise DomainValidationError(
+                message="This claim is not open for voting (already finalized, escalated, or still processing)."
+            )
+
+        if submission.submitter_id is not None and submission.submitter_id == expert_id:
+            raise DomainValidationError(
+                message="You cannot vote on a claim you submitted yourself."
+            )
 
         existing = await self._reviews.get_by_submission_and_reviewer(
             submission_id, expert_id
@@ -268,10 +324,11 @@ class ExpertReviewService:
             ai_source = ai_content = ai_date = None
             ai_overall = derive_ai_overall_verdict_multimodal(mm.prediction)
 
+        config = await self._voting_config.get_or_create()
         profile = await self._profiles.get_or_create(
             expert_id, initial_score=_AUTH.initial_expert_credibility
         )
-        weight, tier = await self._resolve_weight(profile)
+        weight, tier = await self._resolve_weight(profile, config)
 
         review = ExpertReviewV2(
             submission_id=submission_id,
@@ -298,28 +355,41 @@ class ExpertReviewService:
             expert_id=str(expert_id),
             overall_verdict=overall_verdict.value,
             source_status=source_status.value if source_status else None,
-            weight=weight,
+            weight_applied=weight,
+        )
+        await self._record_audit(
+            action="vote_cast",
+            actor_id=expert_id,
+            submission_id=submission_id,
+            details={
+                "review_id": str(review.id),
+                "overall_verdict": overall_verdict.value,
+                "source_status": source_status.value if source_status else None,
+                "weight_applied": weight,
+            },
         )
 
-        vote_count = await self._reviews.count_votes_for_submission(submission_id)
-        voting_config = await self._voting_config.get_or_create()
-        if vote_count >= voting_config.min_expert_votes:
-            await self._finalize_submission(submission_id)
-
+        await self._finalize_or_escalate(submission)
         return _review_to_response(review)
 
-    async def _resolve_weight(self, profile):
+    async def _resolve_weight(self, profile, config: VotingConfig):
         """Admin-configurable voting weight, resolved from credibility_weight_tiers
         by the expert's current accuracy% — replaces the old hardcoded
         ±0.05/-0.03 credibility deltas (PDF §2.2: "administrator-defined rules...
-        without changing system code")."""
-        if profile.total_votes <= 0:
+        without changing system code"). Below config.activation_threshold_votes
+        (N) lifetime completed reviews, every vote counts as weight 1.0
+        regardless of tier — this is `weight_applied`, snapshotted onto the
+        vote row so later tier/config changes never retroactively alter it."""
+        if profile.total_votes < config.activation_threshold_votes:
             return _NEUTRAL_WEIGHT, None
         accuracy_pct = (profile.correct_votes / profile.total_votes) * 100
         tier = await self._tiers.resolve_tier_for_accuracy(accuracy_pct)
         if tier is None:
             return _NEUTRAL_WEIGHT, None
-        return tier.weight, tier
+        weight = tier.weight
+        if config.max_tier_weight is not None:
+            weight = min(weight, config.max_tier_weight)
+        return weight, tier
 
     async def edit_vote(
         self,
@@ -340,6 +410,17 @@ class ExpertReviewService:
             raise DomainValidationError(
                 message="This claim has been finalized. Votes can no longer be edited."
             )
+
+        # Row-lock the submission too — an edit can itself tip finalization,
+        # same as a fresh vote, so it needs the same concurrency guard.
+        submission = await self._submissions.get_by_id_locked(review.submission_id)
+
+        before = {
+            "vote_overall_verdict": review.vote_overall_verdict.value,
+            "vote_source_status": review.vote_source_status.value if review.vote_source_status else None,
+            "vote_content_status": review.vote_content_status.value if review.vote_content_status else None,
+            "vote_date_status": review.vote_date_status.value if review.vote_date_status else None,
+        }
 
         updates: dict = {}
         if overall_verdict is not None:
@@ -371,6 +452,15 @@ class ExpertReviewService:
 
         if updates:
             review = await self._reviews.update(review, **updates)
+            await self._record_audit(
+                action="vote_edited",
+                actor_id=expert_id,
+                submission_id=review.submission_id,
+                details={"review_id": str(review.id), "before": before, "after": updates},
+            )
+            if submission.status == SubmissionStatus.EXPERT_REVIEW:
+                await self._finalize_or_escalate(submission)
+
         return _review_to_response(review)
 
     async def get_history(
@@ -398,9 +488,9 @@ class ExpertReviewService:
                     result = await self._results.get_by_submission_id(r.submission_id)
                     if result is not None:
                         final_overall = result.overall_verdict
-                        final_source = result.source_status
-                        final_content = result.content_status
-                        final_date = result.date_status
+                        final_source = result.final_source_status
+                        final_content = result.final_content_status
+                        final_date = result.final_date_status
                 else:
                     mm = await self._multimodal.get_by_submission_id(r.submission_id)
                     if mm is not None:
@@ -458,126 +548,135 @@ class ExpertReviewService:
             current_credibility=round(profile.credibility_score, 4),
         )
 
-    async def _finalize_submission(self, submission_id: uuid.UUID) -> None:
-        reviews = await self._reviews.get_for_submission(submission_id)
+    async def _finalize_or_escalate(self, submission: Submission) -> None:
+        """Called after every vote cast/edit while the submission is still
+        EXPERT_REVIEW. Checks every applicable dimension's T/M/margin
+        condition; finalizes only if ALL of them pass simultaneously.
+        Otherwise, escalates if the configured review window/vote cap has
+        been exhausted. Caller must already hold the submission's row lock."""
+        reviews = await self._reviews.get_for_submission(submission.id)
         if not reviews:
             return
 
-        submission = await self._submissions.get_by_id(submission_id)
+        config = await self._voting_config.get_or_create()
         is_structured = submission.submission_type in _STRUCTURED_TYPES
-
-        result: VerificationResultV2 | None = None
-        mm: MultimodalAnalysis | None = None
-        ai_source_status: SourceStatus | None = None
+        voters = len(reviews)
 
         if is_structured:
-            result = await self._results.get_by_submission_id(submission_id)
+            result = await self._results.get_by_submission_id(submission.id)
             if result is None or result.source_status is None:
                 return
-            ai_source_status = result.source_status
             ai_overall = derive_ai_overall_verdict(
-                ai_source_status, result.content_status, result.date_status
+                result.source_status, result.content_status, result.date_status
             )
-            ai_weight = result.confidence or 0.0
+
+            overall_weights = _tally(reviews, lambda r: r.vote_overall_verdict)
+            overall_ok, overall_leader = _evaluate(overall_weights, voters, config, ai_overall)
+
+            source_weights = _tally(reviews, lambda r: r.vote_source_status)
+            source_ok, source_leader = _evaluate(source_weights, voters, config, result.source_status)
+
+            content_ok, date_ok = True, True
+            content_leader: ContentStatus | None = None
+            date_leader: DateStatus | None = None
+            if source_leader == SourceStatus.CONFIRMED:
+                content_weights = _tally(reviews, lambda r: r.vote_content_status)
+                content_ok, content_leader = _evaluate(
+                    content_weights, voters, config, result.content_status
+                )
+                date_weights = _tally(reviews, lambda r: r.vote_date_status)
+                date_ok, date_leader = _evaluate(date_weights, voters, config, result.date_status)
+            # else: source leader is NOT_FOUND (or None) -> Content/Date are
+            # N/A, auto-pass, and stay unset on the finalized result.
+
+            if overall_ok and source_ok and content_ok and date_ok and overall_leader and source_leader:
+                await self._results.update(
+                    result,
+                    final_source_status=source_leader,
+                    final_content_status=content_leader,
+                    final_date_status=date_leader,
+                    overall_verdict=overall_leader,
+                    finalized_at=datetime.now(timezone.utc),
+                )
+                await self._submissions.mark_finalized(submission.id)
+                for review in reviews:
+                    await self._reviews.update(review, status="finalized")
+                await self._update_expert_profiles(reviews, overall_leader)
+                await self._record_audit(
+                    action="finalized",
+                    actor_id=None,
+                    submission_id=submission.id,
+                    details={
+                        "overall_verdict": overall_leader.value,
+                        "source_status": source_leader.value,
+                        "content_status": content_leader.value if content_leader else None,
+                        "date_status": date_leader.value if date_leader else None,
+                        "vote_count": voters,
+                    },
+                )
+                logger.info(
+                    "submission_finalized",
+                    submission_id=str(submission.id),
+                    final_overall_verdict=overall_leader.value,
+                    vote_count=voters,
+                )
+                return
         else:
-            mm = await self._multimodal.get_by_submission_id(submission_id)
+            mm = await self._multimodal.get_by_submission_id(submission.id)
             if mm is None:
                 return
             ai_overall = derive_ai_overall_verdict_multimodal(mm.prediction)
-            ai_weight = (
-                mm.confidence_fake
-                if mm.prediction == MultimodalPredictionLabel.FAKE
-                else mm.confidence_real
-            )
+            overall_weights = _tally(reviews, lambda r: r.vote_overall_verdict)
+            overall_ok, overall_leader = _evaluate(overall_weights, voters, config, ai_overall)
 
-        # ─── Overall tally — every submission type votes on this ──────────
-        overall_weights: dict[OverallVerdict, float] = {}
-        for review in reviews:
-            overall_weights[review.vote_overall_verdict] = (
-                overall_weights.get(review.vote_overall_verdict, 0.0)
-                + review.credibility_weight
-            )
-        overall_weights[ai_overall] = overall_weights.get(ai_overall, 0.0) + ai_weight
-        final_overall = _pick_winner(overall_weights, tie_break=ai_overall)
-
-        final_source: SourceStatus | None = None
-        final_content: ContentStatus | None = None
-        final_date: DateStatus | None = None
-
-        # ─── Source → Content/Date tally — SOURCE_BASED/PHOTO_CARD only ───
-        if is_structured and result is not None and ai_source_status is not None:
-            source_weights: dict[SourceStatus, float] = {}
-            for review in reviews:
-                vote_source = review.vote_source_status
-                if vote_source is not None:
-                    source_weights[vote_source] = (
-                        source_weights.get(vote_source, 0.0) + review.credibility_weight
-                    )
-            source_weights[ai_source_status] = (
-                source_weights.get(ai_source_status, 0.0) + ai_weight
-            )
-            final_source = _pick_winner(source_weights, tie_break=ai_source_status)
-
-            if final_source == SourceStatus.CONFIRMED:
-                content_weights: dict[ContentStatus, float] = {}
-                date_weights: dict[DateStatus, float] = {}
+            if overall_ok and overall_leader:
+                await self._multimodal.update(
+                    mm,
+                    expert_overall_verdict=overall_leader,
+                    finalized_at=datetime.now(timezone.utc),
+                )
+                await self._submissions.mark_finalized(submission.id)
                 for review in reviews:
-                    if review.vote_content_status is not None:
-                        content_weights[review.vote_content_status] = (
-                            content_weights.get(review.vote_content_status, 0.0)
-                            + review.credibility_weight
-                        )
-                    if review.vote_date_status is not None:
-                        date_weights[review.vote_date_status] = (
-                            date_weights.get(review.vote_date_status, 0.0)
-                            + review.credibility_weight
-                        )
-                if result.content_status is not None:
-                    content_weights[result.content_status] = (
-                        content_weights.get(result.content_status, 0.0) + ai_weight
-                    )
-                if result.date_status is not None:
-                    date_weights[result.date_status] = (
-                        date_weights.get(result.date_status, 0.0) + ai_weight
-                    )
-
-                final_content = (
-                    _pick_winner(content_weights, tie_break=result.content_status)
-                    if content_weights
-                    else result.content_status
+                    await self._reviews.update(review, status="finalized")
+                await self._update_expert_profiles(reviews, overall_leader)
+                await self._record_audit(
+                    action="finalized",
+                    actor_id=None,
+                    submission_id=submission.id,
+                    details={"overall_verdict": overall_leader.value, "vote_count": voters},
                 )
-                final_date = (
-                    _pick_winner(date_weights, tie_break=result.date_status)
-                    if date_weights
-                    else result.date_status
+                logger.info(
+                    "submission_finalized",
+                    submission_id=str(submission.id),
+                    final_overall_verdict=overall_leader.value,
+                    vote_count=voters,
                 )
+                return
 
-            await self._results.update(
-                result,
-                source_status=final_source,
-                content_status=final_content,
-                date_status=final_date,
-                overall_verdict=final_overall,
-            )
-        elif mm is not None:
-            await self._multimodal.update(mm, expert_overall_verdict=final_overall)
+        await self._maybe_escalate(submission, voters, config)
 
-        await self._submissions.mark_finalized(submission_id)
+    async def _maybe_escalate(
+        self, submission: Submission, voters: int, config: VotingConfig
+    ) -> None:
+        should_escalate = False
+        if config.max_review_votes is not None and voters >= config.max_review_votes:
+            should_escalate = True
+        if config.max_review_hours is not None:
+            age = datetime.now(timezone.utc) - submission.created_at
+            if age >= timedelta(hours=config.max_review_hours):
+                should_escalate = True
 
-        for review in reviews:
-            await self._reviews.update(review, status="finalized")
+        if not should_escalate:
+            return
 
-        await self._update_expert_profiles(reviews, final_overall)
-
-        logger.info(
-            "submission_finalized",
-            submission_id=str(submission_id),
-            final_overall_verdict=final_overall.value,
-            final_source_status=final_source.value if final_source else None,
-            final_content_status=final_content.value if final_content else None,
-            final_date_status=final_date.value if final_date else None,
-            vote_count=len(reviews),
+        await self._submissions.set_status(submission.id, SubmissionStatus.ESCALATED)
+        await self._record_audit(
+            action="escalated",
+            actor_id=None,
+            submission_id=submission.id,
+            details={"vote_count": voters},
         )
+        logger.info("submission_escalated", submission_id=str(submission.id), vote_count=voters)
 
     async def _update_expert_profiles(
         self,

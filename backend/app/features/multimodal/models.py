@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import ARRAY, CheckConstraint, Enum, Float, ForeignKey, Index, String, Text
+from sqlalchemy import ARRAY, CheckConstraint, DateTime, Enum, Float, ForeignKey, Index, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -128,6 +129,12 @@ class MultimodalAnalysis(UUIDMixin, TimestampMixin, ReprMixin, Base):
             "Expert-finalized Overall verdict — NULL until expert review "
             "finalizes this claim. Not written by the inference engine."
         ),
+    )
+
+    finalized_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="When expert review finalized this claim; NULL until then.",
     )
 
     text_embedding: Mapped[list[float] | None] = mapped_column(

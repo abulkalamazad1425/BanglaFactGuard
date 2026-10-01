@@ -6,6 +6,7 @@ import uuid
 from sqlalchemy import and_, func, select
 
 from app.features.expert_review.models import (
+    AuditLogEntry,
     CredibilityScore,
     CredibilityWeightTier,
     ExpertProfile,
@@ -337,3 +338,37 @@ class VotingConfigRepository(BaseRepository[VotingConfig]):
             return row
         row = VotingConfig(min_expert_votes=3)
         return await self.create(row)
+
+
+class AuditLogRepository(BaseRepository[AuditLogEntry]):
+    """Append-only — nothing ever updates or deletes a row here."""
+
+    model_class = AuditLogEntry
+
+    async def record(
+        self,
+        *,
+        action: str,
+        actor_id: uuid.UUID | None,
+        submission_id: uuid.UUID | None = None,
+        details: dict | None = None,
+    ) -> AuditLogEntry:
+        entry = AuditLogEntry(
+            actor_id=actor_id,
+            action=action,
+            submission_id=submission_id,
+            details=details or {},
+        )
+        return await self.create(entry)
+
+    async def list_recent(
+        self, *, limit: int = 100, offset: int = 0
+    ) -> list[AuditLogEntry]:
+        stmt = (
+            select(AuditLogEntry)
+            .order_by(AuditLogEntry.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())

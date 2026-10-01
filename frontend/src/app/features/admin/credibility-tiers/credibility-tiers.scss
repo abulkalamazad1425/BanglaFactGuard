@@ -16,21 +16,19 @@
 }
 
 .voting-config-card {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 20px;
   margin-bottom: 24px;
-  flex-wrap: wrap;
 
-  .voting-config-text {
-    h3 { margin-bottom: 4px; font-size: 16px; }
-    p { color: var(--text-secondary); font-size: 13px; max-width: 480px; line-height: 1.5; }
+  h3 { margin-bottom: 4px; font-size: 16px; }
+  .card-subtitle { color: var(--text-secondary); font-size: 13px; max-width: 720px; line-height: 1.6; margin-bottom: 20px; }
+
+  .voting-config-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px 20px;
+    align-items: start;
   }
-  .voting-config-control {
-    display: flex; align-items: center; gap: 10px; flex-shrink: 0;
-    input { width: 80px; text-align: center; }
-  }
+  .field-hint { display: block; font-size: 11px; color: var(--text-muted); margin-top: 4px; line-height: 1.4; }
+  .voting-config-save { display: flex; align-items: flex-end; }
 }
 
 .loading-overlay { display: flex; justify-content: center; padding: 80px; }

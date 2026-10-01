@@ -345,14 +345,19 @@ class VerificationResultV2(UUIDMixin, TimestampMixin, ReprMixin, Base):
         Enum(SourceStatus, name="source_status_enum", create_type=True),
         nullable=True,
         index=True,
-        comment="Does the claimed source carry this story at all?",
+        comment=(
+            "The AI pipeline's own call — an immutable snapshot, written once "
+            "by s11_classifier.py and never overwritten by expert review. See "
+            "final_source_status for the expert-finalized value, which may "
+            "differ from this one."
+        ),
     )
 
     content_status: Mapped[ContentStatus | None] = mapped_column(
         Enum(ContentStatus, name="content_status_enum", create_type=True),
         nullable=True,
         comment=(
-            "How claimed content compares to the source. Only set when "
+            "The AI's own call — immutable, see source_status. Only set when "
             "source_status is CONFIRMED."
         ),
     )
@@ -361,10 +366,28 @@ class VerificationResultV2(UUIDMixin, TimestampMixin, ReprMixin, Base):
         Enum(DateStatus, name="date_status_enum", create_type=True),
         nullable=True,
         comment=(
-            "Whether the claimed publication date matches the source's actual "
-            "date. Only set when both dates are known; independent of "
-            "content_status — a mismatch here does not imply false content."
+            "The AI's own call — immutable, see source_status. Only set when "
+            "both dates are known; independent of content_status — a mismatch "
+            "here does not imply false content."
         ),
+    )
+
+    final_source_status: Mapped[SourceStatus | None] = mapped_column(
+        Enum(SourceStatus, name="source_status_enum", create_type=False),
+        nullable=True,
+        comment="Expert-finalized Source verdict — NULL until finalized. Written only by ExpertReviewService.",
+    )
+
+    final_content_status: Mapped[ContentStatus | None] = mapped_column(
+        Enum(ContentStatus, name="content_status_enum", create_type=False),
+        nullable=True,
+        comment="Expert-finalized Content verdict — NULL until finalized, or if final_source_status is NOT_FOUND.",
+    )
+
+    final_date_status: Mapped[DateStatus | None] = mapped_column(
+        Enum(DateStatus, name="date_status_enum", create_type=False),
+        nullable=True,
+        comment="Expert-finalized Date verdict — NULL until finalized, or if final_source_status is NOT_FOUND.",
     )
 
     overall_verdict: Mapped[OverallVerdict | None] = mapped_column(
@@ -373,11 +396,19 @@ class VerificationResultV2(UUIDMixin, TimestampMixin, ReprMixin, Base):
         index=True,
         comment=(
             "Expert-finalized Overall verdict (Fake/Real/Misleading/Altered) — "
-            "NULL until expert review finalizes this claim. Written only by "
+            "NULL until expert review finalizes this claim. Functionally the "
+            "'final_overall_verdict' of this fields group — named before "
+            "final_source/content/date_status existed. Written only by "
             "ExpertReviewService, never by the AI pipeline itself; see "
             "app/features/expert_review/overall_verdict.py for the AI's "
             "implied-but-not-persisted preliminary value."
         ),
+    )
+
+    finalized_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="When expert review finalized this claim; NULL until then.",
     )
 
     ai_consensus_label: Mapped[ExpertVerdict | None] = mapped_column(

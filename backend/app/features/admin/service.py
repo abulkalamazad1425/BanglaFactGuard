@@ -10,12 +10,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.constants import ContentStatus, DateStatus, SourceStatus, SubmissionStatus
 from app.core.exceptions import (
+    DomainValidationError,
     DuplicateRecordError,
     RecordNotFoundError,
     WeakPasswordError,
 )
 from app.features.admin.schemas import (
     AdminStatsResponse,
+    AuditLogEntryResponse,
     CreateExpertRequest,
     CredibilityWeightTierRequest,
     CredibilityWeightTierResponse,
@@ -32,6 +34,7 @@ from app.features.auth.repository import RefreshTokenRepository, UserRepository
 from app.features.auth.security import hash_password
 from app.features.expert_review.models import CredibilityWeightTier, VotingConfig
 from app.features.expert_review.repository import (
+    AuditLogRepository,
     CredibilityWeightTierRepository,
     ExpertProfileRepository,
     VotingConfigRepository,
@@ -275,9 +278,66 @@ class AdminService:
         rows = (await self._session.execute(stmt)).scalars().all()
         return [_tier_to_response(t) for t in rows]
 
+    async def _validate_tier(
+        self,
+        *,
+        tier_id: uuid.UUID | None,
+        min_pct: float,
+        max_pct: float,
+        weight: float,
+        is_active: bool,
+    ) -> None:
+        if max_pct <= min_pct:
+            raise DomainValidationError(
+                message="max_accuracy_pct must be greater than min_accuracy_pct."
+            )
+
+        voting_config = await VotingConfigRepository(self._session).get_or_create()
+        if voting_config.max_tier_weight is not None and weight > voting_config.max_tier_weight:
+            raise DomainValidationError(
+                message=(
+                    f"Weight {weight} exceeds the configured maximum of "
+                    f"{voting_config.max_tier_weight}."
+                )
+            )
+
+        if not is_active:
+            return  # inactive tiers don't participate in the 0-100 tiling
+
+        stmt = select(CredibilityWeightTier).where(CredibilityWeightTier.is_active.is_(True))
+        if tier_id is not None:
+            stmt = stmt.where(CredibilityWeightTier.id != tier_id)
+        others = (await self._session.execute(stmt)).scalars().all()
+        ranges = sorted(
+            [(t.min_accuracy_pct, t.max_accuracy_pct) for t in others] + [(min_pct, max_pct)],
+            key=lambda r: r[0],
+        )
+        if ranges[0][0] != 0.0:
+            raise DomainValidationError(
+                message=f"Active tiers must start at 0% (currently starts at {ranges[0][0]}%)."
+            )
+        for (_, hi1), (lo2, _) in zip(ranges, ranges[1:]):
+            if hi1 > lo2:
+                raise DomainValidationError(message=f"Tier ranges overlap around {lo2}%.")
+            if hi1 < lo2:
+                raise DomainValidationError(
+                    message=f"Gap between tiers from {hi1}% to {lo2}% — every accuracy% must be covered."
+                )
+        if ranges[-1][1] != 100.0:
+            raise DomainValidationError(
+                message=f"Active tiers must end at 100% (currently ends at {ranges[-1][1]}%)."
+            )
+
     async def create_credibility_tier(
-        self, req: CredibilityWeightTierRequest
+        self, req: CredibilityWeightTierRequest, admin_id: uuid.UUID | None = None
     ) -> CredibilityWeightTierResponse:
+        await self._validate_tier(
+            tier_id=None,
+            min_pct=req.min_accuracy_pct,
+            max_pct=req.max_accuracy_pct,
+            weight=req.weight,
+            is_active=req.is_active,
+        )
         tier = CredibilityWeightTier(
             label=req.label,
             min_accuracy_pct=req.min_accuracy_pct,
@@ -289,49 +349,126 @@ class AdminService:
         await self._session.flush()
         await self._session.refresh(tier)
         logger.info("credibility_tier_created", tier_id=str(tier.id), label=tier.label)
+        await AuditLogRepository(self._session).record(
+            action="tier_created",
+            actor_id=admin_id,
+            details={"tier_id": str(tier.id), "label": tier.label, "weight": tier.weight},
+        )
         return _tier_to_response(tier)
 
     async def update_credibility_tier(
-        self, tier_id: uuid.UUID, req: CredibilityWeightTierUpdateRequest
+        self,
+        tier_id: uuid.UUID,
+        req: CredibilityWeightTierUpdateRequest,
+        admin_id: uuid.UUID | None = None,
     ) -> CredibilityWeightTierResponse:
         tier = await self._session.get(CredibilityWeightTier, tier_id)
         if tier is None:
             raise RecordNotFoundError(model="CredibilityWeightTier", identifier=str(tier_id))
 
         updates = req.model_dump(exclude_unset=True)
+        await self._validate_tier(
+            tier_id=tier_id,
+            min_pct=updates.get("min_accuracy_pct", tier.min_accuracy_pct),
+            max_pct=updates.get("max_accuracy_pct", tier.max_accuracy_pct),
+            weight=updates.get("weight", tier.weight),
+            is_active=updates.get("is_active", tier.is_active),
+        )
         for field, value in updates.items():
             setattr(tier, field, value)
         self._session.add(tier)
         await self._session.flush()
         await self._session.refresh(tier)
+        await AuditLogRepository(self._session).record(
+            action="tier_updated",
+            actor_id=admin_id,
+            details={"tier_id": str(tier.id), "changes": updates},
+        )
         return _tier_to_response(tier)
 
-    async def delete_credibility_tier(self, tier_id: uuid.UUID) -> None:
+    async def delete_credibility_tier(
+        self, tier_id: uuid.UUID, admin_id: uuid.UUID | None = None
+    ) -> None:
         tier = await self._session.get(CredibilityWeightTier, tier_id)
         if tier is None:
             raise RecordNotFoundError(model="CredibilityWeightTier", identifier=str(tier_id))
         await self._session.delete(tier)
         await self._session.flush()
+        await AuditLogRepository(self._session).record(
+            action="tier_deleted",
+            actor_id=admin_id,
+            details={"tier_id": str(tier_id), "label": tier.label},
+        )
 
     async def get_voting_config(self) -> VotingConfigResponse:
         row = await VotingConfigRepository(self._session).get_or_create()
         return _voting_config_to_response(row)
 
     async def update_voting_config(
-        self, req: VotingConfigUpdateRequest
+        self, req: VotingConfigUpdateRequest, admin_id: uuid.UUID | None = None
     ) -> VotingConfigResponse:
-        row = await VotingConfigRepository(self._session).get_or_create()
-        row = await VotingConfigRepository(self._session).update(
-            row, min_expert_votes=req.min_expert_votes
+        if req.max_tier_weight is not None:
+            existing_tiers = (
+                (
+                    await self._session.execute(
+                        select(CredibilityWeightTier).where(
+                            CredibilityWeightTier.weight > req.max_tier_weight
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            if existing_tiers:
+                labels = ", ".join(t.label for t in existing_tiers)
+                raise DomainValidationError(
+                    message=(
+                        f"max_tier_weight {req.max_tier_weight} is below the weight "
+                        f"of existing tier(s): {labels}. Lower those tiers' weights first."
+                    )
+                )
+
+        repo = VotingConfigRepository(self._session)
+        row = await repo.get_or_create()
+        updates = req.model_dump(exclude_unset=True)
+        row = await repo.update(row, **updates)
+        logger.info("voting_config_updated", **updates)
+        await AuditLogRepository(self._session).record(
+            action="voting_config_updated",
+            actor_id=admin_id,
+            details=updates,
         )
-        logger.info("voting_config_updated", min_expert_votes=req.min_expert_votes)
         return _voting_config_to_response(row)
+
+    async def list_audit_log(
+        self, *, limit: int = 100, offset: int = 0
+    ) -> list[AuditLogEntryResponse]:
+        entries = await AuditLogRepository(self._session).list_recent(
+            limit=limit, offset=offset
+        )
+        return [
+            AuditLogEntryResponse(
+                id=str(e.id),
+                actor_id=str(e.actor_id) if e.actor_id else None,
+                action=e.action,
+                submission_id=str(e.submission_id) if e.submission_id else None,
+                details=e.details,
+                created_at=e.created_at,
+            )
+            for e in entries
+        ]
 
 
 def _voting_config_to_response(row: VotingConfig) -> VotingConfigResponse:
     return VotingConfigResponse(
         id=str(row.id),
         min_expert_votes=row.min_expert_votes,
+        activation_threshold_votes=row.activation_threshold_votes,
+        verified_threshold=row.verified_threshold,
+        lead_margin=row.lead_margin,
+        max_review_votes=row.max_review_votes,
+        max_review_hours=row.max_review_hours,
+        max_tier_weight=row.max_tier_weight,
         updated_at=row.updated_at,
     )
 

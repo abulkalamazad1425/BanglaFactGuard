@@ -157,6 +157,10 @@
                         <span class="summary-desc">
                           Our expert reviewers finalized this claim as
                           <strong>{{ overallVerdictLabel(m.expert_overall_verdict) }}</strong>.
+                          @if (multimodalWasOverridden(m)) {
+                            This changed the AI's preliminary call of
+                            <strong>{{ m.prediction === 'FAKE' ? 'Fake' : 'Real' }}</strong>.
+                          }
                         </span>
                       </div>
                     </div>
@@ -265,6 +269,15 @@
           </div>
         </div>
       </div>
+
+      @if (r.was_overridden) {
+        <div class="override-banner">
+          ⚖️ Experts changed this verdict from
+          <strong>{{ overallVerdictLabel(r.ai_overall_verdict) }}</strong> to
+          <strong>{{ overallVerdictLabel(r.overall_verdict) }}</strong>
+          after reviewing the AI's preliminary result.
+        </div>
+      }
 
       <!-- Reasoning Box -->
       @if (r.reasoning) {

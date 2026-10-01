@@ -282,18 +282,26 @@ class VerificationService:
             numerical_consistency=result.numerical_consistency,
         )
         flags = cached_flags or ManipulationFlagsSchema()
-        result_source = result.source_status or SourceStatus.NOT_FOUND
+        ai_source = result.source_status or SourceStatus.NOT_FOUND
+        is_finalized = bool(result.overall_verdict)
+        displayed_source = result.final_source_status or ai_source
+        displayed_content = result.final_content_status if is_finalized else result.content_status
+        displayed_date = result.final_date_status if is_finalized else result.date_status
+        ai_overall = derive_ai_overall_verdict(ai_source, result.content_status, result.date_status)
+        displayed_overall = result.overall_verdict or ai_overall
 
         return VerificationResponse(
             submission_id=submission_id,
-            overall_verdict=result.overall_verdict
-            or derive_ai_overall_verdict(
-                result_source, result.content_status, result.date_status
-            ),
-            is_finalized=bool(result.overall_verdict),
-            source_status=result_source,
-            content_status=result.content_status,
-            date_status=result.date_status,
+            overall_verdict=displayed_overall,
+            is_finalized=is_finalized,
+            was_overridden=is_finalized and displayed_overall != ai_overall,
+            ai_overall_verdict=ai_overall,
+            ai_source_status=ai_source,
+            ai_content_status=result.content_status,
+            ai_date_status=result.date_status,
+            source_status=displayed_source,
+            content_status=displayed_content,
+            date_status=displayed_date,
             confidence=result.confidence or 0.0,
             reasoning=result.reasoning or "",
             matched_articles=matched_articles,
@@ -355,16 +363,21 @@ class VerificationService:
 
         if context.cache_hit:
             cached_source = context.cached_source_status or SourceStatus.NOT_FOUND
+            cached_ai_overall = derive_ai_overall_verdict(
+                cached_source, context.cached_content_status, context.cached_date_status
+            )
             return VerificationResponse(
                 submission_id=context.submission_id or uuid.uuid4(),
                 # This synchronous path reflects the AI's call at cache-write
                 # time, not whatever expert review may have since finalized —
                 # the GET /verify/{id} path (get_result, above) is what shows
                 # the authoritative finalized verdict.
-                overall_verdict=derive_ai_overall_verdict(
-                    cached_source, context.cached_content_status, context.cached_date_status
-                ),
+                overall_verdict=cached_ai_overall,
                 is_finalized=False,
+                ai_overall_verdict=cached_ai_overall,
+                ai_source_status=cached_source,
+                ai_content_status=context.cached_content_status,
+                ai_date_status=context.cached_date_status,
                 source_status=cached_source,
                 content_status=context.cached_content_status,
                 date_status=context.cached_date_status,
@@ -383,12 +396,17 @@ class VerificationService:
             )
 
         fresh_source = context.source_status or SourceStatus.NOT_FOUND
+        fresh_ai_overall = derive_ai_overall_verdict(
+            fresh_source, context.content_status, context.date_status
+        )
         return VerificationResponse(
             submission_id=context.submission_id or uuid.uuid4(),
-            overall_verdict=derive_ai_overall_verdict(
-                fresh_source, context.content_status, context.date_status
-            ),
+            overall_verdict=fresh_ai_overall,
             is_finalized=False,
+            ai_overall_verdict=fresh_ai_overall,
+            ai_source_status=fresh_source,
+            ai_content_status=context.content_status,
+            ai_date_status=context.date_status,
             source_status=fresh_source,
             content_status=context.content_status,
             date_status=context.date_status,

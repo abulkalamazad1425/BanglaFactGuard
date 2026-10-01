@@ -316,6 +316,12 @@
                       </div>
                     }
 
+                    @if (inconsistencyWarning(); as warning) {
+                      <div class="inconsistency-warning">
+                        ⚠️ {{ warning }}
+                      </div>
+                    }
+
                     <div class="form-group">
                       <label class="form-label">Justification <span style="color:var(--error)">*</span> <span class="text-muted text-xs">(min 50 characters)</span></label>
                       <textarea formControlName="justification" class="form-control"

@@ -97,17 +97,59 @@ class CredibilityWeightTierResponse(BaseModel):
 
 
 class VotingConfigUpdateRequest(BaseModel):
-    min_expert_votes: int = Field(
-        ...,
-        ge=1,
-        le=50,
-        description="Number of expert votes required on a claim before it is finalized",
+    """All fields optional — PUT applies only the ones provided, leaving the
+    rest at their current value (partial update)."""
+
+    min_expert_votes: int | None = Field(
+        default=None, ge=1, le=50, description="M — minimum votes before a claim can finalize"
     )
+    activation_threshold_votes: int | None = Field(
+        default=None,
+        ge=0,
+        le=1000,
+        description="N — lifetime votes an expert needs before their tier weight applies",
+    )
+    verified_threshold: float | None = Field(
+        default=None, gt=0, description="T — weighted score the leading verdict must reach"
+    )
+    lead_margin: float | None = Field(
+        default=None, ge=0, description="Leader's score must exceed the runner-up's by this much"
+    )
+    max_review_votes: int | None = Field(
+        default=None,
+        ge=1,
+        description="Escalate after this many votes without consensus (omit for no cap)",
+    )
+    max_review_hours: int | None = Field(
+        default=None,
+        ge=1,
+        description="Escalate after this many hours without consensus (omit for no cap)",
+    )
+    max_tier_weight: float | None = Field(
+        default=None, gt=0, description="Upper bound on any credibility tier's weight"
+    )
+
+
+class AuditLogEntryResponse(BaseModel):
+    id: str
+    actor_id: str | None
+    action: str
+    submission_id: str | None
+    details: dict
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
 class VotingConfigResponse(BaseModel):
     id: str
     min_expert_votes: int
+    activation_threshold_votes: int
+    verified_threshold: float
+    lead_margin: float
+    max_review_votes: int | None
+    max_review_hours: int | None
+    max_tier_weight: float | None
     updated_at: datetime
 
     model_config = {"from_attributes": True}

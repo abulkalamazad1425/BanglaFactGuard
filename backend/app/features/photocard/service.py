@@ -439,15 +439,20 @@ class PhotoCardService:
     def _build_verification_response(context: PipelineContext) -> VerificationResponse:
         if context.cache_hit:
             cached_source = context.cached_source_status or SourceStatus.NOT_FOUND
+            cached_ai_overall = derive_ai_overall_verdict(
+                cached_source, context.cached_content_status, context.cached_date_status
+            )
             return VerificationResponse(
                 submission_id=context.submission_id or uuid.uuid4(),
                 # Reflects the AI's call at cache-write time, not whatever
                 # expert review may have since finalized — get_result()/
                 # _load_verification() below shows the authoritative value.
-                overall_verdict=derive_ai_overall_verdict(
-                    cached_source, context.cached_content_status, context.cached_date_status
-                ),
+                overall_verdict=cached_ai_overall,
                 is_finalized=False,
+                ai_overall_verdict=cached_ai_overall,
+                ai_source_status=cached_source,
+                ai_content_status=context.cached_content_status,
+                ai_date_status=context.cached_date_status,
                 source_status=cached_source,
                 content_status=context.cached_content_status,
                 date_status=context.cached_date_status,
@@ -467,12 +472,17 @@ class PhotoCardService:
             )
 
         fresh_source = context.source_status or SourceStatus.NOT_FOUND
+        fresh_ai_overall = derive_ai_overall_verdict(
+            fresh_source, context.content_status, context.date_status
+        )
         return VerificationResponse(
             submission_id=context.submission_id or uuid.uuid4(),
-            overall_verdict=derive_ai_overall_verdict(
-                fresh_source, context.content_status, context.date_status
-            ),
+            overall_verdict=fresh_ai_overall,
             is_finalized=False,
+            ai_overall_verdict=fresh_ai_overall,
+            ai_source_status=fresh_source,
+            ai_content_status=context.content_status,
+            ai_date_status=context.date_status,
             source_status=fresh_source,
             content_status=context.content_status,
             date_status=context.date_status,
@@ -532,16 +542,24 @@ class PhotoCardService:
             submission.id, successful_only=True, order_by_rank=True, limit=3
         )
 
+        is_finalized = bool(result.overall_verdict)
+        ai_overall = derive_ai_overall_verdict(
+            result.source_status, result.content_status, result.date_status
+        )
+        displayed_overall = result.overall_verdict or ai_overall
+
         return VerificationResponse(
             submission_id=submission.id,
-            overall_verdict=result.overall_verdict
-            or derive_ai_overall_verdict(
-                result.source_status, result.content_status, result.date_status
-            ),
-            is_finalized=bool(result.overall_verdict),
-            source_status=result.source_status,
-            content_status=result.content_status,
-            date_status=result.date_status,
+            overall_verdict=displayed_overall,
+            is_finalized=is_finalized,
+            was_overridden=is_finalized and displayed_overall != ai_overall,
+            ai_overall_verdict=ai_overall,
+            ai_source_status=result.source_status,
+            ai_content_status=result.content_status,
+            ai_date_status=result.date_status,
+            source_status=result.final_source_status or result.source_status,
+            content_status=(result.final_content_status if is_finalized else result.content_status),
+            date_status=(result.final_date_status if is_finalized else result.date_status),
             confidence=result.confidence or 0.0,
             reasoning=result.reasoning or "",
             matched_articles=[

@@ -166,10 +166,29 @@ export interface CredibilityWeightTierUpdateRequest {
 //    claim needs before it's finalized. ───────────────────────────────
 export interface VotingConfig {
   id: string;
+  /** M — minimum votes before a claim can finalize */
   min_expert_votes: number;
+  /** N — lifetime votes an expert needs before their tier weight applies */
+  activation_threshold_votes: number;
+  /** T — weighted score the leading verdict must reach */
+  verified_threshold: number;
+  /** Leader's score must exceed the runner-up's by at least this */
+  lead_margin: number;
+  /** Escalate to admin after this many votes without consensus (null = no cap) */
+  max_review_votes: number | null;
+  /** Escalate to admin after this many hours without consensus (null = no cap) */
+  max_review_hours: number | null;
+  /** Upper bound on any credibility tier's weight (null = no cap) */
+  max_tier_weight: number | null;
   updated_at: string;
 }
 
 export interface VotingConfigUpdateRequest {
-  min_expert_votes: number;
+  min_expert_votes?: number;
+  activation_threshold_votes?: number;
+  verified_threshold?: number;
+  lead_margin?: number;
+  max_review_votes?: number | null;
+  max_review_hours?: number | null;
+  max_tier_weight?: number | null;
 }

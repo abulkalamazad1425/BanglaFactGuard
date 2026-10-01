@@ -16,7 +16,7 @@ from sqlalchemy import (
     Text,
     func,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.constants import (
@@ -278,9 +278,17 @@ class ExpertReviewV2(UUIDMixin, TimestampMixin, ReprMixin, Base):
 
 class VotingConfig(UUIDMixin, TimestampMixin, ReprMixin, Base):
     """Admin-configurable voting parameters — a single-row table (the oldest
-    row is always the one in effect) so the minimum-votes-to-finalize count
-    is no longer a fixed setting, per the admin's own instruction that there
-    should be no hard-coded limit here."""
+    row is always the one in effect) so none of these are fixed settings in
+    code. Finalization requires ALL of:
+        leader's weighted score   >= verified_threshold        (T)
+        number of votes cast      >= min_expert_votes           (M)
+        leader's score - runner-up's score >= lead_margin
+    checked independently for every applicable dimension (Overall always;
+    Source/Content/Date additionally for SOURCE_BASED/PHOTO_CARD, with
+    Content/Date skipped once Source's own leader is NOT_FOUND). A claim
+    that exhausts max_review_votes or max_review_hours without clearing all
+    of the above escalates to admin review instead of finalizing.
+    """
 
     __tablename__ = "voting_config"
 
@@ -288,11 +296,92 @@ class VotingConfig(UUIDMixin, TimestampMixin, ReprMixin, Base):
         Integer,
         nullable=False,
         default=3,
-        comment="Number of expert votes required on a claim before it is finalized",
+        comment="M — minimum number of expert votes before a claim can finalize",
+    )
+    activation_threshold_votes: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=10,
+        comment=(
+            "N — an expert's vote counts as weight 1.0 until they have "
+            "completed this many lifetime votes; their tier weight applies "
+            "from then on."
+        ),
+    )
+    verified_threshold: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+        default=5.0,
+        comment="T — the weighted score the leading verdict must reach, per dimension",
+    )
+    lead_margin: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+        default=1.0,
+        comment="Leader's weighted score must exceed the runner-up's by at least this",
+    )
+    max_review_votes: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        comment="Escalate to admin after this many votes without reaching consensus (NULL = no cap)",
+    )
+    max_review_hours: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        comment="Escalate to admin after this many hours without reaching consensus (NULL = no cap)",
+    )
+    max_tier_weight: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        comment="Upper bound on any credibility_weight_tiers.weight value (NULL = no cap)",
     )
 
     __table_args__ = (
         CheckConstraint(
             "min_expert_votes >= 1", name="ck_voting_config_min_votes_positive"
         ),
+        CheckConstraint(
+            "activation_threshold_votes >= 0",
+            name="ck_voting_config_activation_threshold_nonneg",
+        ),
+        CheckConstraint(
+            "verified_threshold > 0", name="ck_voting_config_verified_threshold_positive"
+        ),
+        CheckConstraint(
+            "lead_margin >= 0", name="ck_voting_config_lead_margin_nonneg"
+        ),
+    )
+
+
+class AuditLogEntry(UUIDMixin, TimestampMixin, ReprMixin, Base):
+    """Append-only record of config changes, vote edits, finalizations, and
+    credibility updates — nothing reads this to drive behavior, it exists
+    purely so admins can answer "why did this happen" after the fact."""
+
+    __tablename__ = "audit_log"
+
+    actor_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="Expert/admin who performed the action; NULL for system-initiated events",
+    )
+    action: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        index=True,
+        comment=(
+            "vote_cast | vote_edited | finalized | escalated | "
+            "tier_created | tier_updated | tier_deleted | voting_config_updated"
+        ),
+    )
+    submission_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("submissions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    details: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, default=dict, comment="Free-form context for this event"
     )

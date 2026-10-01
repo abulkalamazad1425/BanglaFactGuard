@@ -33,6 +33,20 @@ class SubmissionRepository(BaseRepository[Submission]):
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(session)
 
+    async def get_by_id_locked(self, submission_id: uuid.UUID) -> Submission:
+        """Row-locks the submission for the rest of this transaction —
+        concurrent vote/finalize attempts on the same claim serialize on
+        this lock instead of racing, since a single request's session is
+        one transaction (committed when the request completes)."""
+        from app.core.exceptions import RecordNotFoundError
+
+        stmt = select(Submission).where(Submission.id == submission_id).with_for_update()
+        result = await self.session.execute(stmt)
+        row = result.scalar_one_or_none()
+        if row is None:
+            raise RecordNotFoundError(model="Submission", identifier=str(submission_id))
+        return row
+
     async def get_by_content_hash(self, content_hash: str) -> Submission | None:
         stmt = (
             select(Submission).where(Submission.content_hash == content_hash).limit(1)

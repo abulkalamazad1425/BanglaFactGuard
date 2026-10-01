@@ -22,8 +22,17 @@ export class CredibilityTiersComponent implements OnInit {
   readonly saving = signal(false);
   readonly tiers = signal<CredibilityWeightTier[]>([]);
 
-  readonly minExpertVotes = signal(3);
   readonly votingConfigSaving = signal(false);
+
+  votingConfigForm: FormGroup = this.fb.group({
+    min_expert_votes: [3, [Validators.required, Validators.min(1), Validators.max(50)]],
+    activation_threshold_votes: [10, [Validators.required, Validators.min(0)]],
+    verified_threshold: [5.0, [Validators.required, Validators.min(0.01)]],
+    lead_margin: [1.0, [Validators.required, Validators.min(0)]],
+    max_review_votes: [null as number | null],
+    max_review_hours: [null as number | null],
+    max_tier_weight: [null as number | null],
+  });
 
   drawerOpen = signal(false);
   isEditMode = signal(false);
@@ -40,27 +49,27 @@ export class CredibilityTiersComponent implements OnInit {
   ngOnInit(): void {
     this.load();
     this.adminSvc.getVotingConfig().subscribe({
-      next: c => this.minExpertVotes.set(c.min_expert_votes),
+      next: c => this.votingConfigForm.patchValue(c),
       error: () => this.toast.error('Failed to load voting configuration.'),
     });
   }
 
-  onMinVotesChange(event: Event): void {
-    const value = Number((event.target as HTMLInputElement).value);
-    if (Number.isFinite(value) && value >= 1) this.minExpertVotes.set(value);
-  }
-
   saveVotingConfig(): void {
+    if (this.votingConfigForm.invalid) {
+      this.votingConfigForm.markAllAsTouched();
+      this.toast.error('Please fix the validation errors.');
+      return;
+    }
     this.votingConfigSaving.set(true);
-    this.adminSvc.updateVotingConfig({ min_expert_votes: this.minExpertVotes() }).subscribe({
+    this.adminSvc.updateVotingConfig(this.votingConfigForm.value).subscribe({
       next: c => {
-        this.minExpertVotes.set(c.min_expert_votes);
+        this.votingConfigForm.patchValue(c);
         this.votingConfigSaving.set(false);
         this.toast.success('Voting configuration updated.');
       },
-      error: () => {
+      error: (err) => {
         this.votingConfigSaving.set(false);
-        this.toast.error('Failed to update voting configuration.');
+        this.toast.error(err.error?.detail?.message || err.error?.message || 'Failed to update voting configuration.');
       },
     });
   }

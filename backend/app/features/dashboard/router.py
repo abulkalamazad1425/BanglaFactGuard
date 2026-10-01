@@ -311,6 +311,7 @@ async def search_explorer(
         result = (await session.execute(result_stmt)).scalar_one_or_none()
 
         overall = None
+        is_finalized = bool(result and result.overall_verdict)
         if result and result.source_status:
             overall = result.overall_verdict or derive_ai_overall_verdict(
                 result.source_status, result.content_status, result.date_status
@@ -332,10 +333,20 @@ async def search_explorer(
                 submission_type=submission.submission_type,
                 claimed_source_text=submission.claimed_source_text,
                 overall_verdict=overall,
-                is_finalized=bool(result and result.overall_verdict),
-                source_status=result.source_status if result else None,
-                content_status=result.content_status if result else None,
-                date_status=result.date_status if result else None,
+                is_finalized=is_finalized,
+                source_status=(
+                    (result.final_source_status or result.source_status) if result else None
+                ),
+                content_status=(
+                    (result.final_content_status if is_finalized else result.content_status)
+                    if result
+                    else None
+                ),
+                date_status=(
+                    (result.final_date_status if is_finalized else result.date_status)
+                    if result
+                    else None
+                ),
                 confidence=result.confidence if result else None,
                 image_url=image_url,
                 published_date=submission.published_date,

@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.features.auth.models import User
 from app.features.auth.security import require_role
 from app.features.expert_review.repository import (
+    AuditLogRepository,
     CredibilityWeightTierRepository,
     ExpertProfileRepository,
     ExpertReviewV2Repository,
@@ -56,6 +57,7 @@ def _get_service(
         voting_config_repo=VotingConfigRepository(session),
         storage=storage,
         photocard_storage=photocard_storage,
+        audit_repo=AuditLogRepository(session),
     )
 
 

@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.features.admin.schemas import (
     AdminStatsResponse,
+    AuditLogEntryResponse,
     CreateExpertRequest,
     CredibilityWeightTierRequest,
     CredibilityWeightTierResponse,
@@ -172,10 +173,10 @@ async def list_credibility_tiers(
 )
 async def create_credibility_tier(
     body: CredibilityWeightTierRequest,
-    _: User = Depends(_ADMIN_ONLY),
+    current_user: User = Depends(_ADMIN_ONLY),
     svc: AdminService = Depends(_get_service),
 ) -> CredibilityWeightTierResponse:
-    return await svc.create_credibility_tier(body)
+    return await svc.create_credibility_tier(body, admin_id=current_user.id)
 
 
 @router.put(
@@ -186,10 +187,10 @@ async def create_credibility_tier(
 async def update_credibility_tier(
     tier_id: uuid.UUID,
     body: CredibilityWeightTierUpdateRequest,
-    _: User = Depends(_ADMIN_ONLY),
+    current_user: User = Depends(_ADMIN_ONLY),
     svc: AdminService = Depends(_get_service),
 ) -> CredibilityWeightTierResponse:
-    return await svc.update_credibility_tier(tier_id, body)
+    return await svc.update_credibility_tier(tier_id, body, admin_id=current_user.id)
 
 
 @router.delete(
@@ -199,10 +200,10 @@ async def update_credibility_tier(
 )
 async def delete_credibility_tier(
     tier_id: uuid.UUID,
-    _: User = Depends(_ADMIN_ONLY),
+    current_user: User = Depends(_ADMIN_ONLY),
     svc: AdminService = Depends(_get_service),
 ) -> None:
-    await svc.delete_credibility_tier(tier_id)
+    await svc.delete_credibility_tier(tier_id, admin_id=current_user.id)
 
 
 @router.get(
@@ -228,7 +229,21 @@ async def get_voting_config(
 )
 async def update_voting_config(
     body: VotingConfigUpdateRequest,
-    _: User = Depends(_ADMIN_ONLY),
+    current_user: User = Depends(_ADMIN_ONLY),
     svc: AdminService = Depends(_get_service),
 ) -> VotingConfigResponse:
-    return await svc.update_voting_config(body)
+    return await svc.update_voting_config(body, admin_id=current_user.id)
+
+
+@router.get(
+    "/audit-log",
+    response_model=list[AuditLogEntryResponse],
+    summary="Audit log — config changes, finalizations, escalations",
+)
+async def list_audit_log(
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    _: User = Depends(_ADMIN_ONLY),
+    svc: AdminService = Depends(_get_service),
+) -> list[AuditLogEntryResponse]:
+    return await svc.list_audit_log(limit=limit, offset=offset)

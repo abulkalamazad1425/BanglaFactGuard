@@ -159,6 +159,14 @@ export class VerifyResultComponent implements OnInit, OnDestroy {
     return 283 - 283 * (confidence || 0);
   }
 
+  /** The binary multimodal model can only imply FAKE/REAL — true if the
+   *  expert-finalized verdict is something else, or flips that call. */
+  multimodalWasOverridden(m: MultimodalPredictionDetail): boolean {
+    if (!m.expert_overall_verdict) return false;
+    const impliedByAi = m.prediction === 'FAKE' ? 'FAKE' : 'REAL';
+    return m.expert_overall_verdict !== impliedByAi;
+  }
+
   overallVerdictLabel(v: string): string {
     const labels: Record<string, string> = {
       FAKE: 'Fake',

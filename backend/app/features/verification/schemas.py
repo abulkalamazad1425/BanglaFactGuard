@@ -165,8 +165,27 @@ class VerificationResponse(BaseModel):
         default=False,
         description="True once expert review has finalized overall_verdict.",
     )
+    was_overridden: bool = Field(
+        default=False,
+        description="True if expert review's finalized verdict differs from the AI's original call.",
+    )
+    ai_overall_verdict: OverallVerdict | None = Field(
+        default=None,
+        description="The AI's own implied Overall verdict, before any expert override.",
+    )
+    ai_source_status: SourceStatus | None = Field(
+        default=None,
+        description="The AI's own original call — immutable, never changed by expert review.",
+    )
+    ai_content_status: ContentStatus | None = Field(default=None)
+    ai_date_status: DateStatus | None = Field(default=None)
     source_status: SourceStatus = Field(
-        ..., description="Does the claimed source carry this story at all?"
+        ...,
+        description=(
+            "The displayed Source verdict — expert-finalized if available, "
+            "otherwise the AI's call (see ai_source_status for the AI's "
+            "original, which this may now differ from)."
+        ),
     )
     content_status: ContentStatus | None = Field(
         default=None,

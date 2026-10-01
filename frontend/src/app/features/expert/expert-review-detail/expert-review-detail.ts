@@ -94,6 +94,30 @@ export class ExpertReviewDetailComponent implements OnInit {
     return !!this.selectedContent() && !!this.selectedDate();
   });
 
+  /** A non-blocking heads-up when Overall and the structured sub-verdicts
+   *  seem to pull in different directions — the expert's own editorial call
+   *  on Overall always wins, this is just a sanity nudge. */
+  readonly inconsistencyWarning = computed<string | null>(() => {
+    const overall = this.selectedOverall();
+    if (!overall || !this.isStructuredType()) return null;
+    const source = this.selectedSource();
+    const content = this.selectedContent();
+
+    if (overall === 'REAL' && source === 'NOT_FOUND') {
+      return 'Overall is "Real" but Source is "Not Found" — usually a claimed source that never ran the story points toward Fake.';
+    }
+    if (overall === 'REAL' && content === 'ALTERED') {
+      return 'Overall is "Real" but Content is "Altered" — consider whether Misleading or Altered fits the Overall verdict better.';
+    }
+    if (overall === 'FAKE' && source === 'CONFIRMED' && content === 'MATCHED') {
+      return 'Overall is "Fake" even though Source is confirmed and Content matches — double-check this is intended.';
+    }
+    if (overall === 'ALTERED' && content === 'MATCHED') {
+      return 'Overall is "Altered" but Content is "Matched" — consider whether Real fits better if nothing was actually changed.';
+    }
+    return null;
+  });
+
   ngOnInit(): void {
     const claimId = this.route.snapshot.paramMap.get('id');
     if (!claimId) { this.loading.set(false); return; }

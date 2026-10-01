@@ -83,6 +83,12 @@ export interface VerificationResponse {
   overall_verdict?: OverallVerdict | null;
   /** True once expert review has finalized overall_verdict. */
   is_finalized?: boolean;
+  /** True if expert review's finalized verdict differs from the AI's original call. */
+  was_overridden?: boolean;
+  /** The AI's own original call — immutable, never changed by expert review. */
+  ai_source_status?: SourceStatus | null;
+  ai_content_status?: ContentStatus | null;
+  ai_date_status?: DateStatus | null;
   source_status: SourceStatus;
   content_status?: ContentStatus | null;
   date_status?: DateStatus | null;
