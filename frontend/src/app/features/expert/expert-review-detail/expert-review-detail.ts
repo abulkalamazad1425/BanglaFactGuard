@@ -10,9 +10,14 @@ import { VerdictBadgeComponent } from '../../../shared/components/verdict-badge/
 import { ScoreBarComponent } from '../../../shared/components/score-bar/score-bar.component';
 import { VerificationService } from '../../../services/verification.service';
 import { AuthService } from '../../../services/auth.service';
+import { SourceStatus, ContentStatus, DateStatus, OverallVerdict } from '../../../models/verification.model';
 
-const LABELS = ['TRUE', 'FALSE', 'PARTIALLY_TRUE', 'NOT_FOUND_IN_CLAIMED_SOURCE'] as const;
-type Label = typeof LABELS[number];
+const OVERALL_VERDICTS: { value: OverallVerdict; label: string; icon: string; cls: string }[] = [
+  { value: 'REAL', label: 'Real', icon: '✓', cls: 'option-true' },
+  { value: 'FAKE', label: 'Fake', icon: '✗', cls: 'option-false' },
+  { value: 'MISLEADING', label: 'Misleading', icon: '◑', cls: 'option-partial' },
+  { value: 'ALTERED', label: 'Altered', icon: '✎', cls: 'option-partial' },
+];
 
 @Component({
   selector: 'app-expert-review-detail',
@@ -30,28 +35,30 @@ export class ExpertReviewDetailComponent implements OnInit {
   private readonly auth = inject(AuthService);
 
   readonly isAdmin = this.auth.isAdmin;
+  readonly overallOptions = OVERALL_VERDICTS;
 
   readonly loading = signal(true);
   readonly voting = signal(false);
   readonly submitted = signal(false);
   readonly claim = signal<ExpertQueueItem | null>(null);
   readonly aiResult = signal<VerificationResponse | null>(null);
-  readonly selectedLabel = signal<Label | null>(null);
+
+  readonly selectedOverall = signal<OverallVerdict | null>(null);
+  readonly selectedSource = signal<SourceStatus | null>(null);
+  readonly selectedContent = signal<ContentStatus | null>(null);
+  readonly selectedDate = signal<DateStatus | null>(null);
   formSubmitted = false;
+
+  /** Source/Content/Date only apply to SOURCE_BASED/PHOTO_CARD claims — every
+   *  type votes on Overall, but multimodal has no structured sub-dimensions. */
+  readonly isStructuredType = computed(() => this.claim()?.submission_type !== 'MULTIMODAL');
+  readonly needsContentAndDate = computed(() => this.selectedSource() === 'CONFIRMED');
 
   // Requirement: at most one top article is ever surfaced on this page, with its full body.
   readonly topArticle = computed<MatchedArticle | null>(() => {
     const articles = this.aiResult()?.matched_articles;
     return articles && articles.length > 0 ? articles[0] : null;
   });
-
-  readonly labels = LABELS;
-  readonly labelDisplay: Record<Label, string> = {
-    'TRUE': '✓ True',
-    'FALSE': '✗ False',
-    'PARTIALLY_TRUE': '◑ Partially True',
-    'NOT_FOUND_IN_CLAIMED_SOURCE': '? Not Found',
-  };
 
   form = this.fb.group({
     justification: ['', [Validators.required, Validators.minLength(50)]],
@@ -60,7 +67,32 @@ export class ExpertReviewDetailComponent implements OnInit {
   get justInvalid() { return this.form.get('justification')?.invalid && this.form.get('justification')?.touched; }
   get charCount() { return (this.form.value.justification || '').length; }
 
-  selectLabel(lbl: Label): void { this.selectedLabel.set(lbl); }
+  selectOverall(val: OverallVerdict): void { this.selectedOverall.set(val); }
+
+  selectSource(val: SourceStatus): void {
+    this.selectedSource.set(val);
+    if (val === 'NOT_FOUND') {
+      // Content/Date are moot once the source itself isn't confirmed.
+      this.selectedContent.set(null);
+      this.selectedDate.set(null);
+    }
+  }
+
+  selectContent(val: ContentStatus): void { this.selectedContent.set(val); }
+  selectDate(val: DateStatus): void { this.selectedDate.set(val); }
+
+  /** True once the vote is complete enough to submit. Overall is always
+   *  required; Source (and, if Confirmed, Content/Date) are only required
+   *  for SOURCE_BASED/PHOTO_CARD claims. */
+  readonly voteComplete = computed(() => {
+    if (!this.selectedOverall()) return false;
+    if (!this.isStructuredType()) return true;
+
+    const source = this.selectedSource();
+    if (!source) return false;
+    if (source === 'NOT_FOUND') return true;
+    return !!this.selectedContent() && !!this.selectedDate();
+  });
 
   ngOnInit(): void {
     const claimId = this.route.snapshot.paramMap.get('id');
@@ -69,6 +101,13 @@ export class ExpertReviewDetailComponent implements OnInit {
     this.expertSvc.getQueueItem(claimId).subscribe({
       next: c => {
         this.claim.set(c);
+
+        if (c.submission_type === 'MULTIMODAL') {
+          // No separate "detailed AI result" endpoint for multimodal — the
+          // queue item already carries everything (image, AI label, confidence).
+          this.loading.set(false);
+          return;
+        }
 
         // Also fetch the full AI prediction details (includes full article bodies)
         this.verificationSvc.getResult(claimId).subscribe({
@@ -83,7 +122,7 @@ export class ExpertReviewDetailComponent implements OnInit {
   onSubmit(): void {
     if (this.isAdmin()) { return; } // administrators may view but never vote
     this.formSubmitted = true;
-    if (this.form.invalid || !this.selectedLabel()) {
+    if (this.form.invalid || !this.voteComplete()) {
       this.form.markAllAsTouched();
       return;
     }
@@ -92,7 +131,10 @@ export class ExpertReviewDetailComponent implements OnInit {
     this.voting.set(true);
 
     this.expertSvc.submitVote(claimId, {
-      expert_label: this.selectedLabel() as any,
+      overall_verdict: this.selectedOverall()!,
+      source_status: this.isStructuredType() ? this.selectedSource() : null,
+      content_status: this.isStructuredType() ? this.selectedContent() : null,
+      date_status: this.isStructuredType() ? this.selectedDate() : null,
       justification: this.form.value.justification as string,
     }).subscribe({
       next: () => { this.submitted.set(true); this.voting.set(false); this.toast.success('Vote submitted successfully!'); },

@@ -126,7 +126,7 @@
                   <div class="verdict-summary-card ai-summary">
                     <div class="summary-icon">🤖</div>
                     <div class="summary-body">
-                      <span class="summary-title">AI-Verified Result</span>
+                      <span class="summary-title">AI Preliminary Result</span>
                       <span class="summary-desc">
                         BanglaBERT + EfficientNet-B4 multimodal model classified this as
                         <strong>{{ m.prediction === 'FAKE' ? 'likely fake' : 'likely real' }}</strong>
@@ -135,16 +135,30 @@
                       </span>
                     </div>
                   </div>
-                  <div class="verdict-summary-card expert-summary expert-na">
-                    <div class="summary-icon">⚖️</div>
-                    <div class="summary-body">
-                      <span class="summary-title">Expert Review</span>
-                      <span class="summary-desc">
-                        Multimodal checks are fully automated and do not go through human expert
-                        review — this AI result is the final verdict for this submission.
-                      </span>
+                  @if (m.expert_overall_verdict) {
+                    <div class="verdict-summary-card expert-summary"
+                         [ngClass]="'expert-verdict-' + m.expert_overall_verdict.toLowerCase()">
+                      <div class="summary-icon">⚖️</div>
+                      <div class="summary-body">
+                        <span class="summary-title">Expert Verified</span>
+                        <span class="summary-desc">
+                          Our expert reviewers finalized this claim as
+                          <strong>{{ overallVerdictLabel(m.expert_overall_verdict) }}</strong>.
+                        </span>
+                      </div>
                     </div>
-                  </div>
+                  } @else {
+                    <div class="verdict-summary-card expert-summary expert-pending">
+                      <div class="summary-icon">⏳</div>
+                      <div class="summary-body">
+                        <span class="summary-title">Pending Expert Review</span>
+                        <span class="summary-desc">
+                          Every submission is reviewed by our experts before its verdict is
+                          final — the AI result above is preliminary until then.
+                        </span>
+                      </div>
+                    </div>
+                  }
                 </div>
 
                 <div class="result-footer text-muted text-sm" style="margin-top: 24px; text-align: center;">

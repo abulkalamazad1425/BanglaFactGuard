@@ -3,12 +3,14 @@ import { NgClass } from '@angular/common';
 import {
   ContentStatus,
   DateStatus,
+  OverallVerdict,
   SourceStatus,
 } from '../../../models/verification.model';
 
-// Legacy single-category labels — still used by the independent expert-review
-// voting system (ExpertLabel), which predates and is unrelated to the 3-status
-// AI verdict model below.
+// Legacy single-category labels — kept only for any lingering display of the
+// old flat TRUE/FALSE/PARTIALLY_TRUE/NOT_FOUND_IN_CLAIMED_SOURCE enum.
+// Expert review now votes on the same (source/content/date) structure as the
+// AI verdict model below, via [sourceStatus]/[contentStatus]/[dateStatus].
 const LABEL_CONFIG: Record<string, { text: string; cls: string; icon: string }> = {
   'TRUE': { text: 'True', cls: 'badge-true', icon: '✓' },
   'FALSE': { text: 'False', cls: 'badge-false', icon: '✗' },
@@ -31,16 +33,24 @@ const DATE_CONFIG: Record<DateStatus, { text: string; cls: string; icon: string 
   MISMATCHED: { text: 'Date Mismatch', cls: 'badge-partial', icon: '📅' },
 };
 
+const OVERALL_CONFIG: Record<OverallVerdict, { text: string; cls: string; icon: string }> = {
+  REAL: { text: 'Real', cls: 'badge-true', icon: '✓' },
+  FAKE: { text: 'Fake', cls: 'badge-false', icon: '✗' },
+  MISLEADING: { text: 'Misleading', cls: 'badge-partial', icon: '◑' },
+  ALTERED: { text: 'Altered', cls: 'badge-partial', icon: '✎' },
+};
+
 type BadgeConfig = { text: string; cls: string; icon: string };
 
 /**
- * Renders either:
- * - a single legacy badge, via `[label]` — used by expert review's own
- *   TRUE/FALSE/PARTIALLY_TRUE/NOT_FOUND_IN_CLAIMED_SOURCE vote category, or
- * - up to three badges for the AI pipeline's real verdict, via
- *   `[sourceStatus]` / `[contentStatus]` / `[dateStatus]` — these are
- *   independent dimensions, so each renders its own chip rather than being
- *   collapsed into one label.
+ * Renders one or more verdict chips:
+ * - `[overallVerdict]` — the Fake/Real/Misleading/Altered headline verdict,
+ *   voted on for every submission type.
+ * - `[sourceStatus]` / `[contentStatus]` / `[dateStatus]` — the additional
+ *   structured verdict that exists for SOURCE_BASED/PHOTO_CARD claims only;
+ *   renders alongside overallVerdict when both are passed.
+ * - `[label]` — a single legacy badge, used only as a fallback when neither
+ *   of the above is set.
  */
 @Component({
   selector: 'app-verdict-badge',
@@ -66,6 +76,11 @@ export class VerdictBadgeComponent {
     this.recompute();
   }
 
+  @Input() set overallVerdict(val: OverallVerdict | null | undefined) {
+    this._overallVerdict = val ?? null;
+    this.recompute();
+  }
+
   @Input() set sourceStatus(val: SourceStatus | null | undefined) {
     this._sourceStatus = val ?? null;
     this.recompute();
@@ -82,6 +97,7 @@ export class VerdictBadgeComponent {
   }
 
   private _legacyLabel: string | null = null;
+  private _overallVerdict: OverallVerdict | null = null;
   private _sourceStatus: SourceStatus | null = null;
   private _contentStatus: ContentStatus | null = null;
   private _dateStatus: DateStatus | null = null;
@@ -89,8 +105,13 @@ export class VerdictBadgeComponent {
   badges: BadgeConfig[] = [];
 
   private recompute(): void {
-    if (this._sourceStatus) {
-      const badges: BadgeConfig[] = [SOURCE_CONFIG[this._sourceStatus]];
+    // overallVerdict and sourceStatus/contentStatus/dateStatus can be shown
+    // together (SOURCE_BASED/PHOTO_CARD carry both); legacy [label] is a
+    // fallback only used when neither of the above is set.
+    if (this._overallVerdict || this._sourceStatus) {
+      const badges: BadgeConfig[] = [];
+      if (this._overallVerdict) badges.push(OVERALL_CONFIG[this._overallVerdict]);
+      if (this._sourceStatus) badges.push(SOURCE_CONFIG[this._sourceStatus]);
       if (this._contentStatus) badges.push(CONTENT_CONFIG[this._contentStatus]);
       if (this._dateStatus) badges.push(DATE_CONFIG[this._dateStatus]);
       this.badges = badges;

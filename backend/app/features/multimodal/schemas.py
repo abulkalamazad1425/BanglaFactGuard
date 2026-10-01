@@ -6,17 +6,27 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
+from app.core.constants import OverallVerdict
+
 
 class MultimodalPredictionResponse(BaseModel):
 
     prediction_id: str = Field(..., description="UUID of the stored prediction record")
     submission_id: str = Field(..., description="UUID of the paired submissions row")
-    prediction: str = Field(..., description="'FAKE' or 'NON_FAKE'")
+    prediction: str = Field(..., description="'FAKE' or 'NON_FAKE' — the AI's preliminary call")
     confidence_fake: float = Field(
         ..., ge=0.0, le=1.0, description="P(FAKE) from softmax"
     )
     confidence_real: float = Field(
         ..., ge=0.0, le=1.0, description="P(NON_FAKE) from softmax"
+    )
+    expert_overall_verdict: Optional[OverallVerdict] = Field(
+        default=None,
+        description=(
+            "Expert-finalized Overall verdict (Fake/Real/Misleading/Altered). "
+            "NULL until expert review completes — the prediction above is "
+            "only the AI's preliminary call."
+        ),
     )
     is_cached: bool = Field(..., description="True if a previous prediction was reused")
     original_id: Optional[str] = Field(
@@ -49,6 +59,7 @@ class MultimodalPredictionDetail(BaseModel):
     prediction: str
     confidence_fake: float
     confidence_real: float
+    expert_overall_verdict: Optional[OverallVerdict] = None
     is_cached: bool
     original_id: Optional[str] = None
     minio_object_key: str

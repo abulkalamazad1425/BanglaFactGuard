@@ -25,6 +25,7 @@ export class DashboardService {
     if (params.source_status) query['source_status'] = params.source_status;
     if (params.content_status) query['content_status'] = params.content_status;
     if (params.date_status) query['date_status'] = params.date_status;
+    if (params.overall_verdict) query['overall_verdict'] = params.overall_verdict;
     if (params.method) query['method'] = params.method;
     if (params.date_from) query['date_from'] = params.date_from;
     if (params.date_to) query['date_to'] = params.date_to;

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from pydantic import BaseModel, EmailStr, Field
 
 
@@ -90,5 +92,22 @@ class CredibilityWeightTierResponse(BaseModel):
     max_accuracy_pct: float
     weight: float
     is_active: bool
+
+    model_config = {"from_attributes": True}
+
+
+class VotingConfigUpdateRequest(BaseModel):
+    min_expert_votes: int = Field(
+        ...,
+        ge=1,
+        le=50,
+        description="Number of expert votes required on a claim before it is finalized",
+    )
+
+
+class VotingConfigResponse(BaseModel):
+    id: str
+    min_expert_votes: int
+    updated_at: datetime
 
     model_config = {"from_attributes": True}

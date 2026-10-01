@@ -2,9 +2,7 @@
 // Expert Models — synced with backend expert_review/schemas.py
 // ============================================================
 
-import { ContentStatus, DateStatus, SourceStatus } from './verification.model';
-
-export type ExpertLabel = 'TRUE' | 'FALSE' | 'PARTIALLY_TRUE' | 'NOT_FOUND_IN_CLAIMED_SOURCE';
+import { ContentStatus, DateStatus, OverallVerdict, SourceStatus, SubmissionType } from './verification.model';
 
 // ── Queue item from GET /expert/queue ────────────────────────────────
 export interface ExpertTopArticle {
@@ -17,11 +15,13 @@ export interface ExpertTopArticle {
 
 export interface ExpertQueueItem {
   submission_id: string;
+  submission_type: SubmissionType;
   headline: string;
   body_text?: string | null;
   claimed_source_text: string;
   normalized_source?: string | null;
   ai_label?: string | null;
+  ai_overall_verdict?: OverallVerdict | null;
   source_status?: SourceStatus | null;
   content_status?: ContentStatus | null;
   date_status?: DateStatus | null;
@@ -30,6 +30,8 @@ export interface ExpertQueueItem {
   has_voted: boolean;
   vote_count: number;
   top_article?: ExpertTopArticle | null;
+  /** Multimodal submissions only — the submitted card/photo. */
+  image_url?: string | null;
 }
 
 // ── Review detail from GET /expert/queue/{submission_id} ────────────
@@ -51,8 +53,14 @@ export interface ExpertReviewResponse {
   id: string;
   submission_id: string;
   reviewer_id: string | null;
-  ai_label: string;
-  expert_label: ExpertLabel;
+  ai_overall_verdict: OverallVerdict;
+  ai_source_status: SourceStatus | null;
+  ai_content_status: ContentStatus | null;
+  ai_date_status: DateStatus | null;
+  vote_overall_verdict: OverallVerdict;
+  vote_source_status: SourceStatus | null;
+  vote_content_status: ContentStatus | null;
+  vote_date_status: DateStatus | null;
   justification?: string | null;
   credibility_weight: number;
   status: string;
@@ -64,16 +72,23 @@ export interface ExpertReviewResponse {
 export interface ExpertHistoryItem {
   review_id: string;
   submission_id: string;
+  submission_type: SubmissionType;
   headline: string;
   claimed_source_text: string;
-  expert_label: ExpertLabel;
-  justification?: string | null;
-  final_label?: string | null;
-  is_correct?: boolean | null;
+  vote_overall_verdict: OverallVerdict;
+  vote_source_status: SourceStatus | null;
+  vote_content_status: ContentStatus | null;
+  vote_date_status: DateStatus | null;
+  ai_overall_verdict: OverallVerdict;
+  ai_source_status: SourceStatus | null;
+  ai_content_status: ContentStatus | null;
+  ai_date_status: DateStatus | null;
+  final_overall_verdict?: OverallVerdict | null;
+  final_source_status?: SourceStatus | null;
+  final_content_status?: ContentStatus | null;
+  final_date_status?: DateStatus | null;
   matched?: boolean | null;
-  voted_at?: string | null;
-  ai_label?: string | null;
-  reviewed_at: string;
+  voted_at: string;
 }
 
 // ── Stats from GET /expert/stats ─────────────────────────────────────
@@ -99,13 +114,22 @@ export interface CredibilityScore {
 }
 
 // ── Request to POST /expert/queue/{submission_id}/vote ──────────────
+// overall_verdict is required for every submission type. source_status
+// (plus, conditionally, content_status/date_status) additionally applies to
+// SOURCE_BASED/PHOTO_CARD claims only — omit all three for MULTIMODAL.
 export interface ExpertVoteRequest {
-  expert_label: ExpertLabel;
-  justification?: string | null;
+  overall_verdict: OverallVerdict;
+  source_status?: SourceStatus | null;
+  content_status?: ContentStatus | null;
+  date_status?: DateStatus | null;
+  justification: string;
 }
 
 // ── Request to PUT /expert/reviews/{review_id} ──────────────────────
 export interface ExpertVoteUpdateRequest {
-  expert_label: ExpertLabel;
+  overall_verdict?: OverallVerdict | null;
+  source_status?: SourceStatus | null;
+  content_status?: ContentStatus | null;
+  date_status?: DateStatus | null;
   justification?: string | null;
 }

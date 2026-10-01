@@ -11,6 +11,7 @@ from app.features.expert_review.models import (
     ExpertProfile,
     ExpertReview,
     ExpertReviewV2,
+    VotingConfig,
 )
 from app.shared.base_repository import BaseRepository
 
@@ -319,3 +320,20 @@ class ExpertReviewV2Repository(BaseRepository[ExpertReviewV2]):
         )
         result = await self.session.execute(stmt)
         return result.scalar_one()
+
+
+class VotingConfigRepository(BaseRepository[VotingConfig]):
+    """Single-row admin-configurable voting parameters — the oldest row is
+    always the one in effect, so there is no fixed min-votes-to-finalize
+    setting any more."""
+
+    model_class = VotingConfig
+
+    async def get_or_create(self) -> VotingConfig:
+        stmt = select(VotingConfig).order_by(VotingConfig.created_at.asc()).limit(1)
+        result = await self.session.execute(stmt)
+        row = result.scalar_one_or_none()
+        if row is not None:
+            return row
+        row = VotingConfig(min_expert_votes=3)
+        return await self.create(row)

@@ -3,19 +3,28 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime
 
-from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, Query, Request
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.constants import (
     ContentStatus,
     DateStatus,
+    MultimodalPredictionLabel,
+    OverallVerdict,
     SourceStatus,
     SubmissionStatus,
     SubmissionType,
 )
-from app.features.submissions.models import Submission
+from app.features.expert_review.overall_verdict import (
+    derive_ai_overall_verdict,
+    derive_ai_overall_verdict_multimodal,
+)
+from app.features.multimodal.models import MultimodalAnalysis
+from app.features.multimodal.storage_service import MultimodalStorageService
+from app.features.photocard.storage_service import PhotoCardStorageService
+from app.features.submissions.models import OcrExtraction, Submission
 from app.features.submissions.repository import SubmissionRepository
 from app.features.verification.models import VerificationResultV2
 from app.shared.dependencies import get_async_session
@@ -54,10 +63,24 @@ class ExplorerItem(BaseModel):
     headline: str | None
     submission_type: SubmissionType
     claimed_source_text: str | None
-    source_status: SourceStatus | None
-    content_status: ContentStatus | None
-    date_status: DateStatus | None
+    overall_verdict: OverallVerdict | None = Field(
+        default=None,
+        description=(
+            "The displayed Overall verdict — the expert-finalized value if "
+            "available, otherwise the AI's preliminary implied value."
+        ),
+    )
+    is_finalized: bool = Field(
+        default=False,
+        description="True once expert review has finalized overall_verdict.",
+    )
+    source_status: SourceStatus | None = None
+    content_status: ContentStatus | None = None
+    date_status: DateStatus | None = None
     confidence: float | None
+    image_url: str | None = Field(
+        default=None, description="Thumbnail for MULTIMODAL/PHOTO_CARD submissions"
+    )
     published_date: date | None
     created_at: datetime
 
@@ -196,10 +219,19 @@ async def get_top_sources(
     ),
 )
 async def search_explorer(
+    request: Request,
     keyword: str | None = Query(default=None, max_length=255),
     source_status: SourceStatus | None = Query(default=None),
     content_status: ContentStatus | None = Query(default=None),
     date_status: DateStatus | None = Query(default=None),
+    overall_verdict: OverallVerdict | None = Query(
+        default=None,
+        description=(
+            "Matches only expert-finalized claims — spans every submission "
+            "type, unlike source/content/date_status which only apply to "
+            "SOURCE_BASED/PHOTO_CARD."
+        ),
+    ),
     method: SubmissionType | None = Query(default=None),
     date_from: date | None = Query(default=None),
     date_to: date | None = Query(default=None),
@@ -214,6 +246,7 @@ async def search_explorer(
         source_status=source_status,
         content_status=content_status,
         date_status=date_status,
+        overall_verdict=overall_verdict,
         method=method,
         date_from=date_from,
         date_to=date_to,
@@ -222,22 +255,89 @@ async def search_explorer(
         offset=offset,
     )
 
+    multimodal_storage: MultimodalStorageService | None = getattr(
+        request.app.state, "multimodal_storage", None
+    )
+    photocard_storage: PhotoCardStorageService | None = getattr(
+        request.app.state, "photocard_storage", None
+    )
+
     items = []
     for submission in rows:
+        if submission.submission_type == SubmissionType.MULTIMODAL:
+            mm_stmt = select(MultimodalAnalysis).where(
+                MultimodalAnalysis.submission_id == submission.id
+            )
+            mm = (await session.execute(mm_stmt)).scalar_one_or_none()
+
+            image_url = (
+                await multimodal_storage.get_presigned_url(mm.image_object_key)
+                if mm and multimodal_storage
+                else None
+            )
+            overall = (
+                mm.expert_overall_verdict
+                or derive_ai_overall_verdict_multimodal(mm.prediction)
+                if mm
+                else None
+            )
+            items.append(
+                ExplorerItem(
+                    submission_id=str(submission.id),
+                    headline=submission.headline,
+                    submission_type=submission.submission_type,
+                    claimed_source_text=None,
+                    overall_verdict=overall,
+                    is_finalized=bool(mm and mm.expert_overall_verdict),
+                    confidence=(
+                        (
+                            mm.confidence_fake
+                            if mm.prediction == MultimodalPredictionLabel.FAKE
+                            else mm.confidence_real
+                        )
+                        if mm
+                        else None
+                    ),
+                    image_url=image_url,
+                    published_date=submission.published_date,
+                    created_at=submission.created_at,
+                )
+            )
+            continue
+
         result_stmt = select(VerificationResultV2).where(
             VerificationResultV2.submission_id == submission.id
         )
         result = (await session.execute(result_stmt)).scalar_one_or_none()
+
+        overall = None
+        if result and result.source_status:
+            overall = result.overall_verdict or derive_ai_overall_verdict(
+                result.source_status, result.content_status, result.date_status
+            )
+
+        image_url = None
+        if submission.submission_type == SubmissionType.PHOTO_CARD and photocard_storage:
+            ocr_stmt = select(OcrExtraction).where(
+                OcrExtraction.submission_id == submission.id
+            )
+            ocr = (await session.execute(ocr_stmt)).scalar_one_or_none()
+            if ocr:
+                image_url = await photocard_storage.get_presigned_url(ocr.image_object_key)
+
         items.append(
             ExplorerItem(
                 submission_id=str(submission.id),
                 headline=submission.headline,
                 submission_type=submission.submission_type,
                 claimed_source_text=submission.claimed_source_text,
+                overall_verdict=overall,
+                is_finalized=bool(result and result.overall_verdict),
                 source_status=result.source_status if result else None,
                 content_status=result.content_status if result else None,
                 date_status=result.date_status if result else None,
                 confidence=result.confidence if result else None,
+                image_url=image_url,
                 published_date=submission.published_date,
                 created_at=submission.created_at,
             )

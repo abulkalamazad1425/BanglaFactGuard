@@ -14,6 +14,8 @@ from app.features.admin.schemas import (
     ExpertResponse,
     ResetExpertPasswordRequest,
     UpdateExpertRequest,
+    VotingConfigResponse,
+    VotingConfigUpdateRequest,
 )
 from app.features.admin.service import AdminService
 from app.features.auth.models import User
@@ -201,3 +203,32 @@ async def delete_credibility_tier(
     svc: AdminService = Depends(_get_service),
 ) -> None:
     await svc.delete_credibility_tier(tier_id)
+
+
+@router.get(
+    "/voting-config",
+    response_model=VotingConfigResponse,
+    summary="Get voting configuration",
+    description=(
+        "The number of expert votes required before a claim is finalized — "
+        "admin-configurable, with no fixed limit in code."
+    ),
+)
+async def get_voting_config(
+    _: User = Depends(_ADMIN_ONLY),
+    svc: AdminService = Depends(_get_service),
+) -> VotingConfigResponse:
+    return await svc.get_voting_config()
+
+
+@router.put(
+    "/voting-config",
+    response_model=VotingConfigResponse,
+    summary="Update voting configuration",
+)
+async def update_voting_config(
+    body: VotingConfigUpdateRequest,
+    _: User = Depends(_ADMIN_ONLY),
+    svc: AdminService = Depends(_get_service),
+) -> VotingConfigResponse:
+    return await svc.update_voting_config(body)

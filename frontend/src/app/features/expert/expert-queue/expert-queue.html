@@ -36,10 +36,11 @@
                 <!-- Card Header: Metadata + Verdict Badge -->
                 <div class="queue-header">
                   <div class="queue-meta">
+                    <span class="badge badge-pending text-xs">{{ typeLabel(item.submission_type) }}</span>
                     <span class="text-muted text-xs">Submitted {{ item.submitted_at | date:'MMM d, y' }}</span>
                     <div class="vote-count">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-                      {{ item.vote_count }} / 3 votes
+                      {{ item.vote_count }} votes
                     </div>
                   </div>
                   <div style="display: flex; align-items: center; gap: 12px;">
@@ -48,20 +49,27 @@
                         AI: <strong>{{ (item.ai_confidence! * 100).toFixed(1) }}%</strong>
                       </span>
                     }
-                    @if (item.source_status) {
-                      <app-verdict-badge
-                        [sourceStatus]="item.source_status"
-                        [contentStatus]="item.content_status"
-                        [dateStatus]="item.date_status" />
-                    }
+                    <app-verdict-badge
+                      [overallVerdict]="item.ai_overall_verdict"
+                      [sourceStatus]="item.source_status"
+                      [contentStatus]="item.content_status"
+                      [dateStatus]="item.date_status" />
                   </div>
                 </div>
 
-                <!-- Source -->
-                <div class="queue-source-row">
-                  <span class="source-icon">🌐</span>
-                  <span class="queue-source text-muted text-sm">{{ item.claimed_source_text }}</span>
-                </div>
+                <!-- Source (source-based/photo-card only) -->
+                @if (item.claimed_source_text) {
+                  <div class="queue-source-row">
+                    <span class="source-icon">🌐</span>
+                    <span class="queue-source text-muted text-sm">{{ item.claimed_source_text }}</span>
+                  </div>
+                }
+
+                @if (item.image_url) {
+                  <div class="queue-image-wrap">
+                    <img [src]="item.image_url" class="queue-image" alt="Submitted image" />
+                  </div>
+                }
 
                 <!-- Submitted Headline -->
                 <div class="claim-section">

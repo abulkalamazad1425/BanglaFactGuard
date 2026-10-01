@@ -7,7 +7,7 @@ from sqlalchemy import ARRAY, CheckConstraint, Enum, Float, ForeignKey, Index, S
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.core.constants import MultimodalPredictionLabel
+from app.core.constants import MultimodalPredictionLabel, OverallVerdict
 from app.shared.base_model import Base, ReprMixin, TimestampMixin, UUIDMixin
 
 if TYPE_CHECKING:
@@ -120,6 +120,15 @@ class MultimodalAnalysis(UUIDMixin, TimestampMixin, ReprMixin, Base):
     confidence_fake: Mapped[float] = mapped_column(Float, nullable=False)
 
     confidence_real: Mapped[float] = mapped_column(Float, nullable=False)
+
+    expert_overall_verdict: Mapped[OverallVerdict | None] = mapped_column(
+        Enum(OverallVerdict, name="overall_verdict_enum", create_type=False),
+        nullable=True,
+        comment=(
+            "Expert-finalized Overall verdict — NULL until expert review "
+            "finalizes this claim. Not written by the inference engine."
+        ),
+    )
 
     text_embedding: Mapped[list[float] | None] = mapped_column(
         ARRAY(Float),

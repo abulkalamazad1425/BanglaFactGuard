@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.features.auth.models import User
@@ -11,6 +11,7 @@ from app.features.expert_review.repository import (
     CredibilityWeightTierRepository,
     ExpertProfileRepository,
     ExpertReviewV2Repository,
+    VotingConfigRepository,
 )
 from app.features.expert_review.schemas import (
     CredibilityScoreResponse,
@@ -22,6 +23,8 @@ from app.features.expert_review.schemas import (
     ExpertVoteUpdateRequest,
 )
 from app.features.expert_review.service import ExpertReviewService
+from app.features.multimodal.repository import MultimodalAnalysisRepository
+from app.features.multimodal.storage_service import MultimodalStorageService
 from app.features.submissions.repository import SubmissionRepository
 from app.features.verification.repository import ResultV2Repository
 from app.shared.dependencies import get_async_session
@@ -33,14 +36,21 @@ _EXPERT_ONLY = require_role("expert")
 
 
 def _get_service(
+    request: Request,
     session: AsyncSession = Depends(get_async_session),
 ) -> ExpertReviewService:
+    storage: MultimodalStorageService | None = getattr(
+        request.app.state, "multimodal_storage", None
+    )
     return ExpertReviewService(
         review_repo=ExpertReviewV2Repository(session),
         profile_repo=ExpertProfileRepository(session),
         tier_repo=CredibilityWeightTierRepository(session),
         submission_repo=SubmissionRepository(session),
         result_repo=ResultV2Repository(session),
+        multimodal_repo=MultimodalAnalysisRepository(session),
+        voting_config_repo=VotingConfigRepository(session),
+        storage=storage,
     )
 
 
@@ -86,7 +96,10 @@ async def submit_vote(
     return await svc.submit_vote(
         submission_id=submission_id,
         expert_id=current_user.id,
-        expert_label=body.expert_label,
+        overall_verdict=body.overall_verdict,
+        source_status=body.source_status,
+        content_status=body.content_status,
+        date_status=body.date_status,
         justification=body.justification,
     )
 
@@ -105,7 +118,10 @@ async def edit_vote(
     return await svc.edit_vote(
         review_id=review_id,
         expert_id=current_user.id,
-        expert_label=body.expert_label,
+        overall_verdict=body.overall_verdict,
+        source_status=body.source_status,
+        content_status=body.content_status,
+        date_status=body.date_status,
         justification=body.justification,
     )
 

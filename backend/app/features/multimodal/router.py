@@ -78,6 +78,7 @@ async def _to_detail(
         prediction=record.prediction,
         confidence_fake=record.confidence_fake,
         confidence_real=record.confidence_real,
+        expert_overall_verdict=record.expert_overall_verdict,
         is_cached=record.is_duplicate_of_id is not None,
         original_id=(
             str(record.is_duplicate_of_id) if record.is_duplicate_of_id else None

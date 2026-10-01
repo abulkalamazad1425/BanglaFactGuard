@@ -27,6 +27,8 @@
 
     .claim-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px; h2 { font-size: 1.1rem; } }
     .claim-headline { font-size: 18px; font-weight: 600; line-height: 1.5; margin-bottom: 12px; }
+    .claim-image-wrap { display: flex; justify-content: center; margin-bottom: 16px; }
+    .claim-image { max-width: 100%; max-height: 360px; border-radius: var(--radius-lg); border: 1px solid var(--border); object-fit: contain; }
     .claim-body { font-size: 14px; color: var(--text-secondary); line-height: 1.65; margin-bottom: 16px; white-space: pre-line; }
     .claim-meta { display: flex; gap: 24px; flex-wrap: wrap; a { color: var(--primary); } }
 

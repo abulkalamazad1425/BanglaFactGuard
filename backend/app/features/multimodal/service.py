@@ -140,17 +140,18 @@ class MultimodalPredictionService:
         submitter_id: uuid.UUID | None,
     ) -> Submission:
         """Every verification method produces a Submission row per the thesis ER
-        model. Multimodal has no expert-review step today (its AI verdict is
-        the final result), so the paired submission goes straight to FINALIZED —
-        it still counts toward users.total_submissions and appears in the Fact
-        Explorer."""
+        model. The AI prediction below is returned to the caller immediately
+        (no long-running search, unlike source-based/photo-card), but the
+        submission still goes to EXPERT_REVIEW rather than FINALIZED — every
+        verification method is reviewed by an expert before its verdict is
+        considered final; see ExpertReviewService's MULTIMODAL branch."""
         submission = Submission(
             submission_type=SubmissionType.MULTIMODAL,
             headline=headline[:2000],
             body_text=body_text,
             submitter_id=submitter_id,
             content_hash=compute_text_hash(f"{headline}\n{body_text}"),
-            status=SubmissionStatus.FINALIZED,
+            status=SubmissionStatus.EXPERT_REVIEW,
         )
         created = await self._submissions.create(submission)
         if submitter_id:
@@ -240,6 +241,7 @@ class MultimodalPredictionService:
             prediction=record.prediction,
             confidence_fake=record.confidence_fake,
             confidence_real=record.confidence_real,
+            expert_overall_verdict=record.expert_overall_verdict,
             is_cached=is_cached,
             original_id=original_id,
             similarity_scores=similarity_scores if is_cached else None,

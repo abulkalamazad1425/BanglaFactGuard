@@ -42,6 +42,23 @@ class DateStatus(str, Enum):
     MISMATCHED = "MISMATCHED"
 
 
+class OverallVerdict(str, Enum):
+    """The headline editorial verdict experts vote on for EVERY submission
+    type (source-based, photo card, and multimodal alike) — distinct from,
+    and voted on independently of, the (Source, Content, Date) structured
+    vote that additionally exists for source-based/photo-card claims.
+
+    An expert may, for example, judge Source=CONFIRMED/Content=ALTERED but
+    still cast ALTERED here rather than mechanically deriving it — this is
+    the expert's own editorial call, not a projection of the other fields.
+    """
+
+    FAKE = "FAKE"
+    REAL = "REAL"
+    MISLEADING = "MISLEADING"
+    ALTERED = "ALTERED"
+
+
 class ExpertVerdict(str, Enum):
     """A human expert's own single-category judgment call on a claim.
 

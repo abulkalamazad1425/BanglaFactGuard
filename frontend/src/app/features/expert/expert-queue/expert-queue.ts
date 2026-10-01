@@ -38,4 +38,13 @@ export class ExpertQueueComponent implements OnInit {
   getHost(url: string): string {
     try { return new URL(url).hostname.replace('www.', ''); } catch { return ''; }
   }
+
+  typeLabel(t: ExpertQueueItem['submission_type']): string {
+    const labels: Record<string, string> = {
+      SOURCE_BASED: 'Source-Based',
+      PHOTO_CARD: 'Photo Card',
+      MULTIMODAL: 'Multimodal',
+    };
+    return labels[t] ?? t;
+  }
 }

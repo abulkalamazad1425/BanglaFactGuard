@@ -11,6 +11,8 @@ import {
   CredibilityWeightTier,
   CredibilityWeightTierRequest,
   CredibilityWeightTierUpdateRequest,
+  VotingConfig,
+  VotingConfigUpdateRequest,
 } from '../models/admin.model';
 
 // ── Admin Service ─────────────────────────────────────────────────────
@@ -86,5 +88,15 @@ export class AdminService {
   /** DELETE /api/v1/admin/credibility-tiers/{id} */
   deleteCredibilityTier(id: string): Observable<void> {
     return this.api.delete<void>(`${API_ENDPOINTS.ADMIN_CREDIBILITY_TIERS}/${id}`);
+  }
+
+  /** GET /api/v1/admin/voting-config */
+  getVotingConfig(): Observable<VotingConfig> {
+    return this.api.get<VotingConfig>(API_ENDPOINTS.ADMIN_VOTING_CONFIG);
+  }
+
+  /** PUT /api/v1/admin/voting-config */
+  updateVotingConfig(body: VotingConfigUpdateRequest): Observable<VotingConfig> {
+    return this.api.put<VotingConfig>(API_ENDPOINTS.ADMIN_VOTING_CONFIG, body);
   }
 }

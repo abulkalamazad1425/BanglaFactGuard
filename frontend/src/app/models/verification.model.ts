@@ -10,6 +10,12 @@ export type SourceStatus = 'CONFIRMED' | 'NOT_FOUND';
 export type ContentStatus = 'MATCHED' | 'ALTERED';
 export type DateStatus = 'MATCHED' | 'MISMATCHED';
 
+// ── Overall verdict — voted on by experts for EVERY submission type
+// (source-based, photo card, and multimodal alike), independently of the
+// (Source, Content, Date) structured vote that additionally exists for
+// source-based/photo-card claims.
+export type OverallVerdict = 'FAKE' | 'REAL' | 'MISLEADING' | 'ALTERED';
+
 export type SubmissionStatus = 'PENDING' | 'PROCESSING' | 'EXPERT_REVIEW' | 'FINALIZED' | 'FAILED';
 
 export type SubmissionType = 'SOURCE_BASED' | 'MULTIMODAL' | 'PHOTO_CARD';
@@ -112,9 +118,11 @@ export interface SubmissionStats {
 export interface MultimodalPredictionResult {
   prediction_id: string;
   submission_id: string;
-  prediction: string;          // 'FAKE' | 'NON_FAKE'
+  prediction: string;          // 'FAKE' | 'NON_FAKE' — the AI's preliminary call
   confidence_fake: number;
   confidence_real: number;
+  /** NULL until expert review finalizes this claim — see SubmissionLookup.status. */
+  expert_overall_verdict?: OverallVerdict | null;
   is_cached: boolean;
   original_id?: string | null;
   similarity_scores?: Record<string, number> | null;
@@ -133,9 +141,10 @@ export interface MultimodalPredictionDetail {
   submission_id: string;
   headline: string | null;
   body_text: string | null;
-  prediction: string;          // 'FAKE' | 'NON_FAKE'
+  prediction: string;          // 'FAKE' | 'NON_FAKE' — the AI's preliminary call
   confidence_fake: number;
   confidence_real: number;
+  expert_overall_verdict?: OverallVerdict | null;
   is_cached: boolean;
   original_id?: string | null;
   minio_object_key: string;

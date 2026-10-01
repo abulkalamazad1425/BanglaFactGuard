@@ -98,6 +98,19 @@
 
           <form [formGroup]="filterForm" (ngSubmit)="search()" class="explorer-filters">
             <input type="text" formControlName="keyword" class="form-control" placeholder="Search by keyword..." />
+            <select formControlName="overall_verdict" class="form-control">
+              <option value="">Any overall verdict</option>
+              <option value="REAL">Real</option>
+              <option value="FAKE">Fake</option>
+              <option value="MISLEADING">Misleading</option>
+              <option value="ALTERED">Altered</option>
+            </select>
+            <select formControlName="method" class="form-control">
+              <option value="">Any method</option>
+              <option value="SOURCE_BASED">Source-Based</option>
+              <option value="PHOTO_CARD">Photo Card</option>
+              <option value="MULTIMODAL">Multimodal</option>
+            </select>
             <select formControlName="source_status" class="form-control">
               <option value="">Any source status</option>
               <option value="CONFIRMED">Source Confirmed</option>
@@ -107,11 +120,6 @@
               <option value="">Any content status</option>
               <option value="MATCHED">Content Matched</option>
               <option value="ALTERED">Content Altered</option>
-            </select>
-            <select formControlName="method" class="form-control">
-              <option value="">Any method</option>
-              <option value="SOURCE_BASED">Source-Based</option>
-              <option value="MULTIMODAL">Multimodal</option>
             </select>
             <input type="date" formControlName="date_from" class="form-control" title="From date" />
             <input type="date" formControlName="date_to" class="form-control" title="To date" />
@@ -127,6 +135,11 @@
             <div class="explorer-list">
               @for (item of explorerItems(); track item.submission_id) {
                 <a class="explorer-row" [routerLink]="['/verify', item.submission_id]">
+                  @if (item.image_url) {
+                    <div class="explorer-thumb-wrap">
+                      <img [src]="item.image_url" class="explorer-thumb" alt="" />
+                    </div>
+                  }
                   <div class="explorer-row-main">
                     <span class="explorer-headline">{{ item.headline || '(untitled submission)' }}</span>
                     <span class="text-muted text-xs">
@@ -135,10 +148,16 @@
                       · {{ item.created_at | date:'MMM d, y' }}
                     </span>
                   </div>
-                  <app-verdict-badge
-                    [sourceStatus]="item.source_status"
-                    [contentStatus]="item.content_status"
-                    [dateStatus]="item.date_status" />
+                  <div class="explorer-row-verdict">
+                    @if (!item.is_finalized) {
+                      <span class="badge badge-pending">⏳ Under Review</span>
+                    }
+                    <app-verdict-badge
+                      [overallVerdict]="item.overall_verdict"
+                      [sourceStatus]="item.source_status"
+                      [contentStatus]="item.content_status"
+                      [dateStatus]="item.date_status" />
+                  </div>
                 </a>
               }
             </div>

@@ -24,14 +24,17 @@ from app.features.admin.schemas import (
     ResetExpertPasswordRequest,
     UpdateExpertRequest,
     VerdictBreakdown,
+    VotingConfigResponse,
+    VotingConfigUpdateRequest,
 )
 from app.features.auth.models import User
 from app.features.auth.repository import RefreshTokenRepository, UserRepository
 from app.features.auth.security import hash_password
-from app.features.expert_review.models import CredibilityWeightTier
+from app.features.expert_review.models import CredibilityWeightTier, VotingConfig
 from app.features.expert_review.repository import (
     CredibilityWeightTierRepository,
     ExpertProfileRepository,
+    VotingConfigRepository,
 )
 from app.features.submissions.models import Submission
 from app.features.verification.models import VerificationResultV2
@@ -309,6 +312,28 @@ class AdminService:
             raise RecordNotFoundError(model="CredibilityWeightTier", identifier=str(tier_id))
         await self._session.delete(tier)
         await self._session.flush()
+
+    async def get_voting_config(self) -> VotingConfigResponse:
+        row = await VotingConfigRepository(self._session).get_or_create()
+        return _voting_config_to_response(row)
+
+    async def update_voting_config(
+        self, req: VotingConfigUpdateRequest
+    ) -> VotingConfigResponse:
+        row = await VotingConfigRepository(self._session).get_or_create()
+        row = await VotingConfigRepository(self._session).update(
+            row, min_expert_votes=req.min_expert_votes
+        )
+        logger.info("voting_config_updated", min_expert_votes=req.min_expert_votes)
+        return _voting_config_to_response(row)
+
+
+def _voting_config_to_response(row: VotingConfig) -> VotingConfigResponse:
+    return VotingConfigResponse(
+        id=str(row.id),
+        min_expert_votes=row.min_expert_votes,
+        updated_at=row.updated_at,
+    )
 
 
 def _tier_to_response(t: CredibilityWeightTier) -> CredibilityWeightTierResponse:

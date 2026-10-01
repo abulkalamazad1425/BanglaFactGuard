@@ -159,6 +159,16 @@ export class VerifyResultComponent implements OnInit, OnDestroy {
     return 283 - 283 * (confidence || 0);
   }
 
+  overallVerdictLabel(v: string): string {
+    const labels: Record<string, string> = {
+      FAKE: 'Fake',
+      REAL: 'Real',
+      MISLEADING: 'Misleading',
+      ALTERED: 'Altered',
+    };
+    return labels[v] ?? v;
+  }
+
   getHost(url: string): string {
     try {
       return new URL(url).hostname.replace('www.', '');

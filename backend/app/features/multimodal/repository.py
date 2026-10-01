@@ -104,6 +104,14 @@ class MultimodalAnalysisRepository:
         )
         return result.scalar_one_or_none()
 
+    async def update(self, instance: MultimodalAnalysis, **fields) -> MultimodalAnalysis:
+        for field, value in fields.items():
+            setattr(instance, field, value)
+        self._db.add(instance)
+        await self._db.flush()
+        await self._db.refresh(instance)
+        return instance
+
     async def list_recent(
         self, *, limit: int = 20, offset: int = 0
     ) -> Sequence[MultimodalAnalysis]:

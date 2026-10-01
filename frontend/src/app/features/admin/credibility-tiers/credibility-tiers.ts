@@ -22,6 +22,9 @@ export class CredibilityTiersComponent implements OnInit {
   readonly saving = signal(false);
   readonly tiers = signal<CredibilityWeightTier[]>([]);
 
+  readonly minExpertVotes = signal(3);
+  readonly votingConfigSaving = signal(false);
+
   drawerOpen = signal(false);
   isEditMode = signal(false);
   editingTierId: string | null = null;
@@ -36,6 +39,30 @@ export class CredibilityTiersComponent implements OnInit {
 
   ngOnInit(): void {
     this.load();
+    this.adminSvc.getVotingConfig().subscribe({
+      next: c => this.minExpertVotes.set(c.min_expert_votes),
+      error: () => this.toast.error('Failed to load voting configuration.'),
+    });
+  }
+
+  onMinVotesChange(event: Event): void {
+    const value = Number((event.target as HTMLInputElement).value);
+    if (Number.isFinite(value) && value >= 1) this.minExpertVotes.set(value);
+  }
+
+  saveVotingConfig(): void {
+    this.votingConfigSaving.set(true);
+    this.adminSvc.updateVotingConfig({ min_expert_votes: this.minExpertVotes() }).subscribe({
+      next: c => {
+        this.minExpertVotes.set(c.min_expert_votes);
+        this.votingConfigSaving.set(false);
+        this.toast.success('Voting configuration updated.');
+      },
+      error: () => {
+        this.votingConfigSaving.set(false);
+        this.toast.error('Failed to update voting configuration.');
+      },
+    });
   }
 
   load(): void {

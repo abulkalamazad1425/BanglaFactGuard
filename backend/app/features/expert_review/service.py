@@ -1,21 +1,35 @@
 from __future__ import annotations
 
 import uuid
+from typing import TypeVar
 
 import structlog
 
 from app.core.config import get_settings
-from app.core.constants import ExpertVerdict, SubmissionStatus
+from app.core.constants import (
+    ContentStatus,
+    DateStatus,
+    MultimodalPredictionLabel,
+    OverallVerdict,
+    SourceStatus,
+    SubmissionStatus,
+    SubmissionType,
+)
 from app.core.exceptions import (
     DomainValidationError,
     PermissionDeniedError,
     RecordNotFoundError,
 )
 from app.features.expert_review.models import ExpertReviewV2
+from app.features.expert_review.overall_verdict import (
+    derive_ai_overall_verdict,
+    derive_ai_overall_verdict_multimodal,
+)
 from app.features.expert_review.repository import (
     CredibilityWeightTierRepository,
     ExpertProfileRepository,
     ExpertReviewV2Repository,
+    VotingConfigRepository,
 )
 from app.features.expert_review.schemas import (
     ExpertHistoryItemResponse,
@@ -24,7 +38,12 @@ from app.features.expert_review.schemas import (
     ExpertStatsResponse,
     ExpertTopArticle,
 )
+from app.features.multimodal.models import MultimodalAnalysis
+from app.features.multimodal.repository import MultimodalAnalysisRepository
+from app.features.multimodal.storage_service import MultimodalStorageService
+from app.features.submissions.models import Submission
 from app.features.submissions.repository import SubmissionRepository
+from app.features.verification.models import VerificationResultV2
 from app.features.verification.repository import ResultV2Repository
 from app.features.verification.verdict_compat import format_verdict_display
 
@@ -32,6 +51,20 @@ logger = structlog.get_logger(__name__)
 _SETTINGS = get_settings()
 _AUTH = _SETTINGS.auth
 _NEUTRAL_WEIGHT = 1.0
+
+_STRUCTURED_TYPES = (SubmissionType.SOURCE_BASED, SubmissionType.PHOTO_CARD)
+
+_T = TypeVar("_T")
+
+
+def _pick_winner(weights: dict[_T, float], tie_break: _T | None) -> _T:
+    """Highest total weight wins; among ties, the AI's own call wins (ties
+    favor the status quo rather than an arbitrary dict-ordering pick)."""
+    max_weight = max(weights.values())
+    winners = [k for k, w in weights.items() if w == max_weight]
+    if tie_break is not None and tie_break in winners:
+        return tie_break
+    return winners[0]
 
 
 class ExpertReviewService:
@@ -43,16 +76,22 @@ class ExpertReviewService:
         tier_repo: CredibilityWeightTierRepository,
         submission_repo: SubmissionRepository,
         result_repo: ResultV2Repository,
+        multimodal_repo: MultimodalAnalysisRepository,
+        voting_config_repo: VotingConfigRepository,
+        storage: MultimodalStorageService | None = None,
     ) -> None:
         self._reviews = review_repo
         self._profiles = profile_repo
         self._tiers = tier_repo
         self._submissions = submission_repo
         self._results = result_repo
+        self._multimodal = multimodal_repo
+        self._voting_config = voting_config_repo
+        self._storage = storage
 
         self._session = review_repo.session
 
-    async def _fetch_top_article(self, result) -> ExpertTopArticle | None:
+    async def _fetch_top_article(self, result: VerificationResultV2 | None) -> ExpertTopArticle | None:
         if result is None or result.top_article_id is None:
             return None
         from sqlalchemy import select
@@ -73,32 +112,61 @@ class ExpertReviewService:
             body_snippet=(body[:400] + "…") if body and len(body) > 400 else body,
         )
 
-    async def get_queue_item(
-        self,
-        submission_id: uuid.UUID,
+    async def _build_queue_item(
+        self, submission: Submission, *, full_body: bool
     ) -> ExpertQueueItemResponse:
-        submission = await self._submissions.get_by_id(submission_id)
+        vote_count = await self._reviews.count_votes_for_submission(submission.id)
+        body_text = submission.body_text
+        if not full_body and body_text and len(body_text) > 400:
+            body_text = body_text[:400] + "…"
 
-        result = await self._results.get_by_submission_id(submission_id)
-        vote_count = await self._reviews.count_votes_for_submission(submission_id)
-        top_article = await self._fetch_top_article(result)
+        if submission.submission_type in _STRUCTURED_TYPES:
+            result = await self._results.get_by_submission_id(submission.id)
+            top_article = await self._fetch_top_article(result)
+            return ExpertQueueItemResponse(
+                submission_id=str(submission.id),
+                submission_type=submission.submission_type,
+                headline=submission.headline,
+                body_text=body_text,
+                claimed_source_text=submission.claimed_source_text,
+                ai_label=_ai_label_structured(result),
+                ai_overall_verdict=(
+                    derive_ai_overall_verdict(
+                        result.source_status, result.content_status, result.date_status
+                    )
+                    if result and result.source_status
+                    else None
+                ),
+                source_status=result.source_status if result else None,
+                content_status=result.content_status if result else None,
+                date_status=result.date_status if result else None,
+                ai_confidence=result.confidence if result else None,
+                submitted_at=submission.created_at,
+                vote_count=vote_count,
+                top_article=top_article,
+            )
 
+        mm = await self._multimodal.get_by_submission_id(submission.id)
+        image_url = None
+        if mm and self._storage:
+            image_url = await self._storage.get_presigned_url(mm.image_object_key)
         return ExpertQueueItemResponse(
             submission_id=str(submission.id),
+            submission_type=submission.submission_type,
             headline=submission.headline,
-            # Full, untruncated body — the review-detail page needs the
-            # complete submitted claim text, unlike the queue list preview.
-            body_text=submission.body_text,
+            body_text=body_text,
             claimed_source_text=submission.claimed_source_text,
-            ai_label=_ai_label_display(result),
-            source_status=result.source_status if result else None,
-            content_status=result.content_status if result else None,
-            date_status=result.date_status if result else None,
-            ai_confidence=result.confidence if result else None,
+            ai_label=_ai_label_multimodal(mm),
+            ai_overall_verdict=derive_ai_overall_verdict_multimodal(mm.prediction) if mm else None,
+            ai_confidence=(mm.confidence_fake if mm.prediction == MultimodalPredictionLabel.FAKE else mm.confidence_real) if mm else None,
             submitted_at=submission.created_at,
             vote_count=vote_count,
-            top_article=top_article,
+            image_url=image_url,
         )
+
+    async def get_queue_item(self, submission_id: uuid.UUID) -> ExpertQueueItemResponse:
+        submission = await self._submissions.get_by_id(submission_id)
+        return await self._build_queue_item(submission, full_body=True)
 
     async def get_queue(
         self,
@@ -120,42 +188,21 @@ class ExpertReviewService:
         for submission in submissions:
             if submission.id in already_voted_ids:
                 continue
-            result = await self._results.get_by_submission_id(submission.id)
-            vote_count = await self._reviews.count_votes_for_submission(submission.id)
-            top_article = await self._fetch_top_article(result)
+            queue_items.append(await self._build_queue_item(submission, full_body=False))
 
-            queue_items.append(
-                ExpertQueueItemResponse(
-                    submission_id=str(submission.id),
-                    headline=submission.headline,
-                    body_text=(
-                        (submission.body_text[:400] + "…")
-                        if submission.body_text and len(submission.body_text) > 400
-                        else submission.body_text
-                    ),
-                    claimed_source_text=submission.claimed_source_text,
-                    ai_label=_ai_label_display(result),
-                    source_status=result.source_status if result else None,
-                    content_status=result.content_status if result else None,
-                    date_status=result.date_status if result else None,
-                    ai_confidence=result.confidence if result else None,
-                    submitted_at=submission.created_at,
-                    vote_count=vote_count,
-                    top_article=top_article,
-                )
-            )
-
-        paginated = queue_items[offset : offset + limit]
-        return paginated
+        return queue_items[offset : offset + limit]
 
     async def submit_vote(
         self,
         submission_id: uuid.UUID,
         expert_id: uuid.UUID,
-        expert_label: ExpertVerdict,
+        overall_verdict: OverallVerdict,
+        source_status: SourceStatus | None,
+        content_status: ContentStatus | None,
+        date_status: DateStatus | None,
         justification: str,
     ) -> ExpertReviewResponse:
-        await self._submissions.get_by_id(submission_id)
+        submission = await self._submissions.get_by_id(submission_id)
 
         existing = await self._reviews.get_by_submission_and_reviewer(
             submission_id, expert_id
@@ -166,23 +213,57 @@ class ExpertReviewService:
                 details={"review_id": str(existing.id)},
             )
 
+        is_structured = submission.submission_type in _STRUCTURED_TYPES
+
+        ai_source: SourceStatus | None
+        ai_content: ContentStatus | None
+        ai_date: DateStatus | None
+
+        if is_structured:
+            if source_status is None:
+                raise DomainValidationError(
+                    message="source_status is required for this claim type."
+                )
+            result = await self._results.get_by_submission_id(submission_id)
+            if result is None or result.source_status is None:
+                raise DomainValidationError(
+                    message="The AI result for this claim is not available yet."
+                )
+            ai_source, ai_content, ai_date = (
+                result.source_status,
+                result.content_status,
+                result.date_status,
+            )
+            ai_overall = derive_ai_overall_verdict(ai_source, ai_content, ai_date)
+        else:
+            if source_status is not None:
+                raise DomainValidationError(
+                    message="source_status/content_status/date_status do not apply to multimodal claims."
+                )
+            mm = await self._multimodal.get_by_submission_id(submission_id)
+            if mm is None:
+                raise DomainValidationError(
+                    message="The AI prediction for this claim is not available yet."
+                )
+            ai_source = ai_content = ai_date = None
+            ai_overall = derive_ai_overall_verdict_multimodal(mm.prediction)
+
         profile = await self._profiles.get_or_create(
             expert_id, initial_score=_AUTH.initial_expert_credibility
         )
         weight, tier = await self._resolve_weight(profile)
 
-        result = await self._results.get_by_submission_id(submission_id)
-        ai_label = (
-            result.ai_consensus_label
-            if result and result.ai_consensus_label
-            else ExpertVerdict.NOT_FOUND_IN_CLAIMED_SOURCE
-        )
-
         review = ExpertReviewV2(
             submission_id=submission_id,
             reviewer_id=expert_id,
-            ai_label=ai_label.value,
-            expert_label=expert_label,
+            ai_overall_verdict=ai_overall,
+            ai_source_status=ai_source,
+            ai_content_status=ai_content,
+            ai_date_status=ai_date,
+            vote_overall_verdict=overall_verdict,
+            vote_source_status=source_status,
+            vote_content_status=content_status,
+            vote_date_status=date_status,
             justification=justification,
             credibility_weight=weight,
             applied_weight_tier_id=tier.id if tier else None,
@@ -195,12 +276,14 @@ class ExpertReviewService:
             review_id=str(review.id),
             submission_id=str(submission_id),
             expert_id=str(expert_id),
-            label=expert_label.value,
+            overall_verdict=overall_verdict.value,
+            source_status=source_status.value if source_status else None,
             weight=weight,
         )
 
         vote_count = await self._reviews.count_votes_for_submission(submission_id)
-        if vote_count >= _AUTH.min_expert_votes_to_finalize:
+        voting_config = await self._voting_config.get_or_create()
+        if vote_count >= voting_config.min_expert_votes:
             await self._finalize_submission(submission_id)
 
         return _review_to_response(review)
@@ -222,7 +305,10 @@ class ExpertReviewService:
         self,
         review_id: uuid.UUID,
         expert_id: uuid.UUID,
-        expert_label: ExpertVerdict | None,
+        overall_verdict: OverallVerdict | None,
+        source_status: SourceStatus | None,
+        content_status: ContentStatus | None,
+        date_status: DateStatus | None,
         justification: str | None,
     ) -> ExpertReviewResponse:
         review = await self._reviews.get_by_id(review_id)
@@ -236,14 +322,35 @@ class ExpertReviewService:
             )
 
         updates: dict = {}
-        if expert_label is not None:
-            updates["expert_label"] = expert_label
+        if overall_verdict is not None:
+            updates["vote_overall_verdict"] = overall_verdict
+
+        # source_status is only meaningful for SOURCE_BASED/PHOTO_CARD reviews
+        # (review.vote_source_status is None for multimodal reviews, and stays
+        # None — there's nothing to edit on that axis for them).
+        if review.vote_source_status is not None or source_status is not None:
+            new_source = source_status if source_status is not None else review.vote_source_status
+            new_content = content_status if content_status is not None else review.vote_content_status
+            new_date = date_status if date_status is not None else review.vote_date_status
+
+            if new_source == SourceStatus.CONFIRMED:
+                if new_content is None or new_date is None:
+                    raise DomainValidationError(
+                        message="content_status and date_status are required when source_status is CONFIRMED"
+                    )
+            else:
+                new_content = None
+                new_date = None
+
+            updates["vote_source_status"] = new_source
+            updates["vote_content_status"] = new_content
+            updates["vote_date_status"] = new_date
+
         if justification is not None:
             updates["justification"] = justification
 
         if updates:
             review = await self._reviews.update(review, **updates)
-
         return _review_to_response(review)
 
     async def get_history(
@@ -259,24 +366,51 @@ class ExpertReviewService:
         items = []
         for r in reviews:
             submission = await self._submissions.get_by_id_or_none(r.submission_id)
-            result = await self._results.get_by_submission_id(r.submission_id)
-            final_label = (
-                result.ai_consensus_label.value
-                if result and result.ai_consensus_label
-                else None
-            )
+            is_finalized = r.status == "finalized"
+
+            final_overall: OverallVerdict | None = None
+            final_source: SourceStatus | None = None
+            final_content: ContentStatus | None = None
+            final_date: DateStatus | None = None
+
+            if is_finalized and submission is not None:
+                if submission.submission_type in _STRUCTURED_TYPES:
+                    result = await self._results.get_by_submission_id(r.submission_id)
+                    if result is not None:
+                        final_overall = result.overall_verdict
+                        final_source = result.source_status
+                        final_content = result.content_status
+                        final_date = result.date_status
+                else:
+                    mm = await self._multimodal.get_by_submission_id(r.submission_id)
+                    if mm is not None:
+                        final_overall = mm.expert_overall_verdict
+
             matched: bool | None = None
-            if final_label and r.status == "finalized":
-                matched = r.expert_label.value == final_label
+            if is_finalized and final_overall is not None:
+                matched = r.vote_overall_verdict == final_overall
+
             items.append(
                 ExpertHistoryItemResponse(
                     review_id=str(r.id),
                     submission_id=str(r.submission_id),
+                    submission_type=(
+                        submission.submission_type if submission else SubmissionType.SOURCE_BASED
+                    ),
                     headline=submission.headline if submission else None,
                     claimed_source_text=submission.claimed_source_text if submission else None,
-                    expert_label=r.expert_label.value,
-                    ai_label=r.ai_label,
-                    final_label=final_label,
+                    vote_overall_verdict=r.vote_overall_verdict,
+                    vote_source_status=r.vote_source_status,
+                    vote_content_status=r.vote_content_status,
+                    vote_date_status=r.vote_date_status,
+                    ai_overall_verdict=r.ai_overall_verdict,
+                    ai_source_status=r.ai_source_status,
+                    ai_content_status=r.ai_content_status,
+                    ai_date_status=r.ai_date_status,
+                    final_overall_verdict=final_overall,
+                    final_source_status=final_source,
+                    final_content_status=final_content,
+                    final_date_status=final_date,
                     matched=matched,
                     voted_at=r.created_at,
                 )
@@ -309,50 +443,135 @@ class ExpertReviewService:
         if not reviews:
             return
 
-        result = await self._results.get_by_submission_id(submission_id)
-        if result is None or result.ai_consensus_label is None:
-            return
+        submission = await self._submissions.get_by_id(submission_id)
+        is_structured = submission.submission_type in _STRUCTURED_TYPES
 
-        weighted_totals: dict[ExpertVerdict, float] = {}
-        for review in reviews:
-            lbl = review.expert_label
-            weighted_totals[lbl] = (
-                weighted_totals.get(lbl, 0.0) + review.credibility_weight
+        result: VerificationResultV2 | None = None
+        mm: MultimodalAnalysis | None = None
+        ai_source_status: SourceStatus | None = None
+
+        if is_structured:
+            result = await self._results.get_by_submission_id(submission_id)
+            if result is None or result.source_status is None:
+                return
+            ai_source_status = result.source_status
+            ai_overall = derive_ai_overall_verdict(
+                ai_source_status, result.content_status, result.date_status
+            )
+            ai_weight = result.confidence or 0.0
+        else:
+            mm = await self._multimodal.get_by_submission_id(submission_id)
+            if mm is None:
+                return
+            ai_overall = derive_ai_overall_verdict_multimodal(mm.prediction)
+            ai_weight = (
+                mm.confidence_fake
+                if mm.prediction == MultimodalPredictionLabel.FAKE
+                else mm.confidence_real
             )
 
-        ai_lbl = result.ai_consensus_label
-        ai_weight = result.confidence or 0.0
-        weighted_totals[ai_lbl] = weighted_totals.get(ai_lbl, 0.0) + ai_weight
+        # ─── Overall tally — every submission type votes on this ──────────
+        overall_weights: dict[OverallVerdict, float] = {}
+        for review in reviews:
+            overall_weights[review.vote_overall_verdict] = (
+                overall_weights.get(review.vote_overall_verdict, 0.0)
+                + review.credibility_weight
+            )
+        overall_weights[ai_overall] = overall_weights.get(ai_overall, 0.0) + ai_weight
+        final_overall = _pick_winner(overall_weights, tie_break=ai_overall)
 
-        max_weight = max(weighted_totals.values())
-        winners = [l for l, w in weighted_totals.items() if w == max_weight]
-        final_label = ai_lbl if ai_lbl in winners else winners[0]
+        final_source: SourceStatus | None = None
+        final_content: ContentStatus | None = None
+        final_date: DateStatus | None = None
 
-        await self._results.update(result, ai_consensus_label=final_label)
+        # ─── Source → Content/Date tally — SOURCE_BASED/PHOTO_CARD only ───
+        if is_structured and result is not None and ai_source_status is not None:
+            source_weights: dict[SourceStatus, float] = {}
+            for review in reviews:
+                vote_source = review.vote_source_status
+                if vote_source is not None:
+                    source_weights[vote_source] = (
+                        source_weights.get(vote_source, 0.0) + review.credibility_weight
+                    )
+            source_weights[ai_source_status] = (
+                source_weights.get(ai_source_status, 0.0) + ai_weight
+            )
+            final_source = _pick_winner(source_weights, tie_break=ai_source_status)
+
+            if final_source == SourceStatus.CONFIRMED:
+                content_weights: dict[ContentStatus, float] = {}
+                date_weights: dict[DateStatus, float] = {}
+                for review in reviews:
+                    if review.vote_content_status is not None:
+                        content_weights[review.vote_content_status] = (
+                            content_weights.get(review.vote_content_status, 0.0)
+                            + review.credibility_weight
+                        )
+                    if review.vote_date_status is not None:
+                        date_weights[review.vote_date_status] = (
+                            date_weights.get(review.vote_date_status, 0.0)
+                            + review.credibility_weight
+                        )
+                if result.content_status is not None:
+                    content_weights[result.content_status] = (
+                        content_weights.get(result.content_status, 0.0) + ai_weight
+                    )
+                if result.date_status is not None:
+                    date_weights[result.date_status] = (
+                        date_weights.get(result.date_status, 0.0) + ai_weight
+                    )
+
+                final_content = (
+                    _pick_winner(content_weights, tie_break=result.content_status)
+                    if content_weights
+                    else result.content_status
+                )
+                final_date = (
+                    _pick_winner(date_weights, tie_break=result.date_status)
+                    if date_weights
+                    else result.date_status
+                )
+
+            await self._results.update(
+                result,
+                source_status=final_source,
+                content_status=final_content,
+                date_status=final_date,
+                overall_verdict=final_overall,
+            )
+        elif mm is not None:
+            await self._multimodal.update(mm, expert_overall_verdict=final_overall)
+
         await self._submissions.mark_finalized(submission_id)
 
         for review in reviews:
             await self._reviews.update(review, status="finalized")
 
-        await self._update_expert_profiles(reviews, final_label)
+        await self._update_expert_profiles(reviews, final_overall)
 
         logger.info(
             "submission_finalized",
             submission_id=str(submission_id),
-            final_label=final_label.value,
+            final_overall_verdict=final_overall.value,
+            final_source_status=final_source.value if final_source else None,
+            final_content_status=final_content.value if final_content else None,
+            final_date_status=final_date.value if final_date else None,
             vote_count=len(reviews),
         )
 
     async def _update_expert_profiles(
         self,
         reviews: list[ExpertReviewV2],
-        final_label: ExpertVerdict,
+        final_overall: OverallVerdict,
     ) -> None:
+        """Correctness is judged on the Overall verdict uniformly across all
+        submission types — the one dimension every expert votes on, and the
+        headline judgment call the platform ultimately publishes."""
         for review in reviews:
             if review.reviewer_id is None:
                 continue
+            is_correct = review.vote_overall_verdict == final_overall
             profile = await self._profiles.get_or_create(review.reviewer_id)
-            is_correct = review.expert_label == final_label
             new_total = profile.total_votes + 1
             new_correct = profile.correct_votes + (1 if is_correct else 0)
             new_score = round(new_correct / new_total, 4) if new_total else 0.5
@@ -365,14 +584,7 @@ class ExpertReviewService:
             )
 
 
-def _ai_label_display(result) -> str | None:
-    """What the expert queue shows as "the AI's verdict" for this claim.
-
-    Built from the pipeline's real (source_status, content_status,
-    date_status) rather than the internal ai_consensus_label proxy, so
-    experts see the actual granular verdict, not the single-category
-    projection that only exists to feed the weighted-consensus vote below.
-    """
+def _ai_label_structured(result: VerificationResultV2 | None) -> str | None:
     if result is None:
         return None
     return format_verdict_display(
@@ -380,13 +592,25 @@ def _ai_label_display(result) -> str | None:
     )
 
 
+def _ai_label_multimodal(mm: MultimodalAnalysis | None) -> str | None:
+    if mm is None:
+        return None
+    return "Fake" if mm.prediction == MultimodalPredictionLabel.FAKE else "Real (Non-Fake)"
+
+
 def _review_to_response(r: ExpertReviewV2) -> ExpertReviewResponse:
     return ExpertReviewResponse(
         id=str(r.id),
         submission_id=str(r.submission_id),
         reviewer_id=str(r.reviewer_id) if r.reviewer_id else None,
-        ai_label=r.ai_label,
-        expert_label=r.expert_label.value,
+        ai_overall_verdict=r.ai_overall_verdict,
+        ai_source_status=r.ai_source_status,
+        ai_content_status=r.ai_content_status,
+        ai_date_status=r.ai_date_status,
+        vote_overall_verdict=r.vote_overall_verdict,
+        vote_source_status=r.vote_source_status,
+        vote_content_status=r.vote_content_status,
+        vote_date_status=r.vote_date_status,
         justification=r.justification,
         credibility_weight=r.credibility_weight,
         status=r.status,

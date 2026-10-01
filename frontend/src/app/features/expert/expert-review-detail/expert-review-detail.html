@@ -17,16 +17,24 @@
                 <div class="claim-header">
                   <h2>Claim Details</h2>
                   <app-verdict-badge
+                    [overallVerdict]="claim()!.ai_overall_verdict"
                     [sourceStatus]="claim()!.source_status"
                     [contentStatus]="claim()!.content_status"
                     [dateStatus]="claim()!.date_status" />
                 </div>
                 <p class="claim-headline">{{ claim()!.headline }}</p>
+                @if (claim()!.image_url) {
+                  <div class="claim-image-wrap">
+                    <img [src]="claim()!.image_url" class="claim-image" alt="Submitted image" />
+                  </div>
+                }
                 @if (claim()!.body_text) {
                   <p class="claim-body">{{ claim()!.body_text }}</p>
                 }
                 <div class="claim-meta">
-                  <span class="text-muted text-sm">Source: <a [href]="claim()!.claimed_source_text" target="_blank">{{ claim()!.claimed_source_text }}</a></span>
+                  @if (isStructuredType()) {
+                    <span class="text-muted text-sm">Source: <a [href]="claim()!.claimed_source_text" target="_blank">{{ claim()!.claimed_source_text }}</a></span>
+                  }
                   <span class="text-muted text-sm">Submitted: {{ claim()!.submitted_at | date:'MMM d, y, HH:mm' }}</span>
                 </div>
               </div>
@@ -208,10 +216,7 @@
               <div class="card side-card vote-status-card">
                 <span class="side-label">Vote progress</span>
                 <div class="vote-status">
-                  <span class="text-muted text-sm">{{ claim()!.vote_count }} / 3 expert votes submitted</span>
-                  <div class="vote-progress">
-                    <div class="vote-fill" [style.width.%]="(claim()!.vote_count / 3) * 100"></div>
-                  </div>
+                  <span class="text-muted text-sm">{{ claim()!.vote_count }} expert vote{{ claim()!.vote_count === 1 ? '' : 's' }} submitted so far</span>
                 </div>
                 @if (aiResult(); as ai) {
                   <div class="side-ai-confidence">
@@ -232,21 +237,84 @@
                   <h3>Submit Your Assessment</h3>
                   <form [formGroup]="form" (ngSubmit)="onSubmit()">
                     <div class="form-group">
-                      <label class="form-label">Your Verdict <span style="color:var(--error)">*</span></label>
+                      <label class="form-label">
+                        {{ isStructuredType() ? '1. ' : '' }}Overall, is this claim... <span style="color:var(--error)">*</span>
+                      </label>
                       <div class="verdict-options">
-                        @for (lbl of labels; track lbl) {
-                          <button type="button" class="verdict-option"
-                                  [class.selected]="selectedLabel() === lbl"
-                                  [ngClass]="lbl === 'TRUE' ? 'option-true' : lbl === 'FALSE' ? 'option-false' : lbl === 'PARTIALLY_TRUE' ? 'option-partial' : 'option-notfound'"
-                                  (click)="selectLabel(lbl)">
-                            {{ labelDisplay[lbl] }}
+                        @for (opt of overallOptions; track opt.value) {
+                          <button type="button" class="verdict-option" [ngClass]="opt.cls"
+                                  [class.selected]="selectedOverall() === opt.value"
+                                  (click)="selectOverall(opt.value)">
+                            {{ opt.icon }} {{ opt.label }}
                           </button>
                         }
                       </div>
-                      @if (!selectedLabel() && formSubmitted) {
-                        <span class="form-error">Please select a verdict</span>
+                      @if (!selectedOverall() && formSubmitted) {
+                        <span class="form-error">Please select an overall verdict</span>
                       }
                     </div>
+
+                    @if (isStructuredType()) {
+                      <div class="form-group">
+                        <label class="form-label">2. Is this source confirmed? <span style="color:var(--error)">*</span></label>
+                        <div class="verdict-options">
+                          <button type="button" class="verdict-option option-true"
+                                  [class.selected]="selectedSource() === 'CONFIRMED'"
+                                  (click)="selectSource('CONFIRMED')">
+                            ✓ Source Confirmed
+                          </button>
+                          <button type="button" class="verdict-option option-notfound"
+                                  [class.selected]="selectedSource() === 'NOT_FOUND'"
+                                  (click)="selectSource('NOT_FOUND')">
+                            ? Not Found in Claimed Source
+                          </button>
+                        </div>
+                        @if (!selectedSource() && formSubmitted) {
+                          <span class="form-error">Please select a source verdict</span>
+                        }
+                      </div>
+                    }
+
+                    @if (isStructuredType() && needsContentAndDate()) {
+                      <div class="form-group">
+                        <label class="form-label">3. Does the content match? <span style="color:var(--error)">*</span></label>
+                        <div class="verdict-options">
+                          <button type="button" class="verdict-option option-true"
+                                  [class.selected]="selectedContent() === 'MATCHED'"
+                                  (click)="selectContent('MATCHED')">
+                            ✓ Content Matched
+                          </button>
+                          <button type="button" class="verdict-option option-partial"
+                                  [class.selected]="selectedContent() === 'ALTERED'"
+                                  (click)="selectContent('ALTERED')">
+                            ◑ Content Altered
+                          </button>
+                        </div>
+                        @if (!selectedContent() && formSubmitted) {
+                          <span class="form-error">Please select a content verdict</span>
+                        }
+                      </div>
+
+                      <div class="form-group">
+                        <label class="form-label">4. Does the date match? <span style="color:var(--error)">*</span></label>
+                        <div class="verdict-options">
+                          <button type="button" class="verdict-option option-true"
+                                  [class.selected]="selectedDate() === 'MATCHED'"
+                                  (click)="selectDate('MATCHED')">
+                            ✓ Date Matched
+                          </button>
+                          <button type="button" class="verdict-option option-partial"
+                                  [class.selected]="selectedDate() === 'MISMATCHED'"
+                                  (click)="selectDate('MISMATCHED')">
+                            📅 Date Mismatch
+                          </button>
+                        </div>
+                        @if (!selectedDate() && formSubmitted) {
+                          <span class="form-error">Please select a date verdict</span>
+                        }
+                        <p class="text-muted text-xs mt-2">A date mismatch alone does not mean the news is false.</p>
+                      </div>
+                    }
 
                     <div class="form-group">
                       <label class="form-label">Justification <span style="color:var(--error)">*</span> <span class="text-muted text-xs">(min 50 characters)</span></label>

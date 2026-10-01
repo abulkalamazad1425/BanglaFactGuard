@@ -2,7 +2,7 @@
 // Admin Models — synced with backend admin/schemas.py
 // ============================================================
 
-import { ContentStatus, DateStatus, SourceStatus } from './verification.model';
+import { ContentStatus, DateStatus, OverallVerdict, SourceStatus } from './verification.model';
 
 // ── Expert account response from GET /admin/experts ──────────────────
 export interface ExpertResponse {
@@ -97,10 +97,17 @@ export interface ExplorerItem {
   headline: string | null;
   submission_type: 'SOURCE_BASED' | 'MULTIMODAL' | 'PHOTO_CARD';
   claimed_source_text: string | null;
+  /** The displayed Overall verdict — expert-finalized if available,
+   *  otherwise the AI's preliminary implied value. Spans every type. */
+  overall_verdict: OverallVerdict | null;
+  /** True once expert review has finalized overall_verdict. */
+  is_finalized: boolean;
   source_status: SourceStatus | null;
   content_status: ContentStatus | null;
   date_status: DateStatus | null;
   confidence: number | null;
+  /** Thumbnail for MULTIMODAL/PHOTO_CARD submissions. */
+  image_url?: string | null;
   published_date: string | null;
   created_at: string;
 }
@@ -110,6 +117,8 @@ export interface ExplorerSearchParams {
   source_status?: string;
   content_status?: string;
   date_status?: string;
+  /** Matches only expert-finalized claims; spans every submission type. */
+  overall_verdict?: string;
   method?: string;
   date_from?: string;
   date_to?: string;
@@ -150,4 +159,17 @@ export interface CredibilityWeightTierUpdateRequest {
   max_accuracy_pct?: number;
   weight?: number;
   is_active?: boolean;
+}
+
+// ── Voting configuration — admin-configurable, GET/PUT /admin/voting-config.
+//    No fixed limit in code; the admin decides how many expert votes a
+//    claim needs before it's finalized. ───────────────────────────────
+export interface VotingConfig {
+  id: string;
+  min_expert_votes: number;
+  updated_at: string;
+}
+
+export interface VotingConfigUpdateRequest {
+  min_expert_votes: number;
 }

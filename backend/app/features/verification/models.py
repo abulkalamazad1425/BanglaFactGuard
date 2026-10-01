@@ -27,6 +27,7 @@ from app.core.constants import (
     DateStatus,
     ExpertVerdict,
     LogLevel,
+    OverallVerdict,
     PipelineStageID,
     SourceStatus,
 )
@@ -363,6 +364,19 @@ class VerificationResultV2(UUIDMixin, TimestampMixin, ReprMixin, Base):
             "Whether the claimed publication date matches the source's actual "
             "date. Only set when both dates are known; independent of "
             "content_status — a mismatch here does not imply false content."
+        ),
+    )
+
+    overall_verdict: Mapped[OverallVerdict | None] = mapped_column(
+        Enum(OverallVerdict, name="overall_verdict_enum", create_type=False),
+        nullable=True,
+        index=True,
+        comment=(
+            "Expert-finalized Overall verdict (Fake/Real/Misleading/Altered) — "
+            "NULL until expert review finalizes this claim. Written only by "
+            "ExpertReviewService, never by the AI pipeline itself; see "
+            "app/features/expert_review/overall_verdict.py for the AI's "
+            "implied-but-not-persisted preliminary value."
         ),
     )
 

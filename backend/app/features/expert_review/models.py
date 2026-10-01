@@ -19,7 +19,13 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.core.constants import ExpertVerdict
+from app.core.constants import (
+    ContentStatus,
+    DateStatus,
+    ExpertVerdict,
+    OverallVerdict,
+    SourceStatus,
+)
 from app.shared.base_model import Base, ReprMixin, TimestampMixin, UUIDMixin
 
 if TYPE_CHECKING:
@@ -175,7 +181,15 @@ class CredibilityWeightTier(UUIDMixin, TimestampMixin, ReprMixin, Base):
 class ExpertReviewV2(UUIDMixin, TimestampMixin, ReprMixin, Base):
     """DatabaseDescription.pdf Table 4.11 — expert_reviews (suffixed `_v2` in the DB
     because the legacy `expert_reviews` table, still used by the live voting flow,
-    already owns that name)."""
+    already owns that name).
+
+    The expert votes on the same (source_status, content_status, date_status)
+    structure the AI pipeline itself produces — content/date are only
+    meaningful (non-null) once source_status is CONFIRMED, mirroring
+    s11_classifier's own conditional logic. There is no separate flat
+    "verdict" field: finalization writes the consensus straight back onto
+    VerificationResultV2.source_status/content_status/date_status.
+    """
 
     __tablename__ = "expert_reviews_v2"
 
@@ -191,10 +205,43 @@ class ExpertReviewV2(UUIDMixin, TimestampMixin, ReprMixin, Base):
         nullable=True,
         index=True,
     )
-    ai_label: Mapped[str] = mapped_column(String(20), nullable=False)
-    expert_label: Mapped[ExpertVerdict] = mapped_column(
-        Enum(ExpertVerdict, name="verification_label_enum", create_type=False),
+    ai_overall_verdict: Mapped[OverallVerdict] = mapped_column(
+        Enum(OverallVerdict, name="overall_verdict_enum", create_type=False),
         nullable=False,
+        comment="Snapshot of the AI-implied Overall verdict at vote time (all types)",
+    )
+    ai_source_status: Mapped[SourceStatus | None] = mapped_column(
+        Enum(SourceStatus, name="source_status_enum", create_type=False),
+        nullable=True,
+        comment="Snapshot of the AI's source call at vote time — SOURCE_BASED/PHOTO_CARD only",
+    )
+    ai_content_status: Mapped[ContentStatus | None] = mapped_column(
+        Enum(ContentStatus, name="content_status_enum", create_type=False),
+        nullable=True,
+    )
+    ai_date_status: Mapped[DateStatus | None] = mapped_column(
+        Enum(DateStatus, name="date_status_enum", create_type=False),
+        nullable=True,
+    )
+    vote_overall_verdict: Mapped[OverallVerdict] = mapped_column(
+        Enum(OverallVerdict, name="overall_verdict_enum", create_type=False),
+        nullable=False,
+        comment="Expert's own Overall judgment — required for every submission type",
+    )
+    vote_source_status: Mapped[SourceStatus | None] = mapped_column(
+        Enum(SourceStatus, name="source_status_enum", create_type=False),
+        nullable=True,
+        comment="Expert's own Source judgment — SOURCE_BASED/PHOTO_CARD only",
+    )
+    vote_content_status: Mapped[ContentStatus | None] = mapped_column(
+        Enum(ContentStatus, name="content_status_enum", create_type=False),
+        nullable=True,
+        comment="Expert's own Content judgment — set only when vote_source_status is CONFIRMED",
+    )
+    vote_date_status: Mapped[DateStatus | None] = mapped_column(
+        Enum(DateStatus, name="date_status_enum", create_type=False),
+        nullable=True,
+        comment="Expert's own Date judgment — set only when vote_source_status is CONFIRMED",
     )
     justification: Mapped[str | None] = mapped_column(Text, nullable=True)
     credibility_weight: Mapped[float] = mapped_column(
@@ -226,4 +273,26 @@ class ExpertReviewV2(UUIDMixin, TimestampMixin, ReprMixin, Base):
         primaryjoin="ExpertReviewV2.applied_weight_tier_id == CredibilityWeightTier.id",
         viewonly=True,
         lazy="select",
+    )
+
+
+class VotingConfig(UUIDMixin, TimestampMixin, ReprMixin, Base):
+    """Admin-configurable voting parameters — a single-row table (the oldest
+    row is always the one in effect) so the minimum-votes-to-finalize count
+    is no longer a fixed setting, per the admin's own instruction that there
+    should be no hard-coded limit here."""
+
+    __tablename__ = "voting_config"
+
+    min_expert_votes: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=3,
+        comment="Number of expert votes required on a claim before it is finalized",
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "min_expert_votes >= 1", name="ck_voting_config_min_votes_positive"
+        ),
     )

@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.constants import (
     ContentStatus,
     DateStatus,
+    OverallVerdict,
     SourceStatus,
     SubmissionStatus,
     SubmissionType,
@@ -144,6 +145,7 @@ class SubmissionRepository(BaseRepository[Submission]):
         source_status: SourceStatus | None = None,
         content_status: ContentStatus | None = None,
         date_status: DateStatus | None = None,
+        overall_verdict: OverallVerdict | None = None,
         method: SubmissionType | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
@@ -152,9 +154,18 @@ class SubmissionRepository(BaseRepository[Submission]):
         offset: int = 0,
     ) -> tuple[list[Submission], int]:
         """Fact Explorer search — browse verified (EXPERT_REVIEW/FINALIZED)
-        submissions with optional filters. Returns (rows, total_count)."""
+        submissions with optional filters. Returns (rows, total_count).
+
+        overall_verdict spans every submission type (its finalized value
+        lives on VerificationResultV2 for SOURCE_BASED/PHOTO_CARD, and on
+        MultimodalAnalysis for MULTIMODAL) and only matches claims that have
+        actually been expert-finalized — a claim still under review doesn't
+        match any overall_verdict filter, even though its AI-implied value
+        may be shown on its own detail page.
+        """
         from sqlalchemy import func
 
+        from app.features.multimodal.models import MultimodalAnalysis
         from app.features.verification.models import VerificationResultV2
 
         conditions = [Submission.status.in_(_VERIFIED_STATUSES)]
@@ -181,6 +192,8 @@ class SubmissionRepository(BaseRepository[Submission]):
             or content_status is not None
             or date_status is not None
         )
+        joined_result = False
+
         if needs_result_join:
             base = base.join(
                 VerificationResultV2,
@@ -190,12 +203,38 @@ class SubmissionRepository(BaseRepository[Submission]):
                 VerificationResultV2,
                 VerificationResultV2.submission_id == Submission.id,
             )
+            joined_result = True
             if source_status is not None:
                 conditions.append(VerificationResultV2.source_status == source_status)
             if content_status is not None:
                 conditions.append(VerificationResultV2.content_status == content_status)
             if date_status is not None:
                 conditions.append(VerificationResultV2.date_status == date_status)
+
+        if overall_verdict is not None:
+            if not joined_result:
+                base = base.outerjoin(
+                    VerificationResultV2,
+                    VerificationResultV2.submission_id == Submission.id,
+                )
+                count_base = count_base.outerjoin(
+                    VerificationResultV2,
+                    VerificationResultV2.submission_id == Submission.id,
+                )
+            base = base.outerjoin(
+                MultimodalAnalysis,
+                MultimodalAnalysis.submission_id == Submission.id,
+            )
+            count_base = count_base.outerjoin(
+                MultimodalAnalysis,
+                MultimodalAnalysis.submission_id == Submission.id,
+            )
+            conditions.append(
+                or_(
+                    VerificationResultV2.overall_verdict == overall_verdict,
+                    MultimodalAnalysis.expert_overall_verdict == overall_verdict,
+                )
+            )
 
         stmt = (
             base.where(and_(*conditions))

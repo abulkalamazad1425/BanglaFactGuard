@@ -31,14 +31,31 @@
                 @for (h of history(); track h.review_id) {
                   <tr>
                     <td class="headline-cell">{{ h.headline || h.submission_id | slice:0:70 }}...</td>
-                    <td><app-verdict-badge [label]="h.expert_label" /></td>
-                    <td><app-verdict-badge [label]="h.ai_label" /></td>
                     <td>
-                      @if (h.final_label) { <app-verdict-badge [label]="h.final_label" /> }
-                      @else { <span class="text-muted">Pending</span> }
+                      <app-verdict-badge
+                        [overallVerdict]="h.vote_overall_verdict"
+                        [sourceStatus]="h.vote_source_status"
+                        [contentStatus]="h.vote_content_status"
+                        [dateStatus]="h.vote_date_status" />
                     </td>
                     <td>
-                      @if (h.matched !== null) {
+                      <app-verdict-badge
+                        [overallVerdict]="h.ai_overall_verdict"
+                        [sourceStatus]="h.ai_source_status"
+                        [contentStatus]="h.ai_content_status"
+                        [dateStatus]="h.ai_date_status" />
+                    </td>
+                    <td>
+                      @if (h.final_overall_verdict) {
+                        <app-verdict-badge
+                          [overallVerdict]="h.final_overall_verdict"
+                          [sourceStatus]="h.final_source_status"
+                          [contentStatus]="h.final_content_status"
+                          [dateStatus]="h.final_date_status" />
+                      } @else { <span class="text-muted">Pending</span> }
+                    </td>
+                    <td>
+                      @if (h.matched !== null && h.matched !== undefined) {
                         <span [class]="h.matched ? 'text-success' : 'text-error'">
                           {{ h.matched ? '✓ Match' : '✗ Differ' }}
                         </span>

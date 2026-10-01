@@ -36,9 +36,12 @@
       text-decoration: none; color: inherit; transition: background 0.15s;
       &:hover { background: var(--bg-surface-3); }
     }
-    .explorer-row-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    .explorer-thumb-wrap { flex-shrink: 0; }
+    .explorer-thumb { width: 56px; height: 56px; border-radius: 8px; object-fit: cover; border: 1px solid var(--border); }
+    .explorer-row-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1 1 auto; }
     .explorer-headline {
       font-size: 14px; font-weight: 500;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 520px;
     }
+    .explorer-row-verdict { display: flex; align-items: center; gap: 8px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
     .pagination-controls { display: flex; align-items: center; justify-content: center; gap: 16px; }

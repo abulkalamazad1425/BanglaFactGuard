@@ -164,7 +164,11 @@
       display: flex; gap: 14px; padding: 18px; border-radius: var(--radius-lg); background: var(--bg-surface-2);
       border: 1px solid var(--border);
       &.ai-summary { border-color: rgba(99, 102, 241, 0.25); }
-      &.expert-na { opacity: 0.85; }
+      &.expert-pending { opacity: 0.85; }
+      &.expert-verdict-real { border-color: rgba(16, 185, 129, 0.3); }
+      &.expert-verdict-fake { border-color: rgba(239, 68, 68, 0.3); }
+      &.expert-verdict-misleading,
+      &.expert-verdict-altered { border-color: rgba(245, 158, 11, 0.3); }
     }
     .summary-icon { font-size: 24px; flex-shrink: 0; }
     .summary-body { display: flex; flex-direction: column; gap: 4px; }
