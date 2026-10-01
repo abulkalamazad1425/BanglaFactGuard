@@ -24,6 +24,7 @@ class SubmissionLookupResponse(BaseModel):
     submission_type: SubmissionType
     status: SubmissionStatus
     headline: str | None
+    body_text: str | None = None
     claimed_source_text: str | None = None
     published_date: date | None = None
     created_at: datetime

@@ -5,7 +5,13 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.core.constants import ContentStatus, DateStatus, SourceStatus, SubmissionStatus
+from app.core.constants import (
+    ContentStatus,
+    DateStatus,
+    OverallVerdict,
+    SourceStatus,
+    SubmissionStatus,
+)
 from app.features.articles.schemas import RankedArticleSchema
 
 
@@ -148,6 +154,17 @@ class VerificationScoresResponse(VerificationScoresSchema):
 class VerificationResponse(BaseModel):
 
     submission_id: uuid.UUID
+    overall_verdict: OverallVerdict | None = Field(
+        default=None,
+        description=(
+            "The displayed Overall verdict — the expert-finalized value if "
+            "available, otherwise the AI's preliminary implied value."
+        ),
+    )
+    is_finalized: bool = Field(
+        default=False,
+        description="True once expert review has finalized overall_verdict.",
+    )
     source_status: SourceStatus = Field(
         ..., description="Does the claimed source carry this story at all?"
     )

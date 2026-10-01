@@ -28,6 +28,19 @@
             <!-- ══════════════ SOURCE-BASED ══════════════ -->
             @if (kind() === 'SOURCE_BASED' && sourceResult(); as r) {
               <div class="result-modal card">
+                @if (lookup(); as l) {
+                  <div class="claim-text-block original-claim-block">
+                    <h4 class="block-title">Submitted claim</h4>
+                    <p class="confirmed-text">{{ l.headline || '(no headline recorded)' }}</p>
+                    @if (l.body_text) {
+                      <p class="confirmed-body">{{ l.body_text }}</p>
+                    }
+                    <div class="claim-meta-row text-muted text-sm">
+                      @if (l.claimed_source_text) { <span>🌐 Claimed source: <strong>{{ l.claimed_source_text }}</strong></span> }
+                      @if (l.published_date) { <span>📅 Claimed date: {{ l.published_date | date:'MMM d, y' }}</span> }
+                    </div>
+                  </div>
+                }
                 <ng-container *ngTemplateOutlet="verdictBlock; context: { r: r }"></ng-container>
               </div>
             }
@@ -173,6 +186,9 @@
           <div class="not-found card text-center">
             <div class="spinner" style="margin: 0 auto 20px;"></div>
             <h2>Verification in progress</h2>
+            @if (lookup()?.headline) {
+              <p class="pending-claim-preview">"{{ lookup()!.headline }}"</p>
+            }
             <p>
               This claim is still being checked. The page updates by itself as
               soon as the verdict is ready — you can also come back to this
@@ -189,6 +205,9 @@
           <div class="not-found card text-center">
             <div style="font-size:64px; margin-bottom:20px;">⚠️</div>
             <h2>Verification failed</h2>
+            @if (lookup()?.headline) {
+              <p class="pending-claim-preview">"{{ lookup()!.headline }}"</p>
+            }
             <p>Something went wrong while checking this claim. Please try submitting it again.</p>
             <a routerLink="/verify" class="btn btn-primary mt-4">Submit New Claim</a>
           </div>
@@ -212,6 +231,14 @@
       <!-- Verdict Header -->
       <div class="verdict-header">
         <div class="verdict-left">
+          <div class="overall-verdict-row">
+            @if (!r.is_finalized) {
+              <span class="badge badge-pending">⏳ Under Review</span>
+            } @else {
+              <span class="badge badge-true">⚖️ Expert Verified</span>
+            }
+            <app-verdict-badge [overallVerdict]="r.overall_verdict" />
+          </div>
           <app-verdict-badge
             [sourceStatus]="r.source_status"
             [contentStatus]="r.content_status"

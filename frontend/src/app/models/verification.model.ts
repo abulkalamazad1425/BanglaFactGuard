@@ -78,6 +78,11 @@ export interface VerificationStatus {
 // ── Full response from POST /verify or GET /verify/{id} ─────────────
 export interface VerificationResponse {
   submission_id: string;
+  /** The displayed Overall verdict — expert-finalized if available,
+   *  otherwise the AI's preliminary implied value. */
+  overall_verdict?: OverallVerdict | null;
+  /** True once expert review has finalized overall_verdict. */
+  is_finalized?: boolean;
   source_status: SourceStatus;
   content_status?: ContentStatus | null;
   date_status?: DateStatus | null;
@@ -164,6 +169,7 @@ export interface SubmissionLookup {
   submission_type: SubmissionType;
   status: SubmissionStatus;
   headline: string | null;
+  body_text?: string | null;
   claimed_source_text?: string | null;
   published_date?: string | null;
   created_at: string;

@@ -10,8 +10,9 @@ from app.features.search.google_cse_client import GoogleCSEClient
 from app.features.search.pygooglenews_client import PyGoogleNewsClient
 from app.features.search.duckduckgo_client import DuckDuckGoClient
 from app.features.search.internal_site_client import InternalSiteSearchClient
-from app.core.constants import SubmissionStatus
+from app.core.constants import SourceStatus, SubmissionStatus
 from app.core.exceptions import PipelineError
+from app.features.expert_review.overall_verdict import derive_ai_overall_verdict
 from app.features.verification.pipeline.context import PipelineContext, build_context
 from app.features.verification.pipeline.orchestrator import PipelineOrchestrator
 from app.features.verification.pipeline.stages.s01_normalizer import (
@@ -281,10 +282,16 @@ class VerificationService:
             numerical_consistency=result.numerical_consistency,
         )
         flags = cached_flags or ManipulationFlagsSchema()
+        result_source = result.source_status or SourceStatus.NOT_FOUND
 
         return VerificationResponse(
             submission_id=submission_id,
-            source_status=result.source_status,
+            overall_verdict=result.overall_verdict
+            or derive_ai_overall_verdict(
+                result_source, result.content_status, result.date_status
+            ),
+            is_finalized=bool(result.overall_verdict),
+            source_status=result_source,
             content_status=result.content_status,
             date_status=result.date_status,
             confidence=result.confidence or 0.0,
@@ -344,13 +351,21 @@ class VerificationService:
         ]
 
     def _build_response(self, context: PipelineContext) -> VerificationResponse:
-        from app.core.constants import SourceStatus
         from app.features.verification.schemas import VerificationScoresResponse
 
         if context.cache_hit:
+            cached_source = context.cached_source_status or SourceStatus.NOT_FOUND
             return VerificationResponse(
                 submission_id=context.submission_id or uuid.uuid4(),
-                source_status=context.cached_source_status or SourceStatus.NOT_FOUND,
+                # This synchronous path reflects the AI's call at cache-write
+                # time, not whatever expert review may have since finalized —
+                # the GET /verify/{id} path (get_result, above) is what shows
+                # the authoritative finalized verdict.
+                overall_verdict=derive_ai_overall_verdict(
+                    cached_source, context.cached_content_status, context.cached_date_status
+                ),
+                is_finalized=False,
+                source_status=cached_source,
                 content_status=context.cached_content_status,
                 date_status=context.cached_date_status,
                 confidence=context.cached_confidence or 0.0,
@@ -367,9 +382,14 @@ class VerificationService:
                 created_at=datetime.utcnow(),
             )
 
+        fresh_source = context.source_status or SourceStatus.NOT_FOUND
         return VerificationResponse(
             submission_id=context.submission_id or uuid.uuid4(),
-            source_status=context.source_status or SourceStatus.NOT_FOUND,
+            overall_verdict=derive_ai_overall_verdict(
+                fresh_source, context.content_status, context.date_status
+            ),
+            is_finalized=False,
+            source_status=fresh_source,
             content_status=context.content_status,
             date_status=context.date_status,
             confidence=context.confidence,

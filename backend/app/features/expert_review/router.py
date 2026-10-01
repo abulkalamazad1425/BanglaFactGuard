@@ -25,6 +25,7 @@ from app.features.expert_review.schemas import (
 from app.features.expert_review.service import ExpertReviewService
 from app.features.multimodal.repository import MultimodalAnalysisRepository
 from app.features.multimodal.storage_service import MultimodalStorageService
+from app.features.photocard.storage_service import PhotoCardStorageService
 from app.features.submissions.repository import SubmissionRepository
 from app.features.verification.repository import ResultV2Repository
 from app.shared.dependencies import get_async_session
@@ -42,6 +43,9 @@ def _get_service(
     storage: MultimodalStorageService | None = getattr(
         request.app.state, "multimodal_storage", None
     )
+    photocard_storage: PhotoCardStorageService | None = getattr(
+        request.app.state, "photocard_storage", None
+    )
     return ExpertReviewService(
         review_repo=ExpertReviewV2Repository(session),
         profile_repo=ExpertProfileRepository(session),
@@ -51,6 +55,7 @@ def _get_service(
         multimodal_repo=MultimodalAnalysisRepository(session),
         voting_config_repo=VotingConfigRepository(session),
         storage=storage,
+        photocard_storage=photocard_storage,
     )
 
 

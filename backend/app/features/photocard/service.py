@@ -28,7 +28,8 @@ from datetime import datetime
 import httpx
 import structlog
 
-from app.core.constants import SubmissionStatus, SubmissionType
+from app.core.constants import SourceStatus, SubmissionStatus, SubmissionType
+from app.features.expert_review.overall_verdict import derive_ai_overall_verdict
 from app.core.config import get_settings
 from app.core.exceptions import BanglaFactGuardError, PermissionDeniedError
 from app.features.cache.cache_service import CacheService
@@ -436,12 +437,18 @@ class PhotoCardService:
 
     @staticmethod
     def _build_verification_response(context: PipelineContext) -> VerificationResponse:
-        from app.core.constants import SourceStatus
-
         if context.cache_hit:
+            cached_source = context.cached_source_status or SourceStatus.NOT_FOUND
             return VerificationResponse(
                 submission_id=context.submission_id or uuid.uuid4(),
-                source_status=context.cached_source_status or SourceStatus.NOT_FOUND,
+                # Reflects the AI's call at cache-write time, not whatever
+                # expert review may have since finalized — get_result()/
+                # _load_verification() below shows the authoritative value.
+                overall_verdict=derive_ai_overall_verdict(
+                    cached_source, context.cached_content_status, context.cached_date_status
+                ),
+                is_finalized=False,
+                source_status=cached_source,
                 content_status=context.cached_content_status,
                 date_status=context.cached_date_status,
                 confidence=context.cached_confidence or 0.0,
@@ -459,9 +466,14 @@ class PhotoCardService:
                 created_at=datetime.utcnow(),
             )
 
+        fresh_source = context.source_status or SourceStatus.NOT_FOUND
         return VerificationResponse(
             submission_id=context.submission_id or uuid.uuid4(),
-            source_status=context.source_status or SourceStatus.NOT_FOUND,
+            overall_verdict=derive_ai_overall_verdict(
+                fresh_source, context.content_status, context.date_status
+            ),
+            is_finalized=False,
+            source_status=fresh_source,
             content_status=context.content_status,
             date_status=context.date_status,
             confidence=context.confidence,
@@ -522,6 +534,11 @@ class PhotoCardService:
 
         return VerificationResponse(
             submission_id=submission.id,
+            overall_verdict=result.overall_verdict
+            or derive_ai_overall_verdict(
+                result.source_status, result.content_status, result.date_status
+            ),
+            is_finalized=bool(result.overall_verdict),
             source_status=result.source_status,
             content_status=result.content_status,
             date_status=result.date_status,

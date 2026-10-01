@@ -43,6 +43,7 @@ async def get_submission(
         submission_type=submission.submission_type,
         status=submission.status,
         headline=submission.headline,
+        body_text=submission.body_text,
         claimed_source_text=submission.claimed_source_text,
         published_date=submission.published_date,
         created_at=submission.created_at,

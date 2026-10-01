@@ -16,6 +16,7 @@
       margin-bottom: 32px; padding-bottom: 32px; border-bottom: 1px solid var(--border);
     }
     .verdict-left { display: flex; flex-direction: column; gap: 12px; }
+    .overall-verdict-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .verdict-badge {
       display: inline-flex; align-items: center; gap: 10px;
       padding: 10px 24px; border-radius: var(--radius-full);
@@ -92,6 +93,7 @@
     .article-snippet { font-size: 14px; color: var(--text-secondary); line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; transition: color 0.2s; &:hover { color: var(--text-primary); } }
 
     .loading-card, .not-found { max-width: 400px; margin: 80px auto; }
+    .pending-claim-preview { font-style: italic; color: var(--text-secondary); margin: 8px 0 16px; line-height: 1.5; }
 
     // ── Shared top-bar type chip ──────────────────────────────────────
     .type-chip {
@@ -121,6 +123,10 @@
     .block-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 8px; }
     .confirmed-text { font-weight: 600; color: var(--text-primary); line-height: 1.5; margin-bottom: 8px; }
     .confirmed-body { font-size: 14px; color: var(--text-secondary); line-height: 1.6; }
+    .original-claim-block {
+      padding-bottom: 24px; margin-bottom: 24px; border-bottom: 1px solid var(--border);
+    }
+    .claim-meta-row { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 8px; }
     .ocr-meta-row { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
     .meta-chip {
       display: flex; flex-direction: column; gap: 2px; padding: 8px 12px;

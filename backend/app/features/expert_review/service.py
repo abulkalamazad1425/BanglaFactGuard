@@ -41,7 +41,8 @@ from app.features.expert_review.schemas import (
 from app.features.multimodal.models import MultimodalAnalysis
 from app.features.multimodal.repository import MultimodalAnalysisRepository
 from app.features.multimodal.storage_service import MultimodalStorageService
-from app.features.submissions.models import Submission
+from app.features.photocard.storage_service import PhotoCardStorageService
+from app.features.submissions.models import OcrExtraction, Submission
 from app.features.submissions.repository import SubmissionRepository
 from app.features.verification.models import VerificationResultV2
 from app.features.verification.repository import ResultV2Repository
@@ -79,6 +80,7 @@ class ExpertReviewService:
         multimodal_repo: MultimodalAnalysisRepository,
         voting_config_repo: VotingConfigRepository,
         storage: MultimodalStorageService | None = None,
+        photocard_storage: PhotoCardStorageService | None = None,
     ) -> None:
         self._reviews = review_repo
         self._profiles = profile_repo
@@ -88,8 +90,20 @@ class ExpertReviewService:
         self._multimodal = multimodal_repo
         self._voting_config = voting_config_repo
         self._storage = storage
+        self._photocard_storage = photocard_storage
 
         self._session = review_repo.session
+
+    async def _fetch_photocard_image_url(self, submission_id: uuid.UUID) -> str | None:
+        if self._photocard_storage is None:
+            return None
+        from sqlalchemy import select
+
+        stmt = select(OcrExtraction).where(OcrExtraction.submission_id == submission_id)
+        ocr = (await self._session.execute(stmt)).scalar_one_or_none()
+        if ocr is None:
+            return None
+        return await self._photocard_storage.get_presigned_url(ocr.image_object_key)
 
     async def _fetch_top_article(self, result: VerificationResultV2 | None) -> ExpertTopArticle | None:
         if result is None or result.top_article_id is None:
@@ -123,6 +137,11 @@ class ExpertReviewService:
         if submission.submission_type in _STRUCTURED_TYPES:
             result = await self._results.get_by_submission_id(submission.id)
             top_article = await self._fetch_top_article(result)
+            image_url = (
+                await self._fetch_photocard_image_url(submission.id)
+                if submission.submission_type == SubmissionType.PHOTO_CARD
+                else None
+            )
             return ExpertQueueItemResponse(
                 submission_id=str(submission.id),
                 submission_type=submission.submission_type,
@@ -144,6 +163,7 @@ class ExpertReviewService:
                 submitted_at=submission.created_at,
                 vote_count=vote_count,
                 top_article=top_article,
+                image_url=image_url,
             )
 
         mm = await self._multimodal.get_by_submission_id(submission.id)
