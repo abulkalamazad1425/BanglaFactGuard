@@ -100,7 +100,7 @@ class MultimodalPredictionService:
                 model_version=self._cfg.model_version,
                 is_duplicate_of_id=duplicate.id,
             )
-            return self._build_response(
+            return await self._build_response(
                 record=record,
                 is_cached=True,
                 original_id=str(duplicate.id),
@@ -130,7 +130,7 @@ class MultimodalPredictionService:
             model_version=self._cfg.model_version,
             is_duplicate_of_id=None,
         )
-        return self._build_response(record=record, is_cached=False)
+        return await self._build_response(record=record, is_cached=False)
 
     async def _create_submission(
         self,
@@ -178,6 +178,11 @@ class MultimodalPredictionService:
     async def get_prediction(self, prediction_id: uuid.UUID) -> MultimodalAnalysis:
         return await self._repo.get_by_id(prediction_id)
 
+    async def get_prediction_by_submission(
+        self, submission_id: uuid.UUID
+    ) -> MultimodalAnalysis | None:
+        return await self._repo.get_by_submission_id(submission_id)
+
     async def list_predictions(
         self, *, limit: int = 20, offset: int = 0
     ) -> tuple[list[MultimodalAnalysis], int]:
@@ -221,8 +226,8 @@ class MultimodalPredictionService:
 
         return best_match, best_scores
 
-    @staticmethod
-    def _build_response(
+    async def _build_response(
+        self,
         *,
         record: MultimodalAnalysis,
         is_cached: bool,
@@ -239,6 +244,7 @@ class MultimodalPredictionService:
             original_id=original_id,
             similarity_scores=similarity_scores if is_cached else None,
             minio_object_key=record.image_object_key,
+            image_url=await self._storage.get_presigned_url(record.image_object_key),
             model_version=record.model_version,
             created_at=record.created_at,
         )

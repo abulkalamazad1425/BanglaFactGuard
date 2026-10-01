@@ -30,6 +30,10 @@ class MultimodalPredictionResponse(BaseModel):
     minio_object_key: str = Field(
         ..., description="MinIO object key of the stored image"
     )
+    image_url: Optional[str] = Field(
+        default=None,
+        description="Pre-signed, time-limited URL for displaying the uploaded image",
+    )
     model_version: str = Field(..., description="Model version tag")
     created_at: datetime = Field(
         ..., description="Prediction record creation timestamp"
@@ -48,6 +52,10 @@ class MultimodalPredictionDetail(BaseModel):
     is_cached: bool
     original_id: Optional[str] = None
     minio_object_key: str
+    image_url: Optional[str] = Field(
+        default=None,
+        description="Pre-signed, time-limited URL for displaying the uploaded image",
+    )
     model_version: str
     created_at: datetime
     updated_at: datetime

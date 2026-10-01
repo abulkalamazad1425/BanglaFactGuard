@@ -119,9 +119,45 @@ export interface MultimodalPredictionResult {
   original_id?: string | null;
   similarity_scores?: Record<string, number> | null;
   minio_object_key: string;
+  image_url?: string | null;
   model_version: string;
   created_at: string;
   processing_time_ms?: number | null;
+}
+
+// ── Multimodal prediction from GET /multimodal/predict/{id} or
+//    GET /multimodal/by-submission/{submission_id} — includes the original
+//    claim text, which the bare prediction response above does not. ────
+export interface MultimodalPredictionDetail {
+  prediction_id: string;
+  submission_id: string;
+  headline: string | null;
+  body_text: string | null;
+  prediction: string;          // 'FAKE' | 'NON_FAKE'
+  confidence_fake: number;
+  confidence_real: number;
+  is_cached: boolean;
+  original_id?: string | null;
+  minio_object_key: string;
+  image_url?: string | null;
+  model_version: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// ── Type-agnostic lookup from GET /submissions/{id} ──────────────────
+// The first call a result page makes: tells it which detail endpoint to
+// call next (GET /verify/{id}, GET /multimodal/by-submission/{id}, or
+// GET /photocard/{id}) and carries enough to render a loading/pending
+// state before that second call resolves.
+export interface SubmissionLookup {
+  submission_id: string;
+  submission_type: SubmissionType;
+  status: SubmissionStatus;
+  headline: string | null;
+  claimed_source_text?: string | null;
+  published_date?: string | null;
+  created_at: string;
 }
 
 // ── Old evidence/check types kept for backward compat ────────────────

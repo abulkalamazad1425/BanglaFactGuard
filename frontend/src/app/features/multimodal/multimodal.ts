@@ -1,6 +1,7 @@
 import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { ToastService } from '../../shared/services/toast.service';
 import { MultimodalService } from '../../services/verification.service';
 import { MultimodalPredictionResult } from '../../models/verification.model';
@@ -9,7 +10,7 @@ import { MultimodalPredictionResult } from '../../models/verification.model';
 @Component({
   selector: 'app-multimodal',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './multimodal.html',
   styleUrls: ['./multimodal.scss'],
 })

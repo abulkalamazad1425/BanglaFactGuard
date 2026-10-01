@@ -10,7 +10,7 @@ import {
   SubmissionSummary,
   SubmissionStats,
 } from '../models/verification.model';
-import { MultimodalPredictionResult } from '../models/verification.model';
+import { MultimodalPredictionDetail, MultimodalPredictionResult } from '../models/verification.model';
 
 // ── Verification Service ──────────────────────────────────────────────
 // Covers: POST /api/v1/verify  →  GET /api/v1/verify/{id}
@@ -68,5 +68,12 @@ export class MultimodalService {
     fd.append('body_text', bodyText);
     fd.append('image', image);
     return this.api.postFormData<MultimodalPredictionResult>(API_ENDPOINTS.MULTIMODAL_PREDICT, fd);
+  }
+
+  /** GET /api/v1/multimodal/by-submission/{submission_id} */
+  getBySubmission(submissionId: string): Observable<MultimodalPredictionDetail> {
+    return this.api.get<MultimodalPredictionDetail>(
+      `${API_ENDPOINTS.MULTIMODAL_BY_SUBMISSION}/${submissionId}`,
+    );
   }
 }

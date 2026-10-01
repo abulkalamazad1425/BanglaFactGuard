@@ -11,263 +11,167 @@
           </div>
         }
 
-        @if (!loading() && result()) {
+        @if (!loading() && hasDetail()) {
           <div class="animate-in">
             <!-- Top bar -->
             <div class="result-topbar">
               <a routerLink="/verify" class="btn btn-ghost btn-sm">← New Verification</a>
               <div class="share-actions">
-                <span class="claim-id">ID: {{ result()!.submission_id }}</span>
+                <span class="type-chip" [ngClass]="'type-' + kind()">
+                  {{ kind() === 'SOURCE_BASED' ? '🔎 Source-Based' : kind() === 'PHOTO_CARD' ? '🖼️ Photo Card' : '🧠 Multimodal' }}
+                </span>
+                <span class="claim-id">ID: {{ submissionId }}</span>
                 <button class="btn btn-secondary btn-sm" (click)="copyUrl()">{{ copied ? '✓ Copied' : '🔗 Copy Link' }}</button>
               </div>
             </div>
 
-            <!-- Modal-like Wide Card -->
-            <div class="result-modal card">
-              
-              <!-- Verdict Header -->
-              <div class="verdict-header">
-                <div class="verdict-left">
-                  <app-verdict-badge
-                    [sourceStatus]="result()!.source_status"
-                    [contentStatus]="result()!.content_status"
-                    [dateStatus]="result()!.date_status" />
-                  <div class="source-info">
-                    Source: <strong>{{ result()!.normalized_source || '' }}</strong>
-                    @if (result()!.cached) {
-                      <span class="cache-tag">⚡ Cached</span>
+            <!-- ══════════════ SOURCE-BASED ══════════════ -->
+            @if (kind() === 'SOURCE_BASED' && sourceResult(); as r) {
+              <div class="result-modal card">
+                <ng-container *ngTemplateOutlet="verdictBlock; context: { r: r }"></ng-container>
+              </div>
+            }
+
+            <!-- ══════════════ PHOTO CARD ══════════════ -->
+            @if (kind() === 'PHOTO_CARD' && photocardResult(); as p) {
+              <div class="photocard-layout">
+                <div class="card media-panel">
+                  <h3 class="panel-title"><span class="panel-icon">🖼️</span> Submitted card</h3>
+                  @if (p.image_url) {
+                    <img [src]="p.image_url" class="media-image" alt="Submitted photo card" />
+                  }
+                  <div class="claim-text-block">
+                    <h4 class="block-title">Confirmed claim</h4>
+                    <p class="confirmed-text">{{ p.headline }}</p>
+                    @if (p.body_text) {
+                      <p class="confirmed-body">{{ p.body_text }}</p>
                     }
                   </div>
+                  <div class="ocr-meta-row">
+                    <div class="meta-chip">
+                      <span class="meta-label">OCR engine</span>
+                      <span class="meta-value">{{ p.ocr_engine || '—' }}</span>
+                    </div>
+                    <div class="meta-chip">
+                      <span class="meta-label">OCR confidence</span>
+                      <span class="meta-value">{{ p.ocr_confidence != null ? (p.ocr_confidence * 100).toFixed(0) + '%' : '—' }}</span>
+                    </div>
+                    <div class="meta-chip">
+                      <span class="meta-label">Submitted</span>
+                      <span class="meta-value">{{ p.created_at | date:'MMM d, y' }}</span>
+                    </div>
+                  </div>
+                  @if (p.ocr_raw_text && p.ocr_raw_text !== p.ocr_confirmed_text) {
+                    <details class="raw-ocr-details">
+                      <summary>Show raw OCR text (before correction)</summary>
+                      <p class="raw-ocr-text">{{ p.ocr_raw_text }}</p>
+                    </details>
+                  }
                 </div>
 
-                <!-- Confidence Meter -->
-                <div class="confidence-meter">
-                  <svg class="confidence-svg" viewBox="0 0 100 100">
-                    <circle class="bg-ring" cx="50" cy="50" r="45"></circle>
-                    <circle class="progress-ring" cx="50" cy="50" r="45"
-                            [style.stroke-dashoffset]="getDashOffset(result()!.confidence)"
-                            [style.stroke]="verdictColor()"></circle>
-                  </svg>
-                  <div class="confidence-text">
-                    <span class="confidence-val">{{ (result()!.confidence * 100).toFixed(0) }}%</span>
-                    <span class="confidence-lbl">Confidence</span>
-                  </div>
+                <div class="card result-modal verdict-panel">
+                  @if (p.verification; as v) {
+                    <ng-container *ngTemplateOutlet="verdictBlock; context: { r: v }"></ng-container>
+                  } @else {
+                    <div class="not-found" style="margin:0;">
+                      <p>This photo card hasn't been verified yet.</p>
+                    </div>
+                  }
                 </div>
               </div>
+            }
 
-              <!-- Reasoning Box -->
-              @if (result()!.reasoning) {
-                <div class="reasoning-box">
-                  <h4>💬 Analysis Reasoning</h4>
-                  <p>{{ result()!.reasoning }}</p>
+            <!-- ══════════════ MULTIMODAL ══════════════ -->
+            @if (kind() === 'MULTIMODAL' && multimodalResult(); as m) {
+              <div class="result-modal card multimodal-card">
+
+                <div class="mm-verdict-header">
+                  <span class="prediction-pill" [class.pill-fake]="m.prediction === 'FAKE'" [class.pill-real]="m.prediction !== 'FAKE'">
+                    <span class="pill-icon">{{ m.prediction === 'FAKE' ? '✗' : '✓' }}</span>
+                    {{ m.prediction === 'FAKE' ? 'Likely Fake' : 'Likely Real' }}
+                  </span>
+                  <span class="mm-date">
+                    <span>📅</span> Submitted {{ m.created_at | date:'MMM d, y, HH:mm' }}
+                  </span>
                 </div>
-              }
 
-              <!-- Score Bars Grid -->
-              @if (result()!.scores) {
-                <div class="scores-grid">
-                  @if (result()!.scores.semantic_similarity != null) {
-                    <div class="score-item" style="grid-column: 1 / -1; background: var(--bg-surface-2); padding: 16px; border-radius: 8px;">
-                      <div class="score-info">
-                        <span class="score-label" title="Blended score (30% headline, 70% body)">Semantic Similarity ℹ</span>
-                        <span class="score-value" style="font-size: 24px;">{{ (result()!.scores.semantic_similarity! * 100).toFixed(1) }}%</span>
-                      </div>
-                      <div class="progress-bar-wrap" style="height: 12px; margin-top: 8px; margin-bottom: 12px;">
-                        <div class="progress-bar blue" [style.width.%]="result()!.scores.semantic_similarity! * 100"></div>
-                      </div>
-                      @if (result()!.scores.headline_similarity != null && result()!.scores.body_similarity != null) {
-                        <div class="score-sub" style="display: flex; gap: 24px; justify-content: flex-start; font-size: 14px;">
-                          <span style="background: var(--info-bg); padding: 4px 12px; border-radius: 4px;">
-                            Headline Match: <strong style="color: var(--info)">{{ (result()!.scores.headline_similarity! * 100).toFixed(1) }}%</strong>
-                          </span>
-                          <span style="background: var(--info-bg); padding: 4px 12px; border-radius: 4px;">
-                            Body Match: <strong style="color: var(--info)">{{ (result()!.scores.body_similarity! * 100).toFixed(1) }}%</strong>
-                          </span>
-                        </div>
-                      }
-                    </div>
-                  }
-                  
-                  @if (result()!.scores.entity_match != null) {
-                    <div class="score-item">
-                      <div class="score-info">
-                        <span class="score-label" title="Named entity overlap">Entity Match ℹ</span>
-                        <span class="score-value">{{ (result()!.scores.entity_match! * 100).toFixed(1) }}%</span>
-                      </div>
-                      <div class="progress-bar-wrap">
-                        <div class="progress-bar purple" [style.width.%]="result()!.scores.entity_match! * 100"></div>
-                      </div>
-                    </div>
-                  }
-                  
-                  @if (result()!.scores.keyword_overlap != null) {
-                    <div class="score-item">
-                      <div class="score-info">
-                        <span class="score-label">Keyword Overlap ℹ</span>
-                        <span class="score-value">{{ (result()!.scores.keyword_overlap! * 100).toFixed(1) }}%</span>
-                      </div>
-                      <div class="progress-bar-wrap">
-                        <div class="progress-bar indigo" [style.width.%]="result()!.scores.keyword_overlap! * 100"></div>
-                      </div>
-                    </div>
-                  }
-                  
-                  @if (result()!.scores.numerical_consistency != null) {
-                    <div class="score-item">
-                      <div class="score-info">
-                        <span class="score-label">Numerical Consistency ℹ</span>
-                        <span class="score-value">{{ (result()!.scores.numerical_consistency! * 100).toFixed(1) }}%</span>
-                      </div>
-                      <div class="progress-bar-wrap">
-                        <div class="progress-bar cyan" [style.width.%]="result()!.scores.numerical_consistency! * 100"></div>
-                      </div>
-                    </div>
-                  }
-                  
-                  @if (result()!.scores.contradiction_score != null) {
-                    <div class="score-item">
-                      <div class="score-info">
-                        <span class="score-label" title="NLI contradiction probability">Contradiction Risk ℹ</span>
-                        <span class="score-value">{{ (result()!.scores.contradiction_score! * 100).toFixed(1) }}%</span>
-                      </div>
-                      <div class="progress-bar-wrap">
-                        <div class="progress-bar pink" [style.width.%]="result()!.scores.contradiction_score! * 100"></div>
-                      </div>
-                    </div>
-                  }
+                <!-- Headline, image, body — image sits between the two text blocks -->
+                <h2 class="mm-headline">{{ m.headline || '(no headline recorded)' }}</h2>
+
+                @if (m.image_url) {
+                  <div class="mm-image-wrap">
+                    <img [src]="m.image_url" class="mm-image" alt="Submitted article image" />
+                  </div>
+                }
+
+                @if (m.body_text) {
+                  <p class="mm-body">{{ m.body_text }}</p>
+                }
+
+                <!-- Confidence breakdown -->
+                <div class="mm-confidence-section">
+                  <h4>Model confidence</h4>
+                  <div class="mm-confidence-bar">
+                    <div class="mm-bar-fake" [style.width.%]="(m.confidence_fake || 0) * 100"></div>
+                    <div class="mm-bar-real" [style.width.%]="(m.confidence_real || 0) * 100"></div>
+                  </div>
+                  <div class="mm-confidence-labels">
+                    <span class="mm-lbl-fake">Fake: {{ ((m.confidence_fake || 0) * 100).toFixed(1) }}%</span>
+                    <span class="mm-lbl-real">Real: {{ ((m.confidence_real || 0) * 100).toFixed(1) }}%</span>
+                  </div>
                 </div>
-              }
 
-              <!-- Manipulation Flags -->
-              @if (result()!.manipulation_flags) {
-                <div class="checks-section">
-                  <h4>✅ Verification Checks</h4>
-                  <div class="checks-grid">
-                    <div class="check-card" [class.passed]="!result()!.manipulation_flags.headline_manipulated"
-                         [class.failed]="result()!.manipulation_flags.headline_manipulated">
-                      <div class="check-icon-wrap">
-                        {{ result()!.manipulation_flags.headline_manipulated ? '✗' : '✓' }}
-                      </div>
-                      <div class="check-body">
-                        <span class="check-title">Headline Integrity</span>
-                        <span class="check-desc">
-                          {{ result()!.manipulation_flags.headline_manipulated
-                              ? 'Headline altered or sensationalized relative to body.'
-                              : 'Headline meaning matches article body.' }}
-                        </span>
-                      </div>
+                <!-- AI vs Expert verdict summary -->
+                <div class="verdict-summary-grid">
+                  <div class="verdict-summary-card ai-summary">
+                    <div class="summary-icon">🤖</div>
+                    <div class="summary-body">
+                      <span class="summary-title">AI-Verified Result</span>
+                      <span class="summary-desc">
+                        BanglaBERT + EfficientNet-B4 multimodal model classified this as
+                        <strong>{{ m.prediction === 'FAKE' ? 'likely fake' : 'likely real' }}</strong>
+                        with {{ ((m.prediction === 'FAKE' ? m.confidence_fake : m.confidence_real) * 100).toFixed(0) }}% confidence.
+                        @if (m.is_cached) { This exact submission was seen before — the cached result is shown. }
+                      </span>
                     </div>
-
-                    <div class="check-card" [class.passed]="!result()!.manipulation_flags.body_altered"
-                         [class.failed]="result()!.manipulation_flags.body_altered">
-                      <div class="check-icon-wrap">
-                        {{ result()!.manipulation_flags.body_altered ? '✗' : '✓' }}
-                      </div>
-                      <div class="check-body">
-                        <span class="check-title">Content Authenticity</span>
-                        <span class="check-desc">
-                          {{ result()!.manipulation_flags.body_altered
-                              ? 'Submitted text diverges significantly or is fabricated.'
-                              : 'Submitted text matches the original source.' }}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div class="check-card" [class.passed]="!result()!.manipulation_flags.numbers_altered"
-                         [class.failed]="result()!.manipulation_flags.numbers_altered">
-                      <div class="check-icon-wrap">
-                        {{ result()!.manipulation_flags.numbers_altered ? '✗' : '✓' }}
-                      </div>
-                      <div class="check-body">
-                        <span class="check-title">Numerical Consistency</span>
-                        <span class="check-desc">
-                          {{ result()!.manipulation_flags.numbers_altered
-                              ? 'Numbers or dates altered or inflated.'
-                              : 'Statistics and dates are consistent.' }}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div class="check-card" [class.passed]="!result()!.manipulation_flags.entities_replaced"
-                         [class.failed]="result()!.manipulation_flags.entities_replaced">
-                      <div class="check-icon-wrap">
-                        {{ result()!.manipulation_flags.entities_replaced ? '✗' : '✓' }}
-                      </div>
-                      <div class="check-body">
-                        <span class="check-title">Entity Authenticity</span>
-                        <span class="check-desc">
-                          {{ result()!.manipulation_flags.entities_replaced
-                              ? 'Named entities were swapped or replaced.'
-                              : 'Names, places, organizations match.' }}
-                        </span>
-                      </div>
+                  </div>
+                  <div class="verdict-summary-card expert-summary expert-na">
+                    <div class="summary-icon">⚖️</div>
+                    <div class="summary-body">
+                      <span class="summary-title">Expert Review</span>
+                      <span class="summary-desc">
+                        Multimodal checks are fully automated and do not go through human expert
+                        review — this AI result is the final verdict for this submission.
+                      </span>
                     </div>
                   </div>
                 </div>
-              }
 
-              <!-- Top matching article — at most one, if any was found -->
-              @if (result()!.matched_articles && result()!.matched_articles.length) {
-                <div class="articles-section" style="margin-top: 48px;">
-                  <h4 style="margin-bottom: 24px; font-size: 18px; display: flex; align-items: center; gap: 8px; color: var(--text-primary);">
-                    <span style="font-size: 24px;">📰</span> Top Matching Article from Source
-                  </h4>
-                  <div class="articles-list">
-                    @for (art of result()!.matched_articles!.slice(0, 1); track art.url) {
-                      <div class="article-card" style="border-left: 4px solid var(--primary); background: var(--bg-surface-2);">
-                        <div class="article-header" style="align-items: flex-start;">
-                          <div style="display: flex; gap: 12px; align-items: flex-start; flex: 1;">
-                            <a [href]="art.url" target="_blank" class="article-title" style="margin: 0; font-size: 16px; line-height: 1.4;">
-                              {{ art.title || 'View Source Article' }}
-                            </a>
-                          </div>
-                          @if (art.rank_score != null) {
-                            <div class="article-match" style="background: var(--success-bg); color: var(--success); border: 1px solid rgba(22, 163, 74, 0.25);">
-                              Relevance: {{ (art.rank_score * 100).toFixed(1) }}%
-                            </div>
-                          }
-                        </div>
-                        <div class="article-meta" style="margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border); margin-top: 8px;">
-                          @if (art.author) { <span>👤 {{ art.author }}</span> }
-                          @if (art.published_date) { <span>📅 {{ art.published_date }}</span> }
-                          <span>🌐 {{ getHost(art.url) }}</span>
-                        </div>
-                        @if (art.body) {
-                          <a [href]="art.url" target="_blank" style="text-decoration: none; color: inherit; display: block; cursor: pointer;">
-                            <p class="article-snippet" style="-webkit-line-clamp: 4; margin-top: 12px;">{{ art.body }}</p>
-                          </a>
-                        }
-                      </div>
-                    }
-                  </div>
+                <div class="result-footer text-muted text-sm" style="margin-top: 24px; text-align: center;">
+                  Model version {{ m.model_version }}
                 </div>
-              }
-              
-              <div class="result-footer text-muted text-sm" style="margin-top: 32px; text-align: center;">
-                Verification processed in {{ (result()!.processing_time_ms! / 1000).toFixed(1) }}s 
-                on {{ result()!.created_at | date:'medium' }}
               </div>
-            </div>
+            }
           </div>
         }
 
-        @if (!loading() && !result() && stillRunning()) {
+        @if (!loading() && !hasDetail() && stillRunning()) {
           <div class="not-found card text-center">
             <div class="spinner" style="margin: 0 auto 20px;"></div>
             <h2>Verification in progress</h2>
             <p>
-              This claim is still being checked against its source. The page
-              updates by itself as soon as the verdict is ready — you can also
-              come back to this link later.
+              This claim is still being checked. The page updates by itself as
+              soon as the verdict is ready — you can also come back to this
+              link later.
             </p>
             <p style="margin-top:10px; font-size:12px; opacity:.75;">
-              Status: <strong>{{ status() }}</strong>
+              Status: <strong>{{ lookup()?.status }}</strong>
             </p>
             <a routerLink="/dashboard" class="btn btn-secondary mt-4">Browse Fact Explorer</a>
           </div>
         }
 
-        @if (!loading() && !result() && status() === 'FAILED') {
+        @if (!loading() && !hasDetail() && failed()) {
           <div class="not-found card text-center">
             <div style="font-size:64px; margin-bottom:20px;">⚠️</div>
             <h2>Verification failed</h2>
@@ -276,7 +180,7 @@
           </div>
         }
 
-        @if (!loading() && !result() && !stillRunning() && status() !== 'FAILED') {
+        @if (!loading() && !hasDetail() && !stillRunning() && !failed()) {
           <div class="not-found card text-center">
             <div style="font-size:64px; margin-bottom:20px;">🔎</div>
             <h2>Result not found</h2>
@@ -286,3 +190,233 @@
         }
       </div>
     </div>
+
+    <!-- ══════════════ Shared verdict block — source-based verdict, reused for
+         both standalone source-based claims and the verification half of a
+         photo card (both carry the same VerificationResponse shape) ══════════════ -->
+    <ng-template #verdictBlock let-r="r">
+      <!-- Verdict Header -->
+      <div class="verdict-header">
+        <div class="verdict-left">
+          <app-verdict-badge
+            [sourceStatus]="r.source_status"
+            [contentStatus]="r.content_status"
+            [dateStatus]="r.date_status" />
+          <div class="source-info">
+            Source: <strong>{{ r.normalized_source || '' }}</strong>
+            @if (r.cached) {
+              <span class="cache-tag">⚡ Cached</span>
+            }
+          </div>
+        </div>
+
+        <!-- Confidence Meter -->
+        <div class="confidence-meter">
+          <svg class="confidence-svg" viewBox="0 0 100 100">
+            <circle class="bg-ring" cx="50" cy="50" r="45"></circle>
+            <circle class="progress-ring" cx="50" cy="50" r="45"
+                    [style.stroke-dashoffset]="getDashOffset(r.confidence)"
+                    [style.stroke]="verdictColor(r)"></circle>
+          </svg>
+          <div class="confidence-text">
+            <span class="confidence-val">{{ (r.confidence * 100).toFixed(0) }}%</span>
+            <span class="confidence-lbl">Confidence</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Reasoning Box -->
+      @if (r.reasoning) {
+        <div class="reasoning-box">
+          <h4>💬 Analysis Reasoning</h4>
+          <p>{{ r.reasoning }}</p>
+        </div>
+      }
+
+      <!-- Score Bars Grid -->
+      @if (r.scores) {
+        <div class="scores-grid">
+          @if (r.scores.semantic_similarity != null) {
+            <div class="score-item" style="grid-column: 1 / -1; background: var(--bg-surface-2); padding: 16px; border-radius: 8px;">
+              <div class="score-info">
+                <span class="score-label" title="Blended score (30% headline, 70% body)">Semantic Similarity ℹ</span>
+                <span class="score-value" style="font-size: 24px;">{{ (r.scores.semantic_similarity * 100).toFixed(1) }}%</span>
+              </div>
+              <div class="progress-bar-wrap" style="height: 12px; margin-top: 8px; margin-bottom: 12px;">
+                <div class="progress-bar blue" [style.width.%]="r.scores.semantic_similarity * 100"></div>
+              </div>
+              @if (r.scores.headline_similarity != null && r.scores.body_similarity != null) {
+                <div class="score-sub" style="display: flex; gap: 24px; justify-content: flex-start; font-size: 14px;">
+                  <span style="background: var(--info-bg); padding: 4px 12px; border-radius: 4px;">
+                    Headline Match: <strong style="color: var(--info)">{{ (r.scores.headline_similarity * 100).toFixed(1) }}%</strong>
+                  </span>
+                  <span style="background: var(--info-bg); padding: 4px 12px; border-radius: 4px;">
+                    Body Match: <strong style="color: var(--info)">{{ (r.scores.body_similarity * 100).toFixed(1) }}%</strong>
+                  </span>
+                </div>
+              }
+            </div>
+          }
+
+          @if (r.scores.entity_match != null) {
+            <div class="score-item">
+              <div class="score-info">
+                <span class="score-label" title="Named entity overlap">Entity Match ℹ</span>
+                <span class="score-value">{{ (r.scores.entity_match * 100).toFixed(1) }}%</span>
+              </div>
+              <div class="progress-bar-wrap">
+                <div class="progress-bar purple" [style.width.%]="r.scores.entity_match * 100"></div>
+              </div>
+            </div>
+          }
+
+          @if (r.scores.keyword_overlap != null) {
+            <div class="score-item">
+              <div class="score-info">
+                <span class="score-label">Keyword Overlap ℹ</span>
+                <span class="score-value">{{ (r.scores.keyword_overlap * 100).toFixed(1) }}%</span>
+              </div>
+              <div class="progress-bar-wrap">
+                <div class="progress-bar indigo" [style.width.%]="r.scores.keyword_overlap * 100"></div>
+              </div>
+            </div>
+          }
+
+          @if (r.scores.numerical_consistency != null) {
+            <div class="score-item">
+              <div class="score-info">
+                <span class="score-label">Numerical Consistency ℹ</span>
+                <span class="score-value">{{ (r.scores.numerical_consistency * 100).toFixed(1) }}%</span>
+              </div>
+              <div class="progress-bar-wrap">
+                <div class="progress-bar cyan" [style.width.%]="r.scores.numerical_consistency * 100"></div>
+              </div>
+            </div>
+          }
+
+          @if (r.scores.contradiction_score != null) {
+            <div class="score-item">
+              <div class="score-info">
+                <span class="score-label" title="NLI contradiction probability">Contradiction Risk ℹ</span>
+                <span class="score-value">{{ (r.scores.contradiction_score * 100).toFixed(1) }}%</span>
+              </div>
+              <div class="progress-bar-wrap">
+                <div class="progress-bar pink" [style.width.%]="r.scores.contradiction_score * 100"></div>
+              </div>
+            </div>
+          }
+        </div>
+      }
+
+      <!-- Manipulation Flags -->
+      @if (r.manipulation_flags) {
+        <div class="checks-section">
+          <h4>✅ Verification Checks</h4>
+          <div class="checks-grid">
+            <div class="check-card" [class.passed]="!r.manipulation_flags.headline_manipulated"
+                 [class.failed]="r.manipulation_flags.headline_manipulated">
+              <div class="check-icon-wrap">
+                {{ r.manipulation_flags.headline_manipulated ? '✗' : '✓' }}
+              </div>
+              <div class="check-body">
+                <span class="check-title">Headline Integrity</span>
+                <span class="check-desc">
+                  {{ r.manipulation_flags.headline_manipulated
+                      ? 'Headline altered or sensationalized relative to body.'
+                      : 'Headline meaning matches article body.' }}
+                </span>
+              </div>
+            </div>
+
+            <div class="check-card" [class.passed]="!r.manipulation_flags.body_altered"
+                 [class.failed]="r.manipulation_flags.body_altered">
+              <div class="check-icon-wrap">
+                {{ r.manipulation_flags.body_altered ? '✗' : '✓' }}
+              </div>
+              <div class="check-body">
+                <span class="check-title">Content Authenticity</span>
+                <span class="check-desc">
+                  {{ r.manipulation_flags.body_altered
+                      ? 'Submitted text diverges significantly or is fabricated.'
+                      : 'Submitted text matches the original source.' }}
+                </span>
+              </div>
+            </div>
+
+            <div class="check-card" [class.passed]="!r.manipulation_flags.numbers_altered"
+                 [class.failed]="r.manipulation_flags.numbers_altered">
+              <div class="check-icon-wrap">
+                {{ r.manipulation_flags.numbers_altered ? '✗' : '✓' }}
+              </div>
+              <div class="check-body">
+                <span class="check-title">Numerical Consistency</span>
+                <span class="check-desc">
+                  {{ r.manipulation_flags.numbers_altered
+                      ? 'Numbers or dates altered or inflated.'
+                      : 'Statistics and dates are consistent.' }}
+                </span>
+              </div>
+            </div>
+
+            <div class="check-card" [class.passed]="!r.manipulation_flags.entities_replaced"
+                 [class.failed]="r.manipulation_flags.entities_replaced">
+              <div class="check-icon-wrap">
+                {{ r.manipulation_flags.entities_replaced ? '✗' : '✓' }}
+              </div>
+              <div class="check-body">
+                <span class="check-title">Entity Authenticity</span>
+                <span class="check-desc">
+                  {{ r.manipulation_flags.entities_replaced
+                      ? 'Named entities were swapped or replaced.'
+                      : 'Names, places, organizations match.' }}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Top matching article — at most one, if any was found -->
+      @if (r.matched_articles && r.matched_articles.length) {
+        <div class="articles-section" style="margin-top: 48px;">
+          <h4 style="margin-bottom: 24px; font-size: 18px; display: flex; align-items: center; gap: 8px; color: var(--text-primary);">
+            <span style="font-size: 24px;">📰</span> Top Matching Article from Source
+          </h4>
+          <div class="articles-list">
+            @for (art of r.matched_articles.slice(0, 1); track art.url) {
+              <div class="article-card" style="border-left: 4px solid var(--primary); background: var(--bg-surface-2);">
+                <div class="article-header" style="align-items: flex-start;">
+                  <div style="display: flex; gap: 12px; align-items: flex-start; flex: 1;">
+                    <a [href]="art.url" target="_blank" class="article-title" style="margin: 0; font-size: 16px; line-height: 1.4;">
+                      {{ art.title || 'View Source Article' }}
+                    </a>
+                  </div>
+                  @if (art.rank_score != null) {
+                    <div class="article-match" style="background: var(--success-bg); color: var(--success); border: 1px solid rgba(22, 163, 74, 0.25);">
+                      Relevance: {{ (art.rank_score * 100).toFixed(1) }}%
+                    </div>
+                  }
+                </div>
+                <div class="article-meta" style="margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border); margin-top: 8px;">
+                  @if (art.author) { <span>👤 {{ art.author }}</span> }
+                  @if (art.published_date) { <span>📅 {{ art.published_date }}</span> }
+                  <span>🌐 {{ getHost(art.url) }}</span>
+                </div>
+                @if (art.body) {
+                  <a [href]="art.url" target="_blank" style="text-decoration: none; color: inherit; display: block; cursor: pointer;">
+                    <p class="article-snippet" style="-webkit-line-clamp: 4; line-clamp: 4; margin-top: 12px;">{{ art.body }}</p>
+                  </a>
+                }
+              </div>
+            }
+          </div>
+        </div>
+      }
+
+      @if (r.processing_time_ms != null) {
+        <div class="result-footer text-muted text-sm" style="margin-top: 32px; text-align: center;">
+          Verification processed in {{ (r.processing_time_ms / 1000).toFixed(1) }}s
+          on {{ r.created_at | date:'medium' }}
+        </div>
+      }
+    </ng-template>

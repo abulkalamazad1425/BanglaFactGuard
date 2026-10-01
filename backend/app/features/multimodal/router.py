@@ -65,7 +65,9 @@ def _get_storage(request: Request) -> MultimodalStorageService:
 
 
 async def _to_detail(
-    record: MultimodalAnalysis, submission_repo: SubmissionRepository
+    record: MultimodalAnalysis,
+    submission_repo: SubmissionRepository,
+    storage: MultimodalStorageService,
 ) -> MultimodalPredictionDetail:
     submission = await submission_repo.get_by_id_or_none(record.submission_id)
     return MultimodalPredictionDetail(
@@ -81,6 +83,7 @@ async def _to_detail(
             str(record.is_duplicate_of_id) if record.is_duplicate_of_id else None
         ),
         minio_object_key=record.image_object_key,
+        image_url=await storage.get_presigned_url(record.image_object_key),
         model_version=record.model_version,
         created_at=record.created_at,
         updated_at=record.updated_at,
@@ -199,7 +202,38 @@ async def get_prediction(
             status_code=status.HTTP_404_NOT_FOUND, detail=exc.message
         ) from exc
 
-    return await _to_detail(record, SubmissionRepository(db))
+    return await _to_detail(record, SubmissionRepository(db), storage)
+
+
+@router.get(
+    "/by-submission/{submission_id}",
+    response_model=MultimodalPredictionDetail,
+    summary="Get Prediction by Submission ID",
+    description=(
+        "Retrieve a stored multimodal prediction by the paired submission's "
+        "UUID — the id used everywhere else in the app (Fact Explorer, "
+        "submission history, notification links), as opposed to the "
+        "prediction's own id."
+    ),
+    responses={404: {"description": "No multimodal prediction for this submission"}},
+)
+async def get_prediction_by_submission(
+    submission_id: uuid.UUID,
+    request: Request,
+    db: AsyncSession = Depends(get_async_session),
+) -> MultimodalPredictionDetail:
+    loader = _get_loader(request)
+    storage = _get_storage(request)
+    service = MultimodalPredictionService(db=db, loader=loader, storage=storage)
+
+    record = await service.get_prediction_by_submission(submission_id)
+    if record is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": "not_found", "submission_id": str(submission_id)},
+        )
+
+    return await _to_detail(record, SubmissionRepository(db), storage)
 
 
 @router.get(
@@ -223,6 +257,6 @@ async def list_predictions(
     records, total = await service.list_predictions(limit=limit, offset=offset)
 
     submission_repo = SubmissionRepository(db)
-    items = [await _to_detail(r, submission_repo) for r in records]
+    items = [await _to_detail(r, submission_repo, storage) for r in records]
 
     return PredictionListResponse(items=items, total=total, limit=limit, offset=offset)

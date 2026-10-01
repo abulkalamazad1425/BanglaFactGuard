@@ -24,6 +24,11 @@ export const API_ENDPOINTS = {
 
   // Multimodal
   MULTIMODAL_PREDICT: '/multimodal/predict',
+  MULTIMODAL_BY_SUBMISSION: '/multimodal/by-submission',
+
+  // Submissions (type-agnostic lookup — tells the caller which detail
+  // endpoint above to use for a given submission_id)
+  SUBMISSIONS: '/submissions',
 
   // Photo Card
   PHOTOCARD: '/photocard',
