@@ -19,6 +19,7 @@ export class ExpertQueueComponent implements OnInit {
 
   readonly isAdmin = this.auth.isAdmin;
   readonly loading = signal(true);
+  readonly loadError = signal(false);
   readonly queue = signal<ExpertQueueItem[]>([]);
   readonly offset = signal(0);
   readonly limit = 20;
@@ -29,7 +30,7 @@ export class ExpertQueueComponent implements OnInit {
   load(): void {
     this.loading.set(true);
     this.expertSvc.getQueue(this.limit, this.offset())
-      .subscribe({ next: q => { this.queue.set(q); this.loading.set(false); }, error: () => this.loading.set(false) });
+      .subscribe({ next: q => { this.queue.set(q); this.loading.set(false); this.loadError.set(false); }, error: () => { this.loading.set(false); this.loadError.set(true); } });
   }
 
   prev(): void { this.offset.update(o => Math.max(0, o - this.limit)); this.load(); }
@@ -43,8 +44,8 @@ export class ExpertQueueComponent implements OnInit {
     const labels: Record<string, string> = {
       SOURCE_BASED: 'Source-Based',
       PHOTO_CARD: 'Photo Card',
-      MULTIMODAL: 'Multimodal',
+      MULTIMODAL: 'Text and image',
     };
-    return labels[t] ?? t;
+    return labels[t] ?? 'News check';
   }
 }

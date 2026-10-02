@@ -216,7 +216,7 @@ interface RowSpec {
 
 const SCORE_SPECS: RowSpec[] = [
   { key: 'headline_similarity', metricKey: 'headline_similarity', label: 'Headline similarity to source title',
-    hint: 'Embedding similarity between the submitted headline and the source report\'s title. A measurement, not a probability of truth.', color: COLORS.blue },
+    hint: 'Text similarity between the submitted headline and the source report\'s title. A measurement, not a probability of truth.', color: COLORS.blue },
   { key: 'passage_similarity', metricKey: 'passage_similarity', label: 'Support in relevant source passages',
     hint: 'Similarity to the sentences of the source article that discuss this claim (with surrounding context). Supporting evidence, not a body match.', color: COLORS.blue },
   { key: 'headline_keyword_coverage', metricKey: 'headline_keyword_coverage', label: 'Headline keywords found in source title',
@@ -231,8 +231,8 @@ const SCORE_SPECS: RowSpec[] = [
     hint: 'Submitted body compared passage-by-passage with the source article. Only exists when a body was submitted.', color: COLORS.blue, bodyOnly: true },
   { key: 'body_keyword_coverage', metricKey: 'body_keyword_coverage', label: 'Submitted-body keywords found in source',
     hint: 'Share of keywords of the submitted body that occur in the source article.', color: COLORS.indigo, bodyOnly: true },
-  { key: 'contradiction_score', metricKey: 'contradiction', label: 'Possible-contradiction signal (NLI)',
-    hint: 'NLI contradiction probability. The NLI model has not been validated on Bangla: a high value is a prompt for review, not a finding.', color: COLORS.pink },
+  { key: 'contradiction_score', metricKey: 'contradiction', label: 'Possible contradiction',
+    hint: 'This automated comparison has not been validated for Bengali. A high value needs review and is not proof of a contradiction.', color: COLORS.pink },
 ];
 
 export function buildScoreRows(

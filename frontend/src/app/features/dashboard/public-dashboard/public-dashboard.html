@@ -1,181 +1,80 @@
-    <div class="dashboard-page">
-      <div class="container" style="padding-top:48px; padding-bottom:80px;">
-        <div class="page-header animate-in">
-          <div class="explorer-hero">
-            <div class="explorer-icon">🔍</div>
-            <div>
-              <h1>Fact Explorer</h1>
-              <p>A public repository of all verified fact-checks from BanglaFactGuard — browse AI-verified, source-verified, and multimodal-verified claims.</p>
-            </div>
-          </div>
-        </div>
+<div class="explorer-page">
+  <div class="container explorer-container">
+    <header class="explorer-header">
+      <div><p class="eyebrow">THE VERIFICATION ARCHIVE</p><h1>Fact Explorer</h1><p class="intro">Explore the claims checked by BanglaFactGuard.<br class="desktop-break"> Read the findings, follow the evidence, and see what is still under review.</p></div>
+      <a routerLink="/verify" class="btn btn-secondary">Verify a new claim <span aria-hidden="true">↗</span></a>
+    </header>
 
-        @if (loading()) { <div class="loading-overlay"><div class="spinner"></div></div> }
+    <section class="archive-summary" aria-label="All-time archive summary">
+      <div class="summary-intro"><span class="eyebrow">OUR WORK, AT A GLANCE</span><p>All-time archive activity</p><small>Includes preliminary and final results. Repeat submissions identified by the system are excluded.</small></div>
+      <div class="summary-stat"><strong>{{ summary() ? (summary()!.total | number) : '—' }}</strong><span>Checks in the archive</span></div>
+      <div class="summary-stat"><strong>{{ summary() ? (summary()!.finalized | number) : '—' }}</strong><span>Final decisions</span></div>
+      <div class="summary-stat"><strong>{{ summary() ? (summary()!.review | number) : '—' }}</strong><span>Under expert review</span></div>
+    </section>
 
-        @if (!loading() && stats()) {
-          <div class="animate-in">
-            <!-- Stats Overview -->
-            <div class="grid-4" style="margin-bottom:32px;">
-              <div class="stat-card card text-center">
-                <span class="stat-num">{{ stats()!.total_submissions | number }}</span>
-                <span class="stat-lbl">Total Verified Claims</span>
-              </div>
-              <div class="stat-card card text-center text-success">
-                <span class="stat-num">{{ stats()!.source_confirmed_count | number }}</span>
-                <span class="stat-lbl">Source Confirmed</span>
-              </div>
-              <div class="stat-card card text-center text-error">
-                <span class="stat-num">{{ stats()!.source_not_found_count | number }}</span>
-                <span class="stat-lbl">Source Not Found</span>
-              </div>
-              <div class="stat-card card text-center" style="color: var(--warning);">
-                <span class="stat-num">{{ stats()!.pending_count | number }}</span>
-                <span class="stat-lbl">Pending Reviews</span>
-              </div>
-            </div>
-
-            <!-- Verdict Bars -->
-            <div class="grid-2">
-              <div class="card">
-                <h3 class="card-title">Misinformation Trends</h3>
-                <p class="card-subtitle">Verdict distribution across all verified claims — source, content and date are independent checks</p>
-                <div class="bar-list">
-                  <app-score-bar label="Source Confirmed ✓" [value]="ratio(stats()!.source_confirmed_count)" color="var(--success)" />
-                  <app-score-bar label="Source Not Found ?" [value]="ratio(stats()!.source_not_found_count)" color="var(--text-secondary)" />
-                  <app-score-bar label="Content Matched ✓" [value]="ratio(stats()!.content_matched_count)" color="var(--success)" />
-                  <app-score-bar label="Content Altered ◑" [value]="ratio(stats()!.content_altered_count)" color="var(--warning)" />
-                  <app-score-bar label="Date Mismatch 📅" [value]="ratio(stats()!.date_mismatched_count)" color="var(--text-secondary)" />
-                </div>
-                <p class="text-muted text-xs mt-4">Excludes {{ stats()!.pending_count }} pending submissions</p>
-              </div>
-
-              <div class="card">
-                <h3 class="card-title">Most Claimed Sources</h3>
-                <p class="card-subtitle">News outlets most frequently cited in submitted claims</p>
-                @if (topSources().length) {
-                  <div class="sources-list">
-                    @for (src of topSources(); track src.source; let i = $index) {
-                      <div class="source-item">
-                        <span class="source-rank">{{ i + 1 }}</span>
-                        <span class="source-name truncate">{{ src.source }}</span>
-                        <span class="source-count badge badge-primary">{{ src.count }}</span>
-                      </div>
-                    }
-                  </div>
-                } @else {
-                  <p class="text-muted text-sm">No source data available yet.</p>
-                }
-              </div>
-            </div>
-
-            <!-- Method Distribution & Avg Verification Time -->
-            <div class="grid-2" style="margin-top:24px;">
-              <div class="card">
-                <h3 class="card-title">Verification Method Distribution</h3>
-                <p class="card-subtitle">How claims are being submitted</p>
-                <div class="bar-list">
-                  <app-score-bar label="Source-Based" [value]="methodRatio(stats()!.method_distribution.source_based)" color="var(--primary)" />
-                  <app-score-bar label="Multimodal" [value]="methodRatio(stats()!.method_distribution.multimodal)" color="var(--purple, #8b5cf6)" />
-                  <app-score-bar label="Photo Card" [value]="methodRatio(stats()!.method_distribution.photo_card)" color="var(--warning)" />
-                </div>
-              </div>
-              <div class="card text-center" style="display:flex; flex-direction:column; justify-content:center;">
-                <h3 class="card-title">Average Verification Time</h3>
-                @if (stats()!.avg_verification_time_seconds != null) {
-                  <span class="stat-num">{{ stats()!.avg_verification_time_seconds!.toFixed(1) }}s</span>
-                } @else {
-                  <p class="text-muted text-sm">Not enough data yet.</p>
-                }
-              </div>
-            </div>
-          </div>
-        }
-
-        <!-- Fact Explorer — search & browse -->
-        <div class="card animate-in" style="margin-top:32px;">
-          <h3 class="card-title">Browse Verified Claims</h3>
-          <p class="card-subtitle">Search and filter every verified fact-check</p>
-
-          <form [formGroup]="filterForm" (ngSubmit)="search()" class="explorer-filters">
-            <input type="text" formControlName="keyword" class="form-control" placeholder="Search by keyword..." />
-            <select formControlName="overall_verdict" class="form-control">
-              <option value="">Any overall verdict</option>
-              <option value="REAL">Real</option>
-              <option value="FAKE">Fake</option>
-              <option value="MISLEADING">Misleading</option>
-              <option value="ALTERED">Altered</option>
-            </select>
-            <select formControlName="method" class="form-control">
-              <option value="">Any method</option>
-              <option value="SOURCE_BASED">Source-Based</option>
-              <option value="PHOTO_CARD">Photo Card</option>
-              <option value="MULTIMODAL">Multimodal</option>
-            </select>
-            <select formControlName="source_status" class="form-control">
-              <option value="">Any source status</option>
-              <option value="CONFIRMED">Source Confirmed</option>
-              <option value="NOT_FOUND">Source Not Found</option>
-              <option value="INCOMPLETE">Source Check Incomplete</option>
-            </select>
-            <select formControlName="content_status" class="form-control">
-              <option value="">Any content status</option>
-              <option value="MATCHED">Content Matched</option>
-              <option value="ALTERED">Content Altered</option>
-              <option value="INCOMPLETE">Content Check Incomplete</option>
-            </select>
-            <select formControlName="date_status" class="form-control">
-              <option value="">Any date status</option>
-              <option value="MATCHED">Date Matched</option>
-              <option value="MISMATCHED">Date Mismatch</option>
-              <option value="INCOMPLETE">Date Check Incomplete</option>
-            </select>
-            <input type="date" formControlName="date_from" class="form-control" title="From date" />
-            <input type="date" formControlName="date_to" class="form-control" title="To date" />
-            <button type="submit" class="btn btn-primary btn-sm">Search</button>
-            <button type="button" class="btn btn-ghost btn-sm" (click)="resetFilters()">Reset</button>
-          </form>
-
-          @if (explorerLoading()) {
-            <div class="loading-overlay" style="position:static; padding:32px 0;"><div class="spinner"></div></div>
-          } @else if (explorerItems().length === 0) {
-            <p class="text-muted text-sm" style="padding:24px 0;">No verified claims match your filters yet.</p>
-          } @else {
-            <div class="explorer-list">
-              @for (item of explorerItems(); track item.submission_id) {
-                <a class="explorer-row" [routerLink]="['/verify', item.submission_id]">
-                  @if (item.image_url) {
-                    <div class="explorer-thumb-wrap">
-                      <img [src]="item.image_url" class="explorer-thumb" alt="" />
-                    </div>
-                  }
-                  <div class="explorer-row-main">
-                    <span class="explorer-headline">{{ item.headline || '(untitled submission)' }}</span>
-                    <span class="text-muted text-xs">
-                      {{ methodLabel(item.submission_type) }}
-                      @if (item.claimed_source_text) { · {{ item.claimed_source_text }} }
-                      · {{ item.created_at | date:'MMM d, y' }}
-                    </span>
-                  </div>
-                  <div class="explorer-row-verdict">
-                    @if (!item.is_finalized) {
-                      <span class="badge badge-pending" title="Automated Source / Content / Date result only; no overall verdict until experts finalize it.">⏳ Preliminary · awaiting experts</span>
-                    }
-                    <app-verdict-badge
-                      [overallVerdict]="item.overall_verdict"
-                      [sourceStatus]="item.source_status"
-                      [contentStatus]="item.content_status"
-                      [dateStatus]="item.date_status" />
-                  </div>
-                </a>
-              }
-            </div>
-
-            <div class="pagination-controls" style="margin-top:16px;">
-              <button class="btn btn-ghost btn-sm" [disabled]="offset() === 0" (click)="prev()">← Prev</button>
-              <span class="text-muted text-sm">Page {{ page() }} of {{ pageCount() }}</span>
-              <button class="btn btn-ghost btn-sm" [disabled]="page() >= pageCount()" (click)="next()">Next →</button>
-            </div>
-          }
-        </div>
+    <section class="archive-browser" aria-labelledby="browse-heading">
+      <div class="browse-heading"><div><p class="eyebrow">FIND A FACT CHECK</p><h2 id="browse-heading">Claims, evidence & decisions</h2></div><span class="sort-note">Newest submissions first</span></div>
+      <div class="view-switch" aria-label="Review stage">
+        <button type="button" [class.selected]="reviewState() === 'finalized'" [attr.aria-pressed]="reviewState() === 'finalized'" (click)="selectState('finalized')">Final decisions</button>
+        <button type="button" [class.selected]="reviewState() === 'review'" [attr.aria-pressed]="reviewState() === 'review'" (click)="selectState('review')">Under review</button>
       </div>
-    </div>
+      <p class="stage-description">{{ reviewState() === 'finalized' ? 'These decisions have completed expert review. Open a report to read the evidence and context.' : 'These findings are preliminary. They do not represent a final decision by BanglaFactGuard.' }}</p>
+
+      <form [formGroup]="filterForm" (ngSubmit)="search()" class="search-panel">
+        <div class="primary-filters">
+          <label class="search-field" for="archive-keyword"><span>Search claims</span><input id="archive-keyword" formControlName="keyword" class="form-control" maxlength="255" placeholder="Search a Bengali headline or keyword…" type="search"></label>
+          @if (reviewState() === 'finalized') {
+            <label for="archive-verdict"><span>Decision</span><select id="archive-verdict" formControlName="overall_verdict" class="form-control"><option value="">All decisions</option><option value="REAL">Real</option><option value="FAKE">Fake</option><option value="MISLEADING">Misleading</option><option value="ALTERED">Altered</option></select></label>
+          }
+          <label for="archive-method"><span>Content type</span><select id="archive-method" formControlName="method" class="form-control"><option value="">All types</option><option value="SOURCE_BASED">News text</option><option value="PHOTO_CARD">Photocard</option><option value="MULTIMODAL">Text and image</option></select></label>
+          <button type="submit" class="btn btn-primary">Search</button>
+        </div>
+        <div class="filter-actions"><button type="button" class="filter-toggle" [attr.aria-expanded]="advanced()" aria-controls="archive-advanced" (click)="advanced.set(!advanced())">{{ advanced() ? '− Fewer filters' : '+ More filters' }}</button><button type="button" class="filter-toggle" (click)="resetFilters()">Clear filters</button></div>
+        <div id="archive-advanced" [hidden]="!advanced()">
+          <div class="advanced-filters">
+            <label for="archive-source"><span>Claimed news outlet</span><select id="archive-source" formControlName="source_id" class="form-control"><option value="">All available outlets</option>@for (source of sources(); track source.id) {<option [value]="source.id">{{ source.display_name }}</option>}</select></label>
+            <label for="archive-from"><span>Submitted from (UTC)</span><input id="archive-from" type="date" formControlName="date_from" class="form-control"></label>
+            <label for="archive-to"><span>Submitted through (UTC)</span><input id="archive-to" type="date" formControlName="date_to" class="form-control"></label>
+          </div>
+          <p class="filter-help">Dates refer to when a claim was submitted, not when the news was published. Outlet filters apply to news text and photocards.</p>
+          @if (sourcesError()) {<p class="filter-help" role="status">The outlet list could not be loaded. <button type="button" class="filter-toggle" (click)="loadSources()">Try again</button></p>}
+        </div>
+        @if (validation()) {<p class="validation-message" role="alert">{{ validation() }}</p>}
+      </form>
+
+      @if (activeFilters().length) {
+        <div class="active-filters" aria-label="Applied filters">@for (filter of activeFilters(); track filter.key) {<button type="button" (click)="removeFilter(filter.key)" [attr.aria-label]="'Remove filter: ' + filter.label">{{ filter.label }} <span aria-hidden="true">×</span></button>}</div>
+      }
+      <div class="results-region" [attr.aria-busy]="loading()">
+        @if (loading()) {
+          <div class="result-state" role="status"><div class="spinner"></div><p>Loading fact checks…</p></div>
+        } @else if (error()) {
+          <div class="result-state" role="alert"><h3>We couldn’t load the archive</h3><p>Your filters are saved. Please try again shortly.</p><button type="button" class="btn btn-secondary" (click)="retry()">Try again</button></div>
+        } @else if (!validation() && !items().length) {
+          <div class="result-state"><span class="empty-symbol" aria-hidden="true">⌕</span><h3>{{ activeFilters().length ? 'No matching fact checks' : reviewState() === 'finalized' ? 'No final decisions yet' : 'No checks awaiting review' }}</h3><p>{{ activeFilters().length ? 'Try a different keyword or clear the filters to explore more claims.' : reviewState() === 'finalized' ? 'You can explore preliminary findings while expert review is in progress.' : 'Explore completed decisions, or submit a new claim for verification.' }}</p>
+          @if (activeFilters().length) {<button type="button" class="btn btn-secondary" (click)="resetFilters()">Clear filters</button>} @else {<button type="button" class="btn btn-secondary" (click)="selectState(reviewState() === 'finalized' ? 'review' : 'finalized')">{{ reviewState() === 'finalized' ? 'Explore checks under review' : 'Explore final decisions' }}</button>}
+          </div>
+        } @else if (!validation()) {
+          <p class="result-count" role="status">Showing {{ first() }}–{{ last() }} of {{ total() | number }} {{ reviewState() === 'finalized' ? 'final decisions' : 'checks under review' }}</p>
+          <div class="report-list">
+            @for (item of items(); track item.submission_id) {
+              <article class="report-card">
+                @if (item.image_url && !failedImages().has(item.submission_id)) {<div class="report-image"><img [src]="item.image_url" alt="Image submitted with this claim" loading="lazy" (error)="imageFailed(item.submission_id)"></div>}
+                <div class="report-content">
+                  <div class="report-topline"><span class="content-type">{{ methodLabel(item.submission_type) }}</span>@if (item.is_finalized) {<app-verdict-badge [overallVerdict]="item.overall_verdict" />} @else {<span class="review-label">Under expert review</span>}</div>
+                  <h3><a [routerLink]="['/verify', item.submission_id]">{{ item.headline || 'A submitted claim awaiting a readable headline' }}</a></h3>
+                  <p class="finding">{{ finding(item) }}</p>
+                  <div class="report-meta">@if (item.claimed_source_text) {<span>Claimed outlet: {{ item.claimed_source_text }}</span>}<span>Submitted {{ item.created_at | date:'d MMM y' }}</span></div>
+                  <a class="report-link" [routerLink]="['/verify', item.submission_id]">Read full report <span aria-hidden="true">↗</span><span class="sr-only">: {{ item.headline || 'Submitted claim' }}</span></a>
+                </div>
+              </article>
+            }
+          </div>
+          <nav class="pagination" aria-label="Archive pages"><button type="button" class="btn btn-secondary" [disabled]="page() === 1" (click)="changePage(page() - 1)">← Previous</button><span>Page {{ page() }} of {{ pageCount() }}</span><button type="button" class="btn btn-secondary" [disabled]="page() >= pageCount()" (click)="changePage(page() + 1)">Next →</button></nav>
+        }
+      </div>
+    </section>
+
+    <aside class="reading-guide" aria-labelledby="guide-heading"><div><p class="eyebrow">READ THE EVIDENCE</p><h2 id="guide-heading">A finding needs context.</h2></div><div><p>A source match confirms that a related report was found. It does not, by itself, establish that every statement is true.</p><p>A missing source, a date mismatch or an unfinished check is not a fake-news verdict. Open the full report for the evidence and limitations.</p></div></aside>
+  </div>
+</div>

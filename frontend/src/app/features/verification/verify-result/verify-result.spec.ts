@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed, fakeAsync, tick, discardPeriodicTasks } from '@angular/core/testing';
 import { ActivatedRoute, provideRouter } from '@angular/router';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { VerifyResultComponent } from './verify-result';
 import { VerificationService, MultimodalService } from '../../../services/verification.service';
 import { SubmissionsService } from '../../../services/submissions.service';
@@ -119,6 +119,22 @@ describe('VerifyResultComponent (photo card, returning later)', () => {
     discardPeriodicTasks();
   }));
 
+  it('a service failure offers retry without claiming the result was removed', () => {
+    const fixture = setup();
+    lookupSpy.and.returnValue(throwError(() => ({ status: 503 })));
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.textContent).toContain('Result temporarily unavailable');
+    expect(el.textContent).not.toContain('Result not found');
+    photocard.getResult.and.returnValue(of(pendingCard()));
+    lookupSpy.and.returnValue(of(LOOKUP));
+    fixture.componentInstance.retry();
+    fixture.detectChanges();
+    expect(el.textContent).toContain('Verification in progress');
+    expect(el.textContent).not.toContain('Result temporarily unavailable');
+    fixture.destroy();
+  });
+
   it('a failed card shows the reason and no verdict', () => {
     const fixture = setup({ ...LOOKUP, status: 'FAILED' });
     photocard.getResult.and.returnValue(
@@ -127,8 +143,8 @@ describe('VerifyResultComponent (photo card, returning later)', () => {
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
     expect(el.textContent).toContain('Verification could not be completed');
-    expect(el.textContent).toContain('Could not extract a readable headline');
-    expect(el.textContent).toContain('not a Source Not Found or Altered result');
+    expect(el.textContent).toContain('We could not read the headline');
+    expect(el.textContent).toContain('No verdict was reached');
     fixture.destroy();
   });
 });

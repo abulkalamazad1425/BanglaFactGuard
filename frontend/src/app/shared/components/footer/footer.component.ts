@@ -17,14 +17,14 @@ import { RouterLink } from '@angular/router';
                 <path d="M10 10.5L14 8L18 10.5V15.5L14 18L10 15.5V10.5Z" fill="white" opacity="0.9"/>
                 <defs>
                   <linearGradient id="fg" x1="4" y1="2" x2="24" y2="26" gradientUnits="userSpaceOnUse">
-                    <stop stop-color="#5b3df0"/><stop offset="1" stop-color="#9333ea"/>
+                    <stop stop-color="#1f7f4e"/><stop offset="1" stop-color="#186640"/>
                   </linearGradient>
                 </defs>
               </svg>
               <span>BanglaFactGuard</span>
             </div>
             <p class="brand-tagline">
-              AI-powered source-based fact verification for Bangla news using a 12-stage pipeline.
+              Helping you check Bengali news, claims and photocards against the available evidence.
             </p>
             <div class="social-links">
               <a href="https://github.com/abulkalamazad1425/BanglaFactGuard" target="_blank" class="social-link" title="GitHub">
@@ -39,17 +39,9 @@ import { RouterLink } from '@angular/router';
           <div class="footer-section">
             <h4>Platform</h4>
             <a routerLink="/verify">Verify a Claim</a>
-            <a routerLink="/multimodal">Multimodal Check</a>
-            <a routerLink="/dashboard">Fact Explorer</a>
+            <a routerLink="/multimodal">Text and image</a>
+            <a routerLink="/photo-card">Verify a photocard</a><a routerLink="/dashboard">Fact Explorer</a>
             <a routerLink="/auth/register">Create Account</a>
-          </div>
-
-          <!-- Resources -->
-          <div class="footer-section">
-            <h4>Resources</h4>
-            <a href="http://localhost:8000/docs" target="_blank">API Documentation</a>
-            <a href="http://localhost:8000/redoc" target="_blank">ReDoc</a>
-            <a routerLink="/dashboard">Fact Explorer Stats</a>
           </div>
 
           <!-- Account -->
@@ -64,14 +56,9 @@ import { RouterLink } from '@angular/router';
 
         <div class="footer-bottom">
           <p class="copyright">
-            &copy; {{ year }} BanglaFactGuard. Built for SPL-3 — BSSE 1425.
+            &copy; {{ year }} BanglaFactGuard. Bengali news verification.
           </p>
-          <div class="tech-stack">
-            <span class="tech-tag">Angular 19</span>
-            <span class="tech-tag">FastAPI</span>
-            <span class="tech-tag">BanglaBERT</span>
-            <span class="tech-tag">EfficientNet-B4</span>
-          </div>
+          <p>Check the evidence. Share responsibly.</p>
         </div>
       </div>
     </footer>
@@ -86,7 +73,7 @@ import { RouterLink } from '@angular/router';
       max-width: 1280px; margin: 0 auto; padding: 60px 24px 32px;
     }
     .footer-grid {
-      display: grid; grid-template-columns: 2fr 1fr 1fr 1fr;
+      display: grid; grid-template-columns: 2fr 1fr 1fr;
       gap: 48px; margin-bottom: 48px;
       @media (max-width: 900px) { grid-template-columns: 1fr 1fr; gap: 32px; }
       @media (max-width: 480px) { grid-template-columns: 1fr; gap: 24px; }

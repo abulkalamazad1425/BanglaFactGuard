@@ -1,3 +1,4 @@
+import { requestError } from '../../shared/utils/presentation';
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -60,8 +61,13 @@ export class PhotoCardComponent implements OnInit {
 
   sources: SourceResponse[] = [];
   sourcesLoading = true;
+  sourcesError = false;
 
-  ngOnInit(): void {
+  ngOnInit(): void { this.loadSources(); }
+
+  loadSources(): void {
+    this.sourcesLoading = true;
+    this.sourcesError = false;
     // Only active verified sources may be verified against.
     this.sourceSvc.listSources(undefined, 1, 100).subscribe({
       next: (res) => {
@@ -71,6 +77,7 @@ export class PhotoCardComponent implements OnInit {
         this.sourcesLoading = false;
       },
       error: () => {
+        this.sourcesError = true;
         this.sourcesLoading = false;
       },
     });
@@ -87,7 +94,7 @@ export class PhotoCardComponent implements OnInit {
     event.preventDefault();
     this.dragActive = false;
     const file = event.dataTransfer?.files?.[0];
-    if (file && file.type.startsWith('image/')) this.setFile(file);
+    if (file) this.setFile(file);
   }
 
   onDragOver(event: DragEvent): void {
@@ -100,6 +107,13 @@ export class PhotoCardComponent implements OnInit {
   }
 
   private setFile(file: File): void {
+    if (this.verifying) return;
+    if (!'image/jpeg,image/png,image/webp,image/gif'.split(',').includes(file.type) || file.size > 10 * 1024 * 1024 || file.size === 0) {
+      this.errorMsg = 'Choose a supported, non-empty image under 10 MB.';
+      this.selectedFile = null; this.previewUrl = null;
+      return;
+    }
+    this.errorMsg = null;
     this.selectedFile = file;
     this.errorMsg = null;
     const reader = new FileReader();
@@ -165,8 +179,6 @@ export class PhotoCardComponent implements OnInit {
   }
 
   private readError(err: any, fallback: string): string {
-    const detail = err?.error?.detail;
-    if (typeof detail === 'string') return detail;
-    return detail?.message || err?.error?.message || fallback;
+    return requestError(err, fallback);
   }
 }

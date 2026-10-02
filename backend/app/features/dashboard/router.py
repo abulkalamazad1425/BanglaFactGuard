@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
@@ -87,6 +88,7 @@ class ExplorerSearchResponse(BaseModel):
     total: int
     limit: int
     offset: int
+    archive_summary: dict[str, int] = Field(default_factory=dict)
 
 
 @router.get(
@@ -233,6 +235,7 @@ async def search_explorer(
     date_from: date | None = Query(default=None),
     date_to: date | None = Query(default=None),
     source_id: uuid.UUID | None = Query(default=None),
+    review_state: Literal['finalized', 'review'] | None = Query(default=None),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_async_session),
@@ -248,6 +251,7 @@ async def search_explorer(
         date_from=date_from,
         date_to=date_to,
         source_id=source_id,
+        review_state=review_state,
         limit=limit,
         offset=offset,
     )
@@ -349,4 +353,5 @@ async def search_explorer(
             )
         )
 
-    return ExplorerSearchResponse(items=items, total=total, limit=limit, offset=offset)
+    return ExplorerSearchResponse(items=items, total=total, limit=limit, offset=offset,
+                                  archive_summary=await repo.explorer_summary())

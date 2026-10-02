@@ -1,3 +1,4 @@
+import { requestError, predictionLabel } from '../../shared/utils/presentation';
 import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
@@ -15,6 +16,8 @@ import { MultimodalPredictionResult } from '../../models/verification.model';
   styleUrls: ['./multimodal.scss'],
 })
 export class MultimodalComponent {
+  readonly predictionLabel = predictionLabel;
+  overallVerdictLabel(value: string): string { return ({ REAL: 'Real', FAKE: 'Fake', MISLEADING: 'Misleading', ALTERED: 'Altered' } as Record<string, string>)[value] || 'Decision unavailable'; }
   private readonly svc = inject(MultimodalService);
   private readonly toast = inject(ToastService);
 
@@ -37,10 +40,17 @@ export class MultimodalComponent {
   onDrop(event: DragEvent): void {
     event.preventDefault();
     const file = event.dataTransfer?.files?.[0];
-    if (file && file.type.startsWith('image/')) this._setFile(file);
+    if (file) this._setFile(file);
   }
 
   private _setFile(file: File): void {
+    if (this.loading) return;
+    if (!'image/jpeg,image/png,image/webp'.split(',').includes(file.type) || file.size > 10 * 1024 * 1024 || file.size === 0) {
+      this.errorMsg = 'Choose a supported, non-empty image under 10 MB.';
+      this.selectedFile = null; this.previewUrl = null;
+      return;
+    }
+    this.errorMsg = null;
     this.selectedFile = file;
     const reader = new FileReader();
     reader.onload = () => (this.previewUrl = reader.result as string);
@@ -65,7 +75,7 @@ export class MultimodalComponent {
       },
       error: (err) => {
         this.loading = false;
-        this.errorMsg = err.error?.detail || err.error?.message || 'An error occurred processing the request.';
+        this.errorMsg = requestError(err, 'An error occurred processing the request.');
         this.toast.error(this.errorMsg!);
       },
     });

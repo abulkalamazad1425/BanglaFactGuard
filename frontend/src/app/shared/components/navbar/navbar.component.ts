@@ -19,8 +19,8 @@ import { NotificationService } from '../../../services/notification.service';
               <path d="M10 10.5L14 8L18 10.5V15.5L14 18L10 15.5V10.5Z" fill="white" opacity="0.9"/>
               <defs>
                 <linearGradient id="grad" x1="4" y1="2" x2="24" y2="26" gradientUnits="userSpaceOnUse">
-                  <stop stop-color="#5b3df0"/>
-                  <stop offset="1" stop-color="#9333ea"/>
+                  <stop stop-color="#1f7f4e"/>
+                  <stop offset="1" stop-color="#186640"/>
                 </linearGradient>
               </defs>
             </svg>
@@ -31,8 +31,8 @@ import { NotificationService } from '../../../services/notification.service';
         <!-- Desktop Nav -->
         <div class="navbar-links">
           <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">Home</a>
-          <a routerLink="/verify" routerLinkActive="active" class="nav-link">Verify Claim</a>
-          <a routerLink="/multimodal" routerLinkActive="active" class="nav-link">Multimodal</a>
+          <a routerLink="/verify" routerLinkActive="active" class="nav-link">Verify news</a>
+          <a routerLink="/multimodal" routerLinkActive="active" class="nav-link">Text &amp; image</a>
           <a routerLink="/photo-card" routerLinkActive="active" class="nav-link">Photo Card</a>
           <a routerLink="/dashboard" routerLinkActive="active" class="nav-link">Fact Explorer</a>
           @if (isExpert()) {
@@ -47,7 +47,7 @@ import { NotificationService } from '../../../services/notification.service';
         <div class="navbar-actions">
           @if (isLoggedIn()) {
             <!-- Notifications -->
-            <a routerLink="/notifications" class="notif-btn" [class.has-badge]="unreadCount() > 0">
+            <a routerLink="/notifications" class="notif-btn" aria-label="Notifications" [class.has-badge]="unreadCount() > 0">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
                 <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
@@ -59,7 +59,7 @@ import { NotificationService } from '../../../services/notification.service';
 
             <!-- User Menu -->
             <div class="user-menu" [class.open]="menuOpen">
-              <button class="user-avatar" (click)="toggleMenu()">
+              <button class="user-avatar" aria-label="Account menu" [attr.aria-expanded]="menuOpen" (click)="toggleMenu()">
                 <div class="avatar-circle">{{ userInitial() }}</div>
                 <span class="user-name">{{ userName() }}</span>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="chevron" [class.rotated]="menuOpen">
@@ -91,7 +91,7 @@ import { NotificationService } from '../../../services/notification.service';
         </div>
 
         <!-- Mobile toggle -->
-        <button class="mobile-toggle" (click)="toggleMobileMenu()" [class.open]="mobileOpen">
+        <button class="mobile-toggle" aria-label="Toggle navigation" [attr.aria-expanded]="mobileOpen" (click)="toggleMobileMenu()" [class.open]="mobileOpen">
           <span></span><span></span><span></span>
         </button>
       </div>
@@ -100,8 +100,8 @@ import { NotificationService } from '../../../services/notification.service';
       @if (mobileOpen) {
         <div class="mobile-menu animate-in">
           <a routerLink="/" class="mobile-link" (click)="closeMobileMenu()">Home</a>
-          <a routerLink="/verify" class="mobile-link" (click)="closeMobileMenu()">Verify Claim</a>
-          <a routerLink="/multimodal" class="mobile-link" (click)="closeMobileMenu()">Multimodal</a>
+          <a routerLink="/verify" class="mobile-link" (click)="closeMobileMenu()">Verify news</a>
+          <a routerLink="/multimodal" class="mobile-link" (click)="closeMobileMenu()">Text &amp; image</a>
           <a routerLink="/photo-card" class="mobile-link" (click)="closeMobileMenu()">Photo Card</a>
           <a routerLink="/dashboard" class="mobile-link" (click)="closeMobileMenu()">Fact Explorer</a>
           @if (isLoggedIn()) {
@@ -164,7 +164,7 @@ import { NotificationService } from '../../../services/notification.service';
 
     .navbar-links {
       display: flex; align-items: center; gap: 4px;
-      @media (max-width: 768px) { display: none; }
+      @media (max-width: 1100px) { display: none; }
     }
 
     .nav-link {
@@ -173,14 +173,14 @@ import { NotificationService } from '../../../services/notification.service';
       text-decoration: none; transition: var(--transition);
 
       &:hover { color: var(--text-primary); background: var(--bg-surface-2); }
-      &.active { color: var(--primary-light); background: rgba(124,106,247,0.1); }
+      &.active { color: var(--primary-light); background: rgba(31,127,78,0.1); }
       &--expert { color: var(--accent-light); }
       &--admin  { color: var(--warning); }
     }
 
     .navbar-actions {
       display: flex; align-items: center; gap: 12px;
-      @media (max-width: 768px) { display: none; }
+      @media (max-width: 1100px) { display: none; }
     }
 
     .notif-btn {
@@ -242,7 +242,7 @@ import { NotificationService } from '../../../services/notification.service';
     .mobile-toggle {
       display: none; flex-direction: column; gap: 5px;
       background: none; border: none; cursor: pointer; padding: 8px;
-      @media (max-width: 768px) { display: flex; }
+      @media (max-width: 1100px) { display: flex; }
 
       span {
         display: block; width: 22px; height: 2px;
@@ -267,7 +267,7 @@ import { NotificationService } from '../../../services/notification.service';
       cursor: pointer; text-align: left; transition: var(--transition);
 
       &:hover { background: var(--bg-surface-2); color: var(--text-primary); }
-      &--primary { background: rgba(124,106,247,0.1); color: var(--primary-light); }
+      &--primary { background: rgba(31,127,78,0.1); color: var(--primary-light); }
       &--danger  { color: var(--error); }
     }
 

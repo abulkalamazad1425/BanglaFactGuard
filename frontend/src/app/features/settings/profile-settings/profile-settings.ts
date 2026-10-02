@@ -1,3 +1,4 @@
+import { requestError } from '../../../shared/utils/presentation';
 import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { CommonModule } from '@angular/common';
@@ -90,7 +91,7 @@ export class ProfileSettingsComponent implements OnInit {
     const { current_password, new_password } = this.pwForm.value;
     this.auth.changePassword(current_password!, new_password!).subscribe({
       next: () => { this.changingPw.set(false); this.toast.success('Password changed successfully.'); this.pwForm.reset(); },
-      error: err => { this.changingPw.set(false); this.toast.error(err.error?.message || 'Failed to change password.'); },
+      error: err => { this.changingPw.set(false); this.toast.error(requestError(err, 'Failed to change password.')); },
     });
   }
 }

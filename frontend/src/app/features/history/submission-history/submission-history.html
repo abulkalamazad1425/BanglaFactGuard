@@ -34,9 +34,10 @@
           </div>
         }
 
+        @if (loadError()) {<div class="service-notice" role="alert"><p>This list could not be loaded. Please try again.</p><button class="btn btn-secondary" (click)="load()">Try again</button></div>}
         @if (loading()) { <div class="loading-overlay"><div class="spinner"></div></div> }
 
-        @if (!loading() && submissions().length === 0) {
+        @if (!loading() && !loadError() && submissions().length === 0) {
           <div class="empty-state card text-center">
             <div style="font-size:64px; margin-bottom:16px;">📭</div>
             <h3>No submissions yet</h3>
@@ -53,7 +54,7 @@
                   <th>Submission</th>
                   <th>Source</th>
                   <th>Status</th>
-                  <th title="{{ strengthHelp }}">Check strength ℹ</th>
+
                   <th>Submitted</th>
                   <th></th>
                 </tr>
@@ -79,8 +80,8 @@
                       @if (isRunning(s)) {
                         <span class="badge badge-pending"><span class="mini-spinner"></span> {{ phaseText(s) }}…</span>
                       } @else if (isFailed(s)) {
-                        <span class="badge badge-false" [title]="s.failure_reason || ''">⚠ Failed</span>
-                        @if (s.failure_reason) { <div class="text-muted text-xs fail-reason">{{ truncate(s.failure_reason, 70) }}</div> }
+                        <span class="badge badge-incomplete">Check incomplete</span>
+                        @if (s.failure_reason) { <div class="text-muted text-xs fail-reason">No verdict reached. Open the result for next steps.</div> }
                       } @else if (hasResult(s)) {
                         @if (!s.is_finalized) { <div class="text-muted text-xs">⏳ Preliminary · awaiting experts</div> }
                         <app-verdict-badge
@@ -92,11 +93,7 @@
                         <span class="text-muted">—</span>
                       }
                     </td>
-                    <td>
-                      @if (hasResult(s) && s.ai_confidence !== null && s.source_status !== 'INCOMPLETE') {
-                        <span class="confidence">{{ (s.ai_confidence * 100).toFixed(0) }}%</span>
-                      } @else { <span class="text-muted">—</span> }
-                    </td>
+
                     <td class="text-muted text-sm">{{ s.submitted_at | date:'MMM d, y, HH:mm' }}</td>
                     <td><a [routerLink]="['/verify', s.submission_id]" class="btn btn-ghost btn-sm">{{ isRunning(s) ? 'Progress' : 'View' }}</a></td>
                   </tr>

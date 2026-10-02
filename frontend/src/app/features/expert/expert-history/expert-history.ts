@@ -16,12 +16,13 @@ export class ExpertHistoryComponent implements OnInit {
   private readonly expertSvc = inject(ExpertService);
 
   readonly loading = signal(true);
+  readonly loadError = signal(false);
   readonly history = signal<ExpertHistoryItem[]>([]);
 
   ngOnInit(): void {
     this.expertSvc.getHistory(50).subscribe({
-      next: h => { this.history.set(h); this.loading.set(false); },
-      error: () => this.loading.set(false),
+      next: h => { this.history.set(h); this.loading.set(false); this.loadError.set(false); },
+      error: () => { this.loading.set(false); this.loadError.set(true); },
     });
   }
 }

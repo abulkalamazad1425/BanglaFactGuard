@@ -1,39 +1,7 @@
-<div class="pc-page">
-  <div class="container">
-
-    <!-- Header -->
-    <div class="page-header text-center animate-in">
-      <div class="page-icon">🖼️</div>
-      <h1>Photo Card Verification</h1>
-      <p>
-        Upload a Bangla news photo card or screenshot with the source and date it claims. We read
-        the card, extract its headline and check it against that source in the background — you
-        can leave as soon as it is received.
-      </p>
-    </div>
-
-    <!-- Stepper -->
-    <div class="stepper animate-in" style="animation-delay: 0.05s">
-      <div class="step-node" [class.active]="step === 'upload'" [class.done]="step !== 'upload'">
-        <span class="step-dot">1</span>
-        <span class="step-label">Upload &amp; claim</span>
-      </div>
-      <div class="step-line" [class.done]="step === 'accepted'"></div>
-      <div class="step-node" [class.active]="step === 'accepted'">
-        <span class="step-dot">2</span>
-        <span class="step-label">Received</span>
-      </div>
-    </div>
-
-    <!-- ══════════════ STEP 1 — UPLOAD & CLAIM ══════════════ -->
-    @if (step === 'upload') {
-      <div class="card panel upload-panel animate-in">
-        <h3 class="panel-title"><span class="panel-icon">📤</span> Upload the photo card</h3>
-
-        <div class="dropzone"
+<div class="verification-shell"><div class="flow-container"><header class="flow-heading"><div><span class="eyebrow">CHECK A PHOTOCARD</span><h1>Look beyond the image.</h1><p>Upload a Bengali news photocard or screenshot and select the outlet it claims to come from. We will read its headline and look for the source report.</p></div><a routerLink="/dashboard" class="btn btn-ghost">Explore fact checks ↗</a></header><nav class="method-nav" aria-label="Verification method"><a routerLink="/verify">News text</a><a routerLink="/photo-card" aria-current="page">Photocard</a><a routerLink="/multimodal">Text &amp; image</a></nav>@if (step === 'upload') {<div class="flow-grid"><section class="surface"><div class="section-heading"><span class="eyebrow">01 / IMAGE &amp; CONTEXT</span><h2>Add the photocard</h2><p>Keep the full headline visible. Fields marked * are required.</p></div><fieldset [disabled]="verifying"><div class="dropzone"
              [class.active]="dragActive"
              [class.has-file]="!!previewUrl"
-             (click)="fileInput.click()"
+             role="button" tabindex="0" aria-label="Upload an image" (keydown.enter)="fileInput.click()" (keydown.space)="$event.preventDefault(); fileInput.click()" (click)="fileInput.click()"
              (dragover)="onDragOver($event)"
              (dragleave)="onDragLeave()"
              (drop)="onDrop($event)">
@@ -45,7 +13,7 @@
             <span class="dropzone-label">Click to upload, or drag &amp; drop</span>
             <span class="dropzone-hint">JPEG, PNG, WebP or GIF — up to 10 MB</span>
           }
-          <input #fileInput type="file" class="sr-only"
+          <input #fileInput aria-label="Choose an image" type="file" class="sr-only"
                  accept="image/jpeg,image/png,image/webp,image/gif"
                  (change)="onFileChange($event)" />
         </div>
@@ -55,8 +23,8 @@
         }
 
         <div class="form-group">
-          <label class="form-label">Claimed source <span class="required">*</span></label>
-          <select class="form-control" [(ngModel)]="claimedSource" name="claimed_source"
+          <label for="photocard-claimed_source" class="form-label">Claimed news outlet <span class="required">*</span></label>
+          <select id="photocard-claimed_source" class="form-control" [(ngModel)]="claimedSource" name="claimed_source"
                   [class.is-invalid]="submitted && !claimedSource">
             <option value="" disabled>
               {{ sourcesLoading ? 'Loading verified sources…' : 'Select the news source this card claims to be from' }}
@@ -67,24 +35,25 @@
               </option>
             }
           </select>
-          <span class="source-hint">Only active verified sources can be checked against. This is the verification target — it will not be silently replaced even if the card's own text suggests a different outlet.</span>
+          @if (!sourcesLoading && (sourcesError || !sources.length)) {<div class="service-notice" role="status"><p>{{ sourcesError ? 'News sources could not be loaded. Please try again.' : 'No news sources are available for checking right now.' }}</p><button type="button" class="btn btn-secondary" (click)="loadSources()">Try again</button></div>}
+          <span class="source-hint">Choose the outlet named on the card. We will compare the headline with that outlet.</span>
           @if (submitted && !claimedSource) {
             <span class="form-error">Please select the claimed source</span>
           }
         </div>
 
         <div class="form-group">
-          <label class="form-label">Publication date <span class="optional">(optional)</span></label>
-          <input type="date" class="form-control" [(ngModel)]="publishedDate" name="published_date" />
+          <label for="photocard-published_date" class="form-label">Claimed publication date <span class="optional">(optional)</span></label>
+          <input id="photocard-published_date" type="date" class="form-control" [(ngModel)]="publishedDate" name="published_date" />
         </div>
 
         <label class="checkbox-label">
           <input type="checkbox" [(ngModel)]="forceRefresh" name="force_refresh" />
-          <span>Bypass cache (force a fresh verification)</span>
+          <span>Check again for updated evidence</span>
         </label>
 
         @if (errorMsg) {
-          <div class="alert alert-error">{{ errorMsg }}</div>
+          <div class="note warning" role="alert">{{ errorMsg }}</div>
         }
 
         <button type="button" class="btn btn-primary btn-full btn-lg mt-4"
@@ -96,39 +65,6 @@
           }
         </button>
 
-        <div class="hint-list">
-          <div class="hint"><span>🚪</span> Once the card is received you can leave this page — the check keeps running on the server.</div>
-          <div class="hint"><span>🔤</span> The card's headline is extracted automatically — there is no confirmation step.</div>
-          <div class="hint"><span>🧹</span> Follow prompts, bylines, photo credits and timestamps are removed automatically.</div>
-          <div class="hint"><span>🎯</span> The card is verified against its headline alone — no body or caption text.</div>
-          <div class="hint"><span>⚠️</span> If the card's own text suggests a different source or date, that's recorded and shown with the result — not silently used instead.</div>
-        </div>
-      </div>
-    }
-
-    <!-- ══════════════ STEP 2 — RECEIVED ══════════════ -->
-    @if (step === 'accepted' && accepted) {
-      <div class="card panel upload-panel animate-in text-center">
-        <div style="font-size:56px; margin-bottom:12px;">📬</div>
-        <h3>Your photo card was received</h3>
-        <p class="muted-note">{{ accepted.message }}</p>
-        @if (previewUrl) {
-          <img [src]="previewUrl" class="card-image" alt="Submitted photo card" style="max-width:320px; margin:16px auto;" />
-        }
-        <p class="muted-note">
-          Verifying against <strong>{{ claimedSourceName() }}</strong>
-          @if (publishedDate) { · claimed date <strong>{{ publishedDate }}</strong> }
-          — headline only.
-        </p>
-        <div class="accepted-actions">
-          <a class="btn btn-primary" [routerLink]="['/verify', accepted.submission_id]">View progress</a>
-          <a class="btn btn-secondary" routerLink="/history">My Submissions</a>
-          <button type="button" class="btn btn-ghost" (click)="reset()">Verify another card</button>
-        </div>
-        <p class="text-muted text-sm" style="margin-top:12px;">
-          Submission ID: {{ accepted.submission_id }}
-        </p>
-      </div>
-    }
-  </div>
-</div>
+        </fieldset></section><aside class="side-stack"><section class="surface"><span class="eyebrow">YOUR IMAGE / PREVIEW</span>@if (previewUrl) {<img [src]="previewUrl" class="preview-image" alt="Selected photocard preview"><dl class="meta-grid"><div><dt>Claimed outlet</dt><dd>{{ claimedSourceName() || 'Not selected' }}</dd></div><div><dt>Claimed date</dt><dd>{{ publishedDate || 'Not provided' }}</dd></div></dl>} @else {<p class="preview-placeholder">Your selected image will appear here before you submit it.</p>}<div class="note">Only the headline read from this card is compared with your selected outlet. This does not verify every visual element in the image.</div></section><section class="context-panel"><h2>A clearer image helps</h2><ol class="guide-list"><li><strong>Include the full headline</strong><p>A sharp, uncropped image is easier to read.</p></li><li><strong>Select the claimed outlet</strong><p>Choose the outlet named on the card. Do not choose where you found the screenshot.</p></li><li><strong>Review the read text</strong><p>The result shows the headline used and any detected source or date conflict.</p></li></ol></section></aside></div>}
+@if (step === 'accepted' && accepted) {<section class="surface state-card"><span class="eyebrow">UPLOAD COMPLETE</span><div class="state-mark" aria-hidden="true">✓</div><h2>Your photo card was received</h2><p>The card is now queued for reading and source comparison. You do not need to keep this page open.</p>@if (previewUrl) {<img [src]="previewUrl" class="preview-image" alt="Submitted photocard">}<dl class="meta-grid"><div><dt>Comparing against</dt><dd>{{ claimedSourceName() }}</dd></div><div><dt>Scope</dt><dd>Headline only</dd></div></dl><div class="note">Keep the result link to follow progress and return later. If signed in, you can also use My Submissions.</div><div class="actions"><a class="btn btn-primary" [routerLink]="['/verify',accepted.submission_id]">View progress</a><a class="btn btn-secondary" routerLink="/history">My Submissions</a><button class="btn btn-ghost" (click)="reset()">Verify another card</button></div></section>}
+</div></div>

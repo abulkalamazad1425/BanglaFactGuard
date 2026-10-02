@@ -1,0 +1,50 @@
+<ng-template #findings><section class="report-summary" aria-label="Verification findings">
+  <div class="summary-heading">
+    <div><span class="eyebrow">{{ reviewer ? 'RECORDED FINDINGS / SUPPORTING YOUR REVIEW' : 'VERIFICATION FINDINGS' }}</span>
+      @if (r.is_finalized && r.overall_verdict) {<h2>Expert verified</h2><app-verdict-badge [overallVerdict]="r.overall_verdict" />}
+      @else {<h2>Awaiting expert review</h2><p>These are preliminary findings. An overall verdict is available only after expert review.</p>}
+    </div>
+    <div class="scope-context"><span>Comparison scope</span><strong [title]="scopeHelp">{{ scopeLabel }}</strong>@if (r.cached) {<small>Previous result reused</small>}</div>
+  </div>
+  <div class="findings-grid">
+    <section><span class="finding-number">01 / SOURCE</span><h3>{{ r.source_status === 'CONFIRMED' ? 'Report found' : r.source_status === 'NOT_FOUND' ? 'Report not found' : 'Check incomplete' }}</h3>
+      @if (r.source_status === 'CONFIRMED') {<p>A corresponding report was found on the claimed source.</p>}
+      @else if (r.source_status === 'NOT_FOUND') {<p>No corresponding report was found in the available search. This does not establish that the news is false.</p>}
+      @else {<p>No conclusion can be drawn about whether the outlet published this report. Try a new check later.</p>}
+      @if (r.normalized_source) {<span class="finding-detail">{{ r.normalized_source }}</span>}
+    </section>
+    <section><span class="finding-number">02 / CONTENT</span><h3>{{ r.source_status !== 'CONFIRMED' ? 'Not compared' : r.content_status === 'MATCHED' ? 'Content matched' : r.content_status === 'ALTERED' ? 'Differences found' : 'Check incomplete' }}</h3>
+      @if (r.source_status !== 'CONFIRMED') {<p>Content can only be compared once the source report is confirmed.</p>}
+      @else if (r.content_status === 'MATCHED') {<p>The checked content agrees with the source report. This is a comparison with that report, not independent proof of every statement.</p>}
+      @else if (r.content_status === 'ALTERED') {<p>The checked content differs from the report. Read the recorded differences and source evidence below.</p>}
+      @else {<p>There is not enough evidence to confirm or refute the content. This does not mean it was altered.</p>}
+    </section>
+    <section><span class="finding-number">03 / DATE</span><h3>{{ r.date_status === 'MATCHED' ? 'Date matched' : r.date_status === 'MISMATCHED' ? 'Date mismatch' : r.date_status === 'INCOMPLETE' ? 'Check incomplete' : 'Not compared' }}</h3><p>{{ r.date_status === 'MATCHED' ? 'The claimed publication date agrees with the source date.' : r.date_status === 'MISMATCHED' ? 'The claimed publication date differs from the source. This alone does not mean the news is false.' : r.date_status === 'INCOMPLETE' ? 'The available date information was insufficient to complete this comparison.' : 'No date comparison is recorded. A claimed date and a confirmed source are needed.' }}</p></section>
+  </div>
+  @if (r.analysis?.search; as search) {@if (search.failed || search.skipped) {<div class="report-note">Some searches were unavailable, so the evidence may be incomplete.</div>}}
+  @if (r.was_overridden) {<div class="report-note"><strong>Experts changed the automated finding after review.</strong><p>The findings above reflect the expert-reviewed outcome. The comparison checks below retain the original automated evidence.</p><details><summary>See the earlier findings</summary><app-verdict-badge [sourceStatus]="r.ai_source_status" [contentStatus]="r.ai_content_status" [dateStatus]="r.ai_date_status" /></details></div>}
+</section></ng-template>
+@if (!reviewer) {<ng-container [ngTemplateOutlet]="findings" />}
+
+<section class="evidence-section report-section">
+  <div class="section-heading"><span class="eyebrow">SOURCE EVIDENCE</span><h2>{{ r.source_status === 'CONFIRMED' ? 'Read the corresponding report' : 'What the source search returned' }}</h2><p>{{ r.source_status === 'CONFIRMED' ? 'Open the original publication and compare its wording with the submitted claim.' : 'A retrieved candidate is not a confirmed match. Do not treat it as proof of this claim.' }}</p></div>
+  @if (r.matched_articles.length) {
+    @for (art of r.matched_articles.slice(0, 1); track art.url) {
+      <article class="article-card"><span class="source-domain">{{ host(art.url) }}</span><h3><a [href]="art.url" target="_blank" rel="noopener noreferrer" class="article-title">{{ art.title || 'View source article' }} <span aria-hidden="true">↗</span></a></h3><div class="article-meta">@if (art.author) {<span>{{ art.author }}</span>}@if (art.published_date) {<span>Published {{ art.published_date }}</span>}</div>
+      @if (art.body) {<details [open]="reviewer"><summary>Read the retrieved article text</summary><p class="article-body">{{ art.body }}</p></details>} @else {<p class="section-sub">Article text was not available. Open the source link to inspect the publication.</p>}
+      <a [href]="art.url" target="_blank" rel="noopener noreferrer" class="source-link">Open original source <span aria-hidden="true">↗</span><span class="sr-only"> (opens in a new tab)</span></a></article>
+    }
+  } @else {<div class="evidence-empty"><strong>No source article is available in this saved result.</strong><p>This limits what you can independently compare. It is not evidence that the news is false.</p></div>}
+</section>
+
+@if (reviewer) {<ng-container [ngTemplateOutlet]="findings" />}
+@if (r.source_status === 'CONFIRMED' || reviewer) {
+  <section class="report-section"><div class="section-heading"><span class="eyebrow">COMPARISON RECORD</span><h2>Content match against the claimed source</h2><p>These automated checks describe the submitted {{ bodyApplicable ? 'headline and article text' : 'headline' }}. A check that did not run is not a successful match.</p></div>
+    @if (r.ai_content_status === 'ALTERED' && (r.manipulation_flags.discrepancies?.length ?? 0) === 0) {<div class="report-note">This older result is marked Altered but no itemised discrepancy was recorded for it.</div>}
+    <app-result-checks [flags]="r.manipulation_flags" [scope]="r.claim_scope" />
+    @if (!hasCheckDetails) {<p class="section-sub">Detailed comparison checks were not recorded for this result.</p>}
+    @if (r.analysis?.date; as d) {<div class="date-evidence"><h3>Publication date comparison</h3><div class="date-pair"><div><span>Claimed date</span><strong>{{ d.claimed_date ? (d.claimed_date | date:'d MMM y') : 'Not provided' }}</strong></div><div><span>Source publication date</span><strong>{{ d.article_date ? (d.article_date | date:'d MMM y') : 'Unavailable' }}</strong></div></div><p>Calendar dates are compared in Asia/Dhaka. @if (d.tz_assumed) { The source timezone was assumed. } A date mismatch alone is not a false-news verdict.</p></div>}
+    @if (reviewer) {<details class="measurements"><summary>Supporting comparison measurements</summary><p class="section-sub">These measurements describe agreement with the retrieved report, not the probability that a claim is true. They do not replace your independent assessment.</p><app-result-scores [scores]="r.scores" [analysis]="r.analysis" [scope]="r.claim_scope" /></details>}
+  </section>
+}
+<footer class="report-footer">Automated check recorded {{ r.created_at | date:'medium' }}. Read the findings alongside the original claim and source.</footer>

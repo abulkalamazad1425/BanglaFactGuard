@@ -1,128 +1,32 @@
-    <div class="review-page">
-      <div class="container" style="padding-top:48px; padding-bottom:80px;">
-        <div class="topbar animate-in">
-          <a routerLink="/expert/queue" class="btn btn-ghost btn-sm">← Back to Queue</a>
-        </div>
-
-        @if (loading()) { <div class="loading-overlay"><div class="spinner"></div></div> }
-
-        @if (!loading() && claim()) {
-          <div class="review-layout animate-in">
-
-            <!-- ═══════════ Main column ═══════════ -->
-            <div class="review-main">
-
-              <!-- Claim info -->
-              <div class="card claim-card">
-                <div class="claim-header">
-                  <h2>Claim Details</h2>
-                  <app-verdict-badge
-                    [overallVerdict]="claim()!.ai_overall_verdict"
-                    [sourceStatus]="claim()!.source_status"
-                    [contentStatus]="claim()!.content_status"
-                    [dateStatus]="claim()!.date_status" />
-                </div>
-                <p class="claim-headline">{{ claim()!.headline }}</p>
-                @if (claim()!.image_url) {
-                  <div class="claim-image-wrap">
-                    <img [src]="claim()!.image_url" class="claim-image" alt="Submitted image" />
-                  </div>
-                }
-                @if (claim()!.body_text) {
-                  <p class="claim-body">{{ claim()!.body_text }}</p>
-                }
-                <div class="claim-meta">
-                  @if (isStructuredType()) {
-                    <span class="text-muted text-sm">Source: <a [href]="claim()!.claimed_source_text" target="_blank">{{ claim()!.claimed_source_text }}</a></span>
-                  }
-                  <span class="text-muted text-sm">Submitted: {{ claim()!.submitted_at | date:'MMM d, y, HH:mm' }}</span>
-                </div>
-              </div>
-
-              <!-- Detailed AI Preliminary Prediction -->
-              @if (aiResult()) {
-                <div class="card ai-prediction-card">
-                  <h3 class="section-heading"><span>🤖</span> Preliminary AI Prediction Details</h3>
-
-                  <p class="text-muted text-sm" style="margin-bottom: 16px;">
-                    Preliminary automated Source / Content / Date check
-                    ({{ aiResult()!.claim_scope === 'HEADLINE_WITH_BODY' ? 'headline + submitted body' : 'headline only' }}).
-                    Measurements describe agreement with the report on the claimed source, not the probability that the claim is true.
-                    The Overall verdict is yours to decide independently.
-                  </p>
-
-                  <!-- Component scores: unavailable / not-applicable are labelled, body only when submitted -->
-                  <app-result-scores
-                    [scores]="aiResult()!.scores"
-                    [analysis]="aiResult()!.analysis"
-                    [scope]="aiResult()!.claim_scope" />
-
-                  <!-- Alteration checks: only completed passes are green; failures quote the discrepancy -->
-                  <app-result-checks
-                    [flags]="aiResult()!.manipulation_flags"
-                    [scope]="aiResult()!.claim_scope" />
-                </div>
-              }
-
-              <!-- Top matching article — at most one, shown with its full body -->
-              @if (topArticle(); as art) {
-                <div class="card top-article-card">
-                  <h3 class="section-heading"><span>📰</span> Top Matching Article from Source</h3>
-                  <div class="article-header">
-                    <a [href]="art.url" target="_blank" class="article-title">
-                      {{ art.title || 'View Source Article' }}
-                    </a>
-                    @if (art.rank_score != null) {
-                      <span class="article-match" title="Retrieval relevance — how likely this is the report the claim is about, not a content-match score.">Retrieval relevance: {{ (art.rank_score * 100).toFixed(1) }}%</span>
-                    }
-                  </div>
-                  <div class="article-meta">
-                    @if (art.author) { <span>👤 {{ art.author }}</span> }
-                    @if (art.published_date) { <span>📅 {{ art.published_date }}</span> }
-                    <span>🌐 {{ getHost(art.url) }}</span>
-                  </div>
-                  @if (art.body) {
-                    <div class="article-full-body">{{ art.body }}</div>
-                  } @else {
-                    <p class="text-muted text-sm">No article body could be extracted for this match.</p>
-                  }
-                </div>
-              }
-            </div>
-
-            <!-- ═══════════ Side column: voting & justification ═══════════ -->
-            <aside class="review-side">
-              <div class="card side-card vote-status-card">
-                <span class="side-label">Vote progress</span>
-                <div class="vote-status">
-                  <span class="text-muted text-sm">{{ claim()!.vote_count }} expert vote{{ claim()!.vote_count === 1 ? '' : 's' }} submitted so far</span>
-                </div>
-                @if (aiResult(); as ai) {
-                  <div class="side-ai-confidence">
-                    <app-score-bar label="Automated check strength" [value]="ai.confidence" />
-                  </div>
-                }
-              </div>
-
-              @if (isAdmin()) {
-                <!-- Administrators may monitor the queue but never vote (req. 13) -->
-                <div class="card side-card admin-readonly-card">
-                  <div class="admin-readonly-icon">👁</div>
-                  <h3>View-only access</h3>
-                  <p>Administrators can monitor this claim but do not participate in expert voting. Only expert accounts may submit a verdict here.</p>
-                </div>
-              } @else if (!submitted()) {
-                <div class="card side-card vote-card">
-                  <h3>Submit Your Assessment</h3>
-                  <form [formGroup]="form" (ngSubmit)="onSubmit()">
+<div class="verification-shell"><div class="flow-container">
+<div class="report-toolbar"><a routerLink="/expert/queue" class="btn btn-ghost">← Review queue</a>@if (claim()) {<a [routerLink]="['/verify',claim()!.submission_id]" class="btn btn-secondary">View public report ↗</a>}</div>
+<header class="flow-heading"><div><span class="eyebrow">EXPERT WORKSPACE</span><h1>Review the claim. Follow the evidence.</h1><p>Read the original submission and source material before making your independent assessment. Automated findings are supporting information, not instructions for your decision.</p></div></header>
+@if (loading()) {<section class="surface state-card" role="status"><div class="spinner"></div><h2>Loading the review</h2><p>Retrieving the claim and the available comparison evidence.</p></section>}
+@else if (loadError()) {<section class="surface state-card" role="alert"><h2>Review temporarily unavailable</h2><p>The claim could not be loaded. Try again or return to the review queue.</p><button type="button" class="btn btn-primary" (click)="loadReview()">Try again</button></section>}
+@if (!loading() && !loadError() && claim(); as c) {
+<div class="review-workspace"><div class="review-evidence">
+<section class="surface"><div class="section-heading"><span class="eyebrow">01 / ORIGINAL SUBMISSION</span><h2>{{ isStructuredType() ? 'Read the claim in context' : 'Read the article and inspect its image' }}</h2></div><h3 class="claim-preview">{{ c.headline || 'No headline recorded' }}</h3>
+@if (c.image_url) {<img [src]="c.image_url" class="media-image" alt="Image submitted with this claim">}
+<dl class="meta-grid">@if (isStructuredType()) {<div><dt>Claimed outlet</dt><dd>{{ c.claimed_source_text || 'Not recorded' }}</dd></div>}<div><dt>Submitted</dt><dd>{{ c.submitted_at | date:'medium' }}</dd></div></dl>
+@if (c.body_text) {<details open><summary>Submitted article text</summary><p class="long-text">{{ c.body_text }}</p></details>}
+@if (photocardDetails(); as p) {<div class="note">Photocard comparison covers the extracted headline only. Check that the read headline accurately represents the image.</div>@if (p.source_date_conflict) {<div class="note warning"><strong>Source or date conflict</strong><p>The text read from the card differs from the supplied source or date. Verification used the supplied details.</p></div>}<dl class="meta-grid"><div><dt>Supplied date</dt><dd>{{ p.published_date || 'Not provided' }}</dd></div><div><dt>Date read from card</dt><dd>{{ p.detected_date_text || 'Not identified' }}</dd></div><div><dt>Outlet read from card</dt><dd>{{ p.detected_source_text || 'Not identified' }}</dd></div></dl>@if (p.ocr_raw_text) {<details><summary>All text read from the photocard</summary><p class="long-text">{{ p.ocr_raw_text }}</p></details>}}
+</section>
+@if (aiResult(); as r) {<app-verification-report [r]="r" [reviewer]="true" />}
+@if (evidenceError()) {<section class="surface claim-section" role="alert"><h2>Comparison evidence could not be loaded</h2><p class="field-hint">Do not interpret this as a missing source or a false claim. Retry to inspect the recorded evidence before assessing this submission.</p><button type="button" class="btn btn-secondary" (click)="loadReview()">Reload evidence</button></section>}
+@if (!isStructuredType()) {<section class="surface claim-section"><span class="eyebrow">02 / PRELIMINARY ASSESSMENT</span><h2 class="assessment-value">{{ predictionLabel(c.ai_overall_verdict || c.ai_label) }}</h2><p class="assessment-explanation">This automated assessment is preliminary. Review the article and image independently; it does not establish publication by a news outlet.</p><div class="note">No source-report comparison is provided by this verification method. Explain the evidence and limitations supporting your overall decision.</div></section>}
+</div><aside class="review-decision">
+<section class="surface review-guide"><span class="eyebrow">YOUR INDEPENDENT REVIEW</span><h2>Before you decide</h2><ol><li>Read the full claim and available source.</li><li>Distinguish missing evidence from a false statement.</li><li>Explain how the evidence supports your decision.</li></ol><p class="field-hint">{{ c.vote_count }} expert assessment{{ c.vote_count === 1 ? '' : 's' }} recorded. A final decision depends on the configured review rules.</p></section>
+@if (isAdmin()) {<section class="surface"><span class="eyebrow">VIEW-ONLY ACCESS</span><h2>Observe this review</h2><p class="field-hint">Administrators can inspect the evidence. Only expert accounts can submit an assessment here.</p></section>}
+@else if (submitted() || c.has_voted) {<section class="surface" role="status"><div class="state-mark" aria-hidden="true">✓</div><h2>Assessment recorded</h2><p class="field-hint">Your assessment has been saved. The overall decision will be finalized when the review rules are met.</p><a routerLink="/expert/queue" class="btn btn-primary">Back to review queue</a></section>}
+@else {<section class="surface"><div class="section-heading"><span class="eyebrow">03 / YOUR ASSESSMENT</span><h2>Record your findings</h2><p>Choose each applicable finding and explain the evidence behind it.</p></div><form [formGroup]="form" (ngSubmit)="onSubmit()">
                     <div class="form-group">
                       <label class="form-label">
-                        {{ isStructuredType() ? '1. ' : '' }}Overall, is this claim... <span style="color:var(--error)">*</span>
+                        {{ isStructuredType() ? '1. ' : '' }}Overall decision <span style="color:var(--error)">*</span>
                       </label>
-                      <div class="verdict-options">
+                      <div class="verdict-options" role="group" aria-label="Choose a finding">
                         @for (opt of overallOptions; track opt.value) {
                           <button type="button" class="verdict-option" [ngClass]="opt.cls"
-                                  [class.selected]="selectedOverall() === opt.value"
+                                  [class.selected]="selectedOverall() === opt.value" [attr.aria-pressed]="selectedOverall() === opt.value"
                                   (click)="selectOverall(opt.value)">
                             {{ opt.icon }} {{ opt.label }}
                           </button>
@@ -135,15 +39,15 @@
 
                     @if (isStructuredType()) {
                       <div class="form-group">
-                        <label class="form-label">2. Is this source confirmed? <span style="color:var(--error)">*</span></label>
-                        <div class="verdict-options">
+                        <label class="form-label">2. Was the report found on the claimed outlet? <span style="color:var(--error)">*</span></label>
+                        <div class="verdict-options" role="group" aria-label="Choose a finding">
                           <button type="button" class="verdict-option option-true"
-                                  [class.selected]="selectedSource() === 'CONFIRMED'"
+                                  [class.selected]="selectedSource() === 'CONFIRMED'" [attr.aria-pressed]="selectedSource() === 'CONFIRMED'"
                                   (click)="selectSource('CONFIRMED')">
                             ✓ Source Confirmed
                           </button>
                           <button type="button" class="verdict-option option-notfound"
-                                  [class.selected]="selectedSource() === 'NOT_FOUND'"
+                                  [class.selected]="selectedSource() === 'NOT_FOUND'" [attr.aria-pressed]="selectedSource() === 'NOT_FOUND'"
                                   (click)="selectSource('NOT_FOUND')">
                             ? Not Found in Claimed Source
                           </button>
@@ -157,14 +61,14 @@
                     @if (isStructuredType() && needsContentAndDate()) {
                       <div class="form-group">
                         <label class="form-label">3. Does the content match? <span style="color:var(--error)">*</span></label>
-                        <div class="verdict-options">
+                        <div class="verdict-options" role="group" aria-label="Choose a finding">
                           <button type="button" class="verdict-option option-true"
-                                  [class.selected]="selectedContent() === 'MATCHED'"
+                                  [class.selected]="selectedContent() === 'MATCHED'" [attr.aria-pressed]="selectedContent() === 'MATCHED'"
                                   (click)="selectContent('MATCHED')">
                             ✓ Content Matched
                           </button>
                           <button type="button" class="verdict-option option-partial"
-                                  [class.selected]="selectedContent() === 'ALTERED'"
+                                  [class.selected]="selectedContent() === 'ALTERED'" [attr.aria-pressed]="selectedContent() === 'ALTERED'"
                                   (click)="selectContent('ALTERED')">
                             ◑ Content Altered
                           </button>
@@ -176,14 +80,14 @@
 
                       <div class="form-group">
                         <label class="form-label">4. Does the date match? <span style="color:var(--error)">*</span></label>
-                        <div class="verdict-options">
+                        <div class="verdict-options" role="group" aria-label="Choose a finding">
                           <button type="button" class="verdict-option option-true"
-                                  [class.selected]="selectedDate() === 'MATCHED'"
+                                  [class.selected]="selectedDate() === 'MATCHED'" [attr.aria-pressed]="selectedDate() === 'MATCHED'"
                                   (click)="selectDate('MATCHED')">
                             ✓ Date Matched
                           </button>
                           <button type="button" class="verdict-option option-partial"
-                                  [class.selected]="selectedDate() === 'MISMATCHED'"
+                                  [class.selected]="selectedDate() === 'MISMATCHED'" [attr.aria-pressed]="selectedDate() === 'MISMATCHED'"
                                   (click)="selectDate('MISMATCHED')">
                             📅 Date Mismatch
                           </button>
@@ -202,34 +106,23 @@
                     }
 
                     <div class="form-group">
-                      <label class="form-label">Justification <span style="color:var(--error)">*</span> <span class="text-muted text-xs">(min 50 characters)</span></label>
-                      <textarea formControlName="justification" class="form-control"
+                      <label for="expert-review-detail-justification" class="form-label">Evidence and reasoning <span style="color:var(--error)">*</span> <span class="text-muted text-xs">(min 50 characters)</span></label>
+                      <textarea id="expert-review-detail-justification" formControlName="justification" class="form-control"
                                 [class.is-invalid]="justInvalid"
                                 rows="6"
-                                placeholder="Explain your reasoning. What evidence supports your verdict?">
+                                placeholder="Explain what the evidence shows, cite the relevant source, and describe any uncertainty.">
                       </textarea>
                       <div class="char-count" [class.valid]="charCount >= 50">{{ charCount }} / 50+</div>
                       @if (justInvalid) {
-                        <span class="form-error">Justification must be at least 50 characters</span>
+                        <span class="form-error">Evidence and reasoning must be at least 50 characters</span>
                       }
                     </div>
 
                     <button type="submit" class="btn btn-primary btn-full" [disabled]="voting()">
                       @if (voting()) { <span class="btn-spinner"></span> Submitting... }
-                      @else { ⚖️ Submit Vote }
+                      @else { ⚖️ Submit assessment }
                     </button>
-                  </form>
-                </div>
-              } @else {
-                <div class="card side-card success-card text-center">
-                  <div class="success-icon">✅</div>
-                  <h3>Vote Submitted!</h3>
-                  <p>Your assessment has been recorded. The final verdict will be determined once all minimum votes are in.</p>
-                  <a routerLink="/expert/queue" class="btn btn-primary mt-4">Back to Queue</a>
-                </div>
-              }
-            </aside>
-          </div>
-        }
-      </div>
-    </div>
+                  </form>@if (voteError()) {<p class="error-copy" role="alert">{{ voteError() }} Your selections and reasoning are still here.</p>}</section>}
+</aside></div>
+}
+</div></div>

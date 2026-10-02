@@ -1,3 +1,4 @@
+import { readableExplanation } from '../../../shared/utils/presentation';
 import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
@@ -13,10 +14,12 @@ import { ToastService } from '../../../shared/services/toast.service';
   styleUrls: ['./notification-list.scss']
 })
 export class NotificationListComponent implements OnInit {
+  readonly readableExplanation = readableExplanation;
   private readonly notifSvc = inject(NotificationService);
   private readonly toast = inject(ToastService);
 
   readonly loading = signal(true);
+  readonly loadError = signal(false);
   readonly notifications = signal<NotificationItem[]>([]);
 
   // Computed to avoid arrow functions in template
@@ -24,8 +27,8 @@ export class NotificationListComponent implements OnInit {
 
   ngOnInit(): void {
     this.notifSvc.list(50).subscribe({
-      next: n => { this.notifications.set(n); this.loading.set(false); },
-      error: () => this.loading.set(false),
+      next: n => { this.notifications.set(n); this.loading.set(false); this.loadError.set(false); },
+      error: () => { this.loading.set(false); this.loadError.set(true); },
     });
   }
 

@@ -13,7 +13,7 @@
       background: var(--bg-surface);
       box-shadow: var(--shadow-sm);
       transition: border-color 0.2s ease, box-shadow 0.2s ease;
-      &:hover { border-color: rgba(91, 61, 240, 0.3); box-shadow: var(--shadow-md); }
+      &:hover { border-color: rgba(31, 127, 78, 0.3); box-shadow: var(--shadow-md); }
     }
 
     .queue-header {

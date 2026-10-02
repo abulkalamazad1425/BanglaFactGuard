@@ -118,44 +118,44 @@
         </div>
 
         <div class="form-group" [class.has-error]="form.get('canonical_name')?.invalid && form.get('canonical_name')?.touched">
-          <label>Canonical Domain <span class="required">*</span></label>
-          <input type="text" class="form-input" formControlName="canonical_name" placeholder="e.g. prothomalo.com">
+          <label for="source-management.component-canonical_name">Canonical Domain <span class="required">*</span></label>
+          <input id="source-management.component-canonical_name" type="text" class="form-input" formControlName="canonical_name" placeholder="e.g. prothomalo.com">
           <small *ngIf="isEditMode()" class="hint">Domain name cannot be changed after creation.</small>
           <small *ngIf="form.get('canonical_name')?.hasError('pattern') && form.get('canonical_name')?.touched" class="error-msg">Must be a valid domain (e.g. prothomalo.com)</small>
         </div>
 
         <div class="form-row">
           <div class="form-group" [class.has-error]="form.get('display_name')?.invalid && form.get('display_name')?.touched">
-            <label>Display Name (Bangla) <span class="required">*</span></label>
-            <input type="text" class="form-input" formControlName="display_name" placeholder="e.g. প্রথম আলো">
+            <label for="source-management.component-display_name">Display Name (Bangla) <span class="required">*</span></label>
+            <input id="source-management.component-display_name" type="text" class="form-input" formControlName="display_name" placeholder="e.g. প্রথম আলো">
           </div>
           <div class="form-group">
-            <label>Display Name (English)</label>
-            <input type="text" class="form-input" formControlName="display_name_en" placeholder="e.g. Prothom Alo">
+            <label for="source-management.component-display_name_en">Display Name (English)</label>
+            <input id="source-management.component-display_name_en" type="text" class="form-input" formControlName="display_name_en" placeholder="e.g. Prothom Alo">
           </div>
         </div>
 
         <div class="form-group" [class.has-error]="form.get('base_url')?.invalid && form.get('base_url')?.touched">
-          <label>Base URL <span class="required">*</span></label>
-          <input type="url" class="form-input" formControlName="base_url" placeholder="e.g. https://www.prothomalo.com">
+          <label for="source-management.component-base_url">Base URL <span class="required">*</span></label>
+          <input id="source-management.component-base_url" type="url" class="form-input" formControlName="base_url" placeholder="e.g. https://www.prothomalo.com">
         </div>
 
         <div class="form-group">
-          <label>Description</label>
-          <textarea class="form-input" formControlName="description" rows="2" placeholder="Brief description of this outlet"></textarea>
+          <label for="source-management.component-description">Description</label>
+          <textarea id="source-management.component-description" class="form-input" formControlName="description" rows="2" placeholder="Brief description of this outlet"></textarea>
         </div>
 
         <div class="form-row">
           <div class="form-group">
-            <label>Content Language</label>
-            <select class="form-input" formControlName="language">
+            <label for="source-management.component-language">Content Language</label>
+            <select id="source-management.component-language" class="form-input" formControlName="language">
               <option value="bn">বাংলা (bn)</option>
               <option value="en">English (en)</option>
             </select>
           </div>
           <div class="form-group">
-            <label>Search Language</label>
-            <select class="form-input" formControlName="search_language">
+            <label for="source-management.component-search_language">Search Language</label>
+            <select id="source-management.component-search_language" class="form-input" formControlName="search_language">
               <option value="bn">বাংলা (bn)</option>
               <option value="en">English (en)</option>
             </select>
@@ -182,14 +182,14 @@
         </div>
 
         <div class="form-group">
-          <label>Internal Search URL</label>
-          <input type="text" class="form-input" formControlName="internal_search_url" placeholder="https://...search?q={{ '{query}' }}">
+          <label for="source-management.component-internal_search_url">Internal Search URL</label>
+          <input id="source-management.component-internal_search_url" type="text" class="form-input" formControlName="internal_search_url" placeholder="https://...search?q={{ '{query}' }}">
           <small class="hint">Use <code>{{ '{query}' }}</code> as the search placeholder.</small>
         </div>
 
         <div class="form-group">
-          <label>RSS Feed URL</label>
-          <input type="url" class="form-input" formControlName="rss_url" placeholder="https://...feed">
+          <label for="source-management.component-rss_url">RSS Feed URL</label>
+          <input id="source-management.component-rss_url" type="url" class="form-input" formControlName="rss_url" placeholder="https://...feed">
         </div>
 
         <div class="form-group">

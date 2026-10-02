@@ -27,6 +27,7 @@ export class SubmissionHistoryComponent implements OnInit, OnDestroy {
   private readonly verificationSvc = inject(VerificationService);
 
   readonly loading = signal(true);
+  readonly loadError = signal(false);
   readonly submissions = signal<SubmissionSummary[]>([]);
   readonly stats = signal<SubmissionStats | null>(null);
   readonly offset = signal(0);
@@ -58,10 +59,10 @@ export class SubmissionHistoryComponent implements OnInit, OnDestroy {
       .subscribe({
         next: s => {
           this.submissions.set(s);
-          this.loading.set(false);
+          this.loading.set(false); this.loadError.set(false);
           if (s.some(x => this.isRunning(x))) this.ensureRefresh(); else this.stopRefresh();
         },
-        error: () => this.loading.set(false),
+        error: () => { this.loading.set(false); this.loadError.set(true); },
       });
   }
 
@@ -98,7 +99,7 @@ export class SubmissionHistoryComponent implements OnInit, OnDestroy {
   }
 
   typeLabel(t: string): string {
-    return t === 'PHOTO_CARD' ? '🖼️ Photo card' : t === 'MULTIMODAL' ? '🧠 Multimodal' : '🔎 Text claim';
+    return t === 'PHOTO_CARD' ? '🖼️ Photo card' : t === 'MULTIMODAL' ? 'Text and image' : '🔎 Text claim';
   }
 
   /** What to show where the headline would be — a pending photo card has none yet. */

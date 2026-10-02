@@ -10,32 +10,32 @@
 
       <form [formGroup]="form" (ngSubmit)="onSubmit()">
         <div class="form-group">
-          <label class="form-label">Full Name <span style="color:var(--error)">*</span></label>
-          <input type="text" formControlName="full_name" class="form-control"
+          <label for="create-expert-full_name" class="form-label">Full Name <span style="color:var(--error)">*</span></label>
+          <input id="create-expert-full_name" type="text" formControlName="full_name" class="form-control"
                  [class.is-invalid]="nameInvalid" placeholder="Dr. Example Name" />
           @if (nameInvalid) { <span class="form-error">Full name is required</span> }
         </div>
         <div class="form-group">
-          <label class="form-label">Email Address <span style="color:var(--error)">*</span></label>
-          <input type="email" formControlName="email" class="form-control"
+          <label for="create-expert-email" class="form-label">Email Address <span style="color:var(--error)">*</span></label>
+          <input id="create-expert-email" type="email" formControlName="email" class="form-control"
                  [class.is-invalid]="emailInvalid" placeholder="expert@institution.edu" />
           @if (emailInvalid) { <span class="form-error">Valid email is required</span> }
         </div>
         <div class="form-group">
-          <label class="form-label">Password <span style="color:var(--error)">*</span></label>
-          <input type="password" formControlName="password" class="form-control"
+          <label for="create-expert-password" class="form-label">Password <span style="color:var(--error)">*</span></label>
+          <input id="create-expert-password" type="password" formControlName="password" class="form-control"
                  [class.is-invalid]="pwInvalid" placeholder="Min 8 chars, 1 uppercase, 1 digit" />
           @if (pwInvalid) { <span class="form-error">Strong password required (8+ chars, 1 uppercase, 1 digit)</span> }
         </div>
         <div class="form-group">
-          <label class="form-label">Expertise Area <span style="color:var(--error)">*</span></label>
-          <input type="text" formControlName="expertise_area" class="form-control"
+          <label for="create-expert-expertise_area" class="form-label">Expertise Area <span style="color:var(--error)">*</span></label>
+          <input id="create-expert-expertise_area" type="text" formControlName="expertise_area" class="form-control"
                  [class.is-invalid]="areaInvalid" placeholder="e.g., Political Journalism, Health & Science" />
           @if (areaInvalid) { <span class="form-error">Expertise area is required</span> }
         </div>
 
         @if (errorMsg) {
-          <div class="alert-error" style="margin-bottom:16px;">{{ errorMsg }}</div>
+          <div class="alert-error" role="alert" style="margin-bottom:16px;">{{ errorMsg }}</div>
         }
 
         <div style="display:flex; gap:12px;">

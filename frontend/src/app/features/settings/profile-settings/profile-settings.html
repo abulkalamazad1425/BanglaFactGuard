@@ -13,7 +13,7 @@
         <div>
           <p class="font-semibold">{{ auth.user()?.full_name || 'No name set' }}</p>
           <p class="text-muted text-sm">{{ auth.user()?.email }}</p>
-          <span class="badge badge-primary">{{ auth.user()?.role }}</span>
+          <span class="badge badge-primary">{{ auth.user()?.role === 'admin' ? 'Administrator' : auth.user()?.role === 'expert' ? 'Expert reviewer' : 'Member' }}</span>
         </div>
       </div>
 
@@ -26,20 +26,20 @@
 
       <form [formGroup]="profileForm" (ngSubmit)="saveProfile()" style="margin-top:24px;">
         <div class="form-group">
-          <label class="form-label">Full Name</label>
-          <input type="text" formControlName="full_name" class="form-control" placeholder="Your full name" />
+          <label for="profile-settings-full_name" class="form-label">Full Name</label>
+          <input id="profile-settings-full_name" type="text" formControlName="full_name" class="form-control" placeholder="Your full name" />
         </div>
         <div class="form-group">
-          <label class="form-label">Bio <span class="text-muted text-xs">(optional)</span></label>
-          <textarea formControlName="bio" class="form-control" rows="3" placeholder="Tell us about yourself..."></textarea>
+          <label for="profile-settings-bio" class="form-label">Bio <span class="text-muted text-xs">(optional)</span></label>
+          <textarea id="profile-settings-bio" formControlName="bio" class="form-control" rows="3" placeholder="Tell us about yourself..."></textarea>
         </div>
         <div class="form-group">
-          <label class="form-label">Phone <span class="text-muted text-xs">(optional)</span></label>
-          <input type="tel" formControlName="phone" class="form-control" placeholder="+880..." />
+          <label for="profile-settings-phone" class="form-label">Phone <span class="text-muted text-xs">(optional)</span></label>
+          <input id="profile-settings-phone" type="tel" formControlName="phone" class="form-control" placeholder="+880..." />
         </div>
         <div class="form-group">
-          <label class="form-label">Avatar URL <span class="text-muted text-xs">(optional)</span></label>
-          <input type="text" formControlName="avatar_url" class="form-control" placeholder="https://..." />
+          <label for="profile-settings-avatar_url" class="form-label">Avatar URL <span class="text-muted text-xs">(optional)</span></label>
+          <input id="profile-settings-avatar_url" type="text" formControlName="avatar_url" class="form-control" placeholder="https://..." />
         </div>
         @if (!isExpertOnly()) {
           <button type="submit" class="btn btn-primary" [disabled]="savingProfile()">
@@ -85,14 +85,14 @@
       <h2 class="section-title">Change Password</h2>
       <form [formGroup]="pwForm" (ngSubmit)="changePassword()">
         <div class="form-group">
-          <label class="form-label">Current Password</label>
-          <input type="password" formControlName="current_password" class="form-control"
+          <label for="profile-settings-current_password" class="form-label">Current Password</label>
+          <input id="profile-settings-current_password" type="password" formControlName="current_password" class="form-control"
                  [class.is-invalid]="pwForm.get('current_password')?.invalid && pwForm.get('current_password')?.touched"
                  placeholder="Your current password" />
         </div>
         <div class="form-group">
-          <label class="form-label">New Password</label>
-          <input type="password" formControlName="new_password" class="form-control"
+          <label for="profile-settings-new_password" class="form-label">New Password</label>
+          <input id="profile-settings-new_password" type="password" formControlName="new_password" class="form-control"
                  [class.is-invalid]="pwForm.get('new_password')?.invalid && pwForm.get('new_password')?.touched"
                  placeholder="Min 8 chars, 1 uppercase, 1 digit" />
         </div>
@@ -113,7 +113,7 @@
         </div>
         <div class="info-row">
           <span class="info-key">Role</span>
-          <span class="badge badge-primary">{{ auth.user()?.role }}</span>
+          <span class="badge badge-primary">{{ auth.user()?.role === 'admin' ? 'Administrator' : auth.user()?.role === 'expert' ? 'Expert reviewer' : 'Member' }}</span>
         </div>
         <div class="info-row">
           <span class="info-key">Verification Status</span>

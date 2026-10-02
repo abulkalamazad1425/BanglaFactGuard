@@ -10,7 +10,7 @@
 .breakdown-list { display: flex; flex-direction: column; gap: 16px; margin-bottom: 20px; }
 .breakdown-counts { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; font-weight: 600; padding-top: 16px; border-top: 1px solid var(--border); }
 .quick-actions { display: flex; flex-direction: column; gap: 8px; }
-.action-link { display: flex; align-items: center; gap: 16px; padding: 16px; border-radius: var(--radius-md); background: var(--bg-surface-2); text-decoration: none; color: var(--text-primary); border: 1px solid var(--border); transition: var(--transition); &:hover { border-color: var(--primary); background: rgba(124,106,247,0.05); } }
+.action-link { display: flex; align-items: center; gap: 16px; padding: 16px; border-radius: var(--radius-md); background: var(--bg-surface-2); text-decoration: none; color: var(--text-primary); border: 1px solid var(--border); transition: var(--transition); &:hover { border-color: var(--primary); background: rgba(31,127,78,0.05); } }
 .action-icon { font-size: 24px; flex-shrink: 0; }
 .action-title { font-weight: 600; font-size: 14px; margin-bottom: 2px; }
 .loading-overlay { display: flex; justify-content: center; padding: 80px; }

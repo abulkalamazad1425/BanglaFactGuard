@@ -21,6 +21,7 @@ export class DashboardService {
   /** GET /api/v1/dashboard/explorer — Fact Explorer search/browse */
   searchExplorer(params: ExplorerSearchParams): Observable<ExplorerSearchResponse> {
     const query: Record<string, string | number | boolean> = {};
+    if (params.review_state) query['review_state'] = params.review_state;
     if (params.keyword) query['keyword'] = params.keyword;
     if (params.source_status) query['source_status'] = params.source_status;
     if (params.content_status) query['content_status'] = params.content_status;

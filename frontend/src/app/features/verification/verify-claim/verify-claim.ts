@@ -1,3 +1,4 @@
+import { requestError } from '../../../shared/utils/presentation';
 import { Component, OnDestroy, OnInit, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
@@ -41,9 +42,12 @@ export class VerifyClaimComponent implements OnInit, OnDestroy {
   pendingSubmissionId: string | null = null;
   pendingStatus: SubmissionStatus | null = null;
   pendingHeadline = '';
+  lastSubmissionId: string | null = null;
+  resultLoadError = false;
 
   sources: SourceResponse[] = [];
   sourcesLoading = true;
+  sourcesError = false;
 
   private pollTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -55,14 +59,18 @@ export class VerifyClaimComponent implements OnInit, OnDestroy {
     force_refresh: [false],
   });
 
-  ngOnInit(): void {
+  ngOnInit(): void { this.loadSources(); }
+
+  loadSources(): void {
+    this.sourcesLoading = true;
+    this.sourcesError = false;
     // Only active verified sources are ever eligible for selection here.
     this.sourceSvc.listSources(undefined, 1, 100).subscribe({
       next: (res) => {
         this.sources = [...res.items].sort((a, b) => a.display_name.localeCompare(b.display_name, 'bn'));
         this.sourcesLoading = false;
       },
-      error: () => { this.sourcesLoading = false; },
+      error: () => { this.sourcesLoading = false; this.sourcesError = true; },
     });
   }
 
@@ -84,6 +92,7 @@ export class VerifyClaimComponent implements OnInit, OnDestroy {
     this.error = null;
     this.result = null;
     this.servedFromCache = false;
+    this.resultLoadError = false;
 
     const v = this.form.value;
     const payload: any = {
@@ -98,6 +107,7 @@ export class VerifyClaimComponent implements OnInit, OnDestroy {
 
     this.svc.submitAsync(payload).subscribe({
       next: (queued) => {
+        this.lastSubmissionId = queued.submission_id;
         this.loading = false;
         this.pendingSubmissionId = queued.submission_id;
         this.pendingStatus = queued.status;
@@ -121,9 +131,7 @@ export class VerifyClaimComponent implements OnInit, OnDestroy {
       error: (err) => {
         this.loading = false;
         this.pendingSubmissionId = null;
-        this.error = err.error?.detail?.message
-          || err.error?.message
-          || 'Failed to connect to backend engine. Ensure the API server is running on port 8000.';
+        this.error = requestError(err, 'Unable to submit your claim. Please try again.');
         this.toast.error(this.error!);
       },
     });
@@ -148,7 +156,7 @@ export class VerifyClaimComponent implements OnInit, OnDestroy {
           } else if (res.status === 'FAILED') {
             this.stopPolling();
             this.pendingSubmissionId = null;
-            this.error = res.error || 'Verification could not be completed for this claim.';
+            this.error = 'Verification could not be completed. Please try again. No verdict was reached.';
             this.pending.dismiss(submissionId);
           }
         },
@@ -170,7 +178,11 @@ export class VerifyClaimComponent implements OnInit, OnDestroy {
         this.result = result;
         this.pendingSubmissionId = null;
       },
-      error: () => { this.toast.error('Failed to load result.'); },
+      error: () => {
+        this.pendingSubmissionId = null;
+        this.resultLoadError = true;
+        this.error = 'Your claim was received, but the saved result could not be loaded. Open its report to try again.';
+      },
     });
   }
 

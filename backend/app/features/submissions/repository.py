@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import date, datetime, time, timedelta, timezone
+from typing import Literal
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.constants import (
@@ -231,6 +232,7 @@ class SubmissionRepository(BaseRepository[Submission]):
         date_from: date | None = None,
         date_to: date | None = None,
         source_id: uuid.UUID | None = None,
+        review_state: Literal['finalized', 'review'] | None = None,
         limit: int = 20,
         offset: int = 0,
     ) -> tuple[list[Submission], int]:
@@ -244,8 +246,6 @@ class SubmissionRepository(BaseRepository[Submission]):
         match any overall_verdict filter, even though its AI-implied value
         may be shown on its own detail page.
         """
-        from sqlalchemy import func
-
         from app.features.multimodal.models import MultimodalAnalysis
         from app.features.verification.models import VerificationResultV2
 
@@ -262,38 +262,48 @@ class SubmissionRepository(BaseRepository[Submission]):
         if method is not None:
             conditions.append(Submission.submission_type == method)
         if date_from is not None:
-            conditions.append(Submission.created_at >= date_from)
+            conditions.append(Submission.created_at >= datetime.combine(date_from, time.min, timezone.utc))
         if date_to is not None:
-            conditions.append(Submission.created_at <= date_to)
+            conditions.append(Submission.created_at < datetime.combine(date_to + timedelta(days=1), time.min, timezone.utc))
         if source_id is not None:
             conditions.append(Submission.claimed_source_id == source_id)
 
-        base = select(Submission)
-        count_base = select(func.count(func.distinct(Submission.id)))
+        # Use the same effective decision for filtering and displayed results.
+        overall = case(
+            (Submission.submission_type == SubmissionType.MULTIMODAL, MultimodalAnalysis.expert_overall_verdict),
+            else_=VerificationResultV2.overall_verdict,
+        )
+        if review_state == 'finalized':
+            conditions.append(overall.is_not(None))
+        elif review_state == 'review':
+            conditions.append(overall.is_(None))
+        base = select(Submission).outerjoin(MultimodalAnalysis, MultimodalAnalysis.submission_id == Submission.id)
+        count_base = select(func.count(func.distinct(Submission.id))).select_from(Submission).outerjoin(MultimodalAnalysis, MultimodalAnalysis.submission_id == Submission.id)
 
         needs_result_join = (
             source_status is not None
             or content_status is not None
             or date_status is not None
+            or review_state is not None
         )
         joined_result = False
 
         if needs_result_join:
-            base = base.join(
+            base = base.outerjoin(
                 VerificationResultV2,
                 VerificationResultV2.submission_id == Submission.id,
             )
-            count_base = count_base.join(
+            count_base = count_base.outerjoin(
                 VerificationResultV2,
                 VerificationResultV2.submission_id == Submission.id,
             )
             joined_result = True
             if source_status is not None:
-                conditions.append(VerificationResultV2.source_status == source_status)
+                conditions.append(func.coalesce(VerificationResultV2.final_source_status, VerificationResultV2.source_status) == source_status)
             if content_status is not None:
-                conditions.append(VerificationResultV2.content_status == content_status)
+                conditions.append(case((VerificationResultV2.overall_verdict.is_not(None), VerificationResultV2.final_content_status), else_=VerificationResultV2.content_status) == content_status)
             if date_status is not None:
-                conditions.append(VerificationResultV2.date_status == date_status)
+                conditions.append(case((VerificationResultV2.overall_verdict.is_not(None), VerificationResultV2.final_date_status), else_=VerificationResultV2.date_status) == date_status)
 
         if overall_verdict is not None:
             if not joined_result:
@@ -305,24 +315,11 @@ class SubmissionRepository(BaseRepository[Submission]):
                     VerificationResultV2,
                     VerificationResultV2.submission_id == Submission.id,
                 )
-            base = base.outerjoin(
-                MultimodalAnalysis,
-                MultimodalAnalysis.submission_id == Submission.id,
-            )
-            count_base = count_base.outerjoin(
-                MultimodalAnalysis,
-                MultimodalAnalysis.submission_id == Submission.id,
-            )
-            conditions.append(
-                or_(
-                    VerificationResultV2.overall_verdict == overall_verdict,
-                    MultimodalAnalysis.expert_overall_verdict == overall_verdict,
-                )
-            )
+            conditions.append(overall == overall_verdict)
 
         stmt = (
             base.where(and_(*conditions))
-            .order_by(Submission.created_at.desc())
+            .order_by(Submission.created_at.desc(), Submission.id.desc())
             .offset(offset)
             .limit(limit)
         )
@@ -331,6 +328,25 @@ class SubmissionRepository(BaseRepository[Submission]):
         rows = list((await self.session.execute(stmt)).scalars().all())
         total = (await self.session.execute(count_stmt)).scalar_one()
         return rows, total
+
+    async def explorer_summary(self) -> dict[str, int]:
+        """All-time counts for exactly the public archive's eligible records."""
+        from app.features.multimodal.models import MultimodalAnalysis
+        from app.features.verification.models import VerificationResultV2
+
+        overall = case(
+            (Submission.submission_type == SubmissionType.MULTIMODAL, MultimodalAnalysis.expert_overall_verdict),
+            else_=VerificationResultV2.overall_verdict,
+        )
+        stmt = (
+            select(func.count(Submission.id), func.count(overall))
+            .select_from(Submission)
+            .outerjoin(VerificationResultV2, VerificationResultV2.submission_id == Submission.id)
+            .outerjoin(MultimodalAnalysis, MultimodalAnalysis.submission_id == Submission.id)
+            .where(Submission.status.in_(_VERIFIED_STATUSES), Submission.duplicate_of_submission_id.is_(None))
+        )
+        total, finalized = (await self.session.execute(stmt)).one()
+        return {'total': total, 'finalized': finalized, 'review': total - finalized}
 
 
 class SourceEvidenceQueryRepository(BaseRepository[SourceEvidenceQuery]):

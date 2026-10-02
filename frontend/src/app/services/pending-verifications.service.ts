@@ -107,7 +107,7 @@ export class PendingVerificationsService {
             this.toast.success(`Verification ready: ${this.short(item.headline)}`);
           } else if (res.status === 'FAILED') {
             this.settle(item.submissionId, 'FAILED');
-            this.toast.error(res.error || `Verification failed: ${this.short(item.headline)}`);
+            this.toast.error('A verification could not be completed. Open its result to try again; no verdict was reached.');
           } else {
             this.updateStatus(item.submissionId, res.status);
           }

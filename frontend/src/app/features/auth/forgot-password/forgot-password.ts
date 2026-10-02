@@ -1,3 +1,4 @@
+import { requestError } from '../../../shared/utils/presentation';
 import { Component, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { CommonModule } from '@angular/common';
@@ -67,7 +68,7 @@ export class ForgotPasswordComponent {
       },
       error: (err) => {
         this.loading = false;
-        this.toast.error(err.error?.detail?.message || err.error?.message || 'Invalid or expired code. Please try again.');
+        this.toast.error(requestError(err, 'Invalid or expired code. Please try again.'));
       },
     });
   }

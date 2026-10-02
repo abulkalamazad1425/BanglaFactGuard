@@ -1,114 +1,25 @@
-    <div class="home">
-      <!-- Hero -->
-      <section class="hero">
-        <div class="hero-bg">
-          <div class="hero-blob hero-blob-1"></div>
-          <div class="hero-blob hero-blob-2"></div>
-          <div class="hero-grid"></div>
-        </div>
-        <div class="container hero-content animate-in">
-          <div class="hero-badge">
-            <span class="badge badge-primary">🔬 Advanced AI-Powered Fact Verification</span>
-          </div>
-          <h1 class="hero-title">
-            Uncover the Truth<br>
-            <span class="gradient-text">Stop Misinformation</span>
-          </h1>
-          <p class="hero-subtitle">
-            BanglaFactGuard is an AI-driven fact-checking platform for Bangladesh. Check whether a claimed news source really published a story with our 12-stage verification pipeline, or run a multimodal check on text-and-image content — then let credibility-weighted expert review confirm the final verdict.
-          </p>
-          <div class="hero-actions">
-            <a routerLink="/verify" class="btn btn-primary btn-lg">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-              Verify Source Claim
-            </a>
-            <a routerLink="/multimodal" class="btn btn-secondary btn-lg">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h.01M15 9h.01M9 15h.01M15 15h.01M12 12h.01"/></svg>
-              AI Verification
-            </a>
-            <a routerLink="/photo-card" class="btn btn-secondary btn-lg">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-              Verify Photo Card
-            </a>
-          </div>
-
-          <!-- Stats bar -->
-          @if (stats()) {
-            <div class="hero-stats animate-in" style="animation-delay: 0.2s;">
-              <div class="stat-item">
-                <span class="stat-num">{{ stats()!.total_submissions | number }}</span>
-                <span class="stat-lbl">Total Claims</span>
-              </div>
-              <div class="stat-divider"></div>
-              <div class="stat-item">
-                <span class="stat-num text-success">{{ stats()!.source_confirmed_count | number }}</span>
-                <span class="stat-lbl">Source Confirmed</span>
-              </div>
-              <div class="stat-divider"></div>
-              <div class="stat-item">
-                <span class="stat-num text-error">{{ stats()!.source_not_found_count | number }}</span>
-                <span class="stat-lbl">Source Not Found</span>
-              </div>
-              <div class="stat-divider"></div>
-              <div class="stat-item">
-                <span class="stat-num text-warning">{{ stats()!.content_altered_count | number }}</span>
-                <span class="stat-lbl">Content Altered</span>
-              </div>
-            </div>
-          }
-        </div>
-      </section>
-
-      <!-- The Ecosystem (Features) -->
-      <section class="section features">
-        <div class="container">
-          <div class="section-header">
-            <h2 class="gradient-text">The Platform Ecosystem</h2>
-            <p>A comprehensive, multi-modal pipeline for combating misinformation in Bangladesh.</p>
-          </div>
-          <div class="grid-3">
-            @for (feat of features; track feat.icon) {
-              <div class="feature-card">
-                <div class="feature-icon">{{ feat.icon }}</div>
-                <h3>{{ feat.title }}</h3>
-                <p>{{ feat.desc }}</p>
-              </div>
-            }
-          </div>
-        </div>
-      </section>
-
-      <!-- Verdict Types -->
-      <section class="section section-sm verdicts">
-        <div class="container">
-          <div class="section-header">
-            <h2>Verdict Classifications</h2>
-            <p>Source, content and date are checked independently — a date mismatch never implies false content.</p>
-          </div>
-          <div class="grid-2">
-            @for (v of verdicts; track v.label) {
-              <div class="verdict-card">
-                <div class="verdict-badge" [ngClass]="v.cls">{{ v.icon }} {{ v.label }}</div>
-                <p>{{ v.desc }}</p>
-              </div>
-            }
-          </div>
-        </div>
-      </section>
-
-      <!-- CTA -->
-      <section class="section section-sm cta">
-        <div class="container container-sm">
-          <div class="cta-card glass-card">
-            <h2>Ready to fact-check the news?</h2>
-            <p>Submit a news claim or run a multimodal text-and-image check to get a detailed AI analysis in seconds.</p>
-            <div class="cta-actions">
-              <a routerLink="/verify" class="btn btn-primary btn-lg">Start Verifying</a>
-              @if (!isLoggedIn()) {
-                <a routerLink="/auth/register" class="btn btn-ghost btn-lg">Create Free Account</a>
-              }
-            </div>
-          </div>
-        </div>
-      </section>
+<div class="home container">
+  <section class="news-hero">
+    <div class="hero-copy">
+      <span class="eyebrow">BENGALI NEWS VERIFICATION</span>
+      <h1>Before you share,<br><span>check the source.</span></h1>
+      <p class="hero-intro">Check a Bengali news claim, compare a photocard with its claimed source, or review news text and an image together.</p>
+      <div class="hero-actions"><a routerLink="/verify" class="btn btn-primary btn-lg">Verify news <span aria-hidden="true">↗</span></a><a routerLink="/dashboard" class="btn btn-secondary btn-lg">Explore results</a></div>
+      <p class="hero-note" lang="bn">শেয়ার করার আগে খবরের উৎস যাচাই করুন।</p>
     </div>
+    <aside class="guide-card" aria-label="How source verification works">
+      <span class="eyebrow">FROM CLAIM TO CONTEXT</span>
+      <h2>Read beyond the headline.</h2>
+      <ol><li><span>01</span><div><h3>Share the claim</h3><p>Enter the news text or upload a photocard.</p></div></li><li><span>02</span><div><h3>Compare with the source</h3><p>Look for the original report and check what differs.</p></div></li><li><span>03</span><div><h3>Review the evidence</h3><p>Read the findings, source links and limitations.</p></div></li></ol>
+      <div class="guide-note">A missing report or an unfinished check does not prove a claim is false.</div>
+    </aside>
+  </section>
+  <section class="methods"><div class="section-heading"><div><span class="eyebrow">START A CHECK</span><h2>What would you like to verify?</h2></div><p>Choose the format you have.</p></div>
+    <div class="grid-3">
+      <a routerLink="/verify" class="method-card"><span class="method-icon" aria-hidden="true">≡</span><h3>News text</h3><p>Compare a headline and optional article text with the news outlet it claims to come from.</p><span class="method-action">Enter news text ↗</span></a>
+      <a routerLink="/photo-card" class="method-card"><span class="method-icon" aria-hidden="true">▧</span><h3>News photocard</h3><p>Upload a Bengali photocard or screenshot. Its headline is checked against the source you select.</p><span class="method-action">Upload a photocard ↗</span></a>
+      <a routerLink="/multimodal" class="method-card"><span class="method-icon" aria-hidden="true">▤</span><h3>Text and image</h3><p>Get a preliminary assessment of an article and its image. Expert review is needed for a final verdict.</p><span class="method-action">Check text and image ↗</span></a>
+    </div>
+  </section>
+  <section class="reading-guide"><div><span class="eyebrow">UNDERSTAND YOUR RESULT</span><h2>Evidence first.<br>Context always.</h2><p>Source, content and publication date are checked separately. Read the source before sharing.</p></div><div class="guide-rows">@for (v of verdicts; track v.label) {<div><span class="badge" [ngClass]="v.cls">{{ v.label }}</span><p>{{ v.desc }}</p></div>}</div></section>
+</div>

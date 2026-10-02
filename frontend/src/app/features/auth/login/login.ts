@@ -1,3 +1,4 @@
+import { requestError } from '../../../shared/utils/presentation';
 import { Component, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink, ActivatedRoute } from '@angular/router';
@@ -44,7 +45,7 @@ export class LoginComponent {
         this.router.navigate([returnUrl]);
       },
       error: (err) => {
-        this.errorMsg = err.error?.message || 'Invalid email or password';
+        this.errorMsg = requestError(err, 'Invalid email or password');
         this.loading = false;
       },
     });

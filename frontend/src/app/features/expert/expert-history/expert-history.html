@@ -5,9 +5,10 @@
           <p>Your past expert votes and their outcomes</p>
         </div>
 
+        @if (loadError()) {<div class="service-notice" role="alert"><p>This list could not be loaded. Please try again.</p><button class="btn btn-secondary" (click)="ngOnInit()">Try again</button></div>}
         @if (loading()) { <div class="loading-overlay"><div class="spinner"></div></div> }
 
-        @if (!loading() && history().length === 0) {
+        @if (!loading() && !loadError() && history().length === 0) {
           <div class="empty-state card text-center">
             <div style="font-size:64px;margin-bottom:16px;">📋</div>
             <h3>No reviews yet</h3>
@@ -22,7 +23,7 @@
               <thead><tr>
                 <th>Headline</th>
                 <th>Your Vote</th>
-                <th>AI Vote</th>
+                <th>Automated findings</th>
                 <th>Final</th>
                 <th>Match</th>
                 <th>Date</th>

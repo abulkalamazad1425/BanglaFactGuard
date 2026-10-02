@@ -19,9 +19,10 @@
           </div>
         </div>
 
+        @if (loadError()) {<div class="service-notice" role="alert"><p>This list could not be loaded. Please try again.</p><button class="btn btn-secondary" (click)="load()">Try again</button></div>}
         @if (loading()) { <div class="loading-overlay"><div class="spinner"></div></div> }
 
-        @if (!loading() && queue().length === 0) {
+        @if (!loading() && !loadError() && queue().length === 0) {
           <div class="empty-state card text-center">
             <div style="font-size:64px;margin-bottom:16px;">🎉</div>
             <h3>Queue is empty</h3>

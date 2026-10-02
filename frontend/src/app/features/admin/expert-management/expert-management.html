@@ -70,18 +70,18 @@
             <h3>Edit {{ editTarget()!.full_name }}</h3>
             <form [formGroup]="editForm" (ngSubmit)="confirmEdit()" style="margin-top:20px;">
               <div class="form-group">
-                <label class="form-label">Full Name</label>
-                <input type="text" formControlName="full_name" class="form-control"
+                <label for="expert-management-full_name" class="form-label">Full Name</label>
+                <input id="expert-management-full_name" type="text" formControlName="full_name" class="form-control"
                        [class.is-invalid]="editForm.get('full_name')?.invalid && editForm.get('full_name')?.touched" />
               </div>
               <div class="form-group">
-                <label class="form-label">Email</label>
-                <input type="email" formControlName="email" class="form-control"
+                <label for="expert-management-email" class="form-label">Email</label>
+                <input id="expert-management-email" type="email" formControlName="email" class="form-control"
                        [class.is-invalid]="editForm.get('email')?.invalid && editForm.get('email')?.touched" />
               </div>
               <div class="form-group">
-                <label class="form-label">Expertise Area</label>
-                <input type="text" formControlName="expertise_area" class="form-control" placeholder="e.g., Political Journalism" />
+                <label for="expert-management-expertise_area" class="form-label">Expertise Area</label>
+                <input id="expert-management-expertise_area" type="text" formControlName="expertise_area" class="form-control" placeholder="e.g., Political Journalism" />
               </div>
               <div class="modal-actions">
                 <button type="button" class="btn btn-ghost" (click)="editTarget.set(null)">Cancel</button>
@@ -101,8 +101,8 @@
             <h3>Reset Password for {{ resetTarget()!.full_name }}</h3>
             <form [formGroup]="pwForm" (ngSubmit)="confirmReset()" style="margin-top:20px;">
               <div class="form-group">
-                <label class="form-label">New Password</label>
-                <input type="password" formControlName="password" class="form-control" placeholder="Min 8 chars, 1 uppercase, 1 digit" />
+                <label for="expert-management-password" class="form-label">New Password</label>
+                <input id="expert-management-password" type="password" formControlName="password" class="form-control" placeholder="Min 8 chars, 1 uppercase, 1 digit" />
               </div>
               <div class="modal-actions">
                 <button type="button" class="btn btn-ghost" (click)="resetTarget.set(null)">Cancel</button>

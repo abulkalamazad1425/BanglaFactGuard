@@ -1,3 +1,6 @@
+import { requestError, predictionLabel } from '../../../shared/utils/presentation';
+import { PhotoCardService } from '../../../services/photocard.service';
+import { PhotoCardResultResponse } from '../../../models/photocard.model';
 import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
@@ -6,12 +9,7 @@ import { ExpertService } from '../../../services/expert.service';
 import { ToastService } from '../../../shared/services/toast.service';
 import { ExpertQueueItem } from '../../../models/expert.model';
 import { VerificationResponse, MatchedArticle } from '../../../models/verification.model';
-import { VerdictBadgeComponent } from '../../../shared/components/verdict-badge/verdict-badge.component';
-import { ScoreBarComponent } from '../../../shared/components/score-bar/score-bar.component';
-import {
-  ResultChecksComponent,
-  ResultScoresComponent,
-} from '../../../shared/components/verification-report/verification-report.component';
+import { VerificationReportComponent } from '../../../shared/components/verification-report/verification-report.component';
 import { VerificationService } from '../../../services/verification.service';
 import { AuthService } from '../../../services/auth.service';
 import { SourceStatus, ContentStatus, DateStatus, OverallVerdict } from '../../../models/verification.model';
@@ -30,15 +28,18 @@ const OVERALL_VERDICTS: { value: OverallVerdict; label: string; icon: string; cl
     CommonModule,
     ReactiveFormsModule,
     RouterLink,
-    VerdictBadgeComponent,
-    ScoreBarComponent,
-    ResultChecksComponent,
-    ResultScoresComponent,
+    VerificationReportComponent,
   ],
   templateUrl: './expert-review-detail.html',
   styleUrls: ['./expert-review-detail.scss']
 })
 export class ExpertReviewDetailComponent implements OnInit {
+  readonly predictionLabel = predictionLabel;
+  readonly loadError = signal(false);
+  readonly evidenceError = signal(false);
+  readonly voteError = signal('');
+  readonly photocardDetails = signal<PhotoCardResultResponse | null>(null);
+  private readonly photocardSvc = inject(PhotoCardService);
   private readonly expertSvc = inject(ExpertService);
   private readonly verificationSvc = inject(VerificationService);
   private readonly route = inject(ActivatedRoute);
@@ -116,7 +117,7 @@ export class ExpertReviewDetailComponent implements OnInit {
     const content = this.selectedContent();
 
     if (overall === 'REAL' && source === 'NOT_FOUND') {
-      return 'Overall is "Real" but Source is "Not Found" — usually a claimed source that never ran the story points toward Fake.';
+      return 'You selected Real, but the claimed source was not found. Explain the independent evidence supporting your overall decision. A missing report alone does not prove the claim false.';
     }
     if (overall === 'REAL' && content === 'ALTERED') {
       return 'Overall is "Real" but Content is "Altered" — consider whether Misleading or Altered fits the Overall verdict better.';
@@ -131,12 +132,22 @@ export class ExpertReviewDetailComponent implements OnInit {
   });
 
   ngOnInit(): void {
+    this.loadReview();
+  }
+
+  loadReview(): void {
+    this.loading.set(true);
+    this.loadError.set(false);
+    this.evidenceError.set(false);
     const claimId = this.route.snapshot.paramMap.get('id');
-    if (!claimId) { this.loading.set(false); return; }
+    if (!claimId) { this.loading.set(false); this.loadError.set(true); return; }
 
     this.expertSvc.getQueueItem(claimId).subscribe({
       next: c => {
         this.claim.set(c);
+        if (c.submission_type === 'PHOTO_CARD') {
+          this.photocardSvc.getResult(claimId).subscribe({ next: p => this.photocardDetails.set(p), error: () => this.evidenceError.set(true) });
+        }
 
         if (c.submission_type === 'MULTIMODAL') {
           // No separate "detailed AI result" endpoint for multimodal — the
@@ -148,10 +159,10 @@ export class ExpertReviewDetailComponent implements OnInit {
         // Also fetch the full AI prediction details (includes full article bodies)
         this.verificationSvc.getResult(claimId).subscribe({
           next: res => { this.aiResult.set(res); this.loading.set(false); },
-          error: () => { this.loading.set(false); }
+          error: () => { this.loading.set(false); this.evidenceError.set(true); }
         });
       },
-      error: () => this.loading.set(false),
+      error: () => { this.loading.set(false); this.loadError.set(true); },
     });
   }
 
@@ -165,6 +176,7 @@ export class ExpertReviewDetailComponent implements OnInit {
     const claimId = this.route.snapshot.paramMap.get('id');
     if (!claimId) return;
     this.voting.set(true);
+    this.voteError.set('');
 
     this.expertSvc.submitVote(claimId, {
       overall_verdict: this.selectedOverall()!,
@@ -174,7 +186,7 @@ export class ExpertReviewDetailComponent implements OnInit {
       justification: this.form.value.justification as string,
     }).subscribe({
       next: () => { this.submitted.set(true); this.voting.set(false); this.toast.success('Vote submitted successfully!'); },
-      error: err => { this.voting.set(false); this.toast.error(err.error?.message || 'Failed to submit vote.'); },
+      error: err => { this.voting.set(false); this.voteError.set(requestError(err, 'Your assessment could not be submitted. Please try again.')); this.toast.error(this.voteError()); },
     });
   }
 

@@ -11,9 +11,10 @@
       </div>
     </div>
 
-    @if (loading()) { <div class="loading-overlay"><div class="spinner"></div></div> }
+    @if (loadError()) {<div class="service-notice" role="alert"><p>This list could not be loaded. Please try again.</p><button class="btn btn-secondary" (click)="ngOnInit()">Try again</button></div>}
+        @if (loading()) { <div class="loading-overlay"><div class="spinner"></div></div> }
 
-    @if (!loading() && notifications().length === 0) {
+    @if (!loading() && !loadError() && notifications().length === 0) {
       <div class="empty-state card text-center">
         <div style="font-size:64px;margin-bottom:16px;">🔔</div>
         <h3>No notifications</h3>
@@ -24,13 +25,13 @@
     @if (!loading() && notifications().length > 0) {
       <div class="notif-list animate-in">
         @for (n of notifications(); track n.id) {
-          <div class="notif-item card" [class.unread]="!n.is_read" (click)="markRead(n)">
+          <div class="notif-item card" role="group" [class.unread]="!n.is_read" (click)="markRead(n)">
             <div class="notif-indicator" [class.visible]="!n.is_read"></div>
             <div class="notif-body">
-              <div class="notif-title">{{ n.title }}</div>
-              <div class="notif-message">{{ n.body }}</div>
-              <div class="notif-meta">
-                <span class="badge badge-primary text-xs">{{ n.notification_type }}</span>
+              <div class="notif-title">{{ readableExplanation(n.title) }}</div>
+              <div class="notif-message">{{ readableExplanation(n.body) }}</div>
+              <button class="btn btn-ghost btn-sm" (click)="markRead(n)">Mark as read</button><div class="notif-meta">
+                <span class="badge badge-primary text-xs">Update</span>
                 <span class="text-muted text-xs">{{ n.created_at | date:'MMM d, y, HH:mm' }}</span>
               </div>
             </div>

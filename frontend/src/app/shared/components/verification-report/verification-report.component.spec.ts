@@ -63,7 +63,7 @@ describe('VerificationReportComponent', () => {
 
   it('text with body shows body comparison', () => {
     const el = render(base({ claim_scope: 'HEADLINE_WITH_BODY', scores: { headline_similarity: 0.9, body_similarity: 0.8 } }));
-    expect(el.textContent).toContain('Submitted body vs source body');
+    expect(el.textContent).toContain('Submitted body vs source report');
   });
 
   it('green ticks are only for completed passes; unevaluated checks are neutral', () => {
@@ -106,23 +106,24 @@ describe('VerificationReportComponent', () => {
         },
       }),
     );
-    expect(el.textContent).toContain('Search coverage');
-    expect(el.textContent).toContain('5 failed');
+    expect(el.textContent).toContain('Some searches were unavailable');
+    expect(el.textContent).toContain('No conclusion can be drawn');
     expect(el.querySelector('.scores-grid')).toBeNull();
-    expect(el.querySelector('.confidence-val')!.textContent!.trim()).toBe('—');
+    expect(el.querySelector('.confidence-val')).toBeNull();
   });
 
-  it('labels the strength meter as a measurement, not a probability', () => {
+  it('does not expose internal strength scores in the public result', () => {
     const el = render(base());
-    expect(el.querySelector('.confidence-lbl')!.textContent).toContain('Check strength');
-    expect(el.querySelector('.confidence-meter')!.getAttribute('title')).toContain('not the probability');
+    expect(el.querySelector('.confidence-meter')).toBeNull();
+    expect(el.textContent).not.toContain('90%');
   });
 
-  it('retrieval relevance is labelled as such and distinct from content match', () => {
+  it('keeps the evidence link without exposing internal retrieval scores', () => {
     const el = render(
       base({ matched_articles: [{ url: 'https://prothomalo.com/a/b', title: 'T', rank_score: 0.8 } as any] }),
     );
-    expect(el.textContent).toContain('Retrieval relevance: 80%');
+    expect(el.textContent).not.toContain('Retrieval relevance');
+    expect(el.querySelector('a.article-title')?.getAttribute('href')).toBe('https://prothomalo.com/a/b');
     expect(el.textContent).toContain('Content match against the claimed source');
   });
 });

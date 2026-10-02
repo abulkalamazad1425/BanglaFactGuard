@@ -1,3 +1,4 @@
+import { verificationFailure, predictionLabel } from '../../../shared/utils/presentation';
 import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { CommonModule } from '@angular/common';
@@ -34,6 +35,15 @@ import { VerificationReportComponent } from '../../../shared/components/verifica
   styleUrls: ['./verify-result.scss']
 })
 export class VerifyResultComponent implements OnInit, OnDestroy {
+  readonly verificationFailure = verificationFailure;
+  readonly predictionLabel = predictionLabel;
+  readonly loadError = signal(false);
+  retry(): void { if (this.submissionId) { this.loadError.set(false); this.loading.set(true); this.load(this.submissionId); } }
+  private handleLoadError(error: { status?: number }): void {
+    this.stopPolling(); this.loading.set(false);
+    this.notFound.set(error.status === 404);
+    this.loadError.set(error.status !== 404);
+  }
   private readonly route = inject(ActivatedRoute);
   private readonly verificationSvc = inject(VerificationService);
   private readonly multimodalSvc = inject(MultimodalService);
@@ -49,6 +59,10 @@ export class VerifyResultComponent implements OnInit, OnDestroy {
   readonly multimodalResult = signal<MultimodalPredictionDetail | null>(null);
 
   copied = false;
+  copyFailed = false;
+  imageFailed = false;
+  readonly inputRoute = computed(() => this.kind() === 'PHOTO_CARD' ? '/photo-card' : this.kind() === 'MULTIMODAL' ? '/multimodal' : '/verify');
+  readonly methodLabel = computed(() => this.kind() === 'PHOTO_CARD' ? 'Photocard' : this.kind() === 'MULTIMODAL' ? 'Text and image' : 'News text');
   submissionId: string | null = null;
 
   private pollTimer: ReturnType<typeof setInterval> | null = null;
@@ -81,7 +95,7 @@ export class VerifyResultComponent implements OnInit, OnDestroy {
   readonly phaseText = computed(() => {
     const phase = this.photocardResult()?.phase ?? this.lookup()?.processing_phase;
     switch (phase) {
-      case 'QUEUED': return 'Waiting for a worker';
+      case 'QUEUED': return 'Waiting to start';
       case 'EXTRACTING': return 'Reading the card and extracting its headline';
       case 'VERIFYING': return 'Checking the headline against the claimed source';
       default: return 'Working';
@@ -110,6 +124,7 @@ export class VerifyResultComponent implements OnInit, OnDestroy {
   private load(id: string): void {
     this.submissionsSvc.getLookup(id).subscribe({
       next: (l) => {
+        this.loadError.set(false);
         this.lookup.set(l);
 
         if (l.submission_type === 'PHOTO_CARD') {
@@ -132,11 +147,7 @@ export class VerifyResultComponent implements OnInit, OnDestroy {
           this.ensurePolling(id);
         }
       },
-      error: () => {
-        this.stopPolling();
-        this.loading.set(false);
-        this.notFound.set(true);
-      },
+      error: (err) => this.handleLoadError(err),
     });
   }
 
@@ -151,11 +162,7 @@ export class VerifyResultComponent implements OnInit, OnDestroy {
           this.stopPolling();
         }
       },
-      error: () => {
-        this.stopPolling();
-        this.loading.set(false);
-        this.notFound.set(true);
-      },
+      error: (err) => this.handleLoadError(err),
     });
   }
 
@@ -163,17 +170,17 @@ export class VerifyResultComponent implements OnInit, OnDestroy {
     if (kind === 'SOURCE_BASED') {
       this.verificationSvc.getResult(id).subscribe({
         next: (r) => { this.sourceResult.set(r); this.loading.set(false); },
-        error: () => this.loading.set(false),
+        error: (err) => this.handleLoadError(err),
       });
     } else if (kind === 'PHOTO_CARD') {
       this.photocardSvc.getResult(id).subscribe({
         next: (r) => { this.photocardResult.set(r); this.loading.set(false); },
-        error: () => this.loading.set(false),
+        error: (err) => this.handleLoadError(err),
       });
     } else {
       this.multimodalSvc.getBySubmission(id).subscribe({
         next: (r) => { this.multimodalResult.set(r); this.loading.set(false); },
-        error: () => this.loading.set(false),
+        error: (err) => this.handleLoadError(err),
       });
     }
   }
@@ -231,7 +238,7 @@ export class VerifyResultComponent implements OnInit, OnDestroy {
       MISLEADING: 'Misleading',
       ALTERED: 'Altered',
     };
-    return labels[v] ?? v;
+    return labels[v] ?? 'Not yet available';
   }
 
   getHost(url: string): string {
@@ -242,9 +249,12 @@ export class VerifyResultComponent implements OnInit, OnDestroy {
     }
   }
 
-  copyUrl(): void {
-    navigator.clipboard.writeText(this.shareUrl());
-    this.copied = true;
-    setTimeout(() => this.copied = false, 2000);
+  async copyUrl(): Promise<void> {
+    this.copyFailed = false;
+    try {
+      await navigator.clipboard.writeText(this.shareUrl());
+      this.copied = true;
+      setTimeout(() => this.copied = false, 2000);
+    } catch { this.copyFailed = true; }
   }
 }

@@ -117,7 +117,7 @@ export class VerdictBadgeComponent {
       if (this._sourceStatus) badges.push(SOURCE_CONFIG[this._sourceStatus]);
       if (this._contentStatus) badges.push(CONTENT_CONFIG[this._contentStatus]);
       if (this._dateStatus) badges.push(DATE_CONFIG[this._dateStatus]);
-      this.badges = badges;
+      this.badges = badges.filter(Boolean);
       return;
     }
 

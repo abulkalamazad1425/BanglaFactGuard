@@ -1,3 +1,4 @@
+import { requestError } from '../../../shared/utils/presentation';
 import { Component, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators, AbstractControl, ValidationErrors } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
@@ -71,7 +72,7 @@ export class RegisterComponent {
         this.router.navigate(['/']);
       },
       error: (err) => {
-        this.errorMsg = err.error?.message || 'Registration failed. Please try again.';
+        this.errorMsg = requestError(err, 'Registration failed. Please try again.');
         this.loading = false;
       },
     });

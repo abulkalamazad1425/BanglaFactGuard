@@ -27,38 +27,38 @@
       </p>
       <form [formGroup]="votingConfigForm" class="voting-config-grid" (ngSubmit)="saveVotingConfig()">
         <div class="form-group">
-          <label class="form-label">Min voters (M)</label>
-          <input type="number" min="1" max="50" formControlName="min_expert_votes" class="form-control" />
+          <label for="credibility-tiers-min_expert_votes" class="form-label">Min voters (M)</label>
+          <input id="credibility-tiers-min_expert_votes" type="number" min="1" max="50" formControlName="min_expert_votes" class="form-control" />
           <span class="field-hint">Votes required before a claim can finalize</span>
         </div>
         <div class="form-group">
-          <label class="form-label">Verified threshold (T)</label>
-          <input type="number" step="0.1" min="0.01" formControlName="verified_threshold" class="form-control" />
+          <label for="credibility-tiers-verified_threshold" class="form-label">Verified threshold (T)</label>
+          <input id="credibility-tiers-verified_threshold" type="number" step="0.1" min="0.01" formControlName="verified_threshold" class="form-control" />
           <span class="field-hint">Weighted score the leading verdict must reach</span>
         </div>
         <div class="form-group">
-          <label class="form-label">Lead margin</label>
-          <input type="number" step="0.1" min="0" formControlName="lead_margin" class="form-control" />
+          <label for="credibility-tiers-lead_margin" class="form-label">Lead margin</label>
+          <input id="credibility-tiers-lead_margin" type="number" step="0.1" min="0" formControlName="lead_margin" class="form-control" />
           <span class="field-hint">Leader must beat the runner-up by at least this</span>
         </div>
         <div class="form-group">
-          <label class="form-label">Activation threshold (N)</label>
-          <input type="number" min="0" formControlName="activation_threshold_votes" class="form-control" />
+          <label for="credibility-tiers-activation_threshold_votes" class="form-label">Activation threshold (N)</label>
+          <input id="credibility-tiers-activation_threshold_votes" type="number" min="0" formControlName="activation_threshold_votes" class="form-control" />
           <span class="field-hint">Lifetime votes before an expert's tier weight applies (weight 1.0 until then)</span>
         </div>
         <div class="form-group">
-          <label class="form-label">Max tier weight cap</label>
-          <input type="number" step="0.1" min="0.01" formControlName="max_tier_weight" class="form-control" placeholder="No cap" />
+          <label for="credibility-tiers-max_tier_weight" class="form-label">Max tier weight cap</label>
+          <input id="credibility-tiers-max_tier_weight" type="number" step="0.1" min="0.01" formControlName="max_tier_weight" class="form-control" placeholder="No cap" />
           <span class="field-hint">Upper bound on any credibility tier's weight</span>
         </div>
         <div class="form-group">
-          <label class="form-label">Max review votes</label>
-          <input type="number" min="1" formControlName="max_review_votes" class="form-control" placeholder="No cap" />
+          <label for="credibility-tiers-max_review_votes" class="form-label">Max review votes</label>
+          <input id="credibility-tiers-max_review_votes" type="number" min="1" formControlName="max_review_votes" class="form-control" placeholder="No cap" />
           <span class="field-hint">Escalate to admin after this many votes without consensus</span>
         </div>
         <div class="form-group">
-          <label class="form-label">Max review hours</label>
-          <input type="number" min="1" formControlName="max_review_hours" class="form-control" placeholder="No cap" />
+          <label for="credibility-tiers-max_review_hours" class="form-label">Max review hours</label>
+          <input id="credibility-tiers-max_review_hours" type="number" min="1" formControlName="max_review_hours" class="form-control" placeholder="No cap" />
           <span class="field-hint">Escalate to admin after this long without consensus</span>
         </div>
         <div class="form-group voting-config-save">
@@ -129,22 +129,22 @@
     <form [formGroup]="form" class="drawer-form" (ngSubmit)="onSubmit()">
       <div class="form-section">
         <div class="form-group">
-          <label class="form-label">Label <span class="required">*</span></label>
-          <input type="text" formControlName="label" class="form-control" placeholder="e.g. Expert" />
+          <label for="credibility-tiers-label" class="form-label">Label <span class="required">*</span></label>
+          <input id="credibility-tiers-label" type="text" formControlName="label" class="form-control" placeholder="e.g. Expert" />
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label class="form-label">Min Accuracy % <span class="required">*</span></label>
-            <input type="number" formControlName="min_accuracy_pct" class="form-control" min="0" max="100" step="0.1" />
+            <label for="credibility-tiers-min_accuracy_pct" class="form-label">Min Accuracy % <span class="required">*</span></label>
+            <input id="credibility-tiers-min_accuracy_pct" type="number" formControlName="min_accuracy_pct" class="form-control" min="0" max="100" step="0.1" />
           </div>
           <div class="form-group">
-            <label class="form-label">Max Accuracy % <span class="required">*</span></label>
-            <input type="number" formControlName="max_accuracy_pct" class="form-control" min="0" max="100" step="0.1" />
+            <label for="credibility-tiers-max_accuracy_pct" class="form-label">Max Accuracy % <span class="required">*</span></label>
+            <input id="credibility-tiers-max_accuracy_pct" type="number" formControlName="max_accuracy_pct" class="form-control" min="0" max="100" step="0.1" />
           </div>
         </div>
         <div class="form-group">
-          <label class="form-label">Weight <span class="required">*</span></label>
-          <input type="number" formControlName="weight" class="form-control" min="0.01" step="0.05" />
+          <label for="credibility-tiers-weight" class="form-label">Weight <span class="required">*</span></label>
+          <input id="credibility-tiers-weight" type="number" formControlName="weight" class="form-control" min="0.01" step="0.05" />
           <span class="source-hint">Multiplier applied to this expert's vote during finalization (1.0 = neutral).</span>
         </div>
         <div class="form-group checkbox-group">

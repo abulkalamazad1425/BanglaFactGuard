@@ -7,12 +7,12 @@ import { Toast, ToastService } from '../../services/toast.service';
   standalone: true,
   imports: [CommonModule],
   template: `
-    <div class="toast-container">
+    <div class="toast-container" aria-live="polite" aria-atomic="false">
       @for (toast of toastSvc.toasts(); track toast.id) {
         <div class="toast toast--{{ toast.type }}" (click)="dismiss(toast)">
           <span class="toast-icon">{{ icons[toast.type] }}</span>
           <span class="toast-message">{{ toast.message }}</span>
-          <button class="toast-close" (click)="dismiss(toast)">✕</button>
+          <button class="toast-close" aria-label="Dismiss notification" (click)="dismiss(toast)">✕</button>
         </div>
       }
     </div>
@@ -21,7 +21,7 @@ import { Toast, ToastService } from '../../services/toast.service';
     .toast-container {
       position: fixed; bottom: 24px; right: 24px; z-index: 9999;
       display: flex; flex-direction: column; gap: 10px;
-      max-width: 380px; width: 100%;
+      max-width: 380px; width: calc(100% - 48px);
     }
     .toast {
       display: flex; align-items: center; gap: 12px;

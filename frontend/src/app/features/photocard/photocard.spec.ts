@@ -70,6 +70,17 @@ describe('PhotoCardComponent (background submission)', () => {
     expect(pending.track).toHaveBeenCalledWith('sub-123', 'Photo card', jasmine.any(String), 'PHOTO_CARD');
   });
 
+  it('rejects unsupported or oversized files before uploading', () => {
+    const { cmp } = setup();
+    cmp.onFileChange({ target: { files: [new File(['x'], 'bad.svg', { type: 'image/svg+xml' })] } } as unknown as Event);
+    expect(cmp.selectedFile).toBeNull();
+    expect(cmp.errorMsg).toContain('supported');
+    cmp.onFileChange({ target: { files: [new File([new Uint8Array(10 * 1024 * 1024 + 1)], 'large.png', { type: 'image/png' })] } } as unknown as Event);
+    expect(cmp.selectedFile).toBeNull();
+    expect(cmp.errorMsg).toContain('10 MB');
+    expect(svc.submitAsync).not.toHaveBeenCalled();
+  });
+
   it('a failed upload stays on the form with an explanation', () => {
     const { cmp } = setup();
     svc.submitAsync.and.returnValue(
@@ -77,7 +88,7 @@ describe('PhotoCardComponent (background submission)', () => {
     );
     cmp.verify();
     expect(cmp.step).toBe('upload');
-    expect(cmp.errorMsg).toContain('could not be stored');
+    expect(cmp.errorMsg).toContain('could not be submitted');
     expect(pending.track).not.toHaveBeenCalled();
   });
 });

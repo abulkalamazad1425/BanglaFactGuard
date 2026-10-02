@@ -24,7 +24,7 @@ import { RouterLink } from '@angular/router';
             <path d="M10 10.5L14 8L18 10.5V15.5L14 18L10 15.5V10.5Z" fill="white" opacity="0.9"/>
             <defs>
               <linearGradient id="ag" x1="4" y1="2" x2="24" y2="26" gradientUnits="userSpaceOnUse">
-                <stop stop-color="#5b3df0"/><stop offset="1" stop-color="#9333ea"/>
+                <stop stop-color="#1f7f4e"/><stop offset="1" stop-color="#186640"/>
               </linearGradient>
             </defs>
           </svg>
@@ -48,17 +48,17 @@ import { RouterLink } from '@angular/router';
       filter: blur(90px); opacity: 0.16;
       &-1 {
         width: 600px; height: 600px; top: -200px; right: -100px;
-        background: radial-gradient(circle, #5b3df0, #9333ea);
+        background: radial-gradient(circle, #1f7f4e, #186640);
       }
       &-2 {
         width: 500px; height: 500px; bottom: -200px; left: -100px;
-        background: radial-gradient(circle, #9333ea, #db2777);
+        background: radial-gradient(circle, #186640, #435c54);
       }
     }
     .bg-grid {
       position: absolute; inset: 0;
-      background-image: linear-gradient(rgba(91,61,240,0.06) 1px, transparent 1px),
-                        linear-gradient(90deg, rgba(91,61,240,0.06) 1px, transparent 1px);
+      background-image: linear-gradient(rgba(31,127,78,0.06) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(31,127,78,0.06) 1px, transparent 1px);
       background-size: 40px 40px;
     }
     .auth-wrapper {

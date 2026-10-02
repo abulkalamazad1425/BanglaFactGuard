@@ -17,42 +17,42 @@
       <h3>Basic Information</h3>
       
       <div class="form-group mt-3">
-        <label>Canonical Name <span class="text-danger">*</span></label>
-        <input type="text" class="form-control" formControlName="canonical_name" placeholder="e.g. prothomalo.com" [readonly]="isEditMode()">
+        <label for="source-edit.component-canonical_name">Canonical Name <span class="text-danger">*</span></label>
+        <input id="source-edit.component-canonical_name" type="text" class="form-control" formControlName="canonical_name" placeholder="e.g. prothomalo.com" [readonly]="isEditMode()">
         <small class="text-muted">Unique identifier for this source. Cannot be changed after creation.</small>
       </div>
 
       <div class="form-group">
-        <label>Display Name <span class="text-danger">*</span></label>
-        <input type="text" class="form-control" formControlName="display_name" placeholder="e.g. প্রথম আলো">
+        <label for="source-edit.component-display_name">Display Name <span class="text-danger">*</span></label>
+        <input id="source-edit.component-display_name" type="text" class="form-control" formControlName="display_name" placeholder="e.g. প্রথম আলো">
       </div>
 
       <div class="form-group">
-        <label>Display Name (English)</label>
-        <input type="text" class="form-control" formControlName="display_name_en" placeholder="e.g. Prothom Alo">
+        <label for="source-edit.component-display_name_en">Display Name (English)</label>
+        <input id="source-edit.component-display_name_en" type="text" class="form-control" formControlName="display_name_en" placeholder="e.g. Prothom Alo">
       </div>
 
       <div class="form-group">
-        <label>Base URL <span class="text-danger">*</span></label>
-        <input type="url" class="form-control" formControlName="base_url" placeholder="e.g. https://www.prothomalo.com">
+        <label for="source-edit.component-base_url">Base URL <span class="text-danger">*</span></label>
+        <input id="source-edit.component-base_url" type="url" class="form-control" formControlName="base_url" placeholder="e.g. https://www.prothomalo.com">
       </div>
 
       <div class="form-group">
-        <label>Description</label>
-        <textarea class="form-control" formControlName="description" rows="3" placeholder="Brief description of the source"></textarea>
+        <label for="source-edit.component-description">Description</label>
+        <textarea id="source-edit.component-description" class="form-control" formControlName="description" rows="3" placeholder="Brief description of the source"></textarea>
       </div>
 
       <div class="form-row mt-3">
         <div class="form-group half">
-          <label>Language</label>
-          <select class="form-control" formControlName="language">
+          <label for="source-edit.component-language">Language</label>
+          <select id="source-edit.component-language" class="form-control" formControlName="language">
             <option value="bn">Bangla (bn)</option>
             <option value="en">English (en)</option>
           </select>
         </div>
         <div class="form-group half">
-          <label>Search Language</label>
-          <select class="form-control" formControlName="search_language">
+          <label for="source-edit.component-search_language">Search Language</label>
+          <select id="source-edit.component-search_language" class="form-control" formControlName="search_language">
             <option value="bn">Bangla (bn)</option>
             <option value="en">English (en)</option>
           </select>
@@ -72,14 +72,14 @@
       <h3>Search & Feed</h3>
       
       <div class="form-group mt-3">
-        <label>Internal Search URL</label>
-        <input type="text" class="form-control" formControlName="internal_search_url" placeholder="e.g. https://www.prothomalo.com/search?q={{ '{query}' }}">
+        <label for="source-edit.component-internal_search_url">Internal Search URL</label>
+        <input id="source-edit.component-internal_search_url" type="text" class="form-control" formControlName="internal_search_url" placeholder="e.g. https://www.prothomalo.com/search?q={{ '{query}' }}">
         <small class="text-muted">Use <code>{{ '{query}' }}</code> as the placeholder for the search term.</small>
       </div>
 
       <div class="form-group">
-        <label>RSS Feed URL</label>
-        <input type="url" class="form-control" formControlName="rss_url" placeholder="e.g. https://www.prothomalo.com/feed">
+        <label for="source-edit.component-rss_url">RSS Feed URL</label>
+        <input id="source-edit.component-rss_url" type="url" class="form-control" formControlName="rss_url" placeholder="e.g. https://www.prothomalo.com/feed">
       </div>
 
       <div class="form-group mt-4">

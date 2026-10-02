@@ -113,6 +113,7 @@ export interface ExplorerItem {
 }
 
 export interface ExplorerSearchParams {
+  review_state?: 'finalized' | 'review';
   keyword?: string;
   source_status?: string;
   content_status?: string;
@@ -128,6 +129,7 @@ export interface ExplorerSearchParams {
 }
 
 export interface ExplorerSearchResponse {
+  archive_summary?: { total: number; finalized: number; review: number };
   items: ExplorerItem[];
   total: number;
   limit: number;

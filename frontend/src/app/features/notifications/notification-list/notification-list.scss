@@ -5,7 +5,7 @@
 .notif-item {
   display: flex; align-items: flex-start; gap: 16px; padding: 20px;
   cursor: pointer; position: relative;
-  &.unread { background: rgba(124,106,247,0.05); border-color: rgba(124,106,247,0.2); }
+  &.unread { background: rgba(31,127,78,0.05); border-color: rgba(31,127,78,0.2); }
 }
 .notif-indicator {
   width: 8px; height: 8px; border-radius: 50%; background: var(--primary);

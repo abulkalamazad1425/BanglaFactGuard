@@ -24,9 +24,9 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
       } else if (status === 422) {
         // Validation errors — let components handle them
       } else if (status >= 500) {
-        toast.error('Server error. Please try again later.');
+        toast.error('This service is temporarily unavailable. Please try again shortly.');
       } else if (status === 0) {
-        toast.error('Cannot connect to server. Is the backend running?');
+        toast.error('Unable to connect. Check your connection and try again.');
       }
 
       return throwError(() => err);

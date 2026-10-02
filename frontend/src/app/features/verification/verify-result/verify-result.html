@@ -1,268 +1,38 @@
-    <div class="result-page">
-      <div class="container" style="padding-top:48px; padding-bottom:80px; max-width: 1000px;">
-
-        @if (loading()) {
-          <div class="loading-overlay">
-            <div class="loading-card card text-center">
-              <div class="spinner" style="margin: 0 auto 20px;"></div>
-              <h3>Loading result...</h3>
-              <p>Fetching verification details</p>
-            </div>
-          </div>
-        }
-
-        @if (!loading() && hasDetail()) {
-          <div class="animate-in">
-            <!-- Top bar -->
-            <div class="result-topbar">
-              <a routerLink="/verify" class="btn btn-ghost btn-sm">← New Verification</a>
-              <div class="share-actions">
-                <span class="type-chip" [ngClass]="'type-' + kind()">
-                  {{ kind() === 'SOURCE_BASED' ? '🔎 Source-Based' : kind() === 'PHOTO_CARD' ? '🖼️ Photo Card' : '🧠 Multimodal' }}
-                </span>
-                <span class="claim-id">ID: {{ submissionId }}</span>
-                <button class="btn btn-secondary btn-sm" (click)="copyUrl()">{{ copied ? '✓ Copied' : '🔗 Copy Link' }}</button>
-              </div>
-            </div>
-
-            <!-- ══════════════ SOURCE-BASED ══════════════ -->
-            @if (kind() === 'SOURCE_BASED' && sourceResult(); as r) {
-              <div class="result-modal card">
-                @if (lookup(); as l) {
-                  <div class="claim-text-block original-claim-block">
-                    <h4 class="block-title">Submitted claim</h4>
-                    <p class="confirmed-text">{{ l.headline || '(no headline recorded)' }}</p>
-                    @if (l.body_text) {
-                      <p class="confirmed-body">{{ l.body_text }}</p>
-                    }
-                    <div class="claim-meta-row text-muted text-sm">
-                      @if (l.claimed_source_text) { <span>🌐 Claimed source: <strong>{{ l.claimed_source_text }}</strong></span> }
-                      @if (l.published_date) { <span>📅 Claimed date: {{ l.published_date | date:'MMM d, y' }}</span> }
-                    </div>
-                  </div>
-                }
-                <app-verification-report [r]="r" />
-              </div>
-            }
-
-            <!-- ══════════════ PHOTO CARD ══════════════ -->
-            @if (kind() === 'PHOTO_CARD' && photocardResult(); as p) {
-              <div class="photocard-layout">
-                <div class="card media-panel">
-                  <h3 class="panel-title"><span class="panel-icon">🖼️</span> Submitted card</h3>
-                  @if (p.image_url) {
-                    <img [src]="p.image_url" class="media-image" alt="Submitted photo card" />
-                  }
-                  <div class="claim-text-block">
-                    <h4 class="block-title">Extracted headline</h4>
-                    @if (p.headline) {
-                      <p class="confirmed-text">{{ p.headline }}</p>
-                    } @else if (p.status === 'FAILED') {
-                      <p class="text-muted">No headline could be read from this card.</p>
-                    } @else {
-                      <p class="text-muted">Reading the headline from the card…</p>
-                    }
-                    @if (p.extractor_used) {
-                      <span class="extractor-tag">
-                        {{ p.extractor_used === 'GEMINI' ? '✨ Gemini' : '🧩 Deterministic extractor' }}
-                        @if (p.extraction_model_version) { · {{ p.extraction_model_version }} }
-                      </span>
-                    }
-                    <div class="claim-meta-row text-muted text-sm">
-                      @if (p.claimed_source_text) { <span>🌐 Claimed source: <strong>{{ p.claimed_source_text }}</strong></span> }
-                      @if (p.published_date) { <span>📅 Claimed date: {{ p.published_date | date:'MMM d, y' }}</span> }
-                      <span>Compared: headline only</span>
-                    </div>
-                  </div>
-                  @if (p.extraction_warnings.length) {
-                    @for (warning of p.extraction_warnings; track warning) {
-                      <div class="alert alert-warn">{{ warning }}</div>
-                    }
-                  }
-                  @if (p.detected_source_text || p.detected_date_text) {
-                    <p class="text-muted text-sm">
-                      @if (p.detected_source_text) { Card text suggests source: <strong>{{ p.detected_source_text }}</strong> }
-                      @if (p.detected_date_text) { · Card text suggests date: <strong>{{ p.detected_date_text }}</strong> }
-                    </p>
-                  }
-                  <div class="ocr-meta-row">
-                    <div class="meta-chip">
-                      <span class="meta-label">OCR engine</span>
-                      <span class="meta-value">{{ p.ocr_engine || '—' }}</span>
-                    </div>
-                    <div class="meta-chip">
-                      <span class="meta-label">OCR confidence</span>
-                      <span class="meta-value">{{ p.ocr_confidence != null ? (p.ocr_confidence * 100).toFixed(0) + '%' : '—' }}</span>
-                    </div>
-                    <div class="meta-chip">
-                      <span class="meta-label">Submitted</span>
-                      <span class="meta-value">{{ p.created_at | date:'MMM d, y' }}</span>
-                    </div>
-                  </div>
-                  @if (p.ocr_raw_text) {
-                    <details class="raw-ocr-details">
-                      <summary>Show raw OCR text</summary>
-                      <p class="raw-ocr-text">{{ p.ocr_raw_text }}</p>
-                    </details>
-                  }
-                </div>
-
-                <div class="card result-modal verdict-panel">
-                  @if (p.verification; as v) {
-                    <app-verification-report [r]="v" />
-                  } @else if (p.status === 'FAILED') {
-                    <div class="status-panel failed-panel">
-                      <div class="status-icon">⚠️</div>
-                      <h3>Verification could not be completed</h3>
-                      <p>{{ p.failure_reason || 'Something went wrong while checking this card.' }}</p>
-                      <p class="text-muted text-sm">No automated check ran, so this is not a Source Not Found or Altered result.</p>
-                      <a routerLink="/photo-card" class="btn btn-primary mt-4">Try another image</a>
-                    </div>
-                  } @else {
-                    <div class="status-panel">
-                      <div class="spinner" style="margin: 0 auto 16px;"></div>
-                      <h3>{{ p.status === 'PENDING' ? 'Received — waiting to start' : 'Verification in progress' }}</h3>
-                      <p>{{ phaseText() }}.</p>
-                      <p class="text-muted text-sm">
-                        You can leave this page — the check continues on the server. Find it later in
-                        <a routerLink="/history">My Submissions</a>.
-                      </p>
-                    </div>
-                  }
-                </div>
-              </div>
-            }
-
-            <!-- ══════════════ MULTIMODAL ══════════════ -->
-            @if (kind() === 'MULTIMODAL' && multimodalResult(); as m) {
-              <div class="result-modal card multimodal-card">
-
-                <div class="mm-verdict-header">
-                  <span class="prediction-pill" [class.pill-fake]="m.prediction === 'FAKE'" [class.pill-real]="m.prediction !== 'FAKE'">
-                    <span class="pill-icon">{{ m.prediction === 'FAKE' ? '✗' : '✓' }}</span>
-                    {{ m.prediction === 'FAKE' ? 'Likely Fake' : 'Likely Real' }}
-                  </span>
-                  <span class="mm-date">
-                    <span>📅</span> Submitted {{ m.created_at | date:'MMM d, y, HH:mm' }}
-                  </span>
-                </div>
-
-                <!-- Headline, image, body — image sits between the two text blocks -->
-                <h2 class="mm-headline">{{ m.headline || '(no headline recorded)' }}</h2>
-
-                @if (m.image_url) {
-                  <div class="mm-image-wrap">
-                    <img [src]="m.image_url" class="mm-image" alt="Submitted article image" />
-                  </div>
-                }
-
-                @if (m.body_text) {
-                  <p class="mm-body">{{ m.body_text }}</p>
-                }
-
-                <!-- Confidence breakdown -->
-                <div class="mm-confidence-section">
-                  <h4>Model confidence</h4>
-                  <div class="mm-confidence-bar">
-                    <div class="mm-bar-fake" [style.width.%]="(m.confidence_fake || 0) * 100"></div>
-                    <div class="mm-bar-real" [style.width.%]="(m.confidence_real || 0) * 100"></div>
-                  </div>
-                  <div class="mm-confidence-labels">
-                    <span class="mm-lbl-fake">Fake: {{ ((m.confidence_fake || 0) * 100).toFixed(1) }}%</span>
-                    <span class="mm-lbl-real">Real: {{ ((m.confidence_real || 0) * 100).toFixed(1) }}%</span>
-                  </div>
-                </div>
-
-                <!-- AI vs Expert verdict summary -->
-                <div class="verdict-summary-grid">
-                  <div class="verdict-summary-card ai-summary">
-                    <div class="summary-icon">🤖</div>
-                    <div class="summary-body">
-                      <span class="summary-title">AI Preliminary Result</span>
-                      <span class="summary-desc">
-                        BanglaBERT + EfficientNet-B4 multimodal model classified this as
-                        <strong>{{ m.prediction === 'FAKE' ? 'likely fake' : 'likely real' }}</strong>
-                        with {{ ((m.prediction === 'FAKE' ? m.confidence_fake : m.confidence_real) * 100).toFixed(0) }}% confidence.
-                        @if (m.is_cached) { This exact submission was seen before — the cached result is shown. }
-                      </span>
-                    </div>
-                  </div>
-                  @if (m.expert_overall_verdict) {
-                    <div class="verdict-summary-card expert-summary"
-                         [ngClass]="'expert-verdict-' + m.expert_overall_verdict.toLowerCase()">
-                      <div class="summary-icon">⚖️</div>
-                      <div class="summary-body">
-                        <span class="summary-title">Expert Verified</span>
-                        <span class="summary-desc">
-                          Our expert reviewers finalized this claim as
-                          <strong>{{ overallVerdictLabel(m.expert_overall_verdict) }}</strong>.
-                          @if (multimodalWasOverridden(m)) {
-                            This changed the AI's preliminary call of
-                            <strong>{{ m.prediction === 'FAKE' ? 'Fake' : 'Real' }}</strong>.
-                          }
-                        </span>
-                      </div>
-                    </div>
-                  } @else {
-                    <div class="verdict-summary-card expert-summary expert-pending">
-                      <div class="summary-icon">⏳</div>
-                      <div class="summary-body">
-                        <span class="summary-title">Pending Expert Review</span>
-                        <span class="summary-desc">
-                          Every submission is reviewed by our experts before its verdict is
-                          final — the AI result above is preliminary until then.
-                        </span>
-                      </div>
-                    </div>
-                  }
-                </div>
-
-                <div class="result-footer text-muted text-sm" style="margin-top: 24px; text-align: center;">
-                  Model version {{ m.model_version }}
-                </div>
-              </div>
-            }
-          </div>
-        }
-
-        @if (!loading() && !hasDetail() && stillRunning()) {
-          <div class="not-found card text-center">
-            <div class="spinner" style="margin: 0 auto 20px;"></div>
-            <h2>Verification in progress</h2>
-            @if (lookup()?.headline) {
-              <p class="pending-claim-preview">"{{ lookup()!.headline }}"</p>
-            }
-            <p>
-              This claim is still being checked. The page updates by itself as
-              soon as the verdict is ready — you can also come back to this
-              link later.
-            </p>
-            <p style="margin-top:10px; font-size:12px; opacity:.75;">
-              Status: <strong>{{ lookup()?.status }}</strong>
-            </p>
-            <a routerLink="/dashboard" class="btn btn-secondary mt-4">Browse Fact Explorer</a>
-          </div>
-        }
-
-        @if (!loading() && !hasDetail() && failed()) {
-          <div class="not-found card text-center">
-            <div style="font-size:64px; margin-bottom:20px;">⚠️</div>
-            <h2>Verification failed</h2>
-            @if (lookup()?.headline) {
-              <p class="pending-claim-preview">"{{ lookup()!.headline }}"</p>
-            }
-            <p>{{ failureReason() || 'Something went wrong while checking this claim. Please try submitting it again.' }}</p>
-            <a routerLink="/verify" class="btn btn-primary mt-4">Submit New Claim</a>
-          </div>
-        }
-
-        @if (!loading() && !hasDetail() && !stillRunning() && !failed()) {
-          <div class="not-found card text-center">
-            <div style="font-size:64px; margin-bottom:20px;">🔎</div>
-            <h2>Result not found</h2>
-            <p>This claim ID doesn't exist or has been removed.</p>
-            <a routerLink="/verify" class="btn btn-primary mt-4">Submit New Claim</a>
-          </div>
-        }
-      </div>
-    </div>
+<div class="verification-shell"><div class="flow-container">
+  <div class="report-toolbar"><a routerLink="/dashboard" class="btn btn-ghost">← Fact Explorer</a>@if (lookup()) {<div class="actions"><a [routerLink]="inputRoute()" class="btn btn-secondary">Start another check</a><button type="button" class="btn btn-secondary" (click)="copyUrl()">{{ copied ? 'Link copied' : 'Copy report link' }}</button></div>}</div>
+  @if (copyFailed) {<p class="error-copy" role="status">The link could not be copied. Copy the address from your browser to share this report.</p>}
+  <header class="flow-heading"><div><span class="eyebrow">{{ methodLabel() }} / VERIFICATION RECORD</span><h1>{{ stillRunning() ? 'Your check is in progress.' : failed() ? 'This check could not finish.' : 'Verification result' }}</h1><p>Read the decision alongside the original claim, available evidence and the limits of this check.</p></div></header>@if (lookup()?.headline) {<section class="surface"><span class="eyebrow">SUBMITTED CLAIM</span><h2 class="claim-preview">{{ lookup()!.headline }}</h2></section>}
+  @if (loading()) {<section class="surface state-card" role="status"><div class="spinner"></div><h2>Loading verification details</h2><p>Retrieving the saved claim and its current findings.</p></section>}
+  @else if (loadError()) {<section class="surface state-card" role="alert"><span class="eyebrow">PLEASE TRY AGAIN</span><h2>Result temporarily unavailable</h2><p>We could not load this result. Your submission may still be processing. This is not a verdict on the news.</p><button type="button" class="btn btn-primary" (click)="retry()">Try again</button></section>}
+  @else {
+    @if (stillRunning()) {<section class="surface state-card" role="status"><span class="eyebrow">SUBMISSION RECEIVED</span><div class="spinner"></div><h2>Verification in progress</h2><p>{{ phaseText() }}. This page updates automatically as the check progresses.</p><div class="note"><strong>You can leave this page.</strong><p>The check continues in the background. Keep this result link or find it in <a routerLink="/history">My Submissions</a> if you are signed in.</p></div><p>No verdict has been reached yet. Findings will appear when this check is complete.</p></section>}
+    @if (failed()) {<section class="surface state-card" role="alert"><span class="eyebrow">CHECK INCOMPLETE</span><h2>Verification could not be completed</h2><p>{{ verificationFailure(failureReason()) }}</p><div class="note">No verdict was reached about this news.</div><a [routerLink]="inputRoute()" class="btn btn-primary">{{ kind() === 'PHOTO_CARD' ? 'Try another image' : 'Try another check' }}</a></section>}
+    @if (sourceResult(); as r) {<app-verification-report [r]="r" />}
+    @if (photocardResult()?.verification; as v) {<app-verification-report [r]="v" />}
+    @if (multimodalResult(); as m) {
+      <section class="surface"><span class="eyebrow">{{ m.expert_overall_verdict ? 'EXPERT REVIEW COMPLETE' : 'AWAITING EXPERT REVIEW' }}</span><h2 class="assessment-value">{{ m.expert_overall_verdict ? overallVerdictLabel(m.expert_overall_verdict) : predictionLabel(m.prediction) }}</h2>
+      <p class="assessment-explanation">{{ m.expert_overall_verdict ? 'This is the decision finalized through expert review.' : 'This is a preliminary assessment of the article text and image. It can be wrong and is not a final verdict.' }}</p>
+      <div class="note"><strong>What this check covers</strong><p>This method assesses the supplied article text and image. It does not establish whether a particular outlet published the story, and does not provide a source-report comparison.</p></div>
+      @if (m.expert_overall_verdict) {<details><summary>View the earlier automated assessment</summary><p class="assessment-explanation">Preliminary assessment: <strong>{{ predictionLabel(m.prediction) }}</strong>. @if (multimodalWasOverridden(m)) {Expert review reached a different decision.}</p></details>}
+      @if (m.is_cached) {<p class="field-hint">A previous assessment of this content was reused.</p>}
+      <p class="field-hint">Assessment recorded {{ m.created_at | date:'medium' }}</p>
+      <a routerLink="/verify" class="btn btn-secondary">Check against a news outlet ↗</a></section>
+      <section class="surface claim-section"><div class="section-heading"><span class="eyebrow">ORIGINAL SUBMISSION</span><h2>The article and image that were checked</h2></div><div class="claim-layout" [class.no-image]="!m.image_url || imageFailed">@if (m.image_url && !imageFailed) {<img [src]="m.image_url" class="media-image" alt="Submitted article image" (error)="imageFailed = true">}<div><h3 class="claim-preview">{{ m.headline || 'No headline recorded' }}</h3>@if (imageFailed) {<p class="field-hint">The submitted image is temporarily unavailable.</p>}@if (m.body_text) {<details><summary>Read the submitted article text</summary><p class="long-text">{{ m.body_text }}</p></details>}</div></div></section>
+    }
+    @if (photocardResult(); as p) {
+      <section class="surface claim-section"><div class="section-heading"><span class="eyebrow">ORIGINAL SUBMISSION</span><h2>The photocard and the headline read from it</h2><p>The check uses the headline only. Image text may contain reading errors; compare it with the card.</p></div>
+      <div class="claim-layout" [class.no-image]="!p.image_url || imageFailed">@if (p.image_url && !imageFailed) {<img [src]="p.image_url" class="media-image" alt="Submitted photo card" (error)="imageFailed = true">}<div>
+      @if (p.headline) {<h3 class="claim-preview">{{ p.headline }}</h3>} @else if (p.status === 'FAILED') {<p class="preview-placeholder">No headline could be read from this card.</p>} @else {<p class="preview-placeholder">Reading the headline from the card…</p>}
+      @if (imageFailed) {<p class="field-hint">The submitted image is temporarily unavailable.</p>}
+      <dl class="meta-grid"><div><dt>Claimed outlet</dt><dd>{{ p.claimed_source_text || 'Not recorded' }}</dd></div><div><dt>Claimed publication date</dt><dd>{{ p.published_date ? (p.published_date | date:'d MMM y') : 'Not provided' }}</dd></div><div><dt>Comparison scope</dt><dd>Headline only</dd></div><div><dt>Submitted</dt><dd>{{ p.created_at | date:'d MMM y' }}</dd></div></dl>
+      @if (p.source_date_conflict) {<div class="note warning"><strong>The card and submitted details differ.</strong><p>The detected source or date differs from what was entered. Verification uses the source and date supplied with the submission.</p></div>}
+      @if (p.detected_source_text || p.detected_date_text) {<dl class="meta-grid"><div><dt>Outlet read from the card</dt><dd>{{ p.detected_source_text || 'Not identified' }}</dd></div><div><dt>Date read from the card</dt><dd>{{ p.detected_date_text || 'Not identified' }}</dd></div></dl>}
+      @if (p.ocr_raw_text) {<details><summary>View all text read from the image</summary><p class="long-text">{{ p.ocr_raw_text }}</p></details>}
+      </div></div></section>
+    }
+    @if (kind() === 'SOURCE_BASED' && lookup(); as l) {
+      <section class="surface claim-section"><div class="section-heading"><span class="eyebrow">ORIGINAL SUBMISSION</span><h2>The claim that was checked</h2></div><h3 class="claim-preview">{{ l.headline || 'No headline recorded' }}</h3><dl class="meta-grid"><div><dt>Claimed outlet</dt><dd>{{ l.claimed_source_text || 'Not recorded' }}</dd></div><div><dt>Claimed publication date</dt><dd>{{ l.published_date ? (l.published_date | date:'d MMM y') : 'Not provided' }}</dd></div></dl>@if (l.body_text) {<details><summary>Read the submitted article text</summary><p class="long-text">{{ l.body_text }}</p></details>}</section>
+    }
+    @if (!hasDetail() && !stillRunning() && !failed()) {<section class="surface state-card"><h2>Result not found</h2><p>This result could not be found. Check the link or start a new verification.</p><a routerLink="/verify" class="btn btn-primary">Start a new check</a></section>}
+  }
+</div></div>
