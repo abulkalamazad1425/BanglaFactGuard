@@ -21,16 +21,19 @@ const LABEL_CONFIG: Record<string, { text: string; cls: string; icon: string }> 
 const SOURCE_CONFIG: Record<SourceStatus, { text: string; cls: string; icon: string }> = {
   CONFIRMED: { text: 'Source Confirmed', cls: 'badge-true', icon: '✓' },
   NOT_FOUND: { text: 'Source Not Found', cls: 'badge-not-found', icon: '?' },
+  INCOMPLETE: { text: 'Source Check Incomplete', cls: 'badge-incomplete', icon: '⚠' },
 };
 
 const CONTENT_CONFIG: Record<ContentStatus, { text: string; cls: string; icon: string }> = {
   MATCHED: { text: 'Content Matched', cls: 'badge-true', icon: '✓' },
   ALTERED: { text: 'Content Altered', cls: 'badge-partial', icon: '◑' },
+  INCOMPLETE: { text: 'Content Check Incomplete', cls: 'badge-incomplete', icon: '⚠' },
 };
 
 const DATE_CONFIG: Record<DateStatus, { text: string; cls: string; icon: string }> = {
   MATCHED: { text: 'Date Matched', cls: 'badge-true', icon: '✓' },
   MISMATCHED: { text: 'Date Mismatch', cls: 'badge-partial', icon: '📅' },
+  INCOMPLETE: { text: 'Date Check Incomplete', cls: 'badge-incomplete', icon: '⚠' },
 };
 
 const OVERALL_CONFIG: Record<OverallVerdict, { text: string; cls: string; icon: string }> = {

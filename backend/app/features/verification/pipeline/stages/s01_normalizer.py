@@ -6,11 +6,8 @@ from app.core.constants import PipelineStageID
 from app.core.exceptions import NormalizationError
 from app.features.verification.pipeline.context import PipelineContext
 from app.features.sources.repository import SourceRepository
-from app.shared.utils.bangla_normalizer import (
-    extract_canonical_domain,
-    normalize_bangla_text,
-    normalize_source_name,
-)
+from app.features.sources.resolution import resolve_claimed_source
+from app.shared.utils.bangla_normalizer import extract_canonical_domain, normalize_bangla_text
 from app.shared.utils.hashing import compute_claim_hash
 
 logger = structlog.get_logger(__name__)
@@ -53,31 +50,61 @@ class InputNormalizerStage:
             context.normalized_body = None
 
         context.normalized_source = await self._resolve_source(
-            context.raw_claimed_source, context, log
+            context.raw_claimed_source, log
         )
-
-        if context.normalized_source:
-            source_record = await self.source_repo.get_by_canonical_name(
-                context.normalized_source
+        if context.normalized_source is None:
+            # Fail closed, not silently unrestricted: s04_source_search.py's
+            # domain filter only applies when a domain is known, so letting
+            # an unresolved source through here would search the whole web
+            # rather than just the claimed outlet. The service layer already
+            # pre-checks this before the pipeline even starts (see
+            # VerificationService.register_claim/verify and
+            # PhotoCardService.verify) — reaching here unresolved means that
+            # guard was bypassed, so this is a backstop, not the primary path.
+            raise NormalizationError(
+                stage_id=self.stage_id.value,
+                message=f"Claimed source could not be resolved: {context.raw_claimed_source!r}",
+                details={"claimed_source": context.raw_claimed_source},
             )
-            if source_record:
-                context.source_config = {
-                    "name": source_record.display_name,
-                    "body_selectors": source_record.body_selectors or [],
-                    "title_selectors": source_record.title_selectors or [],
-                    "date_selectors": source_record.date_selectors or [],
-                    "internal_search_url": source_record.internal_search_url,
-                    "article_url_patterns": source_record.article_url_patterns or [],
-                }
 
-        source_for_hash = context.normalized_source or context.raw_claimed_source
+        source_record = await self.source_repo.get_by_canonical_name(
+            context.normalized_source
+        )
+        if source_record:
+            context.source_config = {
+                "name": source_record.display_name,
+                "body_selectors": source_record.body_selectors or [],
+                "title_selectors": source_record.title_selectors or [],
+                "date_selectors": source_record.date_selectors or [],
+                "internal_search_url": source_record.internal_search_url,
+                "article_url_patterns": source_record.article_url_patterns or [],
+                # Registered channels for this outlet: S04 filters candidate
+                # hosts and S05 validates FINAL redirected hosts against them.
+                "allowed_domains": [
+                    d
+                    for d in (
+                        extract_canonical_domain(source_record.base_url or ""),
+                        *(extract_canonical_domain(str(a)) for a in (source_record.aliases or [])),
+                    )
+                    if d
+                ],
+            }
+
+        # The single identity function (shared with registration, S02, S12 and
+        # the photo-card flow): headline, body (only if the scope has one),
+        # canonical source, claimed date, scope and pipeline version.
         context.content_hash = compute_claim_hash(
-            context.normalized_headline, source_for_hash
+            context.normalized_headline,
+            context.normalized_source,
+            context.claim_scope,
+            body=context.normalized_body,
+            published_date=context.published_date,
         )
         log.info(
             "content_hash_computed",
             content_hash=context.content_hash[:16] + "...",
             normalized_source=context.normalized_source,
+            claim_scope=context.claim_scope.value,
         )
 
         return context
@@ -85,39 +112,11 @@ class InputNormalizerStage:
     async def _resolve_source(
         self,
         raw_source: str,
-        context: PipelineContext,
         log: structlog.BoundLogger,
     ) -> str | None:
-        if not raw_source:
-            context.record_stage_error(self.stage_id, "claimed_source is empty")
-            return None
-
-        canonical = extract_canonical_domain(raw_source)
+        canonical = await resolve_claimed_source(raw_source, self.source_repo)
         if canonical:
-            log.debug("source_resolved_via_url_extraction", canonical=canonical)
-            return canonical
-
-        canonical = normalize_source_name(raw_source)
-        if canonical:
-            log.debug("source_resolved_via_static_map", canonical=canonical)
-            return canonical
-
-        try:
-            source_record = await self.source_repo.resolve_source(raw_source)
-            if source_record:
-                canonical = source_record.canonical_name
-                log.debug("source_resolved_via_db", canonical=canonical)
-                return canonical
-        except Exception as exc:
-            log.warning(
-                "source_db_lookup_failed",
-                raw_source=raw_source,
-                error=str(exc),
-            )
-
-        log.warning("source_unresolved", raw_source=raw_source)
-        context.record_stage_error(
-            self.stage_id,
-            f"Source could not be resolved: {raw_source!r}",
-        )
-        return None
+            log.debug("source_resolved", canonical=canonical)
+        else:
+            log.warning("source_unresolved", raw_source=raw_source)
+        return canonical

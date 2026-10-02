@@ -8,7 +8,7 @@ import structlog
 from app.core.config import get_settings
 from app.core.constants import PipelineStageID
 from app.features.verification.pipeline.context import PipelineContext
-from app.features.verification.schemas import NLIScoresSchema
+from app.features.verification.schemas import NLIAnalysis, NLIScoresSchema
 from app.features.nlp.nli_service import NLIService
 
 logger = structlog.get_logger(__name__)
@@ -32,23 +32,28 @@ class ContradictionDetectorStage:
         thresholds = _SETTINGS.classification
 
         degraded_mode = False
-        if article.body:
-            premise = _select_claim_relevant_sentences(
-                article.body, claim_headline, n=5
-            )
+        # Premise = the source passages that discuss the claim (selected in
+        # S08, with surrounding context), best first - not the first five
+        # sentences of the article and not the whole body.
+        passages = [p.text for p in context.analysis.passages]
+        if passages:
+            premise = " ".join(passages)
+        elif article.body:
+            premise = _select_claim_relevant_sentences(article.body, claim_headline, n=5)
         elif article.title:
-
             premise = article.title
             degraded_mode = True
             context.record_stage_error(
                 self.stage_id,
-                "Article body absent — using title-only premise (degraded NLI accuracy)",
+                "Article body absent - using title-only premise (degraded NLI accuracy)",
             )
             logger.warning("s09_degraded_mode_title_only")
         else:
             logger.debug("s09_no_article_content_skipping")
             context.record_stage_error(self.stage_id, "No article content for NLI")
             return context
+        if passages or article.body:
+            premise = f"{article.title or ''}. {premise}".strip(". ")
 
         logger.debug(
             "s09_running_nli",
@@ -84,6 +89,18 @@ class ContradictionDetectorStage:
             )
 
         context.nli_scores = nli_result
+        context.nli_premise = "title_only" if degraded_mode else "relevant_passages"
+        context.analysis.nli = NLIAnalysis(
+            entailment=round(nli_result.entailment, 4),
+            neutral=round(nli_result.neutral, 4),
+            contradiction=round(nli_result.contradiction, 4),
+            premise=context.nli_premise,
+            reliability=(
+                "VALIDATED_FOR_BANGLA"
+                if thresholds.nli_bangla_validated
+                else "UNVALIDATED_FOR_BANGLA"
+            ),
+        )
         context.update_scores(contradiction_score=nli_result.contradiction)
 
         logger.info(

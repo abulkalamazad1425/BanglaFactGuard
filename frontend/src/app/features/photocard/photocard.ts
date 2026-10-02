@@ -1,33 +1,36 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { ToastService } from '../../shared/services/toast.service';
 import { PhotoCardService } from '../../services/photocard.service';
+import { PendingVerificationsService } from '../../services/pending-verifications.service';
 import { SourceService } from '../../services/source.service';
 import { SourceResponse } from '../../models/source.model';
-import { ContentStatus, SourceStatus } from '../../models/verification.model';
-import { VerdictBadgeComponent } from '../../shared/components/verdict-badge/verdict-badge.component';
-import {
-  NOISE_REASON_LABELS,
-  OcrLine,
-  PhotoCardExtractResponse,
-  PhotoCardVerifyResponse,
-} from '../../models/photocard.model';
+import { PhotoCardAccepted } from '../../models/photocard.model';
 
-type Step = 'upload' | 'review' | 'result';
+type Step = 'upload' | 'accepted';
 
 /**
- * Photo-card verification — a three-step wizard.
+ * Photo-card verification — accepted fast, processed in the background.
  *
- * The middle step is the point of the whole feature: OCR is never perfect on
- * Bangla, so the user confirms (and corrects) the extracted claim before
- * anything is verified. Only text they have signed off on reaches the
- * pipeline.
+ * Upload the card with the claimed source and (optionally) its published
+ * date. The server stores the image, queues a durable job and answers 202
+ * immediately. OCR, headline extraction (Gemini first, deterministic fallback)
+ * and the shared verification pipeline then run on the SERVER — leaving this
+ * page, closing the tab or navigating elsewhere does not cancel anything. The
+ * result is fetched later by submission id (My Submissions, the notification
+ * link, or the result page), and is identical to what a viewer who stayed
+ * would see.
+ *
+ * The card is always verified against its headline alone, and the claimed
+ * source/date entered here are the verification targets — never silently
+ * replaced by what the card's own text implies.
  */
 @Component({
   selector: 'app-photocard',
   standalone: true,
-  imports: [CommonModule, FormsModule, VerdictBadgeComponent],
+  imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './photocard.html',
   styleUrls: ['./photocard.scss'],
 })
@@ -35,29 +38,23 @@ export class PhotoCardComponent implements OnInit {
   private readonly svc = inject(PhotoCardService);
   private readonly sourceSvc = inject(SourceService);
   private readonly toast = inject(ToastService);
+  private readonly pending = inject(PendingVerificationsService);
 
   step: Step = 'upload';
 
-  // ── Step 1: upload ──
+  // ── Upload form ──
   selectedFile: File | null = null;
   previewUrl: string | null = null;
   dragActive = false;
-  extracting = false;
-
-  // ── Step 2: review & confirm ──
-  draft: PhotoCardExtractResponse | null = null;
-  headline = '';
-  bodyText = '';
   claimedSource = '';
   publishedDate = '';
   forceRefresh = false;
-  showRemovedLines = false;
-  showRawText = false;
-  verifying = false;
   submitted = false;
+  /** True only while the (fast) upload itself is in flight. */
+  verifying = false;
 
-  // ── Step 3: result ──
-  result: PhotoCardVerifyResponse | null = null;
+  // ── Accepted ──
+  accepted: PhotoCardAccepted | null = null;
 
   errorMsg: string | null = null;
 
@@ -79,7 +76,7 @@ export class PhotoCardComponent implements OnInit {
     });
   }
 
-  /* ─── Step 1: upload ─── */
+  /* ─── Upload ─── */
 
   onFileChange(event: Event): void {
     const file = (event.target as HTMLInputElement).files?.[0];
@@ -110,52 +107,20 @@ export class PhotoCardComponent implements OnInit {
     reader.readAsDataURL(file);
   }
 
-  extract(): void {
-    if (!this.selectedFile) return;
-
-    this.extracting = true;
-    this.errorMsg = null;
-
-    this.svc.extract(this.selectedFile).subscribe({
-      next: (draft) => {
-        this.extracting = false;
-        this.draft = draft;
-        this.headline = draft.suggested_headline;
-        this.bodyText = draft.suggested_body ?? '';
-        // Pre-select the outlet only when detection was confident enough for
-        // the backend to promote it; otherwise the user picks it themselves.
-        this.claimedSource = draft.primary_source?.canonical_name ?? '';
-        this.step = 'review';
-      },
-      error: (err) => {
-        this.extracting = false;
-        this.errorMsg = this.readError(
-          err,
-          'Could not read the photo card. Try a sharper or larger image.',
-        );
-        this.toast.error(this.errorMsg);
-      },
-    });
-  }
-
-  /* ─── Step 2: review & confirm ─── */
-
   get canVerify(): boolean {
-    return this.headline.trim().length >= 5 && !!this.claimedSource;
+    return !!this.selectedFile && !!this.claimedSource;
   }
 
   verify(): void {
     this.submitted = true;
-    if (!this.draft || !this.canVerify) return;
+    if (!this.canVerify || !this.selectedFile) return;
 
     this.verifying = true;
     this.errorMsg = null;
 
     this.svc
-      .verify({
-        draft_id: this.draft.draft_id,
-        headline: this.headline.trim(),
-        body_text: this.bodyText.trim() || null,
+      .submitAsync({
+        image: this.selectedFile,
         claimed_source_text: this.claimedSource,
         published_date: this.publishedDate || null,
         force_refresh: this.forceRefresh,
@@ -163,87 +128,40 @@ export class PhotoCardComponent implements OnInit {
       .subscribe({
         next: (res) => {
           this.verifying = false;
-          this.result = res;
-          this.step = 'result';
+          this.accepted = res;
+          this.step = 'accepted';
+          // Lets the app tell the user when the result lands while they are
+          // elsewhere in the app; the server job does not depend on this.
+          this.pending.track(res.submission_id, 'Photo card', this.claimedSourceName(), 'PHOTO_CARD');
         },
         error: (err) => {
           this.verifying = false;
           this.errorMsg = this.readError(
             err,
-            'Verification failed. Ensure the API server is running on port 8000.',
+            'The card could not be submitted. Check your connection and try again.',
           );
           this.toast.error(this.errorMsg);
         },
       });
   }
 
-  backToUpload(): void {
-    this.step = 'upload';
-    this.errorMsg = null;
-    this.submitted = false;
-  }
-
-  restoreSuggested(): void {
-    if (!this.draft) return;
-    this.headline = this.draft.suggested_headline;
-    this.bodyText = this.draft.suggested_body ?? '';
-  }
-
   reset(): void {
     this.step = 'upload';
     this.selectedFile = null;
     this.previewUrl = null;
-    this.draft = null;
-    this.result = null;
-    this.headline = '';
-    this.bodyText = '';
+    this.accepted = null;
     this.claimedSource = '';
     this.publishedDate = '';
     this.forceRefresh = false;
     this.submitted = false;
     this.errorMsg = null;
-    this.showRemovedLines = false;
-    this.showRawText = false;
   }
 
   /* ─── Template helpers ─── */
 
-  get keptLines(): OcrLine[] {
-    return this.draft?.lines.filter((line) => !line.is_noise) ?? [];
-  }
-
-  get removedLines(): OcrLine[] {
-    return this.draft?.lines.filter((line) => line.is_noise) ?? [];
-  }
-
-  noiseLabel(reason?: string | null): string {
-    return reason ? (NOISE_REASON_LABELS[reason] ?? reason) : 'Excluded';
-  }
-
-  percent(value?: number | null): string {
-    return value == null ? '—' : `${(value * 100).toFixed(0)}%`;
-  }
-
-  /** Ring/accent colour for the overall verdict — content status wins once
-   *  the source is confirmed; a date mismatch never changes this colour. */
-  verdictColor(sourceStatus: SourceStatus | null | undefined, contentStatus?: ContentStatus | null): string {
-    if (sourceStatus === 'NOT_FOUND') return '#6b7280';
-    if (contentStatus === 'MATCHED') return '#16a34a';
-    if (contentStatus === 'ALTERED') return '#c2760a';
-    return '#6b7280';
-  }
-
-  /** Circumference of the r=45 confidence ring is ~283. */
-  getDashOffset(confidence: number): number {
-    return 283 - 283 * (confidence || 0);
-  }
-
-  getHost(url: string): string {
-    try {
-      return new URL(url).hostname.replace('www.', '');
-    } catch {
-      return '';
-    }
+  claimedSourceName(): string {
+    const src = this.sources.find((x) => x.canonical_name === this.claimedSource);
+    return src?.display_name ?? this.claimedSource;
   }
 
   private readError(err: any, fallback: string): string {

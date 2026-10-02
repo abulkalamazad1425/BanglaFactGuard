@@ -54,6 +54,26 @@ class SubmissionRepository(BaseRepository[Submission]):
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def get_reusable_candidates(
+        self, content_hash: str, *, limit: int = 5
+    ) -> list[Submission]:
+        """Verified, non-duplicate submissions with this exact claim identity,
+        newest first. Callers still validate each one's result for
+        reusability and freshness."""
+        stmt = (
+            select(Submission)
+            .where(
+                and_(
+                    Submission.content_hash == content_hash,
+                    Submission.status.in_(_VERIFIED_STATUSES),
+                    Submission.duplicate_of_submission_id.is_(None),
+                )
+            )
+            .order_by(Submission.created_at.desc())
+            .limit(limit)
+        )
+        return list((await self.session.execute(stmt)).scalars().all())
+
     async def get_verified_by_content_hash(
         self, content_hash: str
     ) -> Submission | None:
@@ -105,13 +125,55 @@ class SubmissionRepository(BaseRepository[Submission]):
         await self.set_status(submission_id, SubmissionStatus.PROCESSING)
 
     async def mark_ai_done(self, submission_id: uuid.UUID) -> None:
-        await self.set_status(submission_id, SubmissionStatus.EXPERT_REVIEW)
+        from sqlalchemy import update
+
+        # Also clears any failure left by an earlier, retried attempt.
+        await self.session.execute(
+            update(Submission)
+            .where(Submission.id == submission_id)
+            .values(
+                status=SubmissionStatus.EXPERT_REVIEW,
+                processing_phase="DONE",
+                failure_reason=None,
+            )
+        )
+        await self.session.flush()
 
     async def mark_finalized(self, submission_id: uuid.UUID) -> None:
         await self.set_status(submission_id, SubmissionStatus.FINALIZED)
 
-    async def mark_failed(self, submission_id: uuid.UUID) -> None:
-        await self.set_status(submission_id, SubmissionStatus.FAILED)
+    async def mark_failed(
+        self, submission_id: uuid.UUID, reason: str | None = None
+    ) -> bool:
+        """Terminal failure. Returns True only on the transition INTO failed,
+        so callers can emit the failure notification exactly once."""
+        from sqlalchemy import update
+
+        stmt = (
+            update(Submission)
+            .where(
+                Submission.id == submission_id,
+                Submission.status.notin_(
+                    (SubmissionStatus.FAILED, SubmissionStatus.FINALIZED, SubmissionStatus.ESCALATED)
+                ),
+            )
+            .values(
+                status=SubmissionStatus.FAILED,
+                processing_phase="FAILED",
+                failure_reason=(reason or "Verification could not be completed.")[:2000],
+            )
+        )
+        res = await self.session.execute(stmt)
+        await self.session.flush()
+        return bool(res.rowcount)
+
+    async def set_phase(self, submission_id: uuid.UUID, phase: str) -> None:
+        from sqlalchemy import update
+
+        await self.session.execute(
+            update(Submission).where(Submission.id == submission_id).values(processing_phase=phase)
+        )
+        await self.session.flush()
 
     async def get_recent(
         self,
@@ -119,8 +181,13 @@ class SubmissionRepository(BaseRepository[Submission]):
         status: SubmissionStatus | None = SubmissionStatus.EXPERT_REVIEW,
         submission_type: SubmissionType | None = None,
         limit: int = 20,
+        include_duplicates: bool = False,
     ) -> list[Submission]:
         stmt = select(Submission)
+        if not include_duplicates:
+            # A duplicate is a requester's own copy of an already-reviewed
+            # claim; experts review (and the explorer lists) the original.
+            stmt = stmt.where(Submission.duplicate_of_submission_id.is_(None))
         if status is not None:
             stmt = stmt.where(Submission.status == status)
         if submission_type is not None:
@@ -182,7 +249,10 @@ class SubmissionRepository(BaseRepository[Submission]):
         from app.features.multimodal.models import MultimodalAnalysis
         from app.features.verification.models import VerificationResultV2
 
-        conditions = [Submission.status.in_(_VERIFIED_STATUSES)]
+        conditions = [
+            Submission.status.in_(_VERIFIED_STATUSES),
+            Submission.duplicate_of_submission_id.is_(None),
+        ]
 
         if keyword:
             like = f"%{keyword}%"

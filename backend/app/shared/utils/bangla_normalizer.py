@@ -122,6 +122,7 @@ def extract_canonical_domain(url_or_domain: str) -> str | None:
         if hostname.startswith("www."):
             hostname = hostname[4:]
 
-        return hostname.lower() if hostname else None
+        hostname = hostname.lower()
+        return hostname if hostname and _looks_like_domain(hostname) else None
     except Exception:
         return None

@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import structlog
 
-from app.core.constants import MAX_SEARCH_QUERIES, PipelineStageID, QueryType
+from app.core.constants import ClaimScope, MAX_SEARCH_QUERIES, PipelineStageID, QueryType
 from app.core.exceptions import QueryGenerationError
 from app.features.verification.pipeline.context import PipelineContext
 from app.shared.utils.keyword_extractor import (
@@ -99,7 +99,11 @@ class QueryGeneratorStage:
             date_str = context.published_date.strftime("%Y %B %d")
             _add(f"{headline} {date_str}", QueryType.DATE_BOUND)
 
-        if context.has_body and context.normalized_body:
+        if (
+            context.claim_scope == ClaimScope.HEADLINE_WITH_BODY
+            and context.has_body
+            and context.normalized_body
+        ):
             body_keywords: list[str] = extract_body_keywords(
                 context.normalized_body, top_n=10
             )
@@ -134,6 +138,7 @@ class QueryGeneratorStage:
             count=len(queries),
             types=[q[1] for q in queries],
             has_body=context.has_body,
+            claim_scope=context.claim_scope.value,
             domain=domain,
         )
         return context

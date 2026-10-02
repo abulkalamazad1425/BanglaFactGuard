@@ -3,36 +3,51 @@ import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
 import { API_ENDPOINTS } from '../core/constants/api-endpoints.constant';
 import {
-  PhotoCardExtractResponse,
+  PhotoCardAccepted,
   PhotoCardResultResponse,
   PhotoCardVerifyRequest,
   PhotoCardVerifyResponse,
 } from '../models/photocard.model';
 
 // ── Photo Card Service ────────────────────────────────────────────────
-// Two-step flow:
-//   1. POST /photocard/extract  — OCR the card, return a draft claim
-//   2. POST /photocard/verify   — verify the text the user confirmed
+// Background submission: the card is stored and a durable server-side job is
+// queued, then the API answers 202 straight away. OCR, headline extraction
+// (Gemini, deterministic fallback) and verification continue on the server
+// whether or not the browser stays open; the result is read by submission id.
 @Injectable({ providedIn: 'root' })
 export class PhotoCardService {
   private readonly api = inject(ApiService);
 
-  /** Step 1 — upload the card and get back the extracted claim draft. */
-  extract(image: File): Observable<PhotoCardExtractResponse> {
+  private toForm(request: PhotoCardVerifyRequest): FormData {
     const fd = new FormData();
-    fd.append('image', image);
-    return this.api.postFormData<PhotoCardExtractResponse>(
-      API_ENDPOINTS.PHOTOCARD_EXTRACT,
-      fd,
+    fd.append('image', request.image);
+    fd.append('claimed_source_text', request.claimed_source_text);
+    if (request.published_date) {
+      fd.append('published_date', request.published_date);
+    }
+    if (request.force_refresh) {
+      fd.append('force_refresh', String(request.force_refresh));
+    }
+    return fd;
+  }
+
+  /** POST /photocard/verify/async — returns 202 once the image is stored and the job is queued. */
+  submitAsync(request: PhotoCardVerifyRequest): Observable<PhotoCardAccepted> {
+    return this.api.postFormData<PhotoCardAccepted>(
+      API_ENDPOINTS.PHOTOCARD_VERIFY_ASYNC,
+      this.toForm(request),
     );
   }
 
-  /** Step 2 — verify the confirmed claim against its claimed source. */
+  /** POST /photocard/verify — synchronous, kept for compatibility (holds the request open). */
   verify(request: PhotoCardVerifyRequest): Observable<PhotoCardVerifyResponse> {
-    return this.api.post<PhotoCardVerifyResponse>(API_ENDPOINTS.PHOTOCARD_VERIFY, request);
+    return this.api.postFormData<PhotoCardVerifyResponse>(
+      API_ENDPOINTS.PHOTOCARD_VERIFY,
+      this.toForm(request),
+    );
   }
 
-  /** GET /photocard/{submission_id} — a stored photo-card report. */
+  /** GET /photocard/{submission_id} — current state: pending, processing, failed or the saved report. */
   getResult(submissionId: string): Observable<PhotoCardResultResponse> {
     return this.api.get<PhotoCardResultResponse>(
       `${API_ENDPOINTS.PHOTOCARD}/${submissionId}`,

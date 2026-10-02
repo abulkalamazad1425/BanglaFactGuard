@@ -46,7 +46,7 @@
                   <div style="display: flex; align-items: center; gap: 12px;">
                     @if (item.ai_confidence !== null && item.ai_confidence !== undefined) {
                       <span class="ai-conf text-sm">
-                        AI: <strong>{{ (item.ai_confidence! * 100).toFixed(1) }}%</strong>
+                        Check strength: <strong>{{ (item.ai_confidence! * 100).toFixed(1) }}%</strong>
                       </span>
                     }
                     <app-verdict-badge

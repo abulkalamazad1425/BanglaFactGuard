@@ -22,9 +22,12 @@ from app.shared.utils.bangla_normalizer import normalize_bangla_text
 logger = structlog.get_logger(__name__)
 _SETTINGS = get_settings()
 
-_W_SEM = 0.50
-_W_KW = 0.20
-_W_DATE = 0.10
+# Retrieval relevance only: how likely is this article the report the claim is
+# about. The claimed date is deliberately NOT a ranking input - a wrong claimed
+# date must not push the genuine report below a same-day unrelated one (the
+# date is compared separately, in S11, against the report's datePublished).
+_W_SEM = 0.55
+_W_KW = 0.25
 _W_DOMAIN = 0.20
 
 
@@ -71,16 +74,7 @@ class EvidenceRankerStage:
             if score < self._min_score:
                 break
 
-            updated = RankedArticleSchema(
-                url=article.url,
-                title=article.title,
-                body=article.body,
-                author=article.author,
-                published_date=article.published_date,
-                rank_score=round(score, 4),
-                search_provider=article.search_provider,
-                extraction_method=article.extraction_method,
-            )
+            updated = article.model_copy(update={"rank_score": round(score, 4)})
             ranked.append(updated)
             if len(ranked) >= self._max_ranked:
                 break
@@ -142,21 +136,11 @@ class EvidenceRankerStage:
         article_keywords = extract_headline_keywords(article_text, top_n=8)
         kw_overlap = compute_keyword_overlap(claim_keywords, article_keywords)
 
-        if claim_date is None or article.published_date is None:
-            date_bonus = 0.5
-        elif claim_date == article.published_date:
-            date_bonus = 1.0
-        else:
-
-            delta = abs((claim_date - article.published_date).days)
-            date_bonus = max(0.0, 1.0 - (delta / 7.0))
-
         domain_bonus = self._source_domain_bonus(context, article)
 
         composite = (
             _W_SEM * sem_sim
             + _W_KW * kw_overlap
-            + _W_DATE * date_bonus
             + _W_DOMAIN * domain_bonus
         )
 

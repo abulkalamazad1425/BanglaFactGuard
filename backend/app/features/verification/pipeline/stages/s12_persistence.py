@@ -1,21 +1,25 @@
 from __future__ import annotations
 
-import json
 import uuid
 from collections import Counter
-from datetime import datetime
 
 import structlog
 
-from app.core.constants import PipelineStageID, SearchProvider, SubmissionStatus
+from app.core.constants import (
+    VERIFICATION_PIPELINE_VERSION,
+    PipelineStageID,
+    SearchProvider,
+    SubmissionStatus,
+)
 from app.core.exceptions import PersistenceError
 from app.features.submissions.models import RetrievedArticleV2, SourceEvidenceQuery, Submission
-from app.features.notifications.models import Notification
+from app.features.notifications.service import notify_once
 from app.features.verification.models import VerificationLog
 from app.features.verification.pipeline.context import PipelineContext
 from app.features.submissions.repository import RetrievedArticleV2Repository, SubmissionRepository
+from app.features.verification.pipeline.stages.s02_cache_lookup import CacheLookupStage
 from app.features.verification.repository import ResultV2Repository
-from app.features.verification.verdict_compat import derive_expert_verdict
+from app.features.verification.reuse import result_is_reusable
 from app.features.cache.cache_service import CacheService
 from app.shared.utils.hashing import compute_url_hash
 from sqlalchemy import select, update
@@ -25,12 +29,17 @@ logger = structlog.get_logger(__name__)
 
 
 def _format_notification_verdict(context: PipelineContext) -> str:
+    # INCOMPLETE is a failed check, never a confident result in either
+    # direction — it must be reported as neither "not found" nor "confirmed".
+    if context.source_status and context.source_status.value == "INCOMPLETE":
+        return "⚠️ Source Check Incomplete"
     if context.source_status and context.source_status.value == "NOT_FOUND":
         return "🔍 Not Found in Source"
 
     content_display = {
         "MATCHED": "✅ Content Matched",
         "ALTERED": "⚠️ Content Altered",
+        "INCOMPLETE": "⚠️ Content Check Incomplete",
     }.get(
         context.content_status.value if context.content_status else "",
         "✅ Source Confirmed",
@@ -38,6 +47,8 @@ def _format_notification_verdict(context: PipelineContext) -> str:
 
     if context.date_status and context.date_status.value == "MISMATCHED":
         return f"{content_display} · 📅 Date Mismatch"
+    if context.date_status and context.date_status.value == "INCOMPLETE":
+        return f"{content_display} · ⚠️ Date Check Incomplete"
     return content_display
 
 
@@ -61,19 +72,22 @@ class PersistenceStage:
 
     async def execute(self, context: PipelineContext) -> PipelineContext:
         try:
-
-            submission = await self._upsert_submission(context)
+            submission, already_done = await self._upsert_submission(context)
             context.submission_id = submission.id
 
+            if already_done:
+                # Idempotent re-run (retry after a crash or a duplicate
+                # dispatch): the automated result for this submission is
+                # already saved, so nothing is rewritten and nothing is
+                # notified twice.
+                existing = await self.result_repo.get_by_submission_id(submission.id)
+                context.result_id = existing.id if existing else None
+                context.persisted = True
+                logger.info("s12_already_persisted_skipping", submission_id=str(submission.id))
+                return context
+
             scores = context.scores
-
             top_article_db_id = await self._persist_articles(context, submission.id)
-
-            ai_consensus_label = derive_expert_verdict(
-                context.source_status,
-                context.content_status,
-                contradiction_score=scores.contradiction_score,
-            )
 
             result = await self.result_repo.upsert_result(
                 submission_id=submission.id,
@@ -89,24 +103,29 @@ class PersistenceStage:
                 numerical_consistency=scores.numerical_consistency,
                 top_article_id=top_article_db_id,
                 avg_verification_time_ms=context.elapsed_ms,
-                ai_consensus_label=ai_consensus_label,
+                manipulation_flags=context.manipulation_flags.model_dump(mode="json"),
+                headline_similarity=scores.headline_similarity,
+                body_similarity=scores.body_similarity,
+                passage_similarity=scores.passage_similarity,
+                headline_keyword_coverage=scores.headline_keyword_coverage,
+                passage_keyword_coverage=scores.passage_keyword_coverage,
+                body_keyword_coverage=scores.body_keyword_coverage,
+                claim_scope=context.claim_scope.value,
+                pipeline_version=VERIFICATION_PIPELINE_VERSION,
+                analysis_details=context.analysis.model_dump(mode="json"),
             )
             context.result_id = result.id
 
             await self._persist_search_queries(context, submission.id)
-
             await self._persist_logs(context, submission.id)
 
-            # Every AI-verified submission enters expert review (PDF §2.1: "Every
-            # verification request must first receive a clearly marked AI-assisted
-            # preliminary result... The claim is then sent to human experts for
-            # review").
+            # Every automated result enters expert review - including a
+            # reviewable INCOMPLETE one. No automated overall verdict (and no
+            # legacy TRUE/FALSE consensus label) is derived or stored.
             await self.submission_repo.mark_ai_done(submission.id)
+            await self.submission_repo.set_phase(submission.id, "DONE")
 
-            import asyncio
-
-            asyncio.create_task(self._update_redis_cache(context))
-
+            await self._write_cache_pointer(context, submission.id, result)
             await self._send_submitter_notification(submission, context)
             await self._notify_experts_of_new_review(submission, context)
 
@@ -127,89 +146,103 @@ class PersistenceStage:
                 message=f"Persistence failed: {exc}",
             ) from exc
 
+    async def _write_cache_pointer(self, context, submission_id, result) -> None:
+        """Record this submission as the latest complete result for the claim
+        identity - only when it is a reusable (complete, current) result."""
+        if not context.content_hash or not context.source_status:
+            return
+        ok, reason = result_is_reusable(result)
+        if not ok:
+            logger.info("s12_cache_pointer_skipped", reason=reason)
+            return
+        try:
+            await CacheLookupStage.write_pointer(
+                self.cache_service, context.content_hash, submission_id, context.source_status
+            )
+        except Exception as exc:
+            logger.warning("s12_redis_cache_update_failed", error=str(exc))
+
     async def _send_submitter_notification(
         self, submission: Submission, context: PipelineContext
     ) -> None:
-        try:
-            if not submission.submitter_id or not context.source_status:
-                return
-            label_display = _format_notification_verdict(context)
-            confidence_pct = f"{(context.confidence or 0) * 100:.0f}%"
-            headline_preview = (context.raw_headline or "")[:80]
-            if len(context.raw_headline or "") > 80:
-                headline_preview += "…"
-            notif = Notification(
-                user_id=submission.submitter_id,
-                title=f"Verification Complete: {label_display} ({confidence_pct})",
-                body=f'Your claim "{headline_preview}" has been AI-verified and is now with our experts for review.',
-                notification_type="VERIFICATION_COMPLETE",
-                link_url=f"/verify/{submission.id}",
-                is_read=False,
-            )
-            self.session.add(notif)
-            await self.session.flush()
-            logger.info(
-                "s12_submitter_notification_sent",
-                submission_id=str(submission.id),
-                user_id=str(submission.submitter_id),
-            )
-        except Exception as exc:
-            logger.warning("s12_submitter_notification_failed", error=str(exc))
+        if not submission.submitter_id or not context.source_status:
+            return
+        label_display = _format_notification_verdict(context)
+        headline_preview = (context.raw_headline or submission.headline or "")[:80]
+        if len(context.raw_headline or "") > 80:
+            headline_preview += "…"
+        # No confidence percentage and no overall verdict: the result is a
+        # preliminary automated check awaiting expert review.
+        await notify_once(
+            self.session,
+            user_id=submission.submitter_id,
+            notification_type="VERIFICATION_COMPLETE",
+            link_url=f"/verify/{submission.id}",
+            title=f"Automated check complete: {label_display}",
+            body=(
+                f'Your claim "{headline_preview}" has a preliminary automated result '
+                "and is now with our experts for review."
+            ),
+        )
 
     async def _notify_experts_of_new_review(
         self, submission: Submission, context: PipelineContext
     ) -> None:
-        """Broadcast to every active expert that a new claim is available in the
-        review queue (PDF §2.2: "experts should receive notifications when a new
-        review is assigned to them"). The system uses a shared pull queue rather
-        than per-expert assignment, so "assigned" is interpreted as "available to
-        pick up." Best-effort, never allowed to fail the pipeline."""
+        """Broadcast to every active expert that a new claim is available in
+        the review queue. Best-effort, never allowed to fail the pipeline."""
         try:
+            from sqlalchemy import select
+
             from app.features.auth.models import User
 
             stmt = select(User.id).where(User.role == "expert", User.is_active.is_(True))
             expert_ids = (await self.session.execute(stmt)).scalars().all()
-            if not expert_ids:
-                return
-
-            headline_preview = (context.raw_headline or "")[:80]
+            headline_preview = (context.raw_headline or submission.headline or "")[:80]
             if len(context.raw_headline or "") > 80:
                 headline_preview += "…"
-
-            notifs = [
-                Notification(
+            for expert_id in expert_ids:
+                await notify_once(
+                    self.session,
                     user_id=expert_id,
-                    title="New claim available for review",
-                    body=f'A new submission "{headline_preview}" is ready for expert review.',
                     notification_type="EXPERT_REVIEW_AVAILABLE",
                     link_url=f"/expert/queue/{submission.id}",
-                    is_read=False,
+                    title="New claim available for review",
+                    body=f'A new submission "{headline_preview}" is ready for expert review.',
                 )
-                for expert_id in expert_ids
-            ]
-            self.session.add_all(notifs)
-            await self.session.flush()
-            logger.info(
-                "s12_expert_notifications_sent",
-                submission_id=str(submission.id),
-                expert_count=len(expert_ids),
-            )
         except Exception as exc:
             logger.warning("s12_expert_notifications_failed", error=str(exc))
 
-    async def _upsert_submission(self, context: PipelineContext) -> Submission:
+    async def _upsert_submission(
+        self, context: PipelineContext
+    ) -> tuple[Submission, bool]:
+        """(submission, already_done).
+
+        Persists onto the submission this run was started for. A claim that
+        merely shares an identity hash with another submission is NEVER
+        adopted: submissions carry owner/type/image/OCR provenance and are
+        not interchangeable (the previous hash lookup could overwrite an
+        expert-reviewed submission on a forced refresh).
+        """
         existing = None
         if context.submission_id:
             existing = await self.submission_repo.get_by_id_or_none(context.submission_id)
-        if not existing and context.content_hash:
-            existing = await self.submission_repo.get_by_content_hash(context.content_hash)
 
         if existing:
-            return await self.submission_repo.update(
+            done_states = (
+                SubmissionStatus.EXPERT_REVIEW,
+                SubmissionStatus.FINALIZED,
+                SubmissionStatus.ESCALATED,
+            )
+            if existing.status in done_states:
+                prior = await self.result_repo.get_by_submission_id(existing.id)
+                if prior is not None and prior.source_status is not None:
+                    return existing, True
+            updated = await self.submission_repo.update(
                 existing,
                 status=SubmissionStatus.PROCESSING,
                 content_hash=context.content_hash,
             )
+            return updated, False
 
         from app.core.constants import SubmissionType
 
@@ -226,7 +259,7 @@ class PersistenceStage:
         created = await self.submission_repo.create(submission)
         if context.submitter_id:
             await self._increment_submitter_total_submissions(context.submitter_id)
-        return created
+        return created, False
 
     async def _increment_submitter_total_submissions(
         self, submitter_id: uuid.UUID
@@ -367,32 +400,3 @@ class PersistenceStage:
 
         if log_entries:
             await self.result_repo.bulk_log(log_entries)
-
-    async def _update_redis_cache(self, context: PipelineContext) -> None:
-        if not context.content_hash or not context.source_status:
-            return
-        try:
-            payload = {
-                "source_status": context.source_status.value,
-                "content_status": (
-                    context.content_status.value if context.content_status else None
-                ),
-                "date_status": (
-                    context.date_status.value if context.date_status else None
-                ),
-                "confidence": context.confidence,
-                "reasoning": context.reasoning,
-                "scores": context.scores.model_dump(),
-                "manipulation_flags": context.manipulation_flags.model_dump(),
-                "matched_articles": [
-                    a.model_dump(mode="json") for a in context.ranked_articles[:3]
-                ],
-                "submission_id": str(context.submission_id) if context.submission_id else None,
-                "normalized_source": context.normalized_source,
-            }
-            await self.cache_service.set_claim_result(
-                context.content_hash,
-                json.dumps(payload, ensure_ascii=False),
-            )
-        except Exception as exc:
-            logger.warning("s12_redis_cache_update_failed", error=str(exc))

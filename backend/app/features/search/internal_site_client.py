@@ -48,6 +48,10 @@ def _build_keyword_query(raw: str, max_words: int = 8) -> str:
     return " ".join(selected)
 
 
+class InternalSiteSearchError(Exception):
+    """The outlet's own search page could not be queried."""
+
+
 class InternalSiteSearchClient:
 
     def __init__(self, async_client: httpx.AsyncClient) -> None:
@@ -88,7 +92,12 @@ class InternalSiteSearchClient:
             html = response.content.decode("utf-8", errors="replace")
         except Exception as exc:
             logger.warning("internal_site_search_failed", domain=domain, error=str(exc))
-            return []
+            # Raise, don't return []: a failed request is not a successful
+            # empty search, and S04's outcome accounting must see the
+            # difference.
+            raise InternalSiteSearchError(
+                f"internal site search failed for {domain}: {exc}"
+            ) from exc
 
         soup = BeautifulSoup(html, "html.parser")
         results: list[tuple[str, str]] = []

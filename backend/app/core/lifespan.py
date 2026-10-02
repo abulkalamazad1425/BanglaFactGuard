@@ -128,11 +128,32 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         log.warning("photocard_bucket_ensure_failed", error=str(exc))
     app.state.photocard_storage = photocard_storage
 
+    # Durable job worker: drains verification_jobs (text + photo-card). Jobs
+    # accepted before a restart, or left RUNNING by a crashed process, are
+    # picked up here once their heartbeat is stale.
+    app.state.job_worker = None
+    if _SETTINGS.jobs.enabled:
+        from app.features.verification.jobs import JobDeps, VerificationJobWorker
+
+        worker = VerificationJobWorker(
+            JobDeps.from_app_state(app.state),
+            concurrency=_SETTINGS.jobs.max_concurrent,
+            poll_interval_s=_SETTINGS.jobs.poll_interval_seconds,
+            stale_after_s=_SETTINGS.jobs.stale_after_seconds,
+            heartbeat_interval_s=_SETTINGS.jobs.heartbeat_interval_seconds,
+        )
+        worker.start()
+        app.state.job_worker = worker
+    else:
+        log.warning("job_worker_disabled")
+
     log.info("bangla_fact_guard_ready")
 
     yield
 
     log.info("bangla_fact_guard_shutting_down")
+    if app.state.job_worker is not None:
+        await app.state.job_worker.stop()
     await app.state.http_client.aclose()
     await redis_client.aclose()
     log.info("bangla_fact_guard_shutdown_complete")

@@ -10,7 +10,7 @@ import {
   VerificationResponse,
 } from '../../../models/verification.model';
 import { PhotoCardResultResponse } from '../../../models/photocard.model';
-import { VerdictBadgeComponent } from '../../../shared/components/verdict-badge/verdict-badge.component';
+import { VerificationReportComponent } from '../../../shared/components/verification-report/verification-report.component';
 
 /**
  * Universal submission result page — the one destination every "view this
@@ -29,7 +29,7 @@ import { VerdictBadgeComponent } from '../../../shared/components/verdict-badge/
 @Component({
   selector: 'app-verify-result',
   standalone: true,
-  imports: [CommonModule, RouterLink, VerdictBadgeComponent],
+  imports: [CommonModule, RouterLink, VerificationReportComponent],
   templateUrl: './verify-result.html',
   styleUrls: ['./verify-result.scss']
 })
@@ -64,11 +64,29 @@ export class VerifyResultComponent implements OnInit, OnDestroy {
   /** True while the pipeline is still working — multimodal never sits here,
    *  it finalises synchronously within the request that created it. */
   readonly stillRunning = computed(() => {
-    const s = this.lookup()?.status;
+    const s = this.photocardResult()?.status ?? this.lookup()?.status;
     return s === 'PENDING' || s === 'PROCESSING';
   });
 
-  readonly failed = computed(() => this.lookup()?.status === 'FAILED');
+  readonly failed = computed(
+    () => (this.photocardResult()?.status ?? this.lookup()?.status) === 'FAILED',
+  );
+
+  /** Why a failed submission failed, in words the submitter can act on. */
+  readonly failureReason = computed(
+    () => this.photocardResult()?.failure_reason ?? this.lookup()?.failure_reason ?? null,
+  );
+
+  /** Server-side phase of a pending photo card, for the progress text. */
+  readonly phaseText = computed(() => {
+    const phase = this.photocardResult()?.phase ?? this.lookup()?.processing_phase;
+    switch (phase) {
+      case 'QUEUED': return 'Waiting for a worker';
+      case 'EXTRACTING': return 'Reading the card and extracting its headline';
+      case 'VERIFYING': return 'Checking the headline against the claimed source';
+      default: return 'Working';
+    }
+  });
 
   shareUrl = () => `${window.location.origin}/verify/${this.submissionId}`;
 
@@ -94,7 +112,16 @@ export class VerifyResultComponent implements OnInit, OnDestroy {
       next: (l) => {
         this.lookup.set(l);
 
-        if (l.status === 'EXPERT_REVIEW' || l.status === 'FINALIZED') {
+        if (l.submission_type === 'PHOTO_CARD') {
+          // A photo card is readable in EVERY state (pending, processing,
+          // failed, complete): the detail endpoint returns the stored image,
+          // the extracted headline once known, a failure reason, or the saved
+          // result - so the page never needs the extracted headline to exist.
+          this.loadPhotocard(id);
+          return;
+        }
+
+        if (l.status === 'EXPERT_REVIEW' || l.status === 'FINALIZED' || l.status === 'ESCALATED') {
           this.stopPolling();
           this.loadDetail(id, l.submission_type);
         } else if (l.status === 'FAILED') {
@@ -103,6 +130,25 @@ export class VerifyResultComponent implements OnInit, OnDestroy {
         } else {
           this.loading.set(false);
           this.ensurePolling(id);
+        }
+      },
+      error: () => {
+        this.stopPolling();
+        this.loading.set(false);
+        this.notFound.set(true);
+      },
+    });
+  }
+
+  private loadPhotocard(id: string): void {
+    this.photocardSvc.getResult(id).subscribe({
+      next: (r) => {
+        this.photocardResult.set(r);
+        this.loading.set(false);
+        if (r.status === 'PENDING' || r.status === 'PROCESSING') {
+          this.ensurePolling(id);
+        } else {
+          this.stopPolling();
         }
       },
       error: () => {
@@ -134,7 +180,13 @@ export class VerifyResultComponent implements OnInit, OnDestroy {
 
   private ensurePolling(id: string): void {
     if (this.pollTimer !== null) return;
-    this.pollTimer = setInterval(() => this.load(id), 4000);
+    // Polling is only a courtesy to a viewer who stays: it pauses while the
+    // tab is hidden and stops entirely when the page is left (ngOnDestroy).
+    // None of that affects the server-side job.
+    this.pollTimer = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      this.load(id);
+    }, 4000);
   }
 
   private stopPolling(): void {
@@ -144,6 +196,11 @@ export class VerifyResultComponent implements OnInit, OnDestroy {
   }
 
   /* ─── Shared template helpers ─── */
+
+  /** Lifecycle states in which a saved automated result exists. */
+  isReviewed(status: string | undefined): boolean {
+    return status === 'EXPERT_REVIEW' || status === 'FINALIZED' || status === 'ESCALATED';
+  }
 
   /** Ring/accent colour for a source-based or photo-card verdict —
    *  content status wins once the source is confirmed; a date mismatch

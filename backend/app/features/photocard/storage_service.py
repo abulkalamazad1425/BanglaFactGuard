@@ -97,6 +97,25 @@ class PhotoCardStorageService:
             )
             return False
 
+    async def download(self, object_key: str) -> bytes | None:
+        """Fetch the stored card. The background job reads the image from
+        here rather than from the (long gone) upload request."""
+        loop = asyncio.get_running_loop()
+
+        def _get() -> bytes:
+            response = self._client.get_object(self._bucket, object_key)
+            try:
+                return response.read()
+            finally:
+                response.close()
+                response.release_conn()
+
+        try:
+            return await loop.run_in_executor(_MINIO_POOL, _get)
+        except (S3Error, OSError, ValueError) as exc:
+            logger.warning("photocard_image_download_failed", key=object_key, error=str(exc))
+            return None
+
     async def get_presigned_url(self, object_key: str) -> str | None:
         """Short-lived preview URL, or ``None`` when it cannot be issued."""
         if not object_key:

@@ -1,40 +1,24 @@
-"""AI-implied Overall verdict — used only as the AI's weighted prior in the
-expert Overall tally (see ExpertReviewService._finalize_submission) and for
-display ("AI preliminary: implied REAL") before expert review completes.
+"""AI-implied Overall verdict for MULTIMODAL claims only.
 
-This is a pure presentation/weighting derivation, not a pipeline component:
-it reads already-persisted fields and does not influence, and is never
-written back into, the AI pipeline's own (source_status, content_status,
-date_status) classification (s11_classifier.py) or the multimodal inference
-engine. Experts still cast their own independent Overall vote; this is only
-what the AI's existing output implies, for weighting and display purposes.
+Business rule: the automated system never decides an Overall verdict
+(Fake/Real/Misleading/Altered) for SOURCE_BASED or PHOTO_CARD claims — those
+only ever get the three structured checks (source/content/date status), and
+Overall is exclusively an expert-review outcome for them, with no AI-implied
+default. See ``app/features/verification/pipeline/stages/s11_classifier.py``,
+which has never produced an Overall verdict, and
+``ExpertReviewService._finalize_or_escalate``'s structured branch, which
+passes no tie-break preference for the Overall vote tally.
+
+MULTIMODAL is the one submission type whose model (BanglaBERT+EfficientNet)
+natively outputs a binary FAKE/NON_FAKE call as part of its own classification
+— a pre-existing, separate design this function continues to serve as a
+weighting/display helper for; it is not a general "automated overall verdict"
+mechanism and is deliberately not used by the two source-verification flows.
 """
 
 from __future__ import annotations
 
-from app.core.constants import (
-    ContentStatus,
-    DateStatus,
-    MultimodalPredictionLabel,
-    OverallVerdict,
-    SourceStatus,
-)
-
-
-def derive_ai_overall_verdict(
-    source_status: SourceStatus,
-    content_status: ContentStatus | None,
-    date_status: DateStatus | None,
-) -> OverallVerdict:
-    """For SOURCE_BASED / PHOTO_CARD claims, from the pipeline's own
-    (source_status, content_status, date_status)."""
-    if source_status == SourceStatus.NOT_FOUND:
-        return OverallVerdict.FAKE
-    if content_status == ContentStatus.ALTERED:
-        return OverallVerdict.ALTERED
-    if date_status == DateStatus.MISMATCHED:
-        return OverallVerdict.MISLEADING
-    return OverallVerdict.REAL
+from app.core.constants import MultimodalPredictionLabel, OverallVerdict
 
 
 def derive_ai_overall_verdict_multimodal(

@@ -11,7 +11,7 @@ import {
   SubmissionStatus,
   VerificationResponse,
 } from '../../../models/verification.model';
-import { VerdictBadgeComponent } from '../../../shared/components/verdict-badge/verdict-badge.component';
+import { VerificationReportComponent } from '../../../shared/components/verification-report/verification-report.component';
 import { SourceService } from '../../../services/source.service';
 import { SourceResponse } from '../../../models/source.model';
 
@@ -19,7 +19,7 @@ import { SourceResponse } from '../../../models/source.model';
 @Component({
   selector: 'app-verify-claim',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterLink, VerdictBadgeComponent],
+  imports: [CommonModule, ReactiveFormsModule, RouterLink, VerificationReportComponent],
   templateUrl: './verify-claim.html',
   styleUrls: ['./verify-claim.scss'],
 })
@@ -136,7 +136,7 @@ export class VerifyClaimComponent implements OnInit, OnDestroy {
       this.svc.getStatus(submissionId).subscribe({
         next: (res) => {
           this.pendingStatus = res.status;
-          if (res.status === 'EXPERT_REVIEW' || res.status === 'FINALIZED') {
+          if (res.status === 'EXPERT_REVIEW' || res.status === 'FINALIZED' || res.status === 'ESCALATED') {
             this.stopPolling();
             if (res.result) {
               this.result = res.result;
@@ -148,7 +148,7 @@ export class VerifyClaimComponent implements OnInit, OnDestroy {
           } else if (res.status === 'FAILED') {
             this.stopPolling();
             this.pendingSubmissionId = null;
-            this.error = 'Verification could not be completed for this claim.';
+            this.error = res.error || 'Verification could not be completed for this claim.';
             this.pending.dismiss(submissionId);
           }
         },

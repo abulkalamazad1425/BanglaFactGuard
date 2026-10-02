@@ -5,8 +5,31 @@ Natural Language Inference (NLI) service for contradiction detection (Stage 9).
 
 ## Model
 
-`cross-encoder/nli-deberta-v3-small` — a DeBERTa-v3 cross-encoder fine-tuned
-on MNLI, SNLI, and FEVER. Outputs entailment/contradiction/neutral probabilities.
+`settings.ml.nli_model_name`, default `MoritzLaurer/mDeBERTa-v3-base-mnli-xnli`
+— an mDeBERTa-v3-base cross-encoder fine-tuned on XNLI (15 languages) + MNLI,
+built on a 100-language multilingual vocabulary. Outputs entailment/
+contradiction/neutral probabilities.
+
+Previously hardcoded to `cross-encoder/nli-deberta-v3-small`, a DeBERTa-v3
+cross-encoder fine-tuned on MNLI/SNLI/FEVER — all English-only datasets, on
+an English-only vocabulary. Directly verified: that tokenizer splits a
+71-character Bangla sentence into 71 tokens, almost entirely single Unicode
+code points, because its SentencePiece vocabulary has essentially no Bangla
+subword units. A model cannot represent semantics it cannot tokenize, so its
+contradiction/entailment scores on Bangla input were not meaningful signal —
+whatever confidence the pipeline displayed was not a reliable detection of
+anything happening in the Bangla text itself. The replacement model's
+tokenizer was verified on the same sentence to produce 27 well-formed
+subword tokens with zero `[UNK]`s (e.g. "প্রধানমন্ত্রী" as one token). This is
+a tokenization-coverage check, not a measured accuracy benchmark — Bengali is
+not among the 15 XNLI languages this checkpoint was fine-tuned/evaluated on;
+it is covered only via the base model's multilingual pretraining and
+cross-lingual transfer from the fine-tuned languages, which is the standard,
+well-documented mechanism this family of models relies on for languages
+outside its evaluation set, but is not independently validated here. A
+genuine Bangla NLI accuracy evaluation (labeled Bangla NLI pairs) should
+still happen separately before this score is trusted for high-stakes
+decisions; see docs/06-ai-engineering-design.md S09.
 
 ## Why a cross-encoder (not bi-encoder)?
 
@@ -45,7 +68,7 @@ from app.shared.utils.text_cleaner import truncate_for_nli
 logger = structlog.get_logger(__name__)
 _SETTINGS = get_settings()
 
-_NLI_MODEL = "cross-encoder/nli-deberta-v3-small"
+_NLI_MODEL = _SETTINGS.ml.nli_model_name
 _LABEL_MAP = {
     "ENTAILMENT": "entailment",
     "CONTRADICTION": "contradiction",
@@ -72,6 +95,16 @@ class NLIService:
 
     _pipeline = None
     _loaded: bool = False
+    # Label audit: the pipeline output is mapped by label NAME, so the
+    # checkpoint must expose exactly entailment/neutral/contradiction. A model
+    # with generic LABEL_n names would be silently mis-mapped (label order is
+    # model-specific), so it is refused rather than guessed at.
+    _labels_ok: bool = False
+    _audit: dict = {}
+
+    @property
+    def audit(self) -> dict:
+        return dict(NLIService._audit)
 
     async def load(self) -> None:
         """Load the DeBERTa NLI pipeline (called once at startup)."""
@@ -90,10 +123,33 @@ class NLIService:
                 ),
             )
             NLIService._loaded = True
-            logger.info("nli_model_loaded")
+            self._audit_labels()
         except Exception as exc:
             logger.error("nli_model_load_failed", error=str(exc))
             raise
+
+    def _audit_labels(self) -> None:
+        try:
+            id2label = dict(NLIService._pipeline.model.config.id2label)  # type: ignore[union-attr]
+        except Exception as exc:  # noqa: BLE001
+            logger.error("nli_audit_no_labels", error=str(exc))
+            id2label = {}
+        names = {str(v).lower() for v in id2label.values()}
+        NLIService._labels_ok = names == {"entailment", "neutral", "contradiction"}
+        NLIService._audit = {
+            "model": _NLI_MODEL,
+            "label_order": [str(id2label[k]) for k in sorted(id2label)],
+            "labels_ok": NLIService._labels_ok,
+            "bangla_validated": False,
+        }
+        if NLIService._labels_ok:
+            logger.info("nli_model_loaded", **NLIService._audit)
+        else:
+            logger.error(
+                "nli_labels_unrecognised",
+                hint="Label names are not entailment/neutral/contradiction; NLI output is ignored.",
+                **NLIService._audit,
+            )
 
     async def predict(self, premise: str, hypothesis: str) -> NLIScoresSchema | None:
         """
@@ -107,8 +163,8 @@ class NLIService:
             NLIScoresSchema with entailment/contradiction/neutral probabilities,
             or None if the model is not loaded or inference fails.
         """
-        if not NLIService._loaded or NLIService._pipeline is None:
-            logger.warning("nli_not_loaded_returning_none")
+        if not NLIService._loaded or NLIService._pipeline is None or not NLIService._labels_ok:
+            logger.warning("nli_not_usable_returning_none")
             return None
 
         truncated_premise = truncate_for_nli(premise, max_chars=1200)

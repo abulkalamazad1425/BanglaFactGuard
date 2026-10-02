@@ -3,15 +3,24 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.constants import ContentStatus, SourceStatus, SubmissionStatus
+from app.core.constants import (
+    ContentStatus,
+    DateStatus,
+    OverallVerdict,
+    SourceStatus,
+    SubmissionStatus,
+    SubmissionType,
+)
 from app.features.auth.models import User
 from app.features.auth.security import get_current_user
-from app.features.submissions.models import Submission
+from app.features.submissions.models import OcrExtraction, Submission
+from app.features.verification.presenter import effective_expert_row, effective_status
+from app.features.verification.repository import ResultV2Repository
 from app.features.verification.models import VerificationResultV2
 from app.shared.dependencies import get_async_session
 
@@ -19,14 +28,26 @@ router = APIRouter(prefix="/users", tags=["Users"])
 
 
 class SubmissionSummary(BaseModel):
+    """One row of My Submissions. Valid for a submission that has no result
+    or even no headline yet (a just-accepted photo card)."""
+
     submission_id: str
+    submission_type: SubmissionType = SubmissionType.SOURCE_BASED
     headline: str | None
     claimed_source_text: str | None
     status: str
+    phase: str | None = None
+    failure_reason: str | None = None
     source_status: SourceStatus | None
     content_status: ContentStatus | None
+    date_status: DateStatus | None = None
+    # Expert-finalized only; None while the claim is still under review.
+    overall_verdict: OverallVerdict | None = None
+    is_finalized: bool = False
     ai_confidence: float | None
+    image_url: str | None = None
     submitted_at: datetime
+    updated_at: datetime | None = None
 
 
 class SubmissionStatsResponse(BaseModel):
@@ -62,11 +83,14 @@ class UpdateProfileRequest(BaseModel):
 
 @router.get("/me/submissions", response_model=list[SubmissionSummary])
 async def get_my_submissions(
+    request: Request,
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_async_session),
 ) -> list[SubmissionSummary]:
+    # Owner-only: only the signed-in user's own submissions, including ones
+    # still PENDING/PROCESSING or FAILED and ones with no headline yet.
     stmt = (
         select(Submission)
         .where(Submission.submitter_id == current_user.id)
@@ -75,24 +99,63 @@ async def get_my_submissions(
         .limit(limit)
     )
     submissions = (await session.execute(stmt)).scalars().all()
+    result_repo = ResultV2Repository(session)
+    photocard_storage = getattr(request.app.state, "photocard_storage", None)
     items = []
     for submission in submissions:
-        result_stmt = (
-            select(VerificationResultV2)
-            .where(VerificationResultV2.submission_id == submission.id)
-            .limit(1)
-        )
-        result = (await session.execute(result_stmt)).scalar_one_or_none()
+        result = await result_repo.get_by_submission_id(submission.id)
+        expert = await effective_expert_row(submission, result, result_repo) if result else None
+        is_finalized = bool(expert and expert.overall_verdict)
+
+        original_status = None
+        if submission.duplicate_of_submission_id:
+            original = (
+                await session.execute(
+                    select(Submission.status).where(Submission.id == submission.duplicate_of_submission_id)
+                )
+            ).scalar_one_or_none()
+            original_status = original
+
+        image_url = None
+        if submission.submission_type == SubmissionType.PHOTO_CARD and photocard_storage:
+            key = (
+                await session.execute(
+                    select(OcrExtraction.image_object_key).where(OcrExtraction.submission_id == submission.id)
+                )
+            ).scalar_one_or_none()
+            if key:
+                image_url = await photocard_storage.get_presigned_url(key)
+
         items.append(
             SubmissionSummary(
                 submission_id=str(submission.id),
+                submission_type=submission.submission_type,
                 headline=submission.headline,
                 claimed_source_text=submission.claimed_source_text,
-                status=submission.status.value,
-                source_status=result.source_status if result else None,
-                content_status=result.content_status if result else None,
+                status=effective_status(submission, original_status).value,
+                phase=submission.processing_phase,
+                failure_reason=submission.failure_reason,
+                source_status=(
+                    ((expert.final_source_status if is_finalized else None) or result.source_status)
+                    if result
+                    else None
+                ),
+                content_status=(
+                    (expert.final_content_status if is_finalized else result.content_status)
+                    if result
+                    else None
+                ),
+                date_status=(
+                    (expert.final_date_status if is_finalized else result.date_status)
+                    if result
+                    else None
+                ),
+                overall_verdict=expert.overall_verdict if is_finalized else None,
+                is_finalized=is_finalized,
                 ai_confidence=result.confidence if result else None,
+                image_url=image_url,
                 submitted_at=submission.created_at,
+                updated_at=submission.updated_at,
             )
         )
     return items

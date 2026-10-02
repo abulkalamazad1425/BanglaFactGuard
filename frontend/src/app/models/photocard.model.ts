@@ -1,36 +1,12 @@
 // ============================================================
 // Photo Card Verification Models — synced with backend
 // app/features/photocard/schemas.py
+//
+// Fully unattended, single pass: image + claimed source + published date in,
+// a verdict out. No extraction-preview/confirmation step.
 // ============================================================
 
-import { VerificationResponse } from './verification.model';
-
-/** Why a recognised line was excluded from the claim. */
-export type NoiseReason =
-  | 'social_cta'
-  | 'byline'
-  | 'credit'
-  | 'timestamp'
-  | 'engagement'
-  | 'copyright'
-  | 'advert'
-  | 'source_banner'
-  | 'url'
-  | 'social_handle'
-  | 'phone_number'
-  | 'not_bangla'
-  | 'too_short'
-  | 'low_confidence'
-  | 'no_letters'
-  | 'empty';
-
-export interface OcrLine {
-  text: string;
-  confidence?: number | null;
-  bangla_ratio: number;
-  is_noise: boolean;
-  noise_reason?: NoiseReason | null;
-}
+import { ClaimScope, ProcessingPhase, SubmissionStatus, VerificationResponse } from './verification.model';
 
 export interface DetectedSource {
   source_id: string;
@@ -43,30 +19,20 @@ export interface DetectedSource {
   method: string;
 }
 
-/** Step 1 — POST /photocard/extract. Nothing is verified yet. */
-export interface PhotoCardExtractResponse {
-  draft_id: string;
-  raw_text: string;
-  cleaned_text: string;
-  suggested_headline: string;
-  suggested_body?: string | null;
-  lines: OcrLine[];
-  removed_line_count: number;
-  detected_sources: DetectedSource[];
-  primary_source?: DetectedSource | null;
-  ocr_confidence?: number | null;
-  ocr_engine: string;
-  bangla_char_ratio: number;
-  image_url?: string | null;
-  warnings: string[];
-  created_at: string;
+/** HTTP 202 from POST /photocard/verify/async. The card is stored and the job is
+ *  durable: OCR, extraction and verification continue on the server whether or
+ *  not the browser stays open. */
+export interface PhotoCardAccepted {
+  submission_id: string;
+  status: SubmissionStatus;
+  phase?: ProcessingPhase | null;
+  message: string;
+  queued_at: string;
 }
 
-/** Step 2 — POST /photocard/verify, carrying the text the user confirmed. */
+/** POST /photocard/verify/async (or the synchronous /photocard/verify) — multipart form. */
 export interface PhotoCardVerifyRequest {
-  draft_id: string;
-  headline: string;
-  body_text?: string | null;
+  image: File;
   claimed_source_text: string;
   published_date?: string | null; // YYYY-MM-DD
   force_refresh?: boolean;
@@ -75,13 +41,27 @@ export interface PhotoCardVerifyRequest {
 export interface PhotoCardVerifyResponse {
   submission_id: string;
   verification: VerificationResponse;
-  confirmed_headline: string;
-  confirmed_body?: string | null;
+
+  extracted_headline: string;
+  /** 'GEMINI' | 'EXISTING_FALLBACK' — which extractor produced it. */
+  extractor_used: string;
+  extraction_model_version?: string | null;
+  extraction_warnings: string[];
+
+  detected_sources: DetectedSource[];
+  detected_source_text?: string | null;
+  detected_date_text?: string | null;
+  /** True when the card's own text disagrees with the claimed source/date provided. */
+  source_date_conflict: boolean;
+
   ocr_raw_text: string;
   ocr_engine: string;
   ocr_confidence?: number | null;
   image_url?: string | null;
-  detected_source_confidence?: number | null;
+
+  claimed_source_text: string;
+  published_date?: string | null;
+
   reused_previous_result: boolean;
   original_submission_id?: string | null;
 }
@@ -89,36 +69,28 @@ export interface PhotoCardVerifyResponse {
 /** GET /photocard/{submission_id} — a stored report. */
 export interface PhotoCardResultResponse {
   submission_id: string;
-  status: string;
+  status: SubmissionStatus;
+  phase?: ProcessingPhase | null;
+  /** User-presentable reason when status is FAILED. */
+  failure_reason?: string | null;
+  /** Always HEADLINE_ONLY for photo cards. */
+  claim_scope?: ClaimScope;
   headline?: string | null;
-  body_text?: string | null;
   claimed_source_text?: string | null;
   published_date?: string | null;
+
   ocr_raw_text?: string | null;
-  ocr_confirmed_text?: string | null;
   ocr_engine?: string | null;
   ocr_confidence?: number | null;
   image_url?: string | null;
+
+  extractor_used?: string | null;
+  extraction_model_version?: string | null;
+  extraction_warnings: string[];
+  detected_source_text?: string | null;
+  detected_date_text?: string | null;
+  source_date_conflict?: boolean;
+
   verification?: VerificationResponse | null;
   created_at: string;
 }
-
-/** Human-readable labels for the exclusion reasons shown on the review step. */
-export const NOISE_REASON_LABELS: Record<string, string> = {
-  social_cta: 'Follow / share prompt',
-  byline: 'Reporter byline',
-  credit: 'Photo or source credit',
-  timestamp: 'Date or timestamp',
-  engagement: 'Like / share counter',
-  copyright: 'Copyright notice',
-  advert: 'Advertisement label',
-  source_banner: 'Outlet name banner',
-  url: 'Web address',
-  social_handle: 'Social handle or hashtag',
-  phone_number: 'Phone number',
-  not_bangla: 'Not Bangla text',
-  too_short: 'Too short to be a claim',
-  low_confidence: 'Read with low confidence',
-  no_letters: 'No readable letters',
-  empty: 'Empty line',
-};

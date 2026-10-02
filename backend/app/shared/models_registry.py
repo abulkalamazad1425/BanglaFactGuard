@@ -6,6 +6,7 @@ from app.features.verification.models import (
     VerificationResult,
     VerificationResultV2,
     VerificationLog,
+    VerificationJob,
 )
 
 
@@ -62,6 +63,7 @@ __all__ = [
     "VerificationResult",
     "VerificationResultV2",
     "VerificationLog",
+    "VerificationJob",
     "RetrievedArticle",
     "SearchQuery",
     "VerifiedSource",

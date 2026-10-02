@@ -399,9 +399,7 @@ class VerificationResultV2(UUIDMixin, TimestampMixin, ReprMixin, Base):
             "NULL until expert review finalizes this claim. Functionally the "
             "'final_overall_verdict' of this fields group — named before "
             "final_source/content/date_status existed. Written only by "
-            "ExpertReviewService, never by the AI pipeline itself; see "
-            "app/features/expert_review/overall_verdict.py for the AI's "
-            "implied-but-not-persisted preliminary value."
+            "ExpertReviewService, never by the AI pipeline itself."
         ),
     )
 
@@ -416,12 +414,11 @@ class VerificationResultV2(UUIDMixin, TimestampMixin, ReprMixin, Base):
         nullable=True,
         index=True,
         comment=(
-            "Single-category projection of (source_status, content_status) used "
-            "only to feed the pre-existing expert-review weighted-consensus "
-            "voting system (see verdict_compat.derive_expert_verdict). Not the "
-            "verdict shown to end users — see source_status/content_status/"
-            "date_status for that. Renamed from final_label during the "
-            "3-dimensional verdict migration."
+            "LEGACY / NO LONGER WRITTEN. Formerly a single-category projection "
+            "of (source_status, content_status) onto TRUE/FALSE/PARTIALLY_TRUE. "
+            "The automated system casts no overall truth vote, so new rows "
+            "leave this NULL; historical values are kept, never erased. See "
+            "verdict_compat.py."
         ),
     )
 
@@ -446,6 +443,63 @@ class VerificationResultV2(UUIDMixin, TimestampMixin, ReprMixin, Base):
     numerical_consistency: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     avg_verification_time_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # ── Component scores (applicable ones only; NULL = no measurement) ──────
+    headline_similarity: Mapped[float | None] = mapped_column(Float, nullable=True)
+    body_similarity: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        comment="Submitted body vs aligned source passages. NULL for HEADLINE_ONLY claims (always for photo cards).",
+    )
+    passage_similarity: Mapped[float | None] = mapped_column(Float, nullable=True)
+    headline_keyword_coverage: Mapped[float | None] = mapped_column(Float, nullable=True)
+    passage_keyword_coverage: Mapped[float | None] = mapped_column(Float, nullable=True)
+    body_keyword_coverage: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    claim_scope: Mapped[str | None] = mapped_column(
+        String(24),
+        nullable=True,
+        comment="HEADLINE_ONLY | HEADLINE_WITH_BODY — the scope this result was computed under.",
+    )
+    pipeline_version: Mapped[str | None] = mapped_column(
+        String(40),
+        nullable=True,
+        comment="VERIFICATION_PIPELINE_VERSION in force when computed. NULL on rows from before the scope-aware rewrite; those are never reused as fresh results.",
+    )
+    analysis_details: Mapped[dict | None] = mapped_column(
+        JSONB,
+        nullable=True,
+        comment=(
+            "AnalysisDetails payload: metric states and diagnostics, selected "
+            "evidence passages, NLI output, search accounting, date "
+            "provenance and the decision basis. Durable source for result "
+            "display after the Redis entry expires."
+        ),
+    )
+    reused_from_submission_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("submissions.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="Set when this result row is an automated-result copy of an earlier identical verification.",
+    )
+
+    manipulation_flags: Mapped[dict | None] = mapped_column(
+        JSONB,
+        nullable=True,
+        comment=(
+            "Full ManipulationFlagsSchema payload (the 4 booleans plus "
+            "altered_numbers/substituted_entities detail) from s10_"
+            "manipulation_detector.py's last run. NULL on rows written "
+            "before this column existed, or when S10 never ran. Previously "
+            "this only ever lived in the Redis result cache and was lost "
+            "once that entry's TTL expired — GET /verify/{id} would then "
+            "silently show no manipulation detected even when the original "
+            "run found some, with nothing to show experts reviewing an "
+            "older claim. This column is now the durable, authoritative "
+            "source; the Redis cache remains a fast-path best-effort read "
+            "for a fresh result."
+        ),
+    )
 
     submission: Mapped["Submission"] = relationship(
         "Submission",
@@ -481,3 +535,52 @@ class VerificationResultV2(UUIDMixin, TimestampMixin, ReprMixin, Base):
             "created_at",
         ),
     )
+
+
+class VerificationJob(UUIDMixin, TimestampMixin, ReprMixin, Base):
+    """Durable unit of background verification work.
+
+    The row is written in the same transaction as the accepted submission, so
+    an accepted submission can never exist without its job. A worker claims
+    jobs with ``FOR UPDATE SKIP LOCKED`` and stamps ``locked_at``; a job whose
+    lock has gone stale (process crashed or restarted mid-run) is reclaimed on
+    the next poll. Nothing about execution depends on the browser, polling, or
+    the request that created it.
+    """
+
+    __tablename__ = "verification_jobs"
+
+    submission_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("submissions.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+    kind: Mapped[str] = mapped_column(
+        String(20), nullable=False, comment="SOURCE_BASED | PHOTO_CARD"
+    )
+    status: Mapped[str] = mapped_column(
+        String(12),
+        nullable=False,
+        default="QUEUED",
+        index=True,
+        comment="QUEUED | RUNNING | DONE | FAILED",
+    )
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+    locked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    locked_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    payload: Mapped[dict | None] = mapped_column(
+        JSONB,
+        nullable=True,
+        comment="Job inputs that are not on the submission row (force_refresh, ...).",
+    )
+
+    __table_args__ = (Index("ix_verification_jobs_status_created", status, "created_at"),)

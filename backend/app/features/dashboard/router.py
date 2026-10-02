@@ -17,10 +17,7 @@ from app.core.constants import (
     SubmissionStatus,
     SubmissionType,
 )
-from app.features.expert_review.overall_verdict import (
-    derive_ai_overall_verdict,
-    derive_ai_overall_verdict_multimodal,
-)
+from app.features.expert_review.overall_verdict import derive_ai_overall_verdict_multimodal
 from app.features.multimodal.models import MultimodalAnalysis
 from app.features.multimodal.storage_service import MultimodalStorageService
 from app.features.photocard.storage_service import PhotoCardStorageService
@@ -66,8 +63,8 @@ class ExplorerItem(BaseModel):
     overall_verdict: OverallVerdict | None = Field(
         default=None,
         description=(
-            "The displayed Overall verdict — the expert-finalized value if "
-            "available, otherwise the AI's preliminary implied value."
+            "The expert-finalized Overall verdict. NULL until expert review "
+            "finalizes the claim - the automated system never sets it."
         ),
     )
     is_finalized: bool = Field(
@@ -310,12 +307,10 @@ async def search_explorer(
         )
         result = (await session.execute(result_stmt)).scalar_one_or_none()
 
-        overall = None
+        # Automated checks never produce an Overall verdict — it stays NULL
+        # here until expert review finalizes the claim.
         is_finalized = bool(result and result.overall_verdict)
-        if result and result.source_status:
-            overall = result.overall_verdict or derive_ai_overall_verdict(
-                result.source_status, result.content_status, result.date_status
-            )
+        overall = result.overall_verdict if result else None
 
         image_url = None
         if submission.submission_type == SubmissionType.PHOTO_CARD and photocard_storage:

@@ -270,9 +270,26 @@ class ResultV2Repository(BaseRepository[VerificationResultV2]):
         numerical_consistency: float | None,
         top_article_id: uuid.UUID | None = None,
         ai_preliminary_label: str | None = None,
-        ai_consensus_label: ExpertVerdict | None = None,
         avg_verification_time_ms: int | None = None,
+        manipulation_flags: dict | None = None,
+        headline_similarity: float | None = None,
+        body_similarity: float | None = None,
+        passage_similarity: float | None = None,
+        headline_keyword_coverage: float | None = None,
+        passage_keyword_coverage: float | None = None,
+        body_keyword_coverage: float | None = None,
+        claim_scope: str | None = None,
+        pipeline_version: str | None = None,
+        analysis_details: dict | None = None,
+        reused_from_submission_id: uuid.UUID | None = None,
     ) -> VerificationResultV2:
+        """Write the AUTOMATED snapshot for a submission.
+
+        Only automated columns are written here. Expert-finalized columns
+        (final_*, overall_verdict, finalized_at) belong to ExpertReviewService
+        and are never touched, and `ai_consensus_label` is no longer written
+        at all: the automated system casts no overall truth vote.
+        """
         existing = await self.get_by_submission_id(submission_id)
 
         fields = dict(
@@ -288,8 +305,18 @@ class ResultV2Repository(BaseRepository[VerificationResultV2]):
             numerical_consistency=numerical_consistency,
             top_article_id=top_article_id,
             ai_preliminary_label=ai_preliminary_label,
-            ai_consensus_label=ai_consensus_label,
             avg_verification_time_ms=avg_verification_time_ms,
+            manipulation_flags=manipulation_flags,
+            headline_similarity=headline_similarity,
+            body_similarity=body_similarity,
+            passage_similarity=passage_similarity,
+            headline_keyword_coverage=headline_keyword_coverage,
+            passage_keyword_coverage=passage_keyword_coverage,
+            body_keyword_coverage=body_keyword_coverage,
+            claim_scope=claim_scope,
+            pipeline_version=pipeline_version,
+            analysis_details=analysis_details,
+            reused_from_submission_id=reused_from_submission_id,
         )
 
         if existing is not None:

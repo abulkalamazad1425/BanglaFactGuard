@@ -1,356 +1,259 @@
 from __future__ import annotations
 
-import math
-
 import structlog
 
 from app.core.config import get_settings
-from app.core.constants import ContentStatus, DateStatus, PipelineStageID, SourceStatus
+from app.core.constants import (
+    VERIFICATION_PIPELINE_VERSION,
+    CheckState,
+    ContentStatus,
+    DateStatus,
+    PipelineStageID,
+    SourceStatus,
+)
 from app.core.exceptions import ClassificationError
+from app.features.verification.analysis.decisions import (
+    DecisionInputs,
+    Metric,
+    assess_correspondence,
+    check_strength,
+    decide_content,
+    decide_date,
+    decide_source,
+)
 from app.features.verification.pipeline.context import PipelineContext
+from app.features.verification.schemas import DateAnalysis, SearchAccounting
 
 logger = structlog.get_logger(__name__)
 _SETTINGS = get_settings()
 
 
-_W_SEM = 0.45
-_W_ENT = 0.25
-_W_KW = 0.15
-_W_NUM = 0.15
-
-
-assert (
-    abs((_W_SEM + _W_ENT + _W_KW + _W_NUM) - 1.0) < 1e-9
-), f"Score aggregation weights must sum to 1.0, got {_W_SEM + _W_ENT + _W_KW + _W_NUM}"
-
-
 class ClassifierStage:
-    """Produces the three-dimensional verdict: source, content, date.
+    """Produces the three independent dimensions — Source, Content, Date.
 
-    The three checks run in order and each is independent of the others:
+    SOURCE   Did the claimed outlet publish a corresponding report? Decided
+             from article correspondence (headline↔title similarity plus
+             lexical support) and search adequacy. Content scores play no
+             part, so an altered detail — or a weak aggregate — cannot make a
+             genuine original report look like a different article. An
+             adequate search without a corresponding report is NOT_FOUND; a
+             failed or inadequate search is INCOMPLETE.
+    CONTENT  Only once the source is CONFIRMED. ALTERED requires a concrete,
+             quotable discrepancy (or a validated contradiction). MATCHED
+             requires positive support for every applicable material claim.
+             Weak scores, neutral NLI, missing signals and checks that did
+             not run are INCOMPLETE — never an automatic ALTERED, and a
+             matching headline never hides an altered body.
+    DATE     Claimed day vs the report's datePublished day in Asia/Dhaka,
+             independent of content. Missing actual date -> INCOMPLETE; no
+             claimed date -> not applicable.
 
-    1. Source — does the claimed source carry this story at all? If not,
-       content and date are left unset: there is nothing to compare a claim's
-       wording or date against when the source never published it.
-    2. Content — once the source is CONFIRMED, does the claimed content
-       carry the same facts as the source (MATCHED), or have material facts
-       changed (ALTERED)? Paraphrase and reordering are MATCHED; changed
-       numbers, names, outcomes, or outright contradiction are ALTERED.
-    3. Date — does the claimed publication date match the source's actual
-       date? This is purely informational: a date mismatch never demotes
-       content_status, and is left unset when either date is unknown.
+    Nothing here is an overall Fake/Real/Misleading verdict; that is an
+    expert-only assessment.
     """
 
     stage_id = PipelineStageID.S11_CLASSIFIER
 
     async def execute(self, context: PipelineContext) -> PipelineContext:
-        thresholds = _SETTINGS.classification
-
+        t = _SETTINGS.classification
         try:
+            self._record_search(context)
+            context.analysis.pipeline_version = VERIFICATION_PIPELINE_VERSION
+            context.analysis.claim_scope = context.claim_scope
+            context.analysis.stage_errors = dict(context.stage_errors)
 
-            if not context.has_evidence:
-                self._set_not_found(context, reason="no_evidence")
+            inp = self._build_inputs(context)
+            corr = assess_correspondence(inp, t) if context.has_evidence else None
+            source_status, source_basis = decide_source(
+                has_evidence=context.has_evidence,
+                search_adequate=context.search_adequate,
+                retrieval_failed=context.retrieval_failed,
+                correspondence=corr,
+            )
+            context.source_status = source_status
+            context.analysis.source_basis = source_basis
+
+            if source_status != SourceStatus.CONFIRMED:
+                context.content_status = None
+                context.date_status = None
+                context.confidence = self._negative_strength(context, source_status)
+                context.reasoning = self._reason_not_confirmed(context, source_status, source_basis)
+                self._log(context, source_basis)
                 return context
 
-            sem_sim = context.scores.semantic_similarity
-            if (
-                sem_sim is not None
-                and sem_sim < thresholds.not_found_max_semantic_similarity
-            ):
-                self._set_not_found(
-                    context,
-                    reason="sem_sim_below_not_found_gate",
-                    sem_sim=sem_sim,
-                )
-                return context
-
-            context.source_status = SourceStatus.CONFIRMED
-
-            scores = context.scores
-            evidence_score = _compute_weighted_score(scores, thresholds)
-
-            contradiction = scores.contradiction_score or 0.0
-            contradiction_override = contradiction > thresholds.contradiction_override_threshold
-
-            if contradiction > 0.5 and not contradiction_override:
-                penalty = (contradiction - 0.5) * 0.4
-                evidence_score = max(0.0, evidence_score - penalty)
-
-            if context.stage_error_count > 0:
-                degradation = min(0.15, context.stage_error_count * 0.05)
-                evidence_score = max(0.0, evidence_score - degradation)
-
-            manipulation = context.manipulation_flags
-            content_status = _assign_content_status(
-                evidence_score, manipulation, contradiction_override, thresholds
+            article = context.top_article
+            flags = context.manipulation_flags
+            content_status, content_basis = decide_content(
+                inp, t, concrete_failures=len(flags.discrepancies)
             )
             context.content_status = content_status
+            context.analysis.content_basis = content_basis
 
-            context.date_status = _compare_dates(context)
-
-            context.confidence = _compute_confidence(
-                evidence_score, contradiction, contradiction_override, thresholds
+            actual_date = article.published_date if article else None
+            context.date_status = decide_date(
+                context.published_date, actual_date, source_confirmed=True
             )
-            context.reasoning = self._build_reasoning(context, evidence_score)
-
-            logger.info(
-                "s11_verdict",
-                source_status=context.source_status.value,
-                content_status=content_status.value,
-                date_status=context.date_status.value if context.date_status else None,
-                confidence=context.confidence,
-                evidence_score=round(evidence_score, 3),
-                manipulation=manipulation.any_manipulation_detected,
+            context.analysis.date = DateAnalysis(
+                claimed_date=context.published_date,
+                article_date=actual_date,
+                article_published_at=article.published_at if article else None,
+                provenance=article.published_date_source if article else None,
+                tz_assumed=article.published_tz_assumed if article else False,
             )
+
+            context.confidence = self._strength(context, inp)
+            context.reasoning = self._reason_confirmed(context, content_basis)
+            self._log(context, content_basis)
             return context
-
         except Exception as exc:
             raise ClassificationError(
                 stage_id=self.stage_id.value,
                 message=f"Classification failed: {exc}",
             ) from exc
 
-    def _set_not_found(
-        self,
-        context: PipelineContext,
-        *,
-        reason: str,
-        sem_sim: float | None = None,
-    ) -> None:
-        context.source_status = SourceStatus.NOT_FOUND
-        context.content_status = None
-        context.date_status = None
+    # ── inputs ──────────────────────────────────────────────────────────
 
-        source = context.normalized_source or context.raw_claimed_source
+    @staticmethod
+    def _metric(context: PipelineContext, name: str) -> Metric:
+        d = context.analysis.metrics.get(name)
+        return Metric(d.state, d.value) if d else Metric()
 
-        if reason == "no_evidence":
-            queries_tried = len(context.search_queries)
-            context.confidence = 0.95
-            context.reasoning = (
-                f"No article matching the claim headline was found on {source or 'the claimed source'} "
-                f"after executing {queries_tried} search query variant(s) across multiple providers. "
-                "Verdict: source NOT_FOUND."
-            )
-        else:
-            # Confidence rises the further below the gate the similarity sits.
-            gate = _SETTINGS.classification.not_found_max_semantic_similarity
-            raw_conf = 0.5 + (gate - (sem_sim or 0.0)) * 2
-            context.confidence = round(max(0.55, min(0.90, raw_conf)), 3)
-            context.reasoning = (
-                f"An article was retrieved from {source or 'the claimed source'}, "
-                f"but its semantic similarity to the claim is too low ({(sem_sim or 0.0):.2f}), "
-                "indicating the retrieved article is unrelated to the claim. "
-                "Verdict: source NOT_FOUND."
-            )
-
-        logger.info(
-            "s11_verdict",
-            source_status=context.source_status.value,
-            content_status=None,
-            date_status=None,
-            confidence=context.confidence,
-            reason=reason,
-            sem_sim=round(sem_sim, 3) if sem_sim is not None else None,
+    def _build_inputs(self, context: PipelineContext) -> DecisionInputs:
+        m = self._metric
+        states = dict(context.manipulation_flags.check_states)
+        if not states and context.has_evidence:
+            # S10 produced nothing: the checks did not run, which is NOT a pass.
+            states = {"alteration_checks": CheckState.NOT_EVALUATED}
+        return DecisionInputs(
+            scope=context.claim_scope,
+            headline_similarity=m(context, "headline_similarity"),
+            passage_similarity=m(context, "passage_similarity"),
+            headline_keyword_coverage=m(context, "headline_keyword_coverage"),
+            passage_keyword_coverage=m(context, "passage_keyword_coverage"),
+            body_similarity=m(context, "body_similarity"),
+            body_min_chunk_similarity=context.body_min_chunk_similarity,
+            body_keyword_coverage=m(context, "body_keyword_coverage"),
+            body_complete=context.body_complete,
+            entity_coverage=m(context, "entity_match"),
+            check_states=states,
+            discrepancy_count=len(context.manipulation_flags.discrepancies),
+            contradiction=context.scores.contradiction_score,
+            nli_premise_is_passages=context.nli_premise == "relevant_passages",
         )
 
-    def _build_reasoning(
-        self,
-        context: PipelineContext,
-        evidence_score: float,
+    @staticmethod
+    def _record_search(context: PipelineContext) -> None:
+        context.analysis.search = SearchAccounting(
+            attempted=context.search_attempted,
+            success=context.search_success,
+            success_empty=context.search_success_empty,
+            failed=context.search_errors,
+            skipped=context.search_skipped,
+            cached=context.search_cached,
+            adequate=context.search_adequate,
+            providers=context.search_provider_outcomes,
+            redirect_rejected=context.search_redirect_rejected,
+        )
+
+    # ── strength / reasoning ────────────────────────────────────────────
+
+    @staticmethod
+    def _negative_strength(context: PipelineContext, status: SourceStatus) -> float:
+        """NOT_FOUND strength = share of attempted search calls that completed
+        (how thoroughly the absence was checked). INCOMPLETE carries none."""
+        if status != SourceStatus.NOT_FOUND or context.search_attempted <= 0:
+            return 0.0
+        completed = context.search_success + context.search_success_empty + context.search_cached
+        return round(min(1.0, completed / context.search_attempted), 3)
+
+    @staticmethod
+    def _strength(context: PipelineContext, inp: DecisionInputs) -> float:
+        def v(metric: Metric) -> float | None:
+            return metric.value if metric.ok else None
+
+        values = [v(inp.headline_similarity), v(inp.headline_keyword_coverage), v(inp.passage_keyword_coverage)]
+        if inp.entity_coverage.ok:
+            values.append(inp.entity_coverage.value)
+        if inp.body_similarity.ok:
+            values.append(inp.body_similarity.value)
+        return check_strength(values)
+
+    def _reason_not_confirmed(
+        self, context: PipelineContext, status: SourceStatus, basis: list[str]
     ) -> str:
-        parts: list[str] = []
-        scores = context.scores
-        article = context.top_article
-        source = context.normalized_source or context.raw_claimed_source
+        source = context.normalized_source or context.raw_claimed_source or "the claimed source"
+        s = context.analysis.search
+        search_line = (
+            f"Search: {s.success + s.cached} call(s) returned results, {s.success_empty} completed "
+            f"with no results, {s.failed} failed, {s.skipped} skipped."
+            if s
+            else ""
+        )
+        if status == SourceStatus.NOT_FOUND:
+            head = (
+                f"No corresponding report from {source} was found by an adequate search. "
+                "Content and date were not evaluated."
+            )
+        else:
+            head = (
+                f"The check against {source} could not be completed, so no conclusion "
+                "is drawn about whether the source published this report. "
+                "Content and date were not evaluated."
+            )
+        detail = " ".join(f"{b}." for b in basis)
+        return " ".join(p for p in (head, detail, search_line, f"Verdict: source {status.value}.") if p)
+
+    def _reason_confirmed(self, context: PipelineContext, basis: list[str]) -> str:
+        source = context.normalized_source or context.raw_claimed_source or "the claimed source"
+        art = context.top_article
+        parts = [f"A corresponding report was found on {source}" + (f": {art.title}." if art and art.title else ".")]
         flags = context.manipulation_flags
 
-        if article:
-            parts.append(
-                f"A matching article was found on {source or 'the claimed source'}."
+        if context.content_status == ContentStatus.ALTERED:
+            quotes = "; ".join(
+                f"{d.detail} (claim: \"{d.claim_text[:80]}\")" for d in flags.discrepancies[:4]
             )
-
-        if scores.semantic_similarity is not None:
-            parts.append(f"Semantic similarity: {scores.semantic_similarity:.2f}.")
-        if scores.entity_match is not None:
-            parts.append(f"Entity match: {scores.entity_match:.2f}.")
-
-        if scores.keyword_overlap is not None:
-            kw_note = f"Keyword overlap: {scores.keyword_overlap:.2f}"
-
-            if (
-                scores.semantic_similarity is not None
-                and abs(scores.keyword_overlap - scores.semantic_similarity) > 0.25
-            ):
-                if scores.keyword_overlap > scores.semantic_similarity:
-                    kw_note += " (topic matches but content differs significantly)"
-                else:
-                    kw_note += " (similar language but different topic focus)"
-            kw_note += "."
-            parts.append(kw_note)
-
-        if (
-            scores.numerical_consistency is not None
-            and scores.numerical_consistency < 1.0
-        ):
-            parts.append(
-                f"Numerical consistency: {scores.numerical_consistency:.2f} "
-                "(some numbers may differ)."
-            )
-        if scores.contradiction_score is not None and scores.contradiction_score > 0.3:
-            parts.append(
-                f"Contradiction detected (score: {scores.contradiction_score:.2f})."
-            )
-
-        if flags.headline_manipulated:
-            parts.append(
-                "Headline appears to have been manipulated relative to the original article."
-            )
-        if flags.body_altered:
-            parts.append(
-                "Article body shows significant divergence from the matched article."
-            )
-        if flags.numbers_altered:
-            parts.append("One or more numerical values appear to have been altered.")
-        if flags.entities_replaced:
-            parts.append(
-                "Named entities (persons/places/organisations) may have been substituted."
-            )
-
-        date_note = (
-            {
-                DateStatus.MATCHED: "The claimed publication date matches the source.",
-                DateStatus.MISMATCHED: (
-                    "The claimed publication date does not match the source's actual "
-                    "publication date — this does not affect whether the content itself matches."
-                ),
-            }.get(context.date_status)
-            if context.date_status
-            else None
-        )
-        if date_note:
-            parts.append(date_note)
-
-        source_status = context.source_status.value if context.source_status else "UNKNOWN"
-        content_status = context.content_status.value if context.content_status else "N/A"
-        date_status = context.date_status.value if context.date_status else "UNKNOWN"
-        verdict_line = f"Verdict: source {source_status}, content {content_status}, date {date_status}."
-        parts.append(verdict_line)
-
-        return " ".join(p for p in parts if p)
-
-
-def _compare_dates(context: PipelineContext) -> DateStatus | None:
-    claimed = context.published_date
-    article = context.top_article
-    actual = article.published_date if article else None
-
-    if claimed is None or actual is None:
-        return None
-
-    return DateStatus.MATCHED if claimed == actual else DateStatus.MISMATCHED
-
-
-def _compute_weighted_score(scores, thresholds) -> float:
-    max_dim_weight = thresholds.max_single_dimension_weight
-
-    dim_weights: list[tuple[float | None, float]] = [
-        (scores.semantic_similarity, _W_SEM),
-        (scores.entity_match, _W_ENT),
-        (scores.keyword_overlap, _W_KW),
-        (scores.numerical_consistency, _W_NUM),
-    ]
-
-    available: list[tuple[float, float]] = [
-        (val, wt) for val, wt in dim_weights if val is not None
-    ]
-
-    if not available:
-        return 0.0
-
-    total_weight = sum(wt for _, wt in available)
-    if total_weight == 0:
-        return 0.0
-
-    capped_available: list[tuple[float, float]] = []
-    excess = 0.0
-    uncapped_weight = 0.0
-
-    for val, wt in available:
-        effective = wt / total_weight
-        if effective > max_dim_weight:
-            excess += effective - max_dim_weight
-            capped_available.append((val, max_dim_weight))
+            parts.append(f"The submitted content differs from the report: {quotes}.")
+        elif context.content_status == ContentStatus.MATCHED:
+            parts.append("The submitted content is supported by the report: " + "; ".join(basis) + ".")
         else:
-            capped_available.append((val, effective))
-            uncapped_weight += effective
+            parts.append(
+                "Content could not be confirmed or refuted from the available evidence — "
+                + "; ".join(basis)
+                + ". This is not a finding that the content was altered."
+            )
 
-    if excess > 0 and uncapped_weight > 0:
-        final: list[tuple[float, float]] = []
-        for val, eff_wt in capped_available:
-            if eff_wt < max_dim_weight and uncapped_weight > 0:
-                redistribution = excess * (eff_wt / uncapped_weight)
-                final.append((val, eff_wt + redistribution))
-            else:
-                final.append((val, eff_wt))
-    else:
-        final = capped_available
+        if context.date_status == DateStatus.MATCHED:
+            parts.append("The claimed publication date matches the report's date.")
+        elif context.date_status == DateStatus.MISMATCHED and context.analysis.date:
+            d = context.analysis.date
+            parts.append(
+                f"The claimed publication date ({d.claimed_date}) differs from the report's "
+                f"published date ({d.article_date}, Asia/Dhaka). This does not affect the content check."
+            )
+        elif context.date_status == DateStatus.INCOMPLETE:
+            parts.append(
+                "The report's own publication date could not be determined, so the claimed date "
+                "could not be checked."
+            )
+        elif context.published_date is None:
+            parts.append("No publication date was claimed, so the date check does not apply.")
 
-    result = sum(val * eff_wt for val, eff_wt in final)
+        c = context.content_status.value if context.content_status else "N/A"
+        d = context.date_status.value if context.date_status else "N/A"
+        parts.append(f"Verdict: source CONFIRMED, content {c}, date {d}.")
+        return " ".join(parts)
 
-    if len(available) < 4:
-        logger.debug(
-            "s11_weight_redistribution",
-            available_dims=len(available),
-            effective_weights={
-                f"dim_{i}": round(eff_wt, 3) for i, (_, eff_wt) in enumerate(final)
-            },
+    def _log(self, context: PipelineContext, basis: list[str]) -> None:
+        logger.info(
+            "s11_verdict",
+            scope=context.claim_scope.value,
+            source_status=context.source_status.value if context.source_status else None,
+            content_status=context.content_status.value if context.content_status else None,
+            date_status=context.date_status.value if context.date_status else None,
+            check_strength=context.confidence,
+            basis=basis,
+            search_adequate=context.search_adequate,
+            search_attempted=context.search_attempted,
+            search_failed=context.search_errors,
         )
-
-    return max(0.0, min(1.0, result))
-
-
-def _assign_content_status(
-    evidence_score: float,
-    manipulation,
-    contradiction_override: bool,
-    thresholds,
-) -> ContentStatus:
-    """MATCHED requires strong evidence AND no sign of alteration.
-
-    Outright contradiction (contradiction_override) and detected manipulation
-    both fall through to ALTERED regardless of the raw evidence score — a
-    headline can score well on similarity while still being a manipulated
-    version of the source article.
-    """
-    if contradiction_override:
-        return ContentStatus.ALTERED
-
-    if manipulation.any_manipulation_detected:
-        return ContentStatus.ALTERED
-
-    soft_true_threshold = (
-        thresholds.partial_threshold + thresholds.true_threshold
-    ) / 2.0
-
-    if evidence_score >= soft_true_threshold:
-        return ContentStatus.MATCHED
-
-    return ContentStatus.ALTERED
-
-
-def _compute_confidence(
-    evidence_score: float,
-    contradiction: float,
-    contradiction_override: bool,
-    thresholds,
-) -> float:
-    if contradiction_override:
-        return round(min(0.95, 0.6 + contradiction * 0.35), 3)
-
-    soft_true_threshold = (
-        thresholds.partial_threshold + thresholds.true_threshold
-    ) / 2.0
-    distance = abs(evidence_score - soft_true_threshold)
-
-    base = 0.5 + 0.47 * (1.0 - math.exp(-15.0 * distance))
-    return round(min(0.97, max(0.50, base)), 3)

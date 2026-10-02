@@ -14,3 +14,13 @@
     .empty-state { max-width: 400px; margin: 80px auto; }
     .pagination { display: flex; align-items: center; justify-content: center; gap: 16px; }
     .loading-overlay { display: flex; justify-content: center; padding: 80px; }
+
+.submission-cell { display: flex; align-items: center; gap: 12px; }
+.thumb { width: 44px; height: 44px; border-radius: var(--radius-md); object-fit: cover; flex-shrink: 0; border: 1px solid var(--border); }
+.thumb-placeholder { display: flex; align-items: center; justify-content: center; background: var(--bg-surface-2); font-size: 20px; }
+.type-tag { font-size: 11px; color: var(--text-muted); }
+.row-running { background: var(--bg-surface-2); }
+.row-failed .headline-cell { opacity: 0.85; }
+.fail-reason { max-width: 220px; margin-top: 2px; }
+.mini-spinner { display: inline-block; width: 10px; height: 10px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: hist-spin 0.8s linear infinite; vertical-align: -1px; margin-right: 4px; }
+@keyframes hist-spin { to { transform: rotate(360deg); } }

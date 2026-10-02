@@ -2,171 +2,159 @@ from __future__ import annotations
 
 import structlog
 
-from app.core.config import get_settings
-from app.core.constants import ManipulationType, PipelineStageID
+from app.core.constants import CheckState, ClaimScope, ManipulationType, PipelineStageID
+from app.features.verification.analysis.discrepancies import (
+    ALIGN_MIN_STRENGTH,
+    EvidenceSentence,
+    analyze,
+    sentences_of,
+)
+from app.features.verification.analysis.text import split_sentences
 from app.features.verification.pipeline.context import PipelineContext
-from app.features.verification.schemas import ManipulationFlagsSchema
-from app.features.nlp.embedding_service import EmbeddingService
-from app.features.nlp.ner_service import NERService
-from app.shared.utils.number_extractor import find_altered_numbers
+from app.features.verification.schemas import (
+    AlteredNumberDetail,
+    DiscrepancyDetail,
+    ManipulationFlagsSchema,
+    SubstitutedEntityDetail,
+)
 
 logger = structlog.get_logger(__name__)
-_SETTINGS = get_settings()
+
+# Fraction of submitted-body sentences that must find an aligned source
+# sentence before the body check can claim to have evaluated the body.
+_BODY_MIN_ALIGNED_FRACTION = 0.5
 
 
 class ManipulationDetectorStage:
+    """Concrete, evidence-backed alteration checks — scope-aware.
+
+    A flag is set ONLY when a specific discrepancy between the claim and the
+    source sentence discussing the same thing is found (changed number or
+    unit, flipped negation, same-type-same-role entity substitution, role
+    swap, scope/quantifier change, changed attribution, plan-vs-completed).
+    Low similarity or low entity coverage alone never sets a flag: those are
+    measurements, handled (as "not established") by S11.
+
+    Every check ends in an explicit state: PASSED / FAILED / NOT_EVALUATED /
+    NOT_APPLICABLE. For photo cards (HEADLINE_ONLY) the submitted-body check
+    is NOT_APPLICABLE and no body text — real or synthetic — takes part in any
+    check.
+    """
 
     stage_id = PipelineStageID.S10_MANIPULATION_DETECTOR
 
-    def __init__(self, embedding_service: EmbeddingService) -> None:
+    def __init__(self, embedding_service=None) -> None:  # signature kept for the factory
         self._embedder = embedding_service
-        self._thresholds = _SETTINGS.classification
 
     async def execute(self, context: PipelineContext) -> PipelineContext:
         if not context.top_article:
             logger.debug("s10_no_top_article_skipping")
             return context
 
-        flags = ManipulationFlagsSchema()
-        detected: list[ManipulationType] = []
-
         article = context.top_article
-        scores = context.scores
+        with_body = context.claim_scope == ClaimScope.HEADLINE_WITH_BODY and context.has_body
+
+        claim_sentences = sentences_of(context.normalized_headline, "headline")
+        if with_body and context.normalized_body:
+            claim_sentences += sentences_of(context.normalized_body, "body")
+
+        evidence = [EvidenceSentence(article.title, "title")] if article.title else []
+        evidence += [
+            EvidenceSentence(s, "body") for s in split_sentences(article.body or "", min_len=10)
+        ]
 
         try:
-
-            headline_sim = scores.headline_similarity
-            if headline_sim is None:
-                headline_sim = await self._compute_headline_similarity(context, article)
-
-            body_sim = scores.body_similarity or scores.semantic_similarity or 0.0
-
-            if (
-                headline_sim < self._thresholds.headline_sim_threshold
-                and body_sim >= self._thresholds.body_sim_high
-            ):
-                flags = ManipulationFlagsSchema(
-                    **{**flags.model_dump(), "headline_manipulated": True}
-                )
-                detected.append(ManipulationType.HEADLINE_MANIPULATED)
-                logger.info(
-                    "s10_headline_manipulation_detected",
-                    headline_sim=round(headline_sim, 3),
-                    body_sim=round(body_sim, 3),
-                )
-        except Exception as exc:
-            logger.warning("s10_headline_check_failed", error=str(exc))
-
-        sem_sim = scores.semantic_similarity
-        kw_overlap = scores.keyword_overlap
-        headline_sim_val = scores.headline_similarity
-
-        if sem_sim is not None and sem_sim < self._thresholds.body_altered_threshold:
-
-            if (
-                kw_overlap is not None
-                and kw_overlap >= self._thresholds.body_altered_min_keyword_overlap
-            ):
-
-                flags = ManipulationFlagsSchema(
-                    **{**flags.model_dump(), "body_altered": True}
-                )
-                detected.append(ManipulationType.BODY_ALTERED)
-                logger.info(
-                    "s10_body_alteration_detected",
-                    semantic_sim=round(sem_sim, 3),
-                    keyword_overlap=round(kw_overlap, 3),
-                    reason="topic_match_content_mismatch",
-                )
-            elif (
-                headline_sim_val is not None
-                and headline_sim_val < self._thresholds.headline_sim_threshold
-            ):
-
-                flags = ManipulationFlagsSchema(
-                    **{**flags.model_dump(), "body_altered": True}
-                )
-                detected.append(ManipulationType.BODY_ALTERED)
-                logger.info(
-                    "s10_fabricated_content_detected",
-                    semantic_sim=round(sem_sim, 3),
-                    headline_sim=round(headline_sim_val, 3),
-                    reason="both_headline_and_body_low",
-                )
-
-        try:
-            claim_full = (
-                f"{context.normalized_headline} {context.normalized_body or ''}"
+            results, alignments = analyze(
+                claim_sentences,
+                evidence,
+                context.claim_mentions,
+                context.evidence_mentions,
+                ner_available=context.ner_available,
             )
-            article_full = f"{article.title or ''} {article.body or ''}"
-            altered_nums = find_altered_numbers(claim_full, article_full)
-            if altered_nums:
-                flags = ManipulationFlagsSchema(
-                    **{**flags.model_dump(), "numbers_altered": True}
-                )
-                detected.append(ManipulationType.NUMBERS_ALTERED)
-                logger.info(
-                    "s10_numbers_altered_detected",
-                    altered_count=len(altered_nums),
-                    examples=str(altered_nums[:3]),
-                )
-        except Exception as exc:
-            logger.warning("s10_number_check_failed", error=str(exc))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("s10_checks_failed", error=str(exc))
+            context.record_stage_error(self.stage_id, f"Alteration checks failed: {exc}")
+            return context
 
-        entity_score = scores.entity_match
-        entity_flagged = False
+        discrepancies = [d for r in results.values() for d in r.discrepancies]
+        states: dict[str, CheckState] = {name: r.state for name, r in results.items()}
 
-        if (
-            entity_score is not None
-            and entity_score < self._thresholds.entity_replaced_threshold
-            and context.claim_entities
-        ):
-            entity_flagged = True
+        # Per-part states derived from the sentence alignments.
+        head_al = [a for a in alignments if a.claim.part == "headline"]
+        body_al = [a for a in alignments if a.claim.part == "body"]
+        head_failed = any(d.part == "headline" for d in discrepancies)
+        body_failed = any(d.part == "body" for d in discrepancies)
 
-        if (
-            not entity_flagged
-            and context.claim_entity_types
-            and context.article_entity_types
-        ):
-            type_substitution = NERService.compute_typed_entity_substitution(
-                context.claim_entity_types,
-                context.article_entity_types,
+        if head_failed:
+            states["headline"] = CheckState.FAILED
+        elif head_al and all(a.aligned for a in head_al):
+            states["headline"] = CheckState.PASSED
+        else:
+            states["headline"] = CheckState.NOT_EVALUATED
+
+        if not with_body:
+            states["body"] = CheckState.NOT_APPLICABLE
+        elif body_failed:
+            states["body"] = CheckState.FAILED
+        elif body_al and sum(a.aligned for a in body_al) / len(body_al) >= _BODY_MIN_ALIGNED_FRACTION:
+            states["body"] = CheckState.PASSED
+        else:
+            states["body"] = CheckState.NOT_EVALUATED
+
+        altered_numbers = [
+            AlteredNumberDetail(
+                claimed=d.meta.get("claimed", ""), nearest_in_article=d.meta.get("source")
             )
-            if type_substitution:
-                entity_flagged = True
-                logger.debug("s10_same_type_entity_substitution_detected")
-
-        if entity_flagged:
-            flags = ManipulationFlagsSchema(
-                **{**flags.model_dump(), "entities_replaced": True}
+            for d in discrepancies
+            if d.kind == "numbers"
+        ]
+        substituted = [
+            SubstitutedEntityDetail(
+                entity_type=d.meta.get("type", ""),
+                claimed=[d.meta.get("claimed", "")],
+                article_same_type=[d.meta.get("source", "")],
             )
+            for d in discrepancies
+            if d.kind == "entity_substitution"
+        ]
+
+        flags = ManipulationFlagsSchema(
+            headline_manipulated=head_failed,
+            body_altered=body_failed and with_body,
+            numbers_altered=states.get("numbers") == CheckState.FAILED,
+            entities_replaced=states.get("entities") == CheckState.FAILED,
+            altered_numbers=altered_numbers,
+            substituted_entities=substituted,
+            check_states=states,
+            discrepancies=[
+                DiscrepancyDetail(
+                    kind=d.kind,
+                    claim_text=d.claim_text,
+                    evidence_text=d.evidence_text,
+                    detail=d.detail,
+                    part=d.part,
+                )
+                for d in discrepancies
+            ],
+        )
+        detected: list[ManipulationType] = []
+        if flags.headline_manipulated:
+            detected.append(ManipulationType.HEADLINE_MANIPULATED)
+        if flags.body_altered:
+            detected.append(ManipulationType.BODY_ALTERED)
+        if flags.numbers_altered:
+            detected.append(ManipulationType.NUMBERS_ALTERED)
+        if flags.entities_replaced:
             detected.append(ManipulationType.ENTITIES_REPLACED)
-            logger.info(
-                "s10_entities_replaced_detected",
-                entity_score=(
-                    round(entity_score, 3) if entity_score is not None else None
-                ),
-                claim_entities=context.claim_entities[:5],
-            )
 
         context.manipulation_flags = flags
         context.detected_manipulations = detected
-
         logger.info(
             "s10_detection_complete",
+            scope=context.claim_scope.value,
             any_manipulation=flags.any_manipulation_detected,
-            flags=flags.model_dump(),
+            check_states={k: v.value for k, v in states.items()},
+            discrepancy_kinds=[d.kind for d in discrepancies],
+            align_min=ALIGN_MIN_STRENGTH,
         )
         return context
-
-    async def _compute_headline_similarity(
-        self, context: PipelineContext, article
-    ) -> float:
-        article_title = article.title or ""
-        if not article_title:
-            return 0.5
-
-        return await self._embedder.compute_similarity(
-            context.normalized_headline,
-            article_title,
-        )

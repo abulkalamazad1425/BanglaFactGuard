@@ -29,7 +29,7 @@
             </div>
             <div class="stat-card card">
               <span class="stat-num">{{ stats()!.pending }}</span>
-              <span class="stat-lbl">Pending</span>
+              <span class="stat-lbl">In progress</span>
             </div>
           </div>
         }
@@ -50,27 +50,55 @@
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>Headline</th>
+                  <th>Submission</th>
                   <th>Source</th>
-                  <th>Verdict</th>
-                  <th>Confidence</th>
+                  <th>Status</th>
+                  <th title="{{ strengthHelp }}">Check strength ℹ</th>
                   <th>Submitted</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
                 @for (s of submissions(); track s.submission_id) {
-                  <tr>
-                    <td class="headline-cell">{{ s.headline | slice:0:80 }}{{ s.headline.length > 80 ? '...' : '' }}</td>
-                    <td class="source-cell text-muted text-sm">{{ s.claimed_source_text | slice:0:40 }}</td>
-                    <td><app-verdict-badge [sourceStatus]="s.source_status" [contentStatus]="s.content_status" /></td>
+                  <tr [class.row-running]="isRunning(s)" [class.row-failed]="isFailed(s)">
+                    <td class="headline-cell">
+                      <div class="submission-cell">
+                        @if (s.image_url) {
+                          <img [src]="s.image_url" class="thumb" alt="" />
+                        } @else if (s.submission_type === 'PHOTO_CARD') {
+                          <span class="thumb thumb-placeholder">🖼️</span>
+                        }
+                        <div>
+                          <div [class.text-muted]="!s.headline">{{ truncate(headlineText(s), 80) }}</div>
+                          <span class="type-tag">{{ typeLabel(s.submission_type) }}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="source-cell text-muted text-sm">{{ (s.claimed_source_text || '—') | slice:0:40 }}</td>
                     <td>
-                      @if (s.ai_confidence !== null) {
-                        <span class="confidence">{{ (s.ai_confidence * 100).toFixed(1) }}%</span>
+                      @if (isRunning(s)) {
+                        <span class="badge badge-pending"><span class="mini-spinner"></span> {{ phaseText(s) }}…</span>
+                      } @else if (isFailed(s)) {
+                        <span class="badge badge-false" [title]="s.failure_reason || ''">⚠ Failed</span>
+                        @if (s.failure_reason) { <div class="text-muted text-xs fail-reason">{{ truncate(s.failure_reason, 70) }}</div> }
+                      } @else if (hasResult(s)) {
+                        @if (!s.is_finalized) { <div class="text-muted text-xs">⏳ Preliminary · awaiting experts</div> }
+                        <app-verdict-badge
+                          [overallVerdict]="s.is_finalized ? s.overall_verdict : null"
+                          [sourceStatus]="s.source_status"
+                          [contentStatus]="s.content_status"
+                          [dateStatus]="s.date_status" />
+                      } @else {
+                        <span class="text-muted">—</span>
+                      }
+                    </td>
+                    <td>
+                      @if (hasResult(s) && s.ai_confidence !== null && s.source_status !== 'INCOMPLETE') {
+                        <span class="confidence">{{ (s.ai_confidence * 100).toFixed(0) }}%</span>
                       } @else { <span class="text-muted">—</span> }
                     </td>
-                    <td class="text-muted text-sm">{{ s.submitted_at | date:'MMM d, y' }}</td>
-                    <td><a [routerLink]="['/verify', s.submission_id]" class="btn btn-ghost btn-sm">View</a></td>
+                    <td class="text-muted text-sm">{{ s.submitted_at | date:'MMM d, y, HH:mm' }}</td>
+                    <td><a [routerLink]="['/verify', s.submission_id]" class="btn btn-ghost btn-sm">{{ isRunning(s) ? 'Progress' : 'View' }}</a></td>
                   </tr>
                 }
               </tbody>

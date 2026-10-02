@@ -27,6 +27,8 @@ class SubmissionLookupResponse(BaseModel):
     body_text: str | None = None
     claimed_source_text: str | None = None
     published_date: date | None = None
+    processing_phase: str | None = None
+    failure_reason: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

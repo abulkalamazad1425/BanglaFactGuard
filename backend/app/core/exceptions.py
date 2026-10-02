@@ -47,6 +47,52 @@ class SourceNormalizationError(BanglaFactGuardError):
     http_status_code = 422
 
 
+class PhotoCardExtractionFailedError(BanglaFactGuardError):
+    """Neither Gemini nor the deterministic fallback produced a usable
+    headline from the card's OCR text. This is distinct from — and must
+    never be reported as — SourceNotFoundError or a content_status of
+    ALTERED: the automated checks never ran at all, because there was no
+    claim text to check in the first place."""
+
+    http_status_code = 422
+
+    def __init__(self, ocr_text: str, warnings: list[str]) -> None:
+        super().__init__(
+            message=(
+                "Could not extract a readable headline from this photo card. "
+                "Try a sharper or less cluttered image."
+            ),
+            details={"ocr_text_preview": ocr_text[:500], "warnings": warnings},
+        )
+        self.ocr_text = ocr_text
+        self.warnings = warnings
+
+
+class ImageStorageUnavailableError(BanglaFactGuardError):
+    """The card image could not be stored. A photo-card submission is only
+    acknowledged once its image bytes are durably stored (the background job
+    reads them back), so this is a 503 rather than an accepted submission."""
+
+    http_status_code = 503
+
+    def __init__(self) -> None:
+        super().__init__(
+            message="The image could not be stored right now. Please try again shortly."
+        )
+
+
+class PermanentJobError(BanglaFactGuardError):
+    """A background job failed in a way retrying cannot fix (unreadable
+    image, unresolvable source, ...). Carries a user-presentable reason that
+    is stored on the submission and shown on its result page."""
+
+    http_status_code = 422
+
+    def __init__(self, reason: str, details: dict[str, Any] | None = None) -> None:
+        super().__init__(message=reason, details=details)
+        self.reason = reason
+
+
 class PipelineError(BanglaFactGuardError):
 
     http_status_code = 500

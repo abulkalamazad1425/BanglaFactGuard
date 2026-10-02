@@ -35,6 +35,7 @@ export class PublicDashboardComponent implements OnInit {
     overall_verdict: [''],
     source_status: [''],
     content_status: [''],
+    date_status: [''],
     method: [''],
     date_from: [''],
     date_to: [''],
@@ -74,6 +75,7 @@ export class PublicDashboardComponent implements OnInit {
       overall_verdict: v.overall_verdict || undefined,
       source_status: v.source_status || undefined,
       content_status: v.content_status || undefined,
+      date_status: v.date_status || undefined,
       method: v.method || undefined,
       date_from: v.date_from || undefined,
       date_to: v.date_to || undefined,
@@ -90,7 +92,7 @@ export class PublicDashboardComponent implements OnInit {
   }
 
   resetFilters(): void {
-    this.filterForm.reset({ keyword: '', overall_verdict: '', source_status: '', content_status: '', method: '', date_from: '', date_to: '' });
+    this.filterForm.reset({ keyword: '', overall_verdict: '', source_status: '', content_status: '', date_status: '', method: '', date_from: '', date_to: '' });
     this.search();
   }
 

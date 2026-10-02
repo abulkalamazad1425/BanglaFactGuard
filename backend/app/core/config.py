@@ -62,6 +62,15 @@ class RedisSettings(BaseSettings):
     ttl_claim_result: int = Field(
         default=86_400, description="24 h — full VerificationResponse"
     )
+    ttl_not_found_result: int = Field(
+        default=3_600,
+        description=(
+            "1 h — freshness of a Source NOT_FOUND result. Shorter than "
+            "ttl_claim_result because an outlet can publish (or index) the "
+            "story after the first check. Enforced in Redis AND in the "
+            "database fallback."
+        ),
+    )
     ttl_search_result: int = Field(
         default=21_600, description="6 h — raw search URL lists"
     )
@@ -97,16 +106,31 @@ class MLSettings(BaseSettings):
     )
 
     nli_model_name: str = Field(
-        default="cross-encoder/nli-deberta-v3-base",
-        description="HuggingFace model name for NLI-based contradiction detection",
+        default="MoritzLaurer/mDeBERTa-v3-base-mnli-xnli",
+        description=(
+            "HuggingFace model name for NLI-based contradiction detection. "
+            "Must be a genuinely multilingual NLI model — cross-encoder/"
+            "nli-deberta-v3-* is English-only (MNLI/SNLI/FEVER fine-tuned on "
+            "an English-only DeBERTa-v3 vocabulary) and fragments Bangla "
+            "input into near-single-character tokens, making its scores "
+            "meaningless for Bangla claims. See docs/06-ai-engineering-"
+            "design.md S09 for the tokenization evidence."
+        ),
     )
     nli_thread_workers: int = Field(
         default=2, description="Thread pool workers for NLI prediction"
     )
 
     ner_model_name: str = Field(
-        default="csebuetnlp/banglabert",
-        description="BanglaBERT-based NER model",
+        default="neuropark/sahajBERT-NER",
+        description=(
+            "Bangla-specific NER model (PER/LOC/ORG). csebuetnlp/banglabert "
+            "is an ELECTRA *pretraining* checkpoint with no token-"
+            "classification head — loading it via the HF `ner` pipeline "
+            "silently initialises a random, untrained 2-label classifier "
+            "that never emits PER/LOC/ORG, so extract_entities() always "
+            "returned []. See docs/06-ai-engineering-design.md S08/S10."
+        ),
     )
     ner_thread_workers: int = Field(
         default=2, description="Thread pool workers for NER extraction"
@@ -435,6 +459,60 @@ class ClassificationThresholds(BaseSettings):
             "NLI is far less reliable than body-based NLI."
         ),
     )
+    # ── source correspondence (does the claimed outlet carry THIS report?) ──
+    corr_headline_sim_strong: float = Field(
+        default=0.72,
+        description="Headline↔source-title similarity at/above which the report corresponds on its own.",
+    )
+    corr_headline_sim_plausible: float = Field(
+        default=0.55,
+        description="Minimum headline↔title similarity for a plausible correspondence (needs lexical support).",
+    )
+    corr_keyword_title_plausible: float = Field(
+        default=0.50,
+        description="Claim-keyword coverage of the source title that counts as lexical support.",
+    )
+    corr_keyword_passage_plausible: float = Field(
+        default=0.60,
+        description="Claim-keyword coverage of the relevant passages that counts as lexical support.",
+    )
+    corr_keyword_only_title: float = Field(
+        default=0.70,
+        description="Title keyword coverage required when no embedding similarity is available.",
+    )
+    # ── content support (MATCHED needs positive support, never absence of contradiction) ──
+    support_headline_sim: float = Field(default=0.75)
+    support_keyword_coverage: float = Field(default=0.70)
+    support_keyword_coverage_no_ner: float = Field(
+        default=0.85,
+        description="Stricter keyword coverage required when entity coverage cannot be computed.",
+    )
+    support_entity_coverage: float = Field(default=0.80)
+    support_body_similarity: float = Field(default=0.70)
+    support_body_min_chunk_similarity: float = Field(default=0.50)
+    support_body_keyword_coverage: float = Field(default=0.60)
+    possible_contradiction: float = Field(
+        default=0.50,
+        description="NLI contradiction at/above which a possible contradiction blocks MATCHED.",
+    )
+    nli_bangla_validated: bool = Field(
+        default=False,
+        description=(
+            "Set True only after the NLI model has been evaluated on labelled "
+            "Bangla pairs. While False a high NLI contradiction can block "
+            "MATCHED but can never, on its own, produce ALTERED."
+        ),
+    )
+    # ── search adequacy ──
+    search_min_successful_calls: int = Field(
+        default=2,
+        description="Minimum completed provider calls (success or successful-empty) for a search to count as adequate.",
+    )
+    search_min_success_ratio: float = Field(
+        default=0.5,
+        description="Minimum share of attempted provider calls that must complete for adequacy.",
+    )
+
     max_single_dimension_weight: float = Field(
         default=0.65,
         description=(
@@ -505,6 +583,73 @@ class EmailSettings(BaseSettings):
         return bool(self.smtp_host)
 
 
+class GeminiSettings(BaseSettings):
+    """Gemini is used for one narrow job: extracting a single news headline
+    from OCR'd photo-card text (see app/features/photocard/gemini_extractor.py).
+    It never sees the raw image, never produces a body/caption, and its
+    output is always validated against the OCR text it was given (a
+    "grounding" check) before being trusted — if the key is unset, the
+    request fails, the response is malformed, or grounding fails, callers
+    fall back to the existing deterministic extractor rather than erroring."""
+
+    model_config = SettingsConfigDict(env_prefix="GEMINI_")
+
+    api_key: str = Field(
+        default="",
+        description="Gemini API key. Empty disables Gemini — extraction falls back to the deterministic extractor for every request.",
+    )
+    model_name: str = Field(
+        default="gemini-2.0-flash",
+        description="Gemini model id used for headline extraction, e.g. gemini-2.0-flash.",
+    )
+    base_url: str = Field(
+        default="https://generativelanguage.googleapis.com/v1beta",
+        description="Gemini REST API base URL.",
+    )
+    timeout_seconds: int = Field(
+        default=20,
+        description="HTTP timeout for a single Gemini extraction call.",
+    )
+    min_grounding_overlap: float = Field(
+        default=0.5,
+        description=(
+            "Minimum fraction of the extracted headline's significant words "
+            "that must actually appear in the OCR text for the extraction to "
+            "be trusted. Below this, Gemini's output is treated as "
+            "ungrounded/hallucinated and discarded in favour of the "
+            "deterministic fallback — this is also the mechanical backstop "
+            "against prompt injection embedded in OCR'd text: even if "
+            "injected instructions change what Gemini returns, an "
+            "ungrounded headline fails this check regardless of why it "
+            "diverged from the source text."
+        ),
+    )
+
+    @property
+    def is_configured(self) -> bool:
+        return bool(self.api_key) and self.api_key != "your-gemini-api-key-here"
+
+
+class JobSettings(BaseSettings):
+    """Background verification worker (see app/features/verification/jobs.py)."""
+
+    model_config = SettingsConfigDict(env_prefix="JOBS_")
+
+    enabled: bool = Field(default=True, description="Run the in-process job worker.")
+    max_concurrent: int = Field(
+        default=2,
+        ge=1,
+        description="Bound on simultaneously running verification jobs (the pipeline has CPU-bound stretches that share the API event loop).",
+    )
+    poll_interval_seconds: float = Field(default=5.0, gt=0)
+    stale_after_seconds: float = Field(
+        default=120.0,
+        gt=0,
+        description="A RUNNING job with no heartbeat for this long is reclaimed (restart recovery latency).",
+    )
+    heartbeat_interval_seconds: float = Field(default=30.0, gt=0)
+
+
 class AppSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
@@ -555,6 +700,8 @@ class AppSettings(BaseSettings):
     minio: MinioSettings = Field(default_factory=MinioSettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)
     email: EmailSettings = Field(default_factory=EmailSettings)
+    gemini: GeminiSettings = Field(default_factory=GeminiSettings)
+    jobs: JobSettings = Field(default_factory=JobSettings)
 
     @property
     def classification(self) -> ClassificationThresholds:

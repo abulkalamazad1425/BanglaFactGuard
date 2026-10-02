@@ -8,7 +8,7 @@ Migrated from: app/schemas/article.py
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 
 from pydantic import BaseModel, Field, computed_field
 
@@ -85,7 +85,24 @@ class RankedArticleSchema(BaseModel):
     body: str | None = Field(default=None)
     author: str | None = Field(default=None)
     published_date: date | None = Field(default=None)
-    rank_score: float = Field(default=0.0, ge=0.0, le=1.0)
+    published_at: datetime | None = Field(
+        default=None,
+        description="datePublished with time, tz-aware (Asia/Dhaka), when the page carried one.",
+    )
+    published_date_source: str | None = Field(
+        default=None,
+        description="Provenance of published_date (json_ld.datePublished, meta.article:published_time, selector, ...). Never dateModified or a crawl date.",
+    )
+    published_tz_assumed: bool = Field(
+        default=False,
+        description="True when the page's timestamp had no UTC offset and Asia/Dhaka was assumed.",
+    )
+    rank_score: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="Retrieval relevance (is this the report the claim is about?). NOT a content-match score.",
+    )
     search_provider: SearchProvider
     extraction_method: ExtractionMethod | None = Field(default=None)
 

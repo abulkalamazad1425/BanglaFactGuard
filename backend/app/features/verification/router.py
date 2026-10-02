@@ -5,9 +5,9 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from app.core.constants import SubmissionStatus
-from app.core.exceptions import PipelineError, RecordNotFoundError
+from app.core.exceptions import PipelineError, RecordNotFoundError, SourceNotFoundError
+from app.features.submissions.access import viewer_can_see
 from app.features.submissions.repository import SubmissionRepository
-from app.features.verification.jobs import schedule_verification_job
 from app.features.verification.schemas import (
     VerificationQueuedResponse,
     VerificationRequest,
@@ -37,6 +37,7 @@ router = APIRouter(prefix="/verify", tags=["Verification"])
     ),
     responses={
         200: {"description": "Verification result (may be cached)"},
+        404: {"description": "Claimed source could not be resolved to a registered news source"},
         422: {"description": "Invalid request payload"},
         500: {"description": "Pipeline failure — critical stage error"},
     },
@@ -49,6 +50,15 @@ async def verify_claim(
     try:
         submitter_id = current_user.id if current_user else None
         return await service.verify(request, submitter_id=submitter_id)
+    except SourceNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": "source_not_found",
+                "message": exc.message,
+                "claimed_source": exc.claimed_source,
+            },
+        ) from exc
     except PipelineError as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -75,6 +85,7 @@ async def verify_claim(
     ),
     responses={
         202: {"description": "Claim accepted (or an existing result reused)"},
+        404: {"description": "Claimed source could not be resolved to a registered news source"},
         422: {"description": "Invalid request payload"},
     },
 )
@@ -85,22 +96,26 @@ async def verify_claim_async(
     current_user: User | None = Depends(get_current_user_optional),
 ) -> VerificationQueuedResponse:
     submitter_id = current_user.id if current_user else None
-    submission_id, submission_status, cached = await service.register_claim(
-        request, submitter_id=submitter_id
-    )
+    try:
+        submission_id, submission_status, cached = await service.register_claim(
+            request, submitter_id=submitter_id
+        )
+    except SourceNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": "source_not_found",
+                "message": exc.message,
+                "claimed_source": exc.claimed_source,
+            },
+        ) from exc
 
     if not cached:
-        app_state = http_request.app.state
-        schedule_verification_job(
-            submission_id=submission_id,
-            request=request,
-            submitter_id=submitter_id,
-            cache_service=app_state.cache_service,
-            embedding_service=app_state.embedding_service,
-            ner_service=app_state.ner_service,
-            nli_service=app_state.nli_service,
-            http_client=app_state.http_client,
-        )
+        # The job row was committed with the submission; this only wakes the
+        # worker so it starts without waiting for its next poll.
+        worker = getattr(http_request.app.state, "job_worker", None)
+        if worker is not None:
+            worker.wake()
 
     return VerificationQueuedResponse(
         submission_id=submission_id,
@@ -121,9 +136,11 @@ async def verify_claim_async(
 async def get_verification_result(
     submission_id: uuid.UUID,
     service: VerificationService = Depends(get_verification_service),
+    current_user: User | None = Depends(get_current_user_optional),
 ) -> VerificationResponse:
+    submission = await service.submission_repo.get_by_id_or_none(submission_id)
     result = await service.get_result(submission_id)
-    if result is None:
+    if result is None or submission is None or not viewer_can_see(submission, current_user):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"error": "not_found", "submission_id": str(submission_id)},
@@ -144,6 +161,7 @@ async def get_verification_status(
     submission_id: uuid.UUID,
     submission_repo: SubmissionRepository = Depends(get_submission_repo),
     service: VerificationService = Depends(get_verification_service),
+    current_user: User | None = Depends(get_current_user_optional),
 ) -> VerificationStatusResponse:
     try:
         submission = await submission_repo.get_by_id(submission_id)
@@ -152,16 +170,26 @@ async def get_verification_status(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"error": "not_found", "submission_id": str(submission_id)},
         )
+    if not viewer_can_see(submission, current_user):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": "not_found", "submission_id": str(submission_id)},
+        )
 
     result = None
-    if submission.status in (SubmissionStatus.EXPERT_REVIEW, SubmissionStatus.FINALIZED):
+    if submission.status in (
+        SubmissionStatus.EXPERT_REVIEW,
+        SubmissionStatus.FINALIZED,
+        SubmissionStatus.ESCALATED,
+    ):
         result = await service.get_result(submission_id)
 
     return VerificationStatusResponse(
         submission_id=submission_id,
         status=submission.status,
+        phase=submission.processing_phase,
         result=result,
-        error=None,
+        error=submission.failure_reason if submission.status == SubmissionStatus.FAILED else None,
         queued_at=submission.created_at,
         updated_at=submission.updated_at,
     )

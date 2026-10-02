@@ -16,6 +16,7 @@ from app.core.constants import ExtractionMethod, PipelineStageID, SearchProvider
 from app.features.verification.pipeline.context import PipelineContext
 from app.features.articles.schemas import CandidateArticleSchema, RankedArticleSchema
 from app.features.cache.cache_service import CacheService
+from app.shared.utils.dates import ParsedPublication, parse_publication
 from app.shared.utils.hashing import compute_url_hash
 from app.shared.utils.text_cleaner import clean_extracted_text, clean_title
 
@@ -108,18 +109,23 @@ class ArticleExtractorStage:
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         extracted: list[RankedArticleSchema] = []
+        extraction_errors = 0
         for (url, _), result in zip(raw_html_cache.items(), results):
             if isinstance(result, RankedArticleSchema):
                 if result.has_body or result.title:
                     extracted.append(result)
                 else:
                     context.failed_extraction_urls.append(url)
+                    extraction_errors += 1
             elif isinstance(result, Exception):
                 logger.warning(
                     "s06_extraction_exception", url=url[:80], error=str(result)
                 )
                 context.failed_extraction_urls.append(url)
+                extraction_errors += 1
 
+        context.extraction_attempted += len(raw_html_cache)
+        context.extraction_errors += extraction_errors
         context.extracted_articles = extracted
         logger.info(
             "s06_extraction_complete",
@@ -150,13 +156,20 @@ class ArticleExtractorStage:
         title: str | None = None
         body: str | None = None
         author: str | None = None
-        pub_date: date | None = None
         method = ExtractionMethod.BEAUTIFULSOUP
 
         try:
             soup = BeautifulSoup(html, "lxml")
         except Exception:
             soup = BeautifulSoup(html, "html.parser")
+
+        # datePublished, with provenance and tz handling, found independently
+        # of body extraction. (Previously the date was only looked for on the
+        # fallback paths, so a page whose title/body came from site selectors
+        # returned early with no date at all - and the date check could only
+        # ever report INCOMPLETE for it.) dateModified and crawl dates are
+        # never used.
+        published = self._find_publication(soup, config)
 
         if config:
 
@@ -166,15 +179,6 @@ class ArticleExtractorStage:
                     t = el.get_text(strip=True)
                     if t and len(t) > 5:
                         title = t
-                        break
-
-            for sel in config.get("date_selectors", []):
-                el = self._safe_select_one(soup, sel)
-                if el:
-                    raw_date = el.get("datetime") or el.get_text(strip=True)
-                    parsed = _parse_date(raw_date)
-                    if parsed:
-                        pub_date = parsed
                         break
 
             for sel in config.get("body_selectors", []):
@@ -223,7 +227,7 @@ class ArticleExtractorStage:
 
         if title and body and len(body) >= self._min_body_length:
             return self._build_result(
-                url, title, body, author, pub_date, method, provider, candidate, soup
+                url, title, body, author, published, method, provider, candidate, soup
             )
 
         if not body or len(body) < self._min_body_length:
@@ -254,8 +258,6 @@ class ArticleExtractorStage:
                                 and not author
                             ):
                                 author = author_data[0].get("name")
-                            if not pub_date:
-                                pub_date = _parse_date(item.get("datePublished", ""))
                             method = ExtractionMethod.JSON_LD
                             break
                 except Exception:
@@ -269,7 +271,6 @@ class ArticleExtractorStage:
                 title = title or t_title
                 body = t_body
                 author = author or t_author
-                pub_date = pub_date or t_date
                 method = ExtractionMethod.TRAFILATURA
 
         if not body or len(body) < self._min_body_length:
@@ -292,7 +293,6 @@ class ArticleExtractorStage:
                 title = title or bs_title
                 body = bs_body
                 author = author or bs_author
-                pub_date = pub_date or bs_date
                 method = ExtractionMethod.BEAUTIFULSOUP
 
         if not title:
@@ -316,26 +316,59 @@ class ArticleExtractorStage:
                     method = ExtractionMethod.OPENGRAPH
                     break
 
-        if not pub_date:
-            for attr in [
-                {"property": "article:published_time"},
-                {"name": "publish_date"},
-                {"name": "dc.date"},
-                {"itemprop": "datePublished"},
-            ]:
-                meta = soup.find("meta", attrs=attr)
-                if meta and meta.get("content"):
-                    pub_date = _parse_date(meta["content"])
-                    if pub_date:
-                        break
-
         return self._build_result(
-            url, title, body, author, pub_date, method, provider, candidate, soup
+            url, title, body, author, published, method, provider, candidate, soup
         )
 
+    def _find_publication(self, soup, config) -> tuple[ParsedPublication | None, str | None]:
+        """(parsed publication, provenance label). Priority: the outlet's own
+        date selectors, JSON-LD datePublished, publication meta tags,
+        <time itemprop=datePublished>."""
+        if config:
+            for sel in config.get("date_selectors", []):
+                el = self._safe_select_one(soup, sel)
+                if el:
+                    parsed = parse_publication(el.get("datetime") or el.get_text(strip=True))
+                    if parsed:
+                        return parsed, f"selector:{sel}"[:80]
+
+        for script in soup.find_all("script", type="application/ld+json"):
+            try:
+                data = json.loads(script.string or script.get_text() or "")
+            except Exception:
+                continue
+            for item in _iter_ld_items(data):
+                raw = item.get("datePublished")
+                if raw:
+                    parsed = parse_publication(str(raw))
+                    if parsed:
+                        return parsed, "json_ld.datePublished"
+
+        for attrs, label in (
+            ({"property": "article:published_time"}, "meta.article:published_time"),
+            ({"property": "og:article:published_time"}, "meta.og:article:published_time"),
+            ({"itemprop": "datePublished"}, "meta.itemprop.datePublished"),
+            ({"name": "publish_date"}, "meta.publish_date"),
+            ({"name": "pubdate"}, "meta.pubdate"),
+            ({"name": "dc.date.issued"}, "meta.dc.date.issued"),
+        ):
+            meta = soup.find("meta", attrs=attrs)
+            if meta and meta.get("content"):
+                parsed = parse_publication(meta["content"])
+                if parsed:
+                    return parsed, label
+
+        time_el = soup.find("time", attrs={"itemprop": "datePublished"})
+        if time_el:
+            parsed = parse_publication(time_el.get("datetime") or time_el.get_text(strip=True))
+            if parsed:
+                return parsed, "time.itemprop.datePublished"
+        return None, None
+
     def _build_result(
-        self, url, title, body, author, pub_date, method, provider, candidate, soup
+        self, url, title, body, author, published, method, provider, candidate, soup
     ) -> RankedArticleSchema:
+        parsed, pub_source = published
 
         if title:
             title = _TITLE_SUFFIX_RE.sub("", title).strip()
@@ -356,7 +389,10 @@ class ArticleExtractorStage:
                 else None
             ),
             author=author,
-            published_date=pub_date,
+            published_date=parsed.local_date if parsed else None,
+            published_at=parsed.published_at if parsed else None,
+            published_date_source=pub_source if parsed else None,
+            published_tz_assumed=parsed.tz_assumed if parsed else False,
             rank_score=0.0,
             search_provider=provider,
             extraction_method=method,
@@ -393,9 +429,10 @@ class ArticleExtractorStage:
             if meta:
                 title = meta.title or None
                 author = meta.author or None
-                if meta.date:
-                    pub_date = _parse_date(meta.date)
-            return title, body, author, pub_date
+            # meta.date is deliberately ignored: trafilatura returns the most
+            # recent date it finds (often dateModified), and publication date
+            # is only ever taken from datePublished sources (_find_publication).
+            return title, body, author, None
         except Exception as exc:
             logger.debug("s06_trafilatura_failed", url=url[:80], error=str(exc))
             return None, None, None, None
@@ -491,6 +528,20 @@ class ArticleExtractorStage:
             ]
             body = "\n".join(paras)
         return title, body or None, author, pub_date
+
+
+def _iter_ld_items(data):
+    """Yield every dict in a JSON-LD payload, including @graph members."""
+    stack = [data]
+    while stack:
+        cur = stack.pop()
+        if isinstance(cur, list):
+            stack.extend(cur)
+        elif isinstance(cur, dict):
+            yield cur
+            graph = cur.get("@graph")
+            if graph:
+                stack.append(graph)
 
 
 def _parse_date(raw: str | None) -> date | None:

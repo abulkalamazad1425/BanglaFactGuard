@@ -12,6 +12,7 @@ import structlog
 from app.core.config import get_settings
 from app.core.constants import PipelineStageID
 from app.features.verification.pipeline.context import PipelineContext
+from app.shared.utils.domains import allowed_domains_for, is_allowed_host
 
 logger = structlog.get_logger(__name__)
 
@@ -120,6 +121,20 @@ class _OriginBlocked(Exception):
         self.status = status
 
 
+class _RedirectRejected(Exception):
+    """The request ended on a host outside the claimed source's registered
+    domains/channels (open redirect, shortener, syndication partner). The page
+    is NOT evidence from the claimed source, so it is dropped - and it is a
+    rejected candidate, not a fetch failure."""
+
+    def __init__(self, final_url: str) -> None:
+        super().__init__(f"final URL left the claimed source: {final_url}")
+        self.final_url = final_url
+
+
+_REJECTED = "__REDIRECT_REJECTED__"
+
+
 class EvidenceRetrievalStage:
 
     stage_id = PipelineStageID.S05_EVIDENCE_RETRIEVAL
@@ -129,6 +144,7 @@ class EvidenceRetrievalStage:
         self._semaphore = asyncio.Semaphore(_MAX_CONCURRENT_FETCHES)
         self._top_k = _SETTINGS.search.top_k_candidates
 
+        self._allowed: list[str] = []
         self._domain_last_ts: dict[str, float] = defaultdict(float)
         self._domain_lock: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 
@@ -141,6 +157,10 @@ class EvidenceRetrievalStage:
         candidates = [_maybe_deamp(c) for c in candidates]
 
         candidates = candidates[: self._top_k]
+
+        self._allowed = allowed_domains_for(
+            context.normalized_source, getattr(context, "source_config", None)
+        )
 
         if not candidates:
             context._raw_html_cache = {}
@@ -159,9 +179,13 @@ class EvidenceRetrievalStage:
 
         raw_html_cache: dict[str, str] = {}
         shell_urls: list[str] = []
+        rejected = 0
 
         for url, result in zip(urls, tier1_results):
-            if isinstance(result, str) and result:
+            if isinstance(result, _RedirectRejected):
+                rejected += 1
+                logger.warning("s05_redirect_rejected", url=url[:80], final=result.final_url[:80])
+            elif isinstance(result, str) and result:
                 if _is_shell_html(result) or _is_bot_wall(result):
                     shell_urls.append(url)
                 else:
@@ -176,12 +200,17 @@ class EvidenceRetrievalStage:
             logger.info("s05_playwright_needed", count=len(shell_urls))
             pw_results = await self._fetch_playwright_batch(shell_urls)
             for url, html in pw_results.items():
-                if html:
+                if html == _REJECTED:
+                    rejected += 1
+                elif html:
                     raw_html_cache[url] = html
                 else:
                     context.failed_extraction_urls.append(url)
 
         context._raw_html_cache = raw_html_cache
+        context.search_redirect_rejected += rejected
+        context.fetch_attempted += len(urls) - rejected
+        context.fetch_errors += len(context.failed_extraction_urls)
 
         tier2_success = sum(1 for u in shell_urls if u in raw_html_cache)
         logger.info(
@@ -212,6 +241,9 @@ class EvidenceRetrievalStage:
                     headers=_ACCEPT_HEADERS,
                 )
                 if 200 <= resp.status_code < 300:
+                    final_host = resp.url.host if resp.url else ""
+                    if self._allowed and not is_allowed_host(final_host or "", self._allowed):
+                        return _RedirectRejected(str(resp.url))
                     return resp.text
                 if resp.status_code in _RETRY_IN_BROWSER_STATUSES:
                     return _OriginBlocked(resp.status_code)
@@ -295,6 +327,9 @@ class EvidenceRetrievalStage:
                         )
 
                         await page.wait_for_timeout(1500)
+                        final_host = urlparse(page.url).hostname or ""
+                        if self._allowed and not is_allowed_host(final_host, self._allowed):
+                            return url, _REJECTED
                         html = await page.content()
 
                         # A Cloudflare interstitial clears itself after a few

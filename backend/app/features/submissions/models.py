@@ -32,7 +32,7 @@ from sqlalchemy import (
     Text,
     func,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.constants import ExtractionMethod, QueryType, SearchProvider, SubmissionStatus, SubmissionType
@@ -105,6 +105,21 @@ class Submission(UUIDMixin, TimestampMixin, ReprMixin, Base):
     is_published: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     view_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    processing_phase: Mapped[str | None] = mapped_column(
+        String(16),
+        nullable=True,
+        comment=(
+            "Finer progress inside PENDING/PROCESSING (QUEUED | EXTRACTING | "
+            "VERIFYING | DONE | FAILED). The public lifecycle enum is unchanged."
+        ),
+    )
+
+    failure_reason: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Short, user-presentable reason when status is FAILED (e.g. no readable headline in the image).",
+    )
 
     claimed_source: Mapped["VerifiedSource | None"] = relationship(
         "VerifiedSource",
@@ -280,7 +295,52 @@ class OcrExtraction(UUIDMixin, TimestampMixin, ReprMixin, Base):
         String(100), nullable=False, default="tesseract-bn"
     )
 
-    is_confirmed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_confirmed: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        comment=(
+            "Legacy from the two-step extract-then-confirm flow. The "
+            "unattended Gemini extraction flow never sets this (there is no "
+            "user confirmation step); it stays False on every row it writes."
+        ),
+    )
+
+    extractor_used: Mapped[str | None] = mapped_column(
+        String(30),
+        nullable=True,
+        comment="GEMINI | EXISTING_FALLBACK — which extractor actually produced the final headline for this card.",
+    )
+
+    extraction_model_version: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+        comment="Gemini model id used (e.g. gemini-2.0-flash), NULL when extractor_used=EXISTING_FALLBACK.",
+    )
+
+    extraction_warnings: Mapped[list | None] = mapped_column(
+        JSONB,
+        nullable=True,
+        comment=(
+            "Extraction-time warnings as a JSON array of strings — from the "
+            "extractor itself (e.g. 'OCR text heavily garbled') and/or a "
+            "detected-vs-claimed source/date conflict, which is recorded "
+            "here rather than ever silently overriding the user's claimed "
+            "source/date."
+        ),
+    )
+
+    detected_source_text: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        comment="Source/outlet name the extractor found in the card's own text, independent of the user's claimed_source_text — may conflict with it.",
+    )
+
+    detected_date_text: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        comment="Publish date text the extractor found in the card's own text, independent of the user's published_date — may conflict with it.",
+    )
 
     submission: Mapped["Submission"] = relationship(
         "Submission",

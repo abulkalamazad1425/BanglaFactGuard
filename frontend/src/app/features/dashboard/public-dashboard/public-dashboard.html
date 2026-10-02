@@ -115,11 +115,19 @@
               <option value="">Any source status</option>
               <option value="CONFIRMED">Source Confirmed</option>
               <option value="NOT_FOUND">Source Not Found</option>
+              <option value="INCOMPLETE">Source Check Incomplete</option>
             </select>
             <select formControlName="content_status" class="form-control">
               <option value="">Any content status</option>
               <option value="MATCHED">Content Matched</option>
               <option value="ALTERED">Content Altered</option>
+              <option value="INCOMPLETE">Content Check Incomplete</option>
+            </select>
+            <select formControlName="date_status" class="form-control">
+              <option value="">Any date status</option>
+              <option value="MATCHED">Date Matched</option>
+              <option value="MISMATCHED">Date Mismatch</option>
+              <option value="INCOMPLETE">Date Check Incomplete</option>
             </select>
             <input type="date" formControlName="date_from" class="form-control" title="From date" />
             <input type="date" formControlName="date_to" class="form-control" title="To date" />
@@ -150,7 +158,7 @@
                   </div>
                   <div class="explorer-row-verdict">
                     @if (!item.is_finalized) {
-                      <span class="badge badge-pending">⏳ Under Review</span>
+                      <span class="badge badge-pending" title="Automated Source / Content / Date result only; no overall verdict until experts finalize it.">⏳ Preliminary · awaiting experts</span>
                     }
                     <app-verdict-badge
                       [overallVerdict]="item.overall_verdict"

@@ -61,7 +61,10 @@ class ExpertReviewResponse(BaseModel):
     id: str
     submission_id: str
     reviewer_id: str | None
-    ai_overall_verdict: OverallVerdict
+    ai_overall_verdict: OverallVerdict | None = Field(
+        default=None,
+        description="MULTIMODAL only — automated checks never produce an Overall verdict otherwise.",
+    )
     ai_source_status: SourceStatus | None
     ai_content_status: ContentStatus | None
     ai_date_status: DateStatus | None
@@ -119,7 +122,7 @@ class ExpertHistoryItemResponse(BaseModel):
     vote_source_status: SourceStatus | None
     vote_content_status: ContentStatus | None
     vote_date_status: DateStatus | None
-    ai_overall_verdict: OverallVerdict
+    ai_overall_verdict: OverallVerdict | None
     ai_source_status: SourceStatus | None
     ai_content_status: ContentStatus | None
     ai_date_status: DateStatus | None

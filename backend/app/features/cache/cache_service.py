@@ -43,6 +43,14 @@ class CacheService:
         except Exception as exc:
             logger.debug("cache_set_failed", key_prefix=_KEY_CLAIM, error=str(exc))
 
+    async def set_claim_pointer(self, claim_hash: str, payload: str, *, ttl: int) -> None:
+        """Like set_claim_result but with an explicit freshness window (the
+        NOT_FOUND window is shorter than the default claim TTL)."""
+        try:
+            await self._redis.set(f"{_KEY_CLAIM}:{claim_hash}", payload, ex=ttl)
+        except Exception as exc:
+            logger.debug("cache_set_failed", key_prefix=_KEY_CLAIM, error=str(exc))
+
     async def invalidate_claim(self, claim_hash: str) -> None:
         try:
             await self._redis.delete(f"{_KEY_CLAIM}:{claim_hash}")

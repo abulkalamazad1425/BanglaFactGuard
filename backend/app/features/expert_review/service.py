@@ -22,10 +22,7 @@ from app.core.exceptions import (
     RecordNotFoundError,
 )
 from app.features.expert_review.models import ExpertReviewV2, VotingConfig
-from app.features.expert_review.overall_verdict import (
-    derive_ai_overall_verdict,
-    derive_ai_overall_verdict_multimodal,
-)
+from app.features.expert_review.overall_verdict import derive_ai_overall_verdict_multimodal
 from app.features.expert_review.repository import (
     AuditLogRepository,
     CredibilityWeightTierRepository,
@@ -192,13 +189,11 @@ class ExpertReviewService:
                 body_text=body_text,
                 claimed_source_text=submission.claimed_source_text,
                 ai_label=_ai_label_structured(result),
-                ai_overall_verdict=(
-                    derive_ai_overall_verdict(
-                        result.source_status, result.content_status, result.date_status
-                    )
-                    if result and result.source_status
-                    else None
-                ),
+                # No AI-implied Overall is shown to the expert for source-based/
+                # photo-card claims — the automated system only ever produces
+                # source/content/date status; Overall is a separate, unprompted
+                # expert decision (see §6 of the business requirements).
+                ai_overall_verdict=None,
                 source_status=result.source_status if result else None,
                 content_status=result.content_status if result else None,
                 date_status=result.date_status if result else None,
@@ -310,7 +305,9 @@ class ExpertReviewService:
                 result.content_status,
                 result.date_status,
             )
-            ai_overall = derive_ai_overall_verdict(ai_source, ai_content, ai_date)
+            # No AI-implied Overall exists for this type — the automated
+            # system only produces source/content/date status.
+            ai_overall: OverallVerdict | None = None
         else:
             if source_status is not None:
                 raise DomainValidationError(
@@ -566,12 +563,12 @@ class ExpertReviewService:
             result = await self._results.get_by_submission_id(submission.id)
             if result is None or result.source_status is None:
                 return
-            ai_overall = derive_ai_overall_verdict(
-                result.source_status, result.content_status, result.date_status
-            )
 
             overall_weights = _tally(reviews, lambda r: r.vote_overall_verdict)
-            overall_ok, overall_leader = _evaluate(overall_weights, voters, config, ai_overall)
+            # No AI tie-break for Overall — it is exclusively an expert
+            # decision with no automated default to lean on (a true tie
+            # simply fails the margin requirement and stays open).
+            overall_ok, overall_leader = _evaluate(overall_weights, voters, config, None)
 
             source_weights = _tally(reviews, lambda r: r.vote_source_status)
             source_ok, source_leader = _evaluate(source_weights, voters, config, result.source_status)

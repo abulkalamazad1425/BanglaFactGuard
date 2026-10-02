@@ -6,8 +6,9 @@
       <div class="page-icon">🖼️</div>
       <h1>Photo Card Verification</h1>
       <p>
-        Upload a Bangla news photo card or screenshot. We read the Bangla text, strip the card's
-        chrome, and check the claim against the news source it says it came from.
+        Upload a Bangla news photo card or screenshot with the source and date it claims. We read
+        the card, extract its headline and check it against that source in the background — you
+        can leave as soon as it is received.
       </p>
     </div>
 
@@ -15,21 +16,16 @@
     <div class="stepper animate-in" style="animation-delay: 0.05s">
       <div class="step-node" [class.active]="step === 'upload'" [class.done]="step !== 'upload'">
         <span class="step-dot">1</span>
-        <span class="step-label">Upload card</span>
+        <span class="step-label">Upload &amp; claim</span>
       </div>
-      <div class="step-line" [class.done]="step !== 'upload'"></div>
-      <div class="step-node" [class.active]="step === 'review'" [class.done]="step === 'result'">
+      <div class="step-line" [class.done]="step === 'accepted'"></div>
+      <div class="step-node" [class.active]="step === 'accepted'">
         <span class="step-dot">2</span>
-        <span class="step-label">Confirm text</span>
-      </div>
-      <div class="step-line" [class.done]="step === 'result'"></div>
-      <div class="step-node" [class.active]="step === 'result'">
-        <span class="step-dot">3</span>
-        <span class="step-label">Verdict</span>
+        <span class="step-label">Received</span>
       </div>
     </div>
 
-    <!-- ══════════════ STEP 1 — UPLOAD ══════════════ -->
+    <!-- ══════════════ STEP 1 — UPLOAD & CLAIM ══════════════ -->
     @if (step === 'upload') {
       <div class="card panel upload-panel animate-in">
         <h3 class="panel-title"><span class="panel-icon">📤</span> Upload the photo card</h3>
@@ -58,437 +54,81 @@
           <p class="file-name">Selected: <strong>{{ selectedFile.name }}</strong></p>
         }
 
+        <div class="form-group">
+          <label class="form-label">Claimed source <span class="required">*</span></label>
+          <select class="form-control" [(ngModel)]="claimedSource" name="claimed_source"
+                  [class.is-invalid]="submitted && !claimedSource">
+            <option value="" disabled>
+              {{ sourcesLoading ? 'Loading verified sources…' : 'Select the news source this card claims to be from' }}
+            </option>
+            @for (src of sources; track src.canonical_name) {
+              <option [value]="src.canonical_name">
+                {{ src.display_name }}{{ src.display_name_en ? ' — ' + src.display_name_en : '' }}
+              </option>
+            }
+          </select>
+          <span class="source-hint">Only active verified sources can be checked against. This is the verification target — it will not be silently replaced even if the card's own text suggests a different outlet.</span>
+          @if (submitted && !claimedSource) {
+            <span class="form-error">Please select the claimed source</span>
+          }
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Publication date <span class="optional">(optional)</span></label>
+          <input type="date" class="form-control" [(ngModel)]="publishedDate" name="published_date" />
+        </div>
+
+        <label class="checkbox-label">
+          <input type="checkbox" [(ngModel)]="forceRefresh" name="force_refresh" />
+          <span>Bypass cache (force a fresh verification)</span>
+        </label>
+
         @if (errorMsg) {
           <div class="alert alert-error">{{ errorMsg }}</div>
         }
 
         <button type="button" class="btn btn-primary btn-full btn-lg mt-4"
-                [disabled]="!selectedFile || extracting" (click)="extract()">
-          @if (extracting) {
-            <span class="btn-spinner"></span> Reading the card…
+                [disabled]="!canVerify || verifying" (click)="verify()">
+          @if (verifying) {
+            <span class="btn-spinner"></span> Uploading…
           } @else {
-            Extract Bangla text
+            Verify photo card
           }
         </button>
 
         <div class="hint-list">
-          <div class="hint"><span>🔤</span> Only Bangla text is verified — English watermarks and handles are dropped.</div>
+          <div class="hint"><span>🚪</span> Once the card is received you can leave this page — the check keeps running on the server.</div>
+          <div class="hint"><span>🔤</span> The card's headline is extracted automatically — there is no confirmation step.</div>
           <div class="hint"><span>🧹</span> Follow prompts, bylines, photo credits and timestamps are removed automatically.</div>
-          <div class="hint"><span>🏷️</span> If the card is branded, we detect the news source for you.</div>
-          <div class="hint"><span>✍️</span> You review and correct the text before anything is verified.</div>
+          <div class="hint"><span>🎯</span> The card is verified against its headline alone — no body or caption text.</div>
+          <div class="hint"><span>⚠️</span> If the card's own text suggests a different source or date, that's recorded and shown with the result — not silently used instead.</div>
         </div>
       </div>
     }
 
-    <!-- ══════════════ STEP 2 — REVIEW & CONFIRM ══════════════ -->
-    @if (step === 'review' && draft) {
-      <div class="workspace animate-in">
-
-        <!-- Left: the card, as read -->
-        <div class="card panel">
-          <h3 class="panel-title"><span class="panel-icon">🔍</span> What we read</h3>
-
-          @if (previewUrl) {
-            <img [src]="previewUrl" class="card-image" alt="Uploaded photo card" />
-          }
-
-          <div class="ocr-meta">
-            <div class="meta-chip">
-              <span class="meta-label">OCR engine</span>
-              <span class="meta-value">{{ draft.ocr_engine }}</span>
-            </div>
-            <div class="meta-chip">
-              <span class="meta-label">Confidence</span>
-              <span class="meta-value">{{ percent(draft.ocr_confidence) }}</span>
-            </div>
-            <div class="meta-chip">
-              <span class="meta-label">Bangla</span>
-              <span class="meta-value">{{ percent(draft.bangla_char_ratio) }}</span>
-            </div>
-          </div>
-
-          @for (warning of draft.warnings; track warning) {
-            <div class="alert alert-warn">{{ warning }}</div>
-          }
-
-          <!-- Kept lines -->
-          <div class="lines-block">
-            <h4 class="block-title">Claim text ({{ keptLines.length }} lines)</h4>
-            @if (keptLines.length) {
-              <ul class="line-list">
-                @for (line of keptLines; track $index) {
-                  <li class="line-item kept">
-                    <span class="line-text">{{ line.text }}</span>
-                    @if (line.confidence != null) {
-                      <span class="line-conf">{{ percent(line.confidence) }}</span>
-                    }
-                  </li>
-                }
-              </ul>
-            } @else {
-              <p class="muted-note">No Bangla claim text was recovered from this card.</p>
-            }
-          </div>
-
-          <!-- Removed lines -->
-          @if (removedLines.length) {
-            <div class="lines-block">
-              <button type="button" class="disclosure" (click)="showRemovedLines = !showRemovedLines">
-                <span>{{ showRemovedLines ? '▾' : '▸' }}</span>
-                Removed as card chrome ({{ removedLines.length }})
-              </button>
-              @if (showRemovedLines) {
-                <ul class="line-list">
-                  @for (line of removedLines; track $index) {
-                    <li class="line-item removed">
-                      <span class="line-text">{{ line.text }}</span>
-                      <span class="line-reason">{{ noiseLabel(line.noise_reason) }}</span>
-                    </li>
-                  }
-                </ul>
-              }
-            </div>
-          }
-
-          <!-- Raw OCR -->
-          <div class="lines-block">
-            <button type="button" class="disclosure" (click)="showRawText = !showRawText">
-              <span>{{ showRawText ? '▾' : '▸' }}</span>
-              Raw OCR output
-            </button>
-            @if (showRawText) {
-              <pre class="raw-text">{{ draft.raw_text }}</pre>
-            }
-          </div>
+    <!-- ══════════════ STEP 2 — RECEIVED ══════════════ -->
+    @if (step === 'accepted' && accepted) {
+      <div class="card panel upload-panel animate-in text-center">
+        <div style="font-size:56px; margin-bottom:12px;">📬</div>
+        <h3>Your photo card was received</h3>
+        <p class="muted-note">{{ accepted.message }}</p>
+        @if (previewUrl) {
+          <img [src]="previewUrl" class="card-image" alt="Submitted photo card" style="max-width:320px; margin:16px auto;" />
+        }
+        <p class="muted-note">
+          Verifying against <strong>{{ claimedSourceName() }}</strong>
+          @if (publishedDate) { · claimed date <strong>{{ publishedDate }}</strong> }
+          — headline only.
+        </p>
+        <div class="accepted-actions">
+          <a class="btn btn-primary" [routerLink]="['/verify', accepted.submission_id]">View progress</a>
+          <a class="btn btn-secondary" routerLink="/history">My Submissions</a>
+          <button type="button" class="btn btn-ghost" (click)="reset()">Verify another card</button>
         </div>
-
-        <!-- Right: confirm the claim -->
-        <div class="card panel">
-          <h3 class="panel-title"><span class="panel-icon">✍️</span> Confirm the claim</h3>
-          <p class="panel-note">
-            Check the extracted text against the card and correct anything OCR got wrong.
-            Only what you confirm here is verified.
-          </p>
-
-          <div class="form-group">
-            <label class="form-label">Claim headline <span class="required">*</span></label>
-            <textarea class="form-control" rows="3" [(ngModel)]="headline" name="headline"
-                      [class.is-invalid]="submitted && headline.trim().length < 5"
-                      placeholder="দাবিটি এখানে লিখুন…"></textarea>
-            @if (submitted && headline.trim().length < 5) {
-              <span class="form-error">A claim headline of at least 5 characters is required</span>
-            }
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Supporting text <span class="optional">(optional)</span></label>
-            <textarea class="form-control" rows="4" [(ngModel)]="bodyText" name="body_text"
-                      placeholder="কার্ডের বাকি অংশ…"></textarea>
-          </div>
-
-          <button type="button" class="link-btn" (click)="restoreSuggested()">
-            ↺ Restore the extracted text
-          </button>
-
-          <!-- Detected source -->
-          @if (draft.detected_sources.length) {
-            <div class="detected-block">
-              <h4 class="block-title">Source detected on the card</h4>
-              <div class="detected-list">
-                @for (src of draft.detected_sources; track src.source_id) {
-                  <button type="button" class="detected-chip"
-                          [class.selected]="claimedSource === src.canonical_name"
-                          (click)="claimedSource = src.canonical_name">
-                    <span class="chip-name">{{ src.display_name }}</span>
-                    <span class="chip-meta">{{ percent(src.confidence) }} · {{ src.method }}</span>
-                  </button>
-                }
-              </div>
-              <p class="muted-note">
-                Matched against “{{ draft.detected_sources[0].matched_text }}”. Override it below if that is wrong.
-              </p>
-            </div>
-          }
-
-          <div class="form-group">
-            <label class="form-label">Claimed source <span class="required">*</span></label>
-            <select class="form-control" [(ngModel)]="claimedSource" name="claimed_source"
-                    [class.is-invalid]="submitted && !claimedSource">
-              <option value="" disabled>
-                {{ sourcesLoading ? 'Loading verified sources…' : 'Select a verified news source' }}
-              </option>
-              @for (src of sources; track src.canonical_name) {
-                <option [value]="src.canonical_name">
-                  {{ src.display_name }}{{ src.display_name_en ? ' — ' + src.display_name_en : '' }}
-                </option>
-              }
-            </select>
-            <span class="source-hint">Only active verified sources can be checked against.</span>
-            @if (submitted && !claimedSource) {
-              <span class="form-error">Please select the claimed source</span>
-            }
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Publication date <span class="optional">(optional)</span></label>
-            <input type="date" class="form-control" [(ngModel)]="publishedDate" name="published_date" />
-          </div>
-
-          <label class="checkbox-label">
-            <input type="checkbox" [(ngModel)]="forceRefresh" name="force_refresh" />
-            <span>Bypass cache (force a fresh verification)</span>
-          </label>
-
-          @if (errorMsg) {
-            <div class="alert alert-error">{{ errorMsg }}</div>
-          }
-
-          <div class="action-row">
-            <button type="button" class="btn btn-secondary" (click)="backToUpload()" [disabled]="verifying">
-              ← Back
-            </button>
-            <button type="button" class="btn btn-primary btn-lg action-grow"
-                    [disabled]="verifying" (click)="verify()">
-              @if (verifying) {
-                <span class="btn-spinner"></span> Verifying… (up to 60s)
-              } @else {
-                Verify against source
-              }
-            </button>
-          </div>
-        </div>
+        <p class="text-muted text-sm" style="margin-top:12px;">
+          Submission ID: {{ accepted.submission_id }}
+        </p>
       </div>
     }
-
-    <!-- ══════════════ STEP 3 — RESULT ══════════════ -->
-    @if (step === 'result' && result) {
-      <div class="workspace animate-in">
-
-        <!-- Left: the submission -->
-        <div class="card panel">
-          <h3 class="panel-title"><span class="panel-icon">🖼️</span> Submitted card</h3>
-
-          @if (previewUrl) {
-            <img [src]="previewUrl" class="card-image" alt="Verified photo card" />
-          }
-
-          <div class="lines-block">
-            <h4 class="block-title">Confirmed claim</h4>
-            <p class="confirmed-text">{{ result.confirmed_headline }}</p>
-            @if (result.confirmed_body) {
-              <p class="confirmed-body">{{ result.confirmed_body }}</p>
-            }
-          </div>
-
-          <div class="ocr-meta">
-            <div class="meta-chip">
-              <span class="meta-label">OCR engine</span>
-              <span class="meta-value">{{ result.ocr_engine }}</span>
-            </div>
-            <div class="meta-chip">
-              <span class="meta-label">Confidence</span>
-              <span class="meta-value">{{ percent(result.ocr_confidence) }}</span>
-            </div>
-          </div>
-
-          <button type="button" class="btn btn-secondary btn-full mt-4" (click)="reset()">
-            Verify another photo card
-          </button>
-        </div>
-
-        <!-- Right: the verdict -->
-        <div class="card panel result-panel">
-          <div class="verdict-header">
-            <div class="verdict-left">
-              <app-verdict-badge
-                [sourceStatus]="result.verification.source_status"
-                [contentStatus]="result.verification.content_status"
-                [dateStatus]="result.verification.date_status" />
-              <div class="source-info">
-                Source: <strong>{{ result.verification.normalized_source || claimedSource }}</strong>
-                @if (result.reused_previous_result) {
-                  <span class="cache-tag">⚡ Previously Verified</span>
-                }
-              </div>
-              @if (result.reused_previous_result) {
-                <div class="reused-notice">
-                  <span>ℹ️</span>
-                  This claim had already been verified{{ result.verification.created_at ? ' on ' + (result.verification.created_at | date:'MMM d, y, HH:mm') : '' }} —
-                  showing that result instead of running the pipeline again.
-                </div>
-              }
-              <div class="ai-notice">
-                <span>🤖</span>
-                This is an AI-assisted preliminary result. It now goes to human experts for review.
-              </div>
-            </div>
-
-            <div class="confidence-meter">
-              <svg class="confidence-svg" viewBox="0 0 100 100">
-                <circle class="bg-ring" cx="50" cy="50" r="45"></circle>
-                <circle class="progress-ring" cx="50" cy="50" r="45"
-                        [style.stroke-dashoffset]="getDashOffset(result.verification.confidence)"
-                        [style.stroke]="verdictColor(result.verification.source_status, result.verification.content_status)"></circle>
-              </svg>
-              <div class="confidence-text">
-                <span class="confidence-val">{{ (result.verification.confidence * 100).toFixed(0) }}%</span>
-                <span class="confidence-lbl">Confidence</span>
-              </div>
-            </div>
-          </div>
-
-          @if (result.verification.reasoning) {
-            <div class="reasoning-box">
-              <h4>💬 Analysis reasoning</h4>
-              <p>{{ result.verification.reasoning }}</p>
-            </div>
-          }
-
-          @if (result.verification.scores; as scores) {
-            <div class="scores-grid">
-              @if (scores.semantic_similarity != null) {
-                <div class="score-item">
-                  <div class="score-info">
-                    <span class="score-label" title="Blended score (30% headline, 70% body)">Semantic Similarity</span>
-                    <span class="score-value">{{ (scores.semantic_similarity * 100).toFixed(1) }}%</span>
-                  </div>
-                  <div class="progress-bar-wrap">
-                    <div class="progress-bar blue" [style.width.%]="scores.semantic_similarity * 100"></div>
-                  </div>
-                </div>
-              }
-              @if (scores.entity_match != null) {
-                <div class="score-item">
-                  <div class="score-info">
-                    <span class="score-label" title="Named entity overlap">Entity Match</span>
-                    <span class="score-value">{{ (scores.entity_match * 100).toFixed(1) }}%</span>
-                  </div>
-                  <div class="progress-bar-wrap">
-                    <div class="progress-bar purple" [style.width.%]="scores.entity_match * 100"></div>
-                  </div>
-                </div>
-              }
-              @if (scores.keyword_overlap != null) {
-                <div class="score-item">
-                  <div class="score-info">
-                    <span class="score-label">Keyword Overlap</span>
-                    <span class="score-value">{{ (scores.keyword_overlap * 100).toFixed(1) }}%</span>
-                  </div>
-                  <div class="progress-bar-wrap">
-                    <div class="progress-bar indigo" [style.width.%]="scores.keyword_overlap * 100"></div>
-                  </div>
-                </div>
-              }
-              @if (scores.numerical_consistency != null) {
-                <div class="score-item">
-                  <div class="score-info">
-                    <span class="score-label">Numerical Consistency</span>
-                    <span class="score-value">{{ (scores.numerical_consistency * 100).toFixed(1) }}%</span>
-                  </div>
-                  <div class="progress-bar-wrap">
-                    <div class="progress-bar cyan" [style.width.%]="scores.numerical_consistency * 100"></div>
-                  </div>
-                </div>
-              }
-              @if (scores.contradiction_score != null) {
-                <div class="score-item">
-                  <div class="score-info">
-                    <span class="score-label" title="NLI contradiction probability">Contradiction Risk</span>
-                    <span class="score-value">{{ (scores.contradiction_score * 100).toFixed(1) }}%</span>
-                  </div>
-                  <div class="progress-bar-wrap">
-                    <div class="progress-bar pink" [style.width.%]="scores.contradiction_score * 100"></div>
-                  </div>
-                </div>
-              }
-            </div>
-          }
-
-          @if (result.verification.manipulation_flags; as flags) {
-            <div class="checks-section">
-              <h4>✅ Verification checks</h4>
-              <div class="checks-grid">
-                <div class="check-card" [class.passed]="!flags.headline_manipulated" [class.failed]="flags.headline_manipulated">
-                  <div class="check-icon-wrap">{{ flags.headline_manipulated ? '✗' : '✓' }}</div>
-                  <div class="check-body">
-                    <span class="check-title">Headline integrity</span>
-                    <span class="check-desc">
-                      {{ flags.headline_manipulated
-                          ? 'The card\'s headline is altered or sensationalized relative to the article.'
-                          : 'The card\'s headline matches the article it claims to report.' }}
-                    </span>
-                  </div>
-                </div>
-
-                <div class="check-card" [class.passed]="!flags.body_altered" [class.failed]="flags.body_altered">
-                  <div class="check-icon-wrap">{{ flags.body_altered ? '✗' : '✓' }}</div>
-                  <div class="check-body">
-                    <span class="check-title">Content authenticity</span>
-                    <span class="check-desc">
-                      {{ flags.body_altered
-                          ? 'The card\'s text diverges significantly from the source article.'
-                          : 'The card\'s text matches the source article.' }}
-                    </span>
-                  </div>
-                </div>
-
-                <div class="check-card" [class.passed]="!flags.numbers_altered" [class.failed]="flags.numbers_altered">
-                  <div class="check-icon-wrap">{{ flags.numbers_altered ? '✗' : '✓' }}</div>
-                  <div class="check-body">
-                    <span class="check-title">Numerical consistency</span>
-                    <span class="check-desc">
-                      {{ flags.numbers_altered
-                          ? 'Numbers or dates on the card were altered or inflated.'
-                          : 'Statistics and dates are consistent with the source.' }}
-                    </span>
-                  </div>
-                </div>
-
-                <div class="check-card" [class.passed]="!flags.entities_replaced" [class.failed]="flags.entities_replaced">
-                  <div class="check-icon-wrap">{{ flags.entities_replaced ? '✗' : '✓' }}</div>
-                  <div class="check-body">
-                    <span class="check-title">Entity authenticity</span>
-                    <span class="check-desc">
-                      {{ flags.entities_replaced
-                          ? 'Names, places or organizations were swapped on the card.'
-                          : 'Names, places and organizations match the source.' }}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          }
-
-          @if (result.verification.matched_articles.length) {
-            <div class="articles-section">
-              <h4>📰 Top matching article from the source</h4>
-              <div class="articles-list">
-                @for (art of result.verification.matched_articles.slice(0, 1); track art.url) {
-                  <div class="article-card">
-                    <div class="article-header">
-                      <a [href]="art.url" target="_blank" rel="noopener" class="article-title">
-                        {{ art.title || art.url }}
-                      </a>
-                      @if (art.rank_score != null) {
-                        <span class="article-match">Match: {{ (art.rank_score * 100).toFixed(0) }}%</span>
-                      }
-                    </div>
-                    <div class="article-meta">
-                      @if (art.author) { <span>👤 {{ art.author }}</span> }
-                      @if (art.published_date) { <span>📅 {{ art.published_date }}</span> }
-                      <span>🌐 {{ getHost(art.url) }}</span>
-                    </div>
-                    @if (art.body) {
-                      <p class="article-snippet">{{ art.body }}</p>
-                    }
-                  </div>
-                }
-              </div>
-            </div>
-          }
-        </div>
-      </div>
-    }
-
   </div>
 </div>

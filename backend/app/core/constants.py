@@ -9,37 +9,52 @@ class SourceStatus(str, Enum):
     Checked first, independently of content or date: a story the source
     never published is NOT_FOUND regardless of what the claim says, and a
     story it did publish is CONFIRMED regardless of how the claim words it.
+
+    INCOMPLETE is distinct from NOT_FOUND: NOT_FOUND means an adequate search
+    actually ran and came up empty; INCOMPLETE means the search or retrieval
+    itself failed (every provider errored, every fetch failed) and no
+    conclusion could be reached either way. A failed check must never be
+    reported as a confident negative — see s11_classifier.py.
     """
 
     CONFIRMED = "CONFIRMED"
     NOT_FOUND = "NOT_FOUND"
+    INCOMPLETE = "INCOMPLETE"
 
 
 class ContentStatus(str, Enum):
     """How the claimed content compares to the source once CONFIRMED.
 
     Only meaningful when source_status is CONFIRMED — there is nothing to
-    compare content against when the source never published the story.
-    MATCHED covers paraphrase and reordering that preserve the same facts;
-    ALTERED is reserved for material factual changes (numbers, names,
-    outcomes) or outright contradiction.
+    compare content against when the source never published the story (that
+    case is represented as NULL/not-applicable, not INCOMPLETE). MATCHED
+    covers paraphrase and reordering that preserve the same facts; ALTERED is
+    reserved for material factual changes (numbers, names, outcomes) or
+    outright contradiction. INCOMPLETE means the source WAS confirmed but the
+    evidence needed to compare content (e.g. the article body) could not be
+    retrieved or was too ambiguous to judge.
     """
 
     MATCHED = "MATCHED"
     ALTERED = "ALTERED"
+    INCOMPLETE = "INCOMPLETE"
 
 
 class DateStatus(str, Enum):
     """Does the claimed publication date match the source's actual date?
 
-    Only meaningful when both a claimed date and the source article's date
-    are known. A mismatch here is informational, not a verdict on the
-    content — a claim can be MISMATCHED on date while its content is still
-    MATCHED (e.g. a screenshot circulated years after original publication).
+    Only meaningful when source_status is CONFIRMED. A mismatch here is
+    informational, not a verdict on the content — a claim can be MISMATCHED
+    on date while its content is still MATCHED (e.g. a screenshot circulated
+    years after original publication). INCOMPLETE means the source's actual
+    publication date could not be determined (missing or ambiguous
+    datePublished) — this is not the same as MISMATCHED, and must never be
+    reported as one.
     """
 
     MATCHED = "MATCHED"
     MISMATCHED = "MISMATCHED"
+    INCOMPLETE = "INCOMPLETE"
 
 
 class OverallVerdict(str, Enum):
@@ -148,6 +163,25 @@ class SubmissionType(str, Enum):
     PHOTO_CARD = "PHOTO_CARD"
 
 
+class ClaimScope(str, Enum):
+    """What the pipeline is allowed to use as "the claim" when comparing
+    against source evidence.
+
+    PHOTO_CARD submissions are always HEADLINE_ONLY: the business rule is
+    that a photo card is verified against its extracted headline alone — no
+    body/caption text is checked, and nothing is synthesised to stand in for
+    one. SOURCE_BASED text claims are HEADLINE_WITH_BODY whenever the user
+    supplied body text, HEADLINE_ONLY otherwise. This is part of claim
+    identity: it is folded into the content hash (`hashing.compute_claim_hash`)
+    so a HEADLINE_ONLY run and a HEADLINE_WITH_BODY run of the same
+    headline+source never collide in the cache and silently serve each other
+    a score computed over different input.
+    """
+
+    HEADLINE_ONLY = "HEADLINE_ONLY"
+    HEADLINE_WITH_BODY = "HEADLINE_WITH_BODY"
+
+
 class SubmissionStatus(str, Enum):
     """SUBMITTED/AI_PROCESSING/AI_PRELIMINARY/UNDER_REVIEW/EXPERT_VERIFIED in
     the SRS state-machine map to PENDING/PROCESSING/EXPERT_REVIEW/FINALIZED
@@ -170,6 +204,64 @@ class MultimodalPredictionLabel(str, Enum):
 
     FAKE = "FAKE"
     NON_FAKE = "NON_FAKE"
+
+
+class CheckState(str, Enum):
+    """Outcome of one alteration/consistency check — never inferred from a
+    default-False flag. PASSED means the check ran to completion and found no
+    concrete discrepancy; NOT_EVALUATED means it could not run (missing
+    signal, failed model, absent evidence) and is NOT a pass; NOT_APPLICABLE
+    means the check does not apply to this claim scope (e.g. any submitted-body
+    check for a photo card)."""
+
+    PASSED = "PASSED"
+    FAILED = "FAILED"
+    NOT_EVALUATED = "NOT_EVALUATED"
+    NOT_APPLICABLE = "NOT_APPLICABLE"
+
+
+class MetricState(str, Enum):
+    """Why a score is (or is not) a number.
+
+    COMPUTED       — a real measurement; the value may legitimately be 0.0.
+    NOT_APPLICABLE — the metric has no meaning for this claim (photo-card body
+                     similarity, entity coverage with no claim entities).
+    EMPTY          — the claim side produced nothing to measure (keyword
+                     extraction returned no applicable units).
+    UNAVAILABLE    — the utility/model/evidence needed was missing or failed.
+    """
+
+    COMPUTED = "COMPUTED"
+    NOT_APPLICABLE = "NOT_APPLICABLE"
+    EMPTY = "EMPTY"
+    UNAVAILABLE = "UNAVAILABLE"
+
+
+class SearchCallOutcome(str, Enum):
+    """Per provider-call accounting for S04 — the only honest basis for
+    deciding whether a search was adequate."""
+
+    SUCCESS = "SUCCESS"
+    SUCCESS_EMPTY = "SUCCESS_EMPTY"
+    FAILED = "FAILED"
+    SKIPPED = "SKIPPED"
+    CACHED = "CACHED"
+
+
+class JobPhase(str, Enum):
+    """Fine-grained progress inside the public PENDING/PROCESSING lifecycle."""
+
+    QUEUED = "QUEUED"
+    EXTRACTING = "EXTRACTING"
+    VERIFYING = "VERIFYING"
+    DONE = "DONE"
+    FAILED = "FAILED"
+
+
+# Bumped whenever scoring/decision logic changes in a way that makes earlier
+# stored scores non-comparable. It is part of claim identity, so results
+# produced by older (defective) logic are never served as current.
+VERIFICATION_PIPELINE_VERSION: str = "v3.0-scope-aware"
 
 
 class PipelineStageID(str, Enum):

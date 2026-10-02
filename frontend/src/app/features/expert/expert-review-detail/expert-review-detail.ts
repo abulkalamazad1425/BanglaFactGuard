@@ -8,6 +8,10 @@ import { ExpertQueueItem } from '../../../models/expert.model';
 import { VerificationResponse, MatchedArticle } from '../../../models/verification.model';
 import { VerdictBadgeComponent } from '../../../shared/components/verdict-badge/verdict-badge.component';
 import { ScoreBarComponent } from '../../../shared/components/score-bar/score-bar.component';
+import {
+  ResultChecksComponent,
+  ResultScoresComponent,
+} from '../../../shared/components/verification-report/verification-report.component';
 import { VerificationService } from '../../../services/verification.service';
 import { AuthService } from '../../../services/auth.service';
 import { SourceStatus, ContentStatus, DateStatus, OverallVerdict } from '../../../models/verification.model';
@@ -22,7 +26,15 @@ const OVERALL_VERDICTS: { value: OverallVerdict; label: string; icon: string; cl
 @Component({
   selector: 'app-expert-review-detail',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterLink, VerdictBadgeComponent, ScoreBarComponent],
+  imports: [
+    CommonModule,
+    ReactiveFormsModule,
+    RouterLink,
+    VerdictBadgeComponent,
+    ScoreBarComponent,
+    ResultChecksComponent,
+    ResultScoresComponent,
+  ],
   templateUrl: './expert-review-detail.html',
   styleUrls: ['./expert-review-detail.scss']
 })

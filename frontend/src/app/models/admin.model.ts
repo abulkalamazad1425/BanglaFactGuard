@@ -97,8 +97,8 @@ export interface ExplorerItem {
   headline: string | null;
   submission_type: 'SOURCE_BASED' | 'MULTIMODAL' | 'PHOTO_CARD';
   claimed_source_text: string | null;
-  /** The displayed Overall verdict — expert-finalized if available,
-   *  otherwise the AI's preliminary implied value. Spans every type. */
+  /** The expert-finalized Overall verdict; null until experts finalize it
+   *  (the automated system never sets it for source-based/photo-card claims). */
   overall_verdict: OverallVerdict | null;
   /** True once expert review has finalized overall_verdict. */
   is_finalized: boolean;

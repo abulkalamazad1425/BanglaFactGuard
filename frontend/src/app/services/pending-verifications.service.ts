@@ -1,7 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { VerificationService } from './verification.service';
 import { ToastService } from '../shared/services/toast.service';
-import { SubmissionStatus } from '../models/verification.model';
+import { SubmissionStatus, SubmissionType } from '../models/verification.model';
 
 /**
  * Keeps track of verifications that are still running.
@@ -25,6 +25,8 @@ export interface TrackedVerification {
   submissionId: string;
   headline: string;
   source: string;
+  /** Photo cards have no headline until the server has extracted it. */
+  kind?: SubmissionType;
   status: SubmissionStatus;
   queuedAt: number;
   /** Set once the verdict is in, so the UI can offer a link to it. */
@@ -50,10 +52,10 @@ export class PendingVerificationsService {
   }
 
   /** Begin following a queued verification. */
-  track(submissionId: string, headline: string, source: string): void {
+  track(submissionId: string, headline: string, source: string, kind: SubmissionType = 'SOURCE_BASED'): void {
     if (this.items().some((i) => i.submissionId === submissionId)) return;
     this.items.update((list) => [
-      { submissionId, headline, source, status: 'PENDING', queuedAt: Date.now(), done: false },
+      { submissionId, headline, source, kind, status: 'PENDING', queuedAt: Date.now(), done: false },
       ...list,
     ]);
     this.persist();
@@ -88,6 +90,9 @@ export class PendingVerificationsService {
       this.stopPolling();
       return;
     }
+    // No need to chase a job while nobody is looking at the tab: it keeps
+    // running on the server and is read back by id whenever the user returns.
+    if (typeof document !== 'undefined' && document.hidden) return;
 
     for (const item of outstanding) {
       if (Date.now() - item.queuedAt > MAX_POLL_MS) {
@@ -102,7 +107,7 @@ export class PendingVerificationsService {
             this.toast.success(`Verification ready: ${this.short(item.headline)}`);
           } else if (res.status === 'FAILED') {
             this.settle(item.submissionId, 'FAILED');
-            this.toast.error(`Verification failed: ${this.short(item.headline)}`);
+            this.toast.error(res.error || `Verification failed: ${this.short(item.headline)}`);
           } else {
             this.updateStatus(item.submissionId, res.status);
           }

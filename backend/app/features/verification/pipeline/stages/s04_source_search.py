@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import re
+from dataclasses import dataclass, field
 from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
 
 import structlog
 
-from app.core.constants import PipelineStageID, QueryType, SearchProvider
+from app.core.config import get_settings
+from app.core.constants import PipelineStageID, QueryType, SearchCallOutcome, SearchProvider
+from app.features.verification.analysis.decisions import search_adequate
+from app.shared.utils.domains import allowed_domains_for, is_allowed_host
 from app.features.verification.pipeline.context import PipelineContext
 from app.features.articles.schemas import CandidateArticleSchema
 from app.features.search.newsdata_client import NewsDataClient
@@ -45,6 +49,18 @@ _STRIP_PARAMS = frozenset(
         "cid",
     ]
 )
+
+
+@dataclass
+class _CallResult:
+    """Outcome of ONE provider call. A failed call is FAILED - never a
+    successful empty result - so the caller's accounting cannot mistake an
+    outage for "the source has nothing"."""
+
+    provider: SearchProvider
+    outcome: SearchCallOutcome
+    candidates: list[CandidateArticleSchema] = field(default_factory=list)
+    error: str | None = None
 
 
 def _canonicalise_url(url: str) -> str:
@@ -167,31 +183,51 @@ class SourceSearchStage:
             queries=len(context.search_queries),
         )
 
-        coros = [t[3] for t in tasks]
-        results = await asyncio.gather(*coros, return_exceptions=True)
+        raw = await asyncio.gather(*[t[3] for t in tasks], return_exceptions=True)
 
+        results: list[_CallResult] = []
+        for (provider_enum, _, _qt, _), item in zip(tasks, raw):
+            if isinstance(item, _CallResult):
+                results.append(item)
+            else:  # defensive: an exception escaped _call_provider
+                results.append(
+                    _CallResult(provider_enum, SearchCallOutcome.FAILED, error=str(item))
+                )
+
+        self._record_outcomes(context, results)
+        log.info(
+            "s04_search_accounting",
+            attempted=context.search_attempted,
+            success=context.search_success,
+            success_empty=context.search_success_empty,
+            failed=context.search_errors,
+            cached=context.search_cached,
+            skipped=context.search_skipped,
+            adequate=context.search_adequate,
+        )
+
+        allowed = allowed_domains_for(domain, source_config)
         canon_map: dict[str, tuple[int, CandidateArticleSchema]] = {}
         provider_hit_counts: dict[str, int] = {
             p.value: 0 for p, _ in providers_with_clients
         }
 
-        for (provider_enum, _, query_type, _), result in zip(tasks, results):
-            if isinstance(result, Exception) or not isinstance(result, list):
+        for call in results:
+            if call.outcome == SearchCallOutcome.FAILED:
+                log.warning(
+                    "s04_provider_call_failed",
+                    provider=call.provider.value,
+                    error=(call.error or "")[:120],
+                )
                 continue
-
+            provider_enum = call.provider
             priority = _PROVIDER_PRIORITY.get(provider_enum, 99)
 
-            for candidate in result:
+            for candidate in call.candidates:
                 url = candidate.url
 
-                if domain:
-                    clean_domain = domain.replace("www.", "").lower()
-                    url_netloc = urlparse(url).netloc.replace("www.", "").lower()
-                    if not (
-                        url_netloc == clean_domain
-                        or url_netloc.endswith("." + clean_domain)
-                    ):
-                        continue
+                if allowed and not is_allowed_host(urlparse(url).hostname or "", allowed):
+                    continue
 
                 if not is_probable_article(url, article_url_patterns):
                     continue
@@ -223,6 +259,34 @@ class SourceSearchStage:
             provider_hit_counts=provider_hit_counts,
         )
         return context
+
+    @staticmethod
+    def _record_outcomes(context: PipelineContext, results: list[_CallResult]) -> None:
+        for call in results:
+            bucket = context.search_provider_outcomes.setdefault(call.provider.value, {})
+            bucket[call.outcome.value] = bucket.get(call.outcome.value, 0) + 1
+            if call.outcome == SearchCallOutcome.SKIPPED:
+                context.search_skipped += 1
+                continue
+            context.search_attempted += 1
+            if call.outcome == SearchCallOutcome.FAILED:
+                context.search_errors += 1
+            elif call.outcome == SearchCallOutcome.SUCCESS:
+                context.search_success += 1
+            elif call.outcome == SearchCallOutcome.SUCCESS_EMPTY:
+                context.search_success_empty += 1
+            elif call.outcome == SearchCallOutcome.CACHED:
+                context.search_cached += 1
+        thresholds = get_settings().classification
+        completed = (
+            context.search_success + context.search_success_empty + context.search_cached
+        )
+        context.search_adequate = search_adequate(
+            context.search_attempted,
+            completed,
+            min_calls=thresholds.search_min_successful_calls,
+            min_ratio=thresholds.search_min_success_ratio,
+        )
 
     def _should_dispatch(
         self,
@@ -293,9 +357,23 @@ class SourceSearchStage:
         context: PipelineContext,
         source_config: dict | None,
         log: structlog.BoundLogger,
-    ) -> list[CandidateArticleSchema]:
+    ) -> _CallResult:
         provider_name = provider_enum.value
-        query_hash = compute_search_query_hash(provider_name, query)
+
+        # Retrieval is date-free unless this query is explicitly DATE_BOUND.
+        # Applying the claimed date to every query would hide the right
+        # article whenever the claimed date is the thing that is wrong (the
+        # Content MATCHED + Date MISMATCHED case).
+        search_date = (
+            context.published_date if query_type.upper() == "DATE_BOUND" else None
+        )
+        query_hash = compute_search_query_hash(provider_name, query, search_date)
+
+        if provider_enum == SearchProvider.INTERNAL_SITE and not (
+            source_config and source_config.get("internal_search_url")
+        ):
+            # Not configured for this outlet: skipped, not a search that ran.
+            return _CallResult(provider_enum, SearchCallOutcome.SKIPPED)
 
         if getattr(context, "force_refresh", False):
             cached_urls = None
@@ -303,19 +381,21 @@ class SourceSearchStage:
             cached_urls = await self._get_cached_search(provider_name, query_hash)
 
         if cached_urls is not None:
-            log.debug(
-                "s04_cache_hit", provider=provider_name, cached_count=len(cached_urls)
+            log.debug("s04_cache_hit", provider=provider_name, cached_count=len(cached_urls))
+            return _CallResult(
+                provider_enum,
+                SearchCallOutcome.CACHED,
+                [
+                    CandidateArticleSchema(
+                        url=u,
+                        title_snippet=None,
+                        search_provider=provider_enum,
+                        query_type=query_type,
+                        position=idx + 1,
+                    )
+                    for idx, u in enumerate(cached_urls)
+                ],
             )
-            return [
-                CandidateArticleSchema(
-                    url=u,
-                    title_snippet=None,
-                    search_provider=provider_enum,
-                    query_type=query_type,
-                    position=idx + 1,
-                )
-                for idx, u in enumerate(cached_urls)
-            ]
 
         try:
             kwargs: dict = {}
@@ -325,47 +405,46 @@ class SourceSearchStage:
             entries: list[tuple[str, str]] = await client.search_entries(
                 query,
                 domain=domain,
-                published_date=context.published_date,
+                published_date=search_date,
                 **kwargs,
             )
-
-            urls = [url for url, _ in entries]
-            candidates = [
-                CandidateArticleSchema(
-                    url=url,
-                    title_snippet=title or None,
-                    search_provider=provider_enum,
-                    query_type=query_type,
-                    position=idx + 1,
-                )
-                for idx, (url, title) in enumerate(entries)
-            ]
-
-            if urls:
-                await self._cache_search_result(provider_name, query_hash, urls)
-                log.debug(
-                    "s04_provider_success",
-                    provider=provider_name,
-                    query_type=query_type,
-                    result_count=len(urls),
-                )
-
-            return candidates
-
         except Exception as exc:
             err_str = str(exc)
-            if "not configured" not in err_str.lower():
-                log.warning(
-                    "s04_provider_failed",
-                    provider=provider_name,
-                    query_type=query_type,
-                    error=err_str[:120],
-                )
-                context.record_stage_error(
-                    self.stage_id,
-                    f"{provider_name} failed for '{query[:40]}': {err_str[:80]}",
-                )
-            return []
+            if "not configured" in err_str.lower():
+                return _CallResult(provider_enum, SearchCallOutcome.SKIPPED, error=err_str[:120])
+            log.warning(
+                "s04_provider_failed",
+                provider=provider_name,
+                query_type=query_type,
+                error=err_str[:120],
+            )
+            context.record_stage_error(
+                self.stage_id,
+                f"{provider_name} failed for '{query[:40]}': {err_str[:80]}",
+            )
+            return _CallResult(provider_enum, SearchCallOutcome.FAILED, error=err_str[:200])
+
+        candidates = [
+            CandidateArticleSchema(
+                url=url,
+                title_snippet=title or None,
+                search_provider=provider_enum,
+                query_type=query_type,
+                position=idx + 1,
+            )
+            for idx, (url, title) in enumerate(entries)
+        ]
+        urls = [url for url, _ in entries]
+        if urls:
+            await self._cache_search_result(provider_name, query_hash, urls)
+            log.debug(
+                "s04_provider_success",
+                provider=provider_name,
+                query_type=query_type,
+                result_count=len(urls),
+            )
+            return _CallResult(provider_enum, SearchCallOutcome.SUCCESS, candidates)
+        return _CallResult(provider_enum, SearchCallOutcome.SUCCESS_EMPTY)
 
     async def _get_cached_search(
         self, provider: str, query_hash: str

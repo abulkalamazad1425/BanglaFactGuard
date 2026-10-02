@@ -1,4 +1,5 @@
 import pytest
+from unittest.mock import AsyncMock, MagicMock
 from app.features.verification.pipeline.stages.s01_normalizer import (
     InputNormalizerStage,
 )
@@ -8,6 +9,14 @@ from app.features.sources.repository import SourceRepository
 from app.features.sources.models import VerifiedSource
 
 
+# S01 looks the resolved source up in the registry; a stub with no record is
+# enough for these normalisation tests.
+_REPO = MagicMock(
+    get_by_canonical_name=AsyncMock(return_value=None),
+    resolve_source=AsyncMock(return_value=None),
+)
+
+
 @pytest.mark.asyncio
 async def test_normalize_text_basic():
     context = build_context(
@@ -15,7 +24,7 @@ async def test_normalize_text_basic():
         claimed_source="prothomalo.com",
     )
 
-    stage = InputNormalizerStage(source_repo=None)
+    stage = InputNormalizerStage(source_repo=_REPO)
     context = await stage.execute(context)
 
     assert context.normalized_headline == "প্রথম আলো"
@@ -29,7 +38,7 @@ async def test_normalize_empty_headline_raises_error():
         claimed_source="prothomalo.com",
     )
 
-    stage = InputNormalizerStage(source_repo=None)
+    stage = InputNormalizerStage(source_repo=_REPO)
     with pytest.raises(NormalizationError):
         await stage.execute(context)
 
@@ -41,7 +50,7 @@ async def test_resolve_source_via_url():
         claimed_source="https://www.thedailystar.net/news/bangladesh-123",
     )
 
-    stage = InputNormalizerStage(source_repo=None)
+    stage = InputNormalizerStage(source_repo=_REPO)
     context = await stage.execute(context)
 
     assert context.normalized_source == "thedailystar.net"
@@ -54,7 +63,7 @@ async def test_resolve_source_via_static_alias():
         claimed_source="প্রথম আলো",
     )
 
-    stage = InputNormalizerStage(source_repo=None)
+    stage = InputNormalizerStage(source_repo=_REPO)
     context = await stage.execute(context)
 
     assert context.normalized_source == "prothomalo.com"
@@ -86,7 +95,9 @@ async def test_resolve_source_via_db(db_session):
 
 
 @pytest.mark.asyncio
-async def test_resolve_source_unresolved_falls_back():
+async def test_unresolved_source_fails_closed():
+    """S01 no longer lets an unresolved source through (that would search the
+    whole web instead of the claimed outlet): it raises NormalizationError."""
     context = build_context(
         headline="কিছু খবর",
         claimed_source="অপরিচিত উৎস",
@@ -98,8 +109,18 @@ async def test_resolve_source_unresolved_falls_back():
     mock_repo.resolve_source.return_value = None
 
     stage = InputNormalizerStage(source_repo=mock_repo)
-    context = await stage.execute(context)
+    with pytest.raises(NormalizationError):
+        await stage.execute(context)
 
-    assert context.normalized_source is None
 
-    assert context.claim_hash is not None
+@pytest.mark.asyncio
+async def test_identity_hash_includes_body_and_claimed_date():
+    from datetime import date
+
+    base = dict(headline="কিছু খবর", claimed_source="prothomalo.com")
+    hashes = []
+    for kw in ({}, {"published_date": date(2026, 6, 7)}, {"published_date": date(2026, 6, 8)},
+               {"news_body": "বডি এক"}, {"news_body": "বডি দুই"}):
+        ctx = await InputNormalizerStage(source_repo=_REPO).execute(build_context(**base, **kw))
+        hashes.append(ctx.content_hash)
+    assert len(set(hashes)) == len(hashes)

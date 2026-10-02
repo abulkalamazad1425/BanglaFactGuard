@@ -6,6 +6,7 @@ from datetime import date, datetime
 from typing import Any, Protocol, runtime_checkable
 
 from app.core.constants import (
+    ClaimScope,
     ContentStatus,
     DateStatus,
     ManipulationType,
@@ -13,7 +14,9 @@ from app.core.constants import (
     SourceStatus,
 )
 from app.features.articles.schemas import CandidateArticleSchema, RankedArticleSchema
+from app.features.verification.analysis.entities import EntityMention
 from app.features.verification.schemas import (
+    AnalysisDetails,
     ManipulationFlagsSchema,
     NLIScoresSchema,
     VerificationScoresSchema,
@@ -31,6 +34,7 @@ class PipelineContext:
     raw_claimed_source: str = ""
     published_date: date | None = None
     force_refresh: bool = False
+    claim_scope: ClaimScope = ClaimScope.HEADLINE_ONLY
 
     normalized_headline: str = ""
     normalized_body: str | None = None
@@ -39,6 +43,10 @@ class PipelineContext:
     content_hash: str | None = None
 
     cache_hit: bool = False
+    # The earlier submission whose automated result is being reused (S02).
+    # The service layer materialises a result copy for the requester's own
+    # submission; the pipeline itself never repoints `submission_id`.
+    reused_from_submission_id: uuid.UUID | None = None
     cached_source_status: SourceStatus | None = None
     cached_content_status: ContentStatus | None = None
     cached_date_status: DateStatus | None = None
@@ -52,6 +60,29 @@ class PipelineContext:
 
     candidate_urls: list[CandidateArticleSchema] = field(default_factory=list)
     search_provider_used: str | None = None
+
+    # Attempted/errored counters for distinguishing "the check ran cleanly
+    # and found nothing" (NOT_FOUND) from "the check itself failed" (source
+    # status INCOMPLETE) — see s11_classifier.py. A stage records these even
+    # though it swallows individual provider/fetch exceptions internally
+    # (asyncio.gather(..., return_exceptions=True)) so the pipeline keeps
+    # degrading gracefully rather than aborting on one bad provider.
+    # Per provider-call outcome accounting (S04). `search_attempted` counts
+    # calls that were actually issued or served from cache; unconfigured
+    # providers are `search_skipped` and never count as attempts.
+    search_attempted: int = 0
+    search_errors: int = 0
+    search_success: int = 0
+    search_success_empty: int = 0
+    search_cached: int = 0
+    search_skipped: int = 0
+    search_redirect_rejected: int = 0
+    search_provider_outcomes: dict[str, dict[str, int]] = field(default_factory=dict)
+    search_adequate: bool | None = None
+    fetch_attempted: int = 0
+    fetch_errors: int = 0
+    extraction_attempted: int = 0
+    extraction_errors: int = 0
 
     extracted_articles: list[RankedArticleSchema] = field(default_factory=list)
 
@@ -72,6 +103,18 @@ class PipelineContext:
     article_entity_types: list[tuple[str, str]] = field(default_factory=list)
 
     nli_scores: NLIScoresSchema | None = None
+    nli_premise: str | None = None
+
+    # Typed entity mentions (S08) kept for the sentence-level checks in S10.
+    claim_mentions: list[EntityMention] = field(default_factory=list)
+    evidence_mentions: list[EntityMention] = field(default_factory=list)
+    ner_available: bool = False
+
+    # Everything persisted in verification_results_v2.analysis_details.
+    analysis: AnalysisDetails = field(default_factory=AnalysisDetails)
+    # Body comparison diagnostics (HEADLINE_WITH_BODY only).
+    body_min_chunk_similarity: float | None = None
+    body_complete: bool = True
 
     manipulation_flags: ManipulationFlagsSchema = field(
         default_factory=ManipulationFlagsSchema
@@ -103,6 +146,26 @@ class PipelineContext:
     @property
     def has_evidence(self) -> bool:
         return len(self.ranked_articles) > 0
+
+    @property
+    def retrieval_failed(self) -> bool:
+        """Candidates existed but every page fetch / extraction failed, so the
+        evidence could not be retrieved (as opposed to not existing)."""
+        if self.fetch_attempted > 0 and self.fetch_errors >= self.fetch_attempted:
+            return True
+        if self.extraction_attempted > 0 and self.extraction_errors >= self.extraction_attempted:
+            return True
+        return False
+
+    @property
+    def search_was_incomplete(self) -> bool:
+        """True when no evidence was found AND that absence is attributable
+        to a failed/inadequate search or failed retrieval rather than an
+        adequate search that simply came up empty. S11 reports source_status
+        INCOMPLETE (never the confident-negative NOT_FOUND) in that case."""
+        if self.has_evidence:
+            return False
+        return self.retrieval_failed or not bool(self.search_adequate)
 
     @property
     def has_fatal_error(self) -> bool:
@@ -148,15 +211,32 @@ def build_context(
     force_refresh: bool = False,
     submission_id: uuid.UUID | None = None,
     submitter_id: uuid.UUID | None = None,
+    claim_scope: ClaimScope | None = None,
 ) -> PipelineContext:
+    """Build the pipeline's starting state for one verification run.
+
+    `claim_scope` controls what the pipeline is allowed to treat as "the
+    claim" (see `ClaimScope`). When not given explicitly it is inferred from
+    whether `news_body` was supplied — the right default for a SOURCE_BASED
+    text claim. Photo-card callers must always pass
+    `claim_scope=ClaimScope.HEADLINE_ONLY` explicitly and must not pass
+    `news_body` — the business rule is that a photo card is verified against
+    its headline alone, never a body or caption.
+    """
+    resolved_scope = claim_scope or (
+        ClaimScope.HEADLINE_WITH_BODY
+        if news_body and news_body.strip()
+        else ClaimScope.HEADLINE_ONLY
+    )
     return PipelineContext(
         request_id=uuid.uuid4(),
         submission_id=submission_id,
         submitter_id=submitter_id,
         raw_headline=headline,
-        raw_news_body=news_body,
+        raw_news_body=news_body if resolved_scope == ClaimScope.HEADLINE_WITH_BODY else None,
         raw_claimed_source=claimed_source,
         published_date=published_date,
         force_refresh=force_refresh,
+        claim_scope=resolved_scope,
         pipeline_start_time=datetime.utcnow(),
     )

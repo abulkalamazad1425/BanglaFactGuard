@@ -6,8 +6,11 @@ from datetime import date, datetime
 from pydantic import BaseModel, Field, field_validator
 
 from app.core.constants import (
+    CheckState,
+    ClaimScope,
     ContentStatus,
     DateStatus,
+    MetricState,
     OverallVerdict,
     SourceStatus,
     SubmissionStatus,
@@ -33,25 +36,63 @@ class NLIScoresSchema(BaseModel):
 
 
 class VerificationScoresSchema(BaseModel):
+    """Measurements, not probabilities of truth. A null value means "no
+    measurement" — the reason is in `AnalysisDetails.metrics[<name>].state`
+    (NOT_APPLICABLE / EMPTY / UNAVAILABLE), never 0% or 100%."""
 
-    semantic_similarity: float | None = Field(default=None, ge=0.0, le=1.0)
-    entity_match: float | None = Field(default=None, ge=0.0, le=1.0)
-    keyword_overlap: float | None = Field(default=None, ge=0.0, le=1.0)
-    numerical_consistency: float | None = Field(default=None, ge=0.0, le=1.0)
+    semantic_similarity: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Applicable semantic similarity. HEADLINE_ONLY: headline vs source "
+            "title. HEADLINE_WITH_BODY: 0.3*headline + 0.7*body (both applicable)."
+        ),
+    )
+    entity_match: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Directional coverage of the claim's entities in the source evidence (no penalty for extra source entities).",
+    )
+    keyword_overlap: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Headline keyword coverage against the source title (alias of headline_keyword_coverage).",
+    )
+    numerical_consistency: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Share of claimed numbers supported by the source; null when the claim has no numbers.",
+    )
     contradiction_score: float | None = Field(default=None, ge=0.0, le=1.0)
 
     headline_similarity: float | None = Field(
         default=None,
         ge=0.0,
         le=1.0,
-        description="LaBSE cosine similarity between claim headline and article title only.",
+        description="Embedding cosine similarity between the submitted headline and the source title.",
     )
     body_similarity: float | None = Field(
         default=None,
         ge=0.0,
         le=1.0,
-        description="LaBSE cosine similarity between claim full text and article body only.",
+        description=(
+            "Submitted body vs aligned source passages. NULL (not applicable) "
+            "unless a body was submitted - never computed for photo cards."
+        ),
     )
+    passage_similarity: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Headline vs the most relevant source passages (supporting evidence; not a body match).",
+    )
+    headline_keyword_coverage: float | None = Field(default=None, ge=0.0, le=1.0)
+    passage_keyword_coverage: float | None = Field(default=None, ge=0.0, le=1.0)
+    body_keyword_coverage: float | None = Field(default=None, ge=0.0, le=1.0)
 
     model_config = {
         "json_schema_extra": {
@@ -66,12 +107,71 @@ class VerificationScoresSchema(BaseModel):
     }
 
 
+class AlteredNumberDetail(BaseModel):
+    """One number present in the claim but absent from the article, with the
+    closest number the article did contain (if any) — e.g. claimed "১০০ জন"
+    where the article says "১০ জন" surfaces as claimed="১০০ জন",
+    nearest_in_article="১০"."""
+
+    claimed: str
+    nearest_in_article: str | None = Field(
+        default=None,
+        description="Closest numeral actually found in the article, or null if none was close.",
+    )
+
+
+class SubstitutedEntityDetail(BaseModel):
+    """A same-type entity substitution S10 detected — e.g. the claim names a
+    PER the article never mentions, while the article names a different PER
+    of the same role."""
+
+    entity_type: str = Field(description="PER, LOC, or ORG")
+    claimed: list[str]
+    article_same_type: list[str] = Field(
+        description="Entities of the same type the article mentions instead."
+    )
+
+
+class DiscrepancyDetail(BaseModel):
+    """One concrete, quotable disagreement between the claim and the source."""
+
+    kind: str = Field(
+        description="numbers | negation | entity_substitution | entity_role | scope | attribution | modality"
+    )
+    claim_text: str
+    evidence_text: str | None = None
+    detail: str
+    part: str = Field(default="headline", description="headline | body")
+
+
 class ManipulationFlagsSchema(BaseModel):
+    """Alteration findings. A boolean is True ONLY when a concrete discrepancy
+    was found; False does NOT mean "verified" - consult `check_states`, where
+    a check that did not run is NOT_EVALUATED and one that does not apply is
+    NOT_APPLICABLE. Rows persisted before check_states existed have an empty
+    map and must be read as "not evaluated"."""
 
     headline_manipulated: bool = Field(default=False)
     body_altered: bool = Field(default=False)
     numbers_altered: bool = Field(default=False)
     entities_replaced: bool = Field(default=False)
+
+    altered_numbers: list[AlteredNumberDetail] = Field(
+        default_factory=list,
+        description="Set when numbers_altered is True: which claimed numbers differ from the source, and the source's number.",
+    )
+    substituted_entities: list[SubstitutedEntityDetail] = Field(
+        default_factory=list,
+        description="Set when entities_replaced is True: which claimed entity replaced which source entity (same type and role).",
+    )
+    check_states: dict[str, CheckState] = Field(
+        default_factory=dict,
+        description=(
+            "headline | body | numbers | negation | entities | scope | "
+            "attribution | modality -> PASSED | FAILED | NOT_EVALUATED | NOT_APPLICABLE"
+        ),
+    )
+    discrepancies: list[DiscrepancyDetail] = Field(default_factory=list)
 
     @property
     def any_manipulation_detected(self) -> bool:
@@ -82,18 +182,92 @@ class ManipulationFlagsSchema(BaseModel):
                 self.numbers_altered,
                 self.entities_replaced,
             ]
-        )
+        ) or bool(self.discrepancies)
 
     model_config = {
         "json_schema_extra": {
             "example": {
                 "headline_manipulated": True,
                 "body_altered": False,
-                "numbers_altered": False,
+                "numbers_altered": True,
                 "entities_replaced": False,
+                "altered_numbers": [{"claimed": "5", "nearest_in_article": "10"}],
+                "substituted_entities": [],
+                "check_states": {"numbers": "FAILED", "body": "NOT_APPLICABLE"},
+                "discrepancies": [],
             }
         }
     }
+
+
+class MetricDetail(BaseModel):
+    state: MetricState
+    value: float | None = None
+    reason: str | None = None
+    details: dict = Field(default_factory=dict)
+
+
+class EvidencePassage(BaseModel):
+    text: str
+    score: float
+    location: str = Field(default="body", description="title | body")
+    first_sentence: int | None = None
+    last_sentence: int | None = None
+
+
+class SearchAccounting(BaseModel):
+    attempted: int = 0
+    success: int = 0
+    success_empty: int = 0
+    failed: int = 0
+    skipped: int = 0
+    cached: int = 0
+    adequate: bool | None = Field(
+        default=None,
+        description="True only when enough provider calls completed to treat an empty result as a real negative.",
+    )
+    providers: dict[str, dict[str, int]] = Field(default_factory=dict)
+    redirect_rejected: int = 0
+
+
+class DateAnalysis(BaseModel):
+    claimed_date: date | None = None
+    article_date: date | None = Field(
+        default=None, description="datePublished as a calendar day in Asia/Dhaka."
+    )
+    article_published_at: datetime | None = None
+    provenance: str | None = Field(
+        default=None,
+        description="Where the article's publication date came from (json_ld.datePublished, meta.article:published_time, selector, ...). dateModified and crawl dates are never used.",
+    )
+    tz_assumed: bool = False
+    timezone: str = "Asia/Dhaka"
+
+
+class NLIAnalysis(BaseModel):
+    entailment: float | None = None
+    neutral: float | None = None
+    contradiction: float | None = None
+    premise: str | None = Field(default=None, description="relevant_passages | title_only")
+    reliability: str = Field(
+        default="UNVALIDATED_FOR_BANGLA",
+        description="The NLI model has not been validated on Bangla; it can block MATCHED but never alone cause ALTERED.",
+    )
+
+
+class AnalysisDetails(BaseModel):
+    """Everything needed to explain and reproduce a result after Redis expiry."""
+
+    pipeline_version: str | None = None
+    claim_scope: ClaimScope | None = None
+    metrics: dict[str, MetricDetail] = Field(default_factory=dict)
+    passages: list[EvidencePassage] = Field(default_factory=list)
+    nli: NLIAnalysis | None = None
+    search: SearchAccounting | None = None
+    date: DateAnalysis | None = None
+    source_basis: list[str] = Field(default_factory=list)
+    content_basis: list[str] = Field(default_factory=list)
+    stage_errors: dict[str, str] = Field(default_factory=dict)
 
 
 class VerificationRequest(BaseModel):
@@ -157,8 +331,9 @@ class VerificationResponse(BaseModel):
     overall_verdict: OverallVerdict | None = Field(
         default=None,
         description=(
-            "The displayed Overall verdict — the expert-finalized value if "
-            "available, otherwise the AI's preliminary implied value."
+            "The expert-finalized Overall verdict (Fake/Real/Misleading/Altered). "
+            "The automated system never computes this — it is NULL until expert "
+            "review finalizes the claim, full stop. There is no AI-implied value."
         ),
     )
     is_finalized: bool = Field(
@@ -167,11 +342,11 @@ class VerificationResponse(BaseModel):
     )
     was_overridden: bool = Field(
         default=False,
-        description="True if expert review's finalized verdict differs from the AI's original call.",
-    )
-    ai_overall_verdict: OverallVerdict | None = Field(
-        default=None,
-        description="The AI's own implied Overall verdict, before any expert override.",
+        description=(
+            "True if expert review's finalized source/content/date status "
+            "differs from the AI's original structured call on any dimension. "
+            "Not applicable to overall_verdict, which the AI never sets."
+        ),
     )
     ai_source_status: SourceStatus | None = Field(
         default=None,
@@ -214,6 +389,23 @@ class VerificationResponse(BaseModel):
     cached: bool = False
     processing_time_ms: int | None = None
     created_at: datetime
+    claim_scope: ClaimScope | None = Field(
+        default=None,
+        description="HEADLINE_ONLY (always for photo cards) or HEADLINE_WITH_BODY.",
+    )
+    review_pending: bool = Field(
+        default=True,
+        description="True until expert review finalizes the overall verdict; the UI must not show a truth badge while True.",
+    )
+    confidence_meaning: str = Field(
+        default=(
+            "Automated check strength: the mean of the applicable similarity/"
+            "coverage measurements behind this result. It is a measurement "
+            "summary, not the probability that the claim is true."
+        ),
+    )
+    pipeline_version: str | None = None
+    analysis: AnalysisDetails | None = None
 
     model_config = {
         "json_schema_extra": {
@@ -298,8 +490,11 @@ class VerificationStatusResponse(BaseModel):
 
     submission_id: uuid.UUID
     status: SubmissionStatus
+    phase: str | None = Field(
+        default=None, description="QUEUED | EXTRACTING | VERIFYING | DONE | FAILED"
+    )
     result: VerificationResponse | None = None
-    error: str | None = None
+    error: str | None = Field(default=None, description="User-presentable reason when status is FAILED")
     queued_at: datetime
     updated_at: datetime
 

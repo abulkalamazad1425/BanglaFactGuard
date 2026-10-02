@@ -205,10 +205,14 @@ class ExpertReviewV2(UUIDMixin, TimestampMixin, ReprMixin, Base):
         nullable=True,
         index=True,
     )
-    ai_overall_verdict: Mapped[OverallVerdict] = mapped_column(
+    ai_overall_verdict: Mapped[OverallVerdict | None] = mapped_column(
         Enum(OverallVerdict, name="overall_verdict_enum", create_type=False),
-        nullable=False,
-        comment="Snapshot of the AI-implied Overall verdict at vote time (all types)",
+        nullable=True,
+        comment=(
+            "Snapshot of the AI-implied Overall verdict at vote time — "
+            "MULTIMODAL only. Automated checks never produce an Overall "
+            "verdict for SOURCE_BASED/PHOTO_CARD, so this is NULL for them."
+        ),
     )
     ai_source_status: Mapped[SourceStatus | None] = mapped_column(
         Enum(SourceStatus, name="source_status_enum", create_type=False),

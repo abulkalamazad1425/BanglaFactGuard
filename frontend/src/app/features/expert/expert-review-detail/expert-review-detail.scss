@@ -116,6 +116,13 @@
     .check-title { font-weight: 600; font-size: 13px; color: var(--text-primary); }
     .check-desc { font-size: 12px; color: var(--text-secondary); line-height: 1.4; }
 
+    .alteration-detail {
+      margin-top: 14px; padding: 12px 14px; background: var(--error-bg);
+      border: 1px solid rgba(220, 38, 38, 0.2); border-radius: var(--radius-lg);
+    }
+    .alteration-detail-title { display: block; font-weight: 600; font-size: 12px; color: var(--error); margin-bottom: 6px; }
+    .alteration-detail-list { margin: 0; padding-left: 18px; font-size: 13px; color: var(--text-primary); line-height: 1.6; }
+
     /* ─── Top article card ─── */
     .article-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 10px; }
     .article-title { font-size: 17px; font-weight: 600; color: var(--primary); line-height: 1.4; text-decoration: none; &:hover { text-decoration: underline; color: var(--primary-dark); } }

@@ -281,6 +281,10 @@ textarea.form-control { resize: vertical; min-height: 100px; }
   &-not-found { background: rgba(139,146,169,0.1); color: var(--text-secondary); border: 1px solid var(--border); }
   &-pending { background: var(--info-bg); color: var(--info); border: 1px solid rgba(59,130,246,0.2); }
   &-primary { background: rgba(124,106,247,0.15); color: var(--primary-light); border: 1px solid rgba(124,106,247,0.25); }
+  // A check that could not be completed — deliberately distinct from both a
+  // positive (true) and a negative (not-found/false) result, since neither
+  // was actually reached.
+  &-incomplete { background: rgba(139,146,169,0.15); color: var(--text-secondary); border: 1px dashed var(--border); }
 }
 
 // ── Table ─────────────────────────────────────────────────────

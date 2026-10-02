@@ -44,144 +44,23 @@
                 <div class="card ai-prediction-card">
                   <h3 class="section-heading"><span>🤖</span> Preliminary AI Prediction Details</h3>
 
-                  <!-- Score Bars Grid -->
-                  @if (aiResult()!.scores) {
-                    <div class="scores-grid">
-                      @if (aiResult()!.scores.semantic_similarity != null) {
-                        <div class="score-item score-item--wide">
-                          <div class="score-info">
-                            <span class="score-label" title="Blended score (30% headline, 70% body)">Semantic Similarity ℹ</span>
-                            <span class="score-value score-value--lg">{{ (aiResult()!.scores.semantic_similarity! * 100).toFixed(1) }}%</span>
-                          </div>
-                          <div class="progress-bar-wrap progress-bar-wrap--lg">
-                            <div class="progress-bar blue" [style.width.%]="aiResult()!.scores.semantic_similarity! * 100"></div>
-                          </div>
-                          @if (aiResult()!.scores.headline_similarity != null && aiResult()!.scores.body_similarity != null) {
-                            <div class="score-sub score-sub--pills">
-                              <span class="score-pill">Headline Match: <strong>{{ (aiResult()!.scores.headline_similarity! * 100).toFixed(1) }}%</strong></span>
-                              <span class="score-pill">Body Match: <strong>{{ (aiResult()!.scores.body_similarity! * 100).toFixed(1) }}%</strong></span>
-                            </div>
-                          }
-                        </div>
-                      }
+                  <p class="text-muted text-sm" style="margin-bottom: 16px;">
+                    Preliminary automated Source / Content / Date check
+                    ({{ aiResult()!.claim_scope === 'HEADLINE_WITH_BODY' ? 'headline + submitted body' : 'headline only' }}).
+                    Measurements describe agreement with the report on the claimed source, not the probability that the claim is true.
+                    The Overall verdict is yours to decide independently.
+                  </p>
 
-                      @if (aiResult()!.scores.entity_match != null) {
-                        <div class="score-item">
-                          <div class="score-info">
-                            <span class="score-label" title="Named entity overlap">Entity Match ℹ</span>
-                            <span class="score-value">{{ (aiResult()!.scores.entity_match! * 100).toFixed(1) }}%</span>
-                          </div>
-                          <div class="progress-bar-wrap">
-                            <div class="progress-bar purple" [style.width.%]="aiResult()!.scores.entity_match! * 100"></div>
-                          </div>
-                        </div>
-                      }
+                  <!-- Component scores: unavailable / not-applicable are labelled, body only when submitted -->
+                  <app-result-scores
+                    [scores]="aiResult()!.scores"
+                    [analysis]="aiResult()!.analysis"
+                    [scope]="aiResult()!.claim_scope" />
 
-                      @if (aiResult()!.scores.keyword_overlap != null) {
-                        <div class="score-item">
-                          <div class="score-info">
-                            <span class="score-label">Keyword Overlap ℹ</span>
-                            <span class="score-value">{{ (aiResult()!.scores.keyword_overlap! * 100).toFixed(1) }}%</span>
-                          </div>
-                          <div class="progress-bar-wrap">
-                            <div class="progress-bar indigo" [style.width.%]="aiResult()!.scores.keyword_overlap! * 100"></div>
-                          </div>
-                        </div>
-                      }
-
-                      @if (aiResult()!.scores.numerical_consistency != null) {
-                        <div class="score-item">
-                          <div class="score-info">
-                            <span class="score-label">Numerical Consistency ℹ</span>
-                            <span class="score-value">{{ (aiResult()!.scores.numerical_consistency! * 100).toFixed(1) }}%</span>
-                          </div>
-                          <div class="progress-bar-wrap">
-                            <div class="progress-bar cyan" [style.width.%]="aiResult()!.scores.numerical_consistency! * 100"></div>
-                          </div>
-                        </div>
-                      }
-
-                      @if (aiResult()!.scores.contradiction_score != null) {
-                        <div class="score-item">
-                          <div class="score-info">
-                            <span class="score-label" title="NLI contradiction probability">Contradiction Risk ℹ</span>
-                            <span class="score-value">{{ (aiResult()!.scores.contradiction_score! * 100).toFixed(1) }}%</span>
-                          </div>
-                          <div class="progress-bar-wrap">
-                            <div class="progress-bar pink" [style.width.%]="aiResult()!.scores.contradiction_score! * 100"></div>
-                          </div>
-                        </div>
-                      }
-                    </div>
-                  }
-
-                  <!-- Manipulation Flags -->
-                  @if (aiResult()!.manipulation_flags) {
-                    <div class="checks-section">
-                      <h4>✅ Verification Checks</h4>
-                      <div class="checks-grid">
-                        <div class="check-card" [class.passed]="!aiResult()!.manipulation_flags.headline_manipulated"
-                             [class.failed]="aiResult()!.manipulation_flags.headline_manipulated">
-                          <div class="check-icon-wrap">
-                            {{ aiResult()!.manipulation_flags.headline_manipulated ? '✗' : '✓' }}
-                          </div>
-                          <div class="check-body">
-                            <span class="check-title">Headline Integrity</span>
-                            <span class="check-desc">
-                              {{ aiResult()!.manipulation_flags.headline_manipulated
-                                  ? 'Headline altered or sensationalized relative to body.'
-                                  : 'Headline meaning matches article body.' }}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div class="check-card" [class.passed]="!aiResult()!.manipulation_flags.body_altered"
-                             [class.failed]="aiResult()!.manipulation_flags.body_altered">
-                          <div class="check-icon-wrap">
-                            {{ aiResult()!.manipulation_flags.body_altered ? '✗' : '✓' }}
-                          </div>
-                          <div class="check-body">
-                            <span class="check-title">Content Authenticity</span>
-                            <span class="check-desc">
-                              {{ aiResult()!.manipulation_flags.body_altered
-                                  ? 'Submitted text diverges significantly or is fabricated.'
-                                  : 'Submitted text matches the original source.' }}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div class="check-card" [class.passed]="!aiResult()!.manipulation_flags.numbers_altered"
-                             [class.failed]="aiResult()!.manipulation_flags.numbers_altered">
-                          <div class="check-icon-wrap">
-                            {{ aiResult()!.manipulation_flags.numbers_altered ? '✗' : '✓' }}
-                          </div>
-                          <div class="check-body">
-                            <span class="check-title">Numerical Consistency</span>
-                            <span class="check-desc">
-                              {{ aiResult()!.manipulation_flags.numbers_altered
-                                  ? 'Numbers or dates altered or inflated.'
-                                  : 'Statistics and dates are consistent.' }}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div class="check-card" [class.passed]="!aiResult()!.manipulation_flags.entities_replaced"
-                             [class.failed]="aiResult()!.manipulation_flags.entities_replaced">
-                          <div class="check-icon-wrap">
-                            {{ aiResult()!.manipulation_flags.entities_replaced ? '✗' : '✓' }}
-                          </div>
-                          <div class="check-body">
-                            <span class="check-title">Entity Authenticity</span>
-                            <span class="check-desc">
-                              {{ aiResult()!.manipulation_flags.entities_replaced
-                                  ? 'Named entities were swapped or replaced.'
-                                  : 'Names, places, organizations match.' }}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  }
+                  <!-- Alteration checks: only completed passes are green; failures quote the discrepancy -->
+                  <app-result-checks
+                    [flags]="aiResult()!.manipulation_flags"
+                    [scope]="aiResult()!.claim_scope" />
                 </div>
               }
 
@@ -194,7 +73,7 @@
                       {{ art.title || 'View Source Article' }}
                     </a>
                     @if (art.rank_score != null) {
-                      <span class="article-match">Relevance: {{ (art.rank_score * 100).toFixed(1) }}%</span>
+                      <span class="article-match" title="Retrieval relevance — how likely this is the report the claim is about, not a content-match score.">Retrieval relevance: {{ (art.rank_score * 100).toFixed(1) }}%</span>
                     }
                   </div>
                   <div class="article-meta">
@@ -220,7 +99,7 @@
                 </div>
                 @if (aiResult(); as ai) {
                   <div class="side-ai-confidence">
-                    <app-score-bar label="AI Confidence" [value]="ai.confidence" />
+                    <app-score-bar label="Automated check strength" [value]="ai.confidence" />
                   </div>
                 }
               </div>

@@ -32,8 +32,8 @@ export const API_ENDPOINTS = {
 
   // Photo Card
   PHOTOCARD: '/photocard',
-  PHOTOCARD_EXTRACT: '/photocard/extract',
   PHOTOCARD_VERIFY: '/photocard/verify',
+  PHOTOCARD_VERIFY_ASYNC: '/photocard/verify/async',
 
   // Expert
   EXPERT_QUEUE: '/expert/queue',

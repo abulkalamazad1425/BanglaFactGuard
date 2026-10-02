@@ -524,6 +524,55 @@ select.form-control {
   .chip-meta { font-size: 0.7rem; color: var(--text-muted); }
 }
 
+.detected-chip-static {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 14px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+
+  .chip-name { font-size: 0.9rem; font-weight: 600; color: var(--text-primary); }
+  .chip-meta { font-size: 0.7rem; color: var(--text-muted); }
+}
+
+/* ─── Extraction provenance ─── */
+.extractor-tag {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 3px 10px;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.alteration-detail {
+  margin-top: 14px;
+  padding: 12px 14px;
+  background: var(--error-bg);
+  border: 1px solid rgba(220, 38, 38, 0.2);
+  border-radius: 12px;
+}
+
+.alteration-detail-title {
+  display: block;
+  font-weight: 600;
+  font-size: 0.75rem;
+  color: var(--error);
+  margin-bottom: 6px;
+}
+
+.alteration-detail-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.82rem;
+  color: var(--text-primary);
+  line-height: 1.6;
+}
+
 /* ─── Actions ─── */
 .action-row {
   display: flex;
@@ -845,3 +894,5 @@ select.form-control {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+.accepted-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 20px; }
