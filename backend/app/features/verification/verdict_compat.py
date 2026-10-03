@@ -4,7 +4,7 @@ History: this module used to also hold ``derive_expert_verdict``, which
 projected the automated (source, content) result onto the legacy single-
 category TRUE / FALSE / PARTIALLY_TRUE / NOT_FOUND_IN_CLAIMED_SOURCE enum so
 the automated system could cast a vote of its own in the expert-consensus
-mechanism (stored as ``verification_results_v2.ai_consensus_label``). That
+mechanism (stored as ``verification_results.ai_consensus_label``). That
 projection was removed on purpose:
 
 * The automated system verifies Source, Content and Date ONLY. Fake / Real /

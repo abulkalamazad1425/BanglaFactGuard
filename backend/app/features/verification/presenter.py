@@ -18,9 +18,9 @@ from app.core.constants import (
 )
 from app.features.articles.schemas import RankedArticleSchema
 from app.features.submissions.models import Submission
-from app.features.submissions.repository import RetrievedArticleV2Repository
-from app.features.verification.models import VerificationResultV2
-from app.features.verification.repository import ResultV2Repository
+from app.features.submissions.repository import RetrievedArticleRepository
+from app.features.verification.models import VerificationResult
+from app.features.verification.repository import ResultRepository
 from app.features.verification.schemas import (
     AnalysisDetails,
     ManipulationFlagsSchema,
@@ -29,7 +29,7 @@ from app.features.verification.schemas import (
 )
 
 
-def resolve_scope(submission: Submission, result: VerificationResultV2) -> ClaimScope:
+def resolve_scope(submission: Submission, result: VerificationResult) -> ClaimScope:
     """Photo cards are ALWAYS headline-only, whatever an old row says."""
     if submission.submission_type == SubmissionType.PHOTO_CARD:
         return ClaimScope.HEADLINE_ONLY
@@ -44,9 +44,9 @@ def resolve_scope(submission: Submission, result: VerificationResultV2) -> Claim
 
 async def effective_expert_row(
     submission: Submission,
-    result: VerificationResultV2,
-    result_repo: ResultV2Repository,
-) -> VerificationResultV2:
+    result: VerificationResult,
+    result_repo: ResultRepository,
+) -> VerificationResult:
     """The row whose expert-finalized fields apply to this submission.
 
     A reused copy reads the original's review outcome live instead of
@@ -69,7 +69,7 @@ def effective_status(submission: Submission, original_status: SubmissionStatus |
     return submission.status
 
 
-def scores_from_result(result: VerificationResultV2, scope: ClaimScope) -> VerificationScoresResponse:
+def scores_from_result(result: VerificationResult, scope: ClaimScope) -> VerificationScoresResponse:
     body_applicable = scope == ClaimScope.HEADLINE_WITH_BODY
     return VerificationScoresResponse(
         semantic_similarity=result.semantic_similarity,
@@ -91,8 +91,8 @@ def scores_from_result(result: VerificationResultV2, scope: ClaimScope) -> Verif
 async def load_verification_response(
     submission: Submission,
     *,
-    result_repo: ResultV2Repository,
-    article_repo: RetrievedArticleV2Repository,
+    result_repo: ResultRepository,
+    article_repo: RetrievedArticleRepository,
 ) -> VerificationResponse | None:
     result = await result_repo.get_by_submission_id(submission.id)
     if result is None or result.source_status is None:

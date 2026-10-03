@@ -48,11 +48,11 @@ from app.features.photocard.storage_service import PhotoCardStorageService
 from app.features.sources.repository import SourceRepository
 from app.features.submissions.repository import (
     OcrExtractionRepository,
-    RetrievedArticleV2Repository,
+    RetrievedArticleRepository,
     SubmissionRepository,
 )
 from app.features.verification.job_repository import VerificationJobRepository
-from app.features.verification.repository import ResultV2Repository
+from app.features.verification.repository import ResultRepository
 from app.features.verification.service import VerificationService
 
 logger = structlog.get_logger(__name__)
@@ -105,8 +105,8 @@ async def execute_job(
         ):
             return  # idempotent: already processed
 
-        result_repo = ResultV2Repository(session)
-        article_repo = RetrievedArticleV2Repository(session)
+        result_repo = ResultRepository(session)
+        article_repo = RetrievedArticleRepository(session)
         source_repo = SourceRepository(session)
         try:
             if kind == "PHOTO_CARD":

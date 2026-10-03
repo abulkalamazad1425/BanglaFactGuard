@@ -1,15 +1,6 @@
-"""
-app/features/submissions/models.py
-================================
-ORM models for the `submissions` feature — the schema described in
-DatabaseDescription.pdf §4.1 (Submission, SourceEvidenceQuery, RetrievedArticle,
-OcrExtraction).
+"""Current submission, source-evidence, retrieved-article and OCR storage.
 
-These tables are additive: they implement the thesis ER diagram alongside the
-pre-existing verified_claims / search_queries / retrieved_articles tables used
-by the live verification pipeline (see app/features/verification and
-app/features/articles), which are left untouched. Nothing in the running app
-writes to these tables yet.
+These models are used by the live text, photo-card and multimodal workflows.
 """
 
 from __future__ import annotations
@@ -142,8 +133,8 @@ class Submission(UUIDMixin, TimestampMixin, ReprMixin, Base):
         cascade="all, delete-orphan",
     )
 
-    retrieved_articles: Mapped[list["RetrievedArticleV2"]] = relationship(
-        "RetrievedArticleV2",
+    retrieved_articles: Mapped[list["RetrievedArticle"]] = relationship(
+        "RetrievedArticle",
         back_populates="submission",
         lazy="select",
         cascade="all, delete-orphan",
@@ -207,12 +198,10 @@ class SourceEvidenceQuery(UUIDMixin, ReprMixin, Base):
     )
 
 
-class RetrievedArticleV2(UUIDMixin, ReprMixin, Base):
-    """DatabaseDescription.pdf Table 4.7 — retrieved_articles (suffixed `_v2` in the DB
-    because the legacy `retrieved_articles` table, still used by the live pipeline,
-    already owns that name)."""
+class RetrievedArticle(UUIDMixin, ReprMixin, Base):
+    """Retrieved source evidence for a submission."""
 
-    __tablename__ = "retrieved_articles_v2"
+    __tablename__ = "retrieved_articles"
 
     submission_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -259,10 +248,10 @@ class RetrievedArticleV2(UUIDMixin, ReprMixin, Base):
     __table_args__ = (
         CheckConstraint(
             "rank_score IS NULL OR (rank_score >= 0.0 AND rank_score <= 1.0)",
-            name="ck_retrieved_articles_v2_rank_score_range",
+            name="ck_retrieved_articles_rank_score_range",
         ),
         Index(
-            "uq_retrieved_articles_v2_submission_url_hash",
+            "uq_retrieved_articles_submission_url_hash",
             submission_id,
             url_hash,
             unique=True,

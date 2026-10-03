@@ -29,11 +29,11 @@ from app.core.constants import (
     SubmissionType,
 )
 from app.core.exceptions import DomainValidationError
-from app.features.expert_review.models import ExpertReviewV2, VotingConfig
+from app.features.expert_review.models import ExpertReview, VotingConfig
 from app.features.expert_review.service import ExpertReviewService, _evaluate, _tally
 from app.features.multimodal.models import MultimodalAnalysis
 from app.features.submissions.models import Submission
-from app.features.verification.models import VerificationResultV2
+from app.features.verification.models import VerificationResult
 
 
 def _config(
@@ -65,7 +65,6 @@ def _make_service():
     result_repo = AsyncMock()
     multimodal_repo = AsyncMock()
     voting_config_repo = AsyncMock()
-    audit_repo = AsyncMock()
     review_repo.session = MagicMock()
     svc = ExpertReviewService(
         review_repo=review_repo,
@@ -75,7 +74,6 @@ def _make_service():
         result_repo=result_repo,
         multimodal_repo=multimodal_repo,
         voting_config_repo=voting_config_repo,
-        audit_repo=audit_repo,
     )
     return {
         "svc": svc,
@@ -86,7 +84,6 @@ def _make_service():
         "results": result_repo,
         "multimodal": multimodal_repo,
         "voting_config": voting_config_repo,
-        "audit": audit_repo,
     }
 
 
@@ -98,8 +95,8 @@ def _review(
     content: ContentStatus | None = None,
     date_: DateStatus | None = None,
     reviewer_id: uuid.UUID | None = None,
-) -> ExpertReviewV2:
-    return ExpertReviewV2(
+) -> ExpertReview:
+    return ExpertReview(
         id=uuid.uuid4(),
         submission_id=uuid.uuid4(),
         reviewer_id=reviewer_id or uuid.uuid4(),
@@ -116,8 +113,8 @@ def _review(
     )
 
 
-def _result(source, content, date_, confidence=0.9) -> VerificationResultV2:
-    return VerificationResultV2(
+def _result(source, content, date_, confidence=0.9) -> VerificationResult:
+    return VerificationResult(
         id=uuid.uuid4(),
         submission_id=uuid.uuid4(),
         source_status=source,

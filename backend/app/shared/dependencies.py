@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.engine import AsyncSessionLocal
 from app.features.submissions.repository import (
-    RetrievedArticleV2Repository,
+    RetrievedArticleRepository,
     SubmissionRepository,
 )
 from app.features.cache.cache_service import CacheService
@@ -17,7 +17,7 @@ from app.features.nlp.ner_service import NERService
 from app.features.nlp.nli_service import NLIService
 from app.features.sources.repository import SourceRepository
 from app.features.sources.service import SourceService
-from app.features.verification.repository import ResultV2Repository
+from app.features.verification.repository import ResultRepository
 from app.features.verification.service import VerificationService
 
 
@@ -39,14 +39,14 @@ async def get_submission_repo(
 
 async def get_result_repo(
     session: AsyncSession = Depends(get_async_session),
-) -> ResultV2Repository:
-    return ResultV2Repository(session)
+) -> ResultRepository:
+    return ResultRepository(session)
 
 
 async def get_article_repo(
     session: AsyncSession = Depends(get_async_session),
-) -> RetrievedArticleV2Repository:
-    return RetrievedArticleV2Repository(session)
+) -> RetrievedArticleRepository:
+    return RetrievedArticleRepository(session)
 
 
 async def get_source_repo(
@@ -77,8 +77,8 @@ def get_http_client(request: Request) -> httpx.AsyncClient:
 
 async def get_verification_service(
     submission_repo: SubmissionRepository = Depends(get_submission_repo),
-    result_repo: ResultV2Repository = Depends(get_result_repo),
-    article_repo: RetrievedArticleV2Repository = Depends(get_article_repo),
+    result_repo: ResultRepository = Depends(get_result_repo),
+    article_repo: RetrievedArticleRepository = Depends(get_article_repo),
     source_repo: SourceRepository = Depends(get_source_repo),
     cache_service: CacheService = Depends(get_cache_service),
     embedding_service: EmbeddingService = Depends(get_embedding_service),

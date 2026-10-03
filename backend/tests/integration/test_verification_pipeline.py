@@ -6,10 +6,10 @@ from app.features.verification.schemas import VerificationRequest
 from app.features.verification.service import VerificationService
 from app.core.constants import ContentStatus, SourceStatus
 from app.features.submissions.repository import (
-    RetrievedArticleV2Repository,
+    RetrievedArticleRepository,
     SubmissionRepository,
 )
-from app.features.verification.repository import ResultV2Repository
+from app.features.verification.repository import ResultRepository
 from app.features.sources.repository import SourceRepository
 
 
@@ -22,8 +22,8 @@ async def test_full_pipeline_execution(
     mock_nli_service,
 ):
     submission_repo = SubmissionRepository(db_session)
-    result_repo = ResultV2Repository(db_session)
-    article_repo = RetrievedArticleV2Repository(db_session)
+    result_repo = ResultRepository(db_session)
+    article_repo = RetrievedArticleRepository(db_session)
     source_repo = SourceRepository(db_session)
 
     import httpx
@@ -113,8 +113,8 @@ async def test_pipeline_cache_hit(
     mock_nli_service,
 ):
     submission_repo = SubmissionRepository(db_session)
-    result_repo = ResultV2Repository(db_session)
-    article_repo = RetrievedArticleV2Repository(db_session)
+    result_repo = ResultRepository(db_session)
+    article_repo = RetrievedArticleRepository(db_session)
     source_repo = SourceRepository(db_session)
 
     claim_hash = "f35a646c2eb5387b328a9b3a0bb21897e930bc22998a442e97a3eb17b7a0d1e2"

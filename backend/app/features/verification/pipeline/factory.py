@@ -23,7 +23,7 @@ from app.features.search.newsdata_client import NewsDataClient
 from app.features.search.pygooglenews_client import PyGoogleNewsClient
 from app.features.sources.repository import SourceRepository
 from app.features.submissions.repository import (
-    RetrievedArticleV2Repository,
+    RetrievedArticleRepository,
     SubmissionRepository,
 )
 from app.features.verification.pipeline.context import PipelineStage
@@ -57,14 +57,14 @@ from app.features.verification.pipeline.stages.s10_manipulation_detector import 
 )
 from app.features.verification.pipeline.stages.s11_classifier import ClassifierStage
 from app.features.verification.pipeline.stages.s12_persistence import PersistenceStage
-from app.features.verification.repository import ResultV2Repository
+from app.features.verification.repository import ResultRepository
 
 
 def build_verification_stages(
     *,
     submission_repo: SubmissionRepository,
-    result_repo: ResultV2Repository,
-    article_repo: RetrievedArticleV2Repository,
+    result_repo: ResultRepository,
+    article_repo: RetrievedArticleRepository,
     source_repo: SourceRepository,
     cache_service: CacheService,
     embedding_service: EmbeddingService,

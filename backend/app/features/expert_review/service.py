@@ -21,13 +21,12 @@ from app.core.exceptions import (
     PermissionDeniedError,
     RecordNotFoundError,
 )
-from app.features.expert_review.models import ExpertReviewV2, VotingConfig
+from app.features.expert_review.models import ExpertReview, VotingConfig
 from app.features.expert_review.overall_verdict import derive_ai_overall_verdict_multimodal
 from app.features.expert_review.repository import (
-    AuditLogRepository,
     CredibilityWeightTierRepository,
     ExpertProfileRepository,
-    ExpertReviewV2Repository,
+    ExpertReviewRepository,
     VotingConfigRepository,
 )
 from app.features.expert_review.schemas import (
@@ -43,8 +42,8 @@ from app.features.multimodal.storage_service import MultimodalStorageService
 from app.features.photocard.storage_service import PhotoCardStorageService
 from app.features.submissions.models import OcrExtraction, Submission
 from app.features.submissions.repository import SubmissionRepository
-from app.features.verification.models import VerificationResultV2
-from app.features.verification.repository import ResultV2Repository
+from app.features.verification.models import VerificationResult
+from app.features.verification.repository import ResultRepository
 from app.features.verification.verdict_compat import format_verdict_display
 
 logger = structlog.get_logger(__name__)
@@ -57,7 +56,7 @@ _STRUCTURED_TYPES = (SubmissionType.SOURCE_BASED, SubmissionType.PHOTO_CARD)
 _T = TypeVar("_T")
 
 
-def _tally(reviews: list[ExpertReviewV2], get_vote: Callable[[ExpertReviewV2], _T | None]) -> dict[_T, float]:
+def _tally(reviews: list[ExpertReview], get_vote: Callable[[ExpertReview], _T | None]) -> dict[_T, float]:
     """Weighted vote counts for one dimension — experts only. The AI's own
     call is never added here: per the finalization spec, T/M/margin are
     evaluated against expert consensus alone, with the AI's call used only
@@ -96,16 +95,15 @@ class ExpertReviewService:
 
     def __init__(
         self,
-        review_repo: ExpertReviewV2Repository,
+        review_repo: ExpertReviewRepository,
         profile_repo: ExpertProfileRepository,
         tier_repo: CredibilityWeightTierRepository,
         submission_repo: SubmissionRepository,
-        result_repo: ResultV2Repository,
+        result_repo: ResultRepository,
         multimodal_repo: MultimodalAnalysisRepository,
         voting_config_repo: VotingConfigRepository,
         storage: MultimodalStorageService | None = None,
         photocard_storage: PhotoCardStorageService | None = None,
-        audit_repo: AuditLogRepository | None = None,
     ) -> None:
         self._reviews = review_repo
         self._profiles = profile_repo
@@ -116,23 +114,9 @@ class ExpertReviewService:
         self._voting_config = voting_config_repo
         self._storage = storage
         self._photocard_storage = photocard_storage
-        self._audit = audit_repo
 
         self._session = review_repo.session
 
-    async def _record_audit(
-        self,
-        *,
-        action: str,
-        actor_id: uuid.UUID | None,
-        submission_id: uuid.UUID | None = None,
-        details: dict | None = None,
-    ) -> None:
-        if self._audit is None:
-            return
-        await self._audit.record(
-            action=action, actor_id=actor_id, submission_id=submission_id, details=details
-        )
 
     async def _fetch_photocard_image_url(self, submission_id: uuid.UUID) -> str | None:
         if self._photocard_storage is None:
@@ -145,14 +129,14 @@ class ExpertReviewService:
             return None
         return await self._photocard_storage.get_presigned_url(ocr.image_object_key)
 
-    async def _fetch_top_article(self, result: VerificationResultV2 | None) -> ExpertTopArticle | None:
+    async def _fetch_top_article(self, result: VerificationResult | None) -> ExpertTopArticle | None:
         if result is None or result.top_article_id is None:
             return None
         from sqlalchemy import select
-        from app.features.submissions.models import RetrievedArticleV2
+        from app.features.submissions.models import RetrievedArticle
 
-        stmt = select(RetrievedArticleV2).where(
-            RetrievedArticleV2.id == result.top_article_id
+        stmt = select(RetrievedArticle).where(
+            RetrievedArticle.id == result.top_article_id
         )
         row = (await self._session.execute(stmt)).scalar_one_or_none()
         if row is None:
@@ -327,7 +311,7 @@ class ExpertReviewService:
         )
         weight, tier = await self._resolve_weight(profile, config)
 
-        review = ExpertReviewV2(
+        review = ExpertReview(
             submission_id=submission_id,
             reviewer_id=expert_id,
             ai_overall_verdict=ai_overall,
@@ -353,17 +337,6 @@ class ExpertReviewService:
             overall_verdict=overall_verdict.value,
             source_status=source_status.value if source_status else None,
             weight_applied=weight,
-        )
-        await self._record_audit(
-            action="vote_cast",
-            actor_id=expert_id,
-            submission_id=submission_id,
-            details={
-                "review_id": str(review.id),
-                "overall_verdict": overall_verdict.value,
-                "source_status": source_status.value if source_status else None,
-                "weight_applied": weight,
-            },
         )
 
         await self._finalize_or_escalate(submission)
@@ -412,13 +385,6 @@ class ExpertReviewService:
         # same as a fresh vote, so it needs the same concurrency guard.
         submission = await self._submissions.get_by_id_locked(review.submission_id)
 
-        before = {
-            "vote_overall_verdict": review.vote_overall_verdict.value,
-            "vote_source_status": review.vote_source_status.value if review.vote_source_status else None,
-            "vote_content_status": review.vote_content_status.value if review.vote_content_status else None,
-            "vote_date_status": review.vote_date_status.value if review.vote_date_status else None,
-        }
-
         updates: dict = {}
         if overall_verdict is not None:
             updates["vote_overall_verdict"] = overall_verdict
@@ -449,12 +415,6 @@ class ExpertReviewService:
 
         if updates:
             review = await self._reviews.update(review, **updates)
-            await self._record_audit(
-                action="vote_edited",
-                actor_id=expert_id,
-                submission_id=review.submission_id,
-                details={"review_id": str(review.id), "before": before, "after": updates},
-            )
             if submission.status == SubmissionStatus.EXPERT_REVIEW:
                 await self._finalize_or_escalate(submission)
 
@@ -599,18 +559,6 @@ class ExpertReviewService:
                 for review in reviews:
                     await self._reviews.update(review, status="finalized")
                 await self._update_expert_profiles(reviews, overall_leader)
-                await self._record_audit(
-                    action="finalized",
-                    actor_id=None,
-                    submission_id=submission.id,
-                    details={
-                        "overall_verdict": overall_leader.value,
-                        "source_status": source_leader.value,
-                        "content_status": content_leader.value if content_leader else None,
-                        "date_status": date_leader.value if date_leader else None,
-                        "vote_count": voters,
-                    },
-                )
                 logger.info(
                     "submission_finalized",
                     submission_id=str(submission.id),
@@ -636,12 +584,6 @@ class ExpertReviewService:
                 for review in reviews:
                     await self._reviews.update(review, status="finalized")
                 await self._update_expert_profiles(reviews, overall_leader)
-                await self._record_audit(
-                    action="finalized",
-                    actor_id=None,
-                    submission_id=submission.id,
-                    details={"overall_verdict": overall_leader.value, "vote_count": voters},
-                )
                 logger.info(
                     "submission_finalized",
                     submission_id=str(submission.id),
@@ -667,17 +609,11 @@ class ExpertReviewService:
             return
 
         await self._submissions.set_status(submission.id, SubmissionStatus.ESCALATED)
-        await self._record_audit(
-            action="escalated",
-            actor_id=None,
-            submission_id=submission.id,
-            details={"vote_count": voters},
-        )
         logger.info("submission_escalated", submission_id=str(submission.id), vote_count=voters)
 
     async def _update_expert_profiles(
         self,
-        reviews: list[ExpertReviewV2],
+        reviews: list[ExpertReview],
         final_overall: OverallVerdict,
     ) -> None:
         """Correctness is judged on the Overall verdict uniformly across all
@@ -700,7 +636,7 @@ class ExpertReviewService:
             )
 
 
-def _ai_label_structured(result: VerificationResultV2 | None) -> str | None:
+def _ai_label_structured(result: VerificationResult | None) -> str | None:
     if result is None:
         return None
     return format_verdict_display(
@@ -714,7 +650,7 @@ def _ai_label_multimodal(mm: MultimodalAnalysis | None) -> str | None:
     return "Fake" if mm.prediction == MultimodalPredictionLabel.FAKE else "Real (Non-Fake)"
 
 
-def _review_to_response(r: ExpertReviewV2) -> ExpertReviewResponse:
+def _review_to_response(r: ExpertReview) -> ExpertReviewResponse:
     return ExpertReviewResponse(
         id=str(r.id),
         submission_id=str(r.submission_id),

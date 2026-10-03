@@ -17,7 +17,6 @@ from app.core.exceptions import (
 )
 from app.features.admin.schemas import (
     AdminStatsResponse,
-    AuditLogEntryResponse,
     CreateExpertRequest,
     CredibilityWeightTierRequest,
     CredibilityWeightTierResponse,
@@ -34,13 +33,12 @@ from app.features.auth.repository import RefreshTokenRepository, UserRepository
 from app.features.auth.security import hash_password
 from app.features.expert_review.models import CredibilityWeightTier, VotingConfig
 from app.features.expert_review.repository import (
-    AuditLogRepository,
     CredibilityWeightTierRepository,
     ExpertProfileRepository,
     VotingConfigRepository,
 )
 from app.features.submissions.models import Submission
-from app.features.verification.models import VerificationResultV2
+from app.features.verification.models import VerificationResult
 
 logger = structlog.get_logger(__name__)
 _SETTINGS = get_settings()
@@ -194,22 +192,22 @@ class AdminService:
         def _count_source(status: SourceStatus):
             return (
                 select(func.count())
-                .select_from(VerificationResultV2)
-                .where(VerificationResultV2.source_status == status)
+                .select_from(VerificationResult)
+                .where(VerificationResult.source_status == status)
             )
 
         def _count_content(status: ContentStatus):
             return (
                 select(func.count())
-                .select_from(VerificationResultV2)
-                .where(VerificationResultV2.content_status == status)
+                .select_from(VerificationResult)
+                .where(VerificationResult.content_status == status)
             )
 
         def _count_date(status: DateStatus):
             return (
                 select(func.count())
-                .select_from(VerificationResultV2)
-                .where(VerificationResultV2.date_status == status)
+                .select_from(VerificationResult)
+                .where(VerificationResult.date_status == status)
             )
 
         source_confirmed_c = (
@@ -239,17 +237,17 @@ class AdminService:
         )
         active_experts = (await self._session.execute(active_experts_stmt)).scalar_one()
 
-        from app.features.expert_review.models import ExpertReviewV2
+        from app.features.expert_review.models import ExpertReview
 
         pending_stmt = (
             select(func.count())
-            .select_from(ExpertReviewV2)
-            .where(ExpertReviewV2.status == "pending")
+            .select_from(ExpertReview)
+            .where(ExpertReview.status == "pending")
         )
         pending = (await self._session.execute(pending_stmt)).scalar_one()
 
-        avg_ms_stmt = select(func.avg(VerificationResultV2.avg_verification_time_ms)).where(
-            VerificationResultV2.avg_verification_time_ms.is_not(None)
+        avg_ms_stmt = select(func.avg(VerificationResult.avg_verification_time_ms)).where(
+            VerificationResult.avg_verification_time_ms.is_not(None)
         )
         avg_ms = (await self._session.execute(avg_ms_stmt)).scalar_one()
         avg_seconds = round(avg_ms / 1000, 2) if avg_ms is not None else None
@@ -349,11 +347,6 @@ class AdminService:
         await self._session.flush()
         await self._session.refresh(tier)
         logger.info("credibility_tier_created", tier_id=str(tier.id), label=tier.label)
-        await AuditLogRepository(self._session).record(
-            action="tier_created",
-            actor_id=admin_id,
-            details={"tier_id": str(tier.id), "label": tier.label, "weight": tier.weight},
-        )
         return _tier_to_response(tier)
 
     async def update_credibility_tier(
@@ -379,11 +372,6 @@ class AdminService:
         self._session.add(tier)
         await self._session.flush()
         await self._session.refresh(tier)
-        await AuditLogRepository(self._session).record(
-            action="tier_updated",
-            actor_id=admin_id,
-            details={"tier_id": str(tier.id), "changes": updates},
-        )
         return _tier_to_response(tier)
 
     async def delete_credibility_tier(
@@ -394,11 +382,6 @@ class AdminService:
             raise RecordNotFoundError(model="CredibilityWeightTier", identifier=str(tier_id))
         await self._session.delete(tier)
         await self._session.flush()
-        await AuditLogRepository(self._session).record(
-            action="tier_deleted",
-            actor_id=admin_id,
-            details={"tier_id": str(tier_id), "label": tier.label},
-        )
 
     async def get_voting_config(self) -> VotingConfigResponse:
         row = await VotingConfigRepository(self._session).get_or_create()
@@ -433,30 +416,8 @@ class AdminService:
         updates = req.model_dump(exclude_unset=True)
         row = await repo.update(row, **updates)
         logger.info("voting_config_updated", **updates)
-        await AuditLogRepository(self._session).record(
-            action="voting_config_updated",
-            actor_id=admin_id,
-            details=updates,
-        )
         return _voting_config_to_response(row)
 
-    async def list_audit_log(
-        self, *, limit: int = 100, offset: int = 0
-    ) -> list[AuditLogEntryResponse]:
-        entries = await AuditLogRepository(self._session).list_recent(
-            limit=limit, offset=offset
-        )
-        return [
-            AuditLogEntryResponse(
-                id=str(e.id),
-                actor_id=str(e.actor_id) if e.actor_id else None,
-                action=e.action,
-                submission_id=str(e.submission_id) if e.submission_id else None,
-                details=e.details,
-                created_at=e.created_at,
-            )
-            for e in entries
-        ]
 
 
 def _voting_config_to_response(row: VotingConfig) -> VotingConfigResponse:

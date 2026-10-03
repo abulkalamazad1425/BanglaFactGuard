@@ -130,15 +130,6 @@ class VotingConfigUpdateRequest(BaseModel):
     )
 
 
-class AuditLogEntryResponse(BaseModel):
-    id: str
-    actor_id: str | None
-    action: str
-    submission_id: str | None
-    details: dict
-    created_at: datetime
-
-    model_config = {"from_attributes": True}
 
 
 class VotingConfigResponse(BaseModel):

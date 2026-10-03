@@ -64,7 +64,7 @@ from app.features.sources.resolution import resolve_claimed_source
 from app.features.submissions.models import OcrExtraction, Submission
 from app.features.submissions.repository import (
     OcrExtractionRepository,
-    RetrievedArticleV2Repository,
+    RetrievedArticleRepository,
     SubmissionRepository,
 )
 from app.features.verification.job_repository import VerificationJobRepository
@@ -72,7 +72,7 @@ from app.features.verification.pipeline.context import build_context
 from app.features.verification.pipeline.factory import build_verification_stages
 from app.features.verification.pipeline.orchestrator import PipelineOrchestrator
 from app.features.verification.presenter import load_verification_response
-from app.features.verification.repository import ResultV2Repository
+from app.features.verification.repository import ResultRepository
 from app.features.verification.reuse import ResultReuseService
 from app.shared.utils.bangla_normalizer import normalize_bangla_digits
 from app.shared.utils.hashing import compute_claim_hash
@@ -91,8 +91,8 @@ class PhotoCardService:
         storage: PhotoCardStorageService,
         submission_repo: SubmissionRepository,
         ocr_repo: OcrExtractionRepository,
-        result_repo: ResultV2Repository,
-        article_repo: RetrievedArticleV2Repository,
+        result_repo: ResultRepository,
+        article_repo: RetrievedArticleRepository,
         source_repo: SourceRepository,
         cache_service: CacheService,
         embedding_service: EmbeddingService,

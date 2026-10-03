@@ -15,12 +15,12 @@ import pytest
 
 from app.core.constants import ContentStatus, DateStatus, SourceStatus, SubmissionStatus
 from app.features.sources.repository import SourceRepository
-from app.features.submissions.repository import RetrievedArticleV2Repository, SubmissionRepository
+from app.features.submissions.repository import RetrievedArticleRepository, SubmissionRepository
 from app.features.verification.pipeline import factory
 from app.features.verification.pipeline.context import build_context
 from app.features.verification.pipeline.orchestrator import PipelineOrchestrator
 from app.features.verification.presenter import load_verification_response
-from app.features.verification.repository import ResultV2Repository
+from app.features.verification.repository import ResultRepository
 from db_helpers import add_source, add_user, make_session_factory
 from pipeline_helpers import FakeEmbedder, FakeNER, neutral_nli
 
@@ -99,8 +99,8 @@ class SimpleEnv:
         http = self.http()
         stages = factory.build_verification_stages(
             submission_repo=SubmissionRepository(session),
-            result_repo=ResultV2Repository(session),
-            article_repo=RetrievedArticleV2Repository(session),
+            result_repo=ResultRepository(session),
+            article_repo=RetrievedArticleRepository(session),
             source_repo=SourceRepository(session),
             cache_service=cache,
             embedding_service=FakeEmbedder(),
@@ -128,11 +128,11 @@ async def test_full_pipeline_confirms_matches_and_persists_everything(env):
 
         sub = await SubmissionRepository(s).get_by_id(ctx.submission_id)
         assert sub.status == SubmissionStatus.EXPERT_REVIEW
-        res = await ResultV2Repository(s).get_by_submission_id(sub.id)
+        res = await ResultRepository(s).get_by_submission_id(sub.id)
         assert res.body_similarity is None and res.claim_scope == "HEADLINE_ONLY"
         assert res.headline_keyword_coverage == 1.0 and res.ai_consensus_label is None
         r = await load_verification_response(
-            sub, result_repo=ResultV2Repository(s), article_repo=RetrievedArticleV2Repository(s)
+            sub, result_repo=ResultRepository(s), article_repo=RetrievedArticleRepository(s)
         )
         assert r.overall_verdict is None and r.review_pending
         assert r.analysis.date.claimed_date == date(2026, 6, 7) and r.analysis.search.adequate is True
@@ -201,7 +201,7 @@ async def test_service_verify_returns_the_db_result_and_reuse_gives_each_user_th
 
         def service() -> VerificationService:
             return VerificationService(
-                SubmissionRepository(s), ResultV2Repository(s), RetrievedArticleV2Repository(s),
+                SubmissionRepository(s), ResultRepository(s), RetrievedArticleRepository(s),
                 SourceRepository(s), cache, FakeEmbedder(), FakeNER(), neutral_nli(), http,
             )
 

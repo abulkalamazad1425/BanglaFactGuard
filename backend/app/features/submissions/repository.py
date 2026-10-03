@@ -17,7 +17,7 @@ from app.core.constants import (
 )
 from app.features.submissions.models import (
     OcrExtraction,
-    RetrievedArticleV2,
+    RetrievedArticle,
     SourceEvidenceQuery,
     Submission,
 )
@@ -240,14 +240,14 @@ class SubmissionRepository(BaseRepository[Submission]):
         submissions with optional filters. Returns (rows, total_count).
 
         overall_verdict spans every submission type (its finalized value
-        lives on VerificationResultV2 for SOURCE_BASED/PHOTO_CARD, and on
+        lives on VerificationResult for SOURCE_BASED/PHOTO_CARD, and on
         MultimodalAnalysis for MULTIMODAL) and only matches claims that have
         actually been expert-finalized — a claim still under review doesn't
         match any overall_verdict filter, even though its AI-implied value
         may be shown on its own detail page.
         """
         from app.features.multimodal.models import MultimodalAnalysis
-        from app.features.verification.models import VerificationResultV2
+        from app.features.verification.models import VerificationResult
 
         conditions = [
             Submission.status.in_(_VERIFIED_STATUSES),
@@ -271,7 +271,7 @@ class SubmissionRepository(BaseRepository[Submission]):
         # Use the same effective decision for filtering and displayed results.
         overall = case(
             (Submission.submission_type == SubmissionType.MULTIMODAL, MultimodalAnalysis.expert_overall_verdict),
-            else_=VerificationResultV2.overall_verdict,
+            else_=VerificationResult.overall_verdict,
         )
         if review_state == 'finalized':
             conditions.append(overall.is_not(None))
@@ -290,30 +290,30 @@ class SubmissionRepository(BaseRepository[Submission]):
 
         if needs_result_join:
             base = base.outerjoin(
-                VerificationResultV2,
-                VerificationResultV2.submission_id == Submission.id,
+                VerificationResult,
+                VerificationResult.submission_id == Submission.id,
             )
             count_base = count_base.outerjoin(
-                VerificationResultV2,
-                VerificationResultV2.submission_id == Submission.id,
+                VerificationResult,
+                VerificationResult.submission_id == Submission.id,
             )
             joined_result = True
             if source_status is not None:
-                conditions.append(func.coalesce(VerificationResultV2.final_source_status, VerificationResultV2.source_status) == source_status)
+                conditions.append(func.coalesce(VerificationResult.final_source_status, VerificationResult.source_status) == source_status)
             if content_status is not None:
-                conditions.append(case((VerificationResultV2.overall_verdict.is_not(None), VerificationResultV2.final_content_status), else_=VerificationResultV2.content_status) == content_status)
+                conditions.append(case((VerificationResult.overall_verdict.is_not(None), VerificationResult.final_content_status), else_=VerificationResult.content_status) == content_status)
             if date_status is not None:
-                conditions.append(case((VerificationResultV2.overall_verdict.is_not(None), VerificationResultV2.final_date_status), else_=VerificationResultV2.date_status) == date_status)
+                conditions.append(case((VerificationResult.overall_verdict.is_not(None), VerificationResult.final_date_status), else_=VerificationResult.date_status) == date_status)
 
         if overall_verdict is not None:
             if not joined_result:
                 base = base.outerjoin(
-                    VerificationResultV2,
-                    VerificationResultV2.submission_id == Submission.id,
+                    VerificationResult,
+                    VerificationResult.submission_id == Submission.id,
                 )
                 count_base = count_base.outerjoin(
-                    VerificationResultV2,
-                    VerificationResultV2.submission_id == Submission.id,
+                    VerificationResult,
+                    VerificationResult.submission_id == Submission.id,
                 )
             conditions.append(overall == overall_verdict)
 
@@ -332,16 +332,16 @@ class SubmissionRepository(BaseRepository[Submission]):
     async def explorer_summary(self) -> dict[str, int]:
         """All-time counts for exactly the public archive's eligible records."""
         from app.features.multimodal.models import MultimodalAnalysis
-        from app.features.verification.models import VerificationResultV2
+        from app.features.verification.models import VerificationResult
 
         overall = case(
             (Submission.submission_type == SubmissionType.MULTIMODAL, MultimodalAnalysis.expert_overall_verdict),
-            else_=VerificationResultV2.overall_verdict,
+            else_=VerificationResult.overall_verdict,
         )
         stmt = (
             select(func.count(Submission.id), func.count(overall))
             .select_from(Submission)
-            .outerjoin(VerificationResultV2, VerificationResultV2.submission_id == Submission.id)
+            .outerjoin(VerificationResult, VerificationResult.submission_id == Submission.id)
             .outerjoin(MultimodalAnalysis, MultimodalAnalysis.submission_id == Submission.id)
             .where(Submission.status.in_(_VERIFIED_STATUSES), Submission.duplicate_of_submission_id.is_(None))
         )
@@ -366,22 +366,22 @@ class SourceEvidenceQueryRepository(BaseRepository[SourceEvidenceQuery]):
         return list(result.scalars().all())
 
 
-class RetrievedArticleV2Repository(BaseRepository[RetrievedArticleV2]):
+class RetrievedArticleRepository(BaseRepository[RetrievedArticle]):
 
-    model_class = RetrievedArticleV2
+    model_class = RetrievedArticle
 
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(session)
 
     async def get_by_url_hash(
         self, submission_id: uuid.UUID, url_hash: str
-    ) -> RetrievedArticleV2 | None:
+    ) -> RetrievedArticle | None:
         stmt = (
-            select(RetrievedArticleV2)
+            select(RetrievedArticle)
             .where(
                 and_(
-                    RetrievedArticleV2.submission_id == submission_id,
-                    RetrievedArticleV2.url_hash == url_hash,
+                    RetrievedArticle.submission_id == submission_id,
+                    RetrievedArticle.url_hash == url_hash,
                 )
             )
             .limit(1)
@@ -396,30 +396,30 @@ class RetrievedArticleV2Repository(BaseRepository[RetrievedArticleV2]):
         successful_only: bool = True,
         order_by_rank: bool = True,
         limit: int = 10,
-    ) -> list[RetrievedArticleV2]:
-        conditions = [RetrievedArticleV2.submission_id == submission_id]
+    ) -> list[RetrievedArticle]:
+        conditions = [RetrievedArticle.submission_id == submission_id]
         if successful_only:
-            conditions.append(RetrievedArticleV2.extraction_success.is_(True))
+            conditions.append(RetrievedArticle.extraction_success.is_(True))
 
-        stmt = select(RetrievedArticleV2).where(and_(*conditions))
+        stmt = select(RetrievedArticle).where(and_(*conditions))
         if order_by_rank:
-            stmt = stmt.order_by(RetrievedArticleV2.rank_score.desc().nullslast())
+            stmt = stmt.order_by(RetrievedArticle.rank_score.desc().nullslast())
         stmt = stmt.limit(limit)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
     async def get_top_ranked(
         self, submission_id: uuid.UUID
-    ) -> RetrievedArticleV2 | None:
+    ) -> RetrievedArticle | None:
         stmt = (
-            select(RetrievedArticleV2)
+            select(RetrievedArticle)
             .where(
                 and_(
-                    RetrievedArticleV2.submission_id == submission_id,
-                    RetrievedArticleV2.extraction_success.is_(True),
+                    RetrievedArticle.submission_id == submission_id,
+                    RetrievedArticle.extraction_success.is_(True),
                 )
             )
-            .order_by(RetrievedArticleV2.rank_score.desc().nullslast())
+            .order_by(RetrievedArticle.rank_score.desc().nullslast())
             .limit(1)
         )
         result = await self.session.execute(stmt)
@@ -430,12 +430,12 @@ class RetrievedArticleV2Repository(BaseRepository[RetrievedArticleV2]):
     ) -> int:
         from sqlalchemy import func
 
-        conditions = [RetrievedArticleV2.submission_id == submission_id]
+        conditions = [RetrievedArticle.submission_id == submission_id]
         if successful_only:
-            conditions.append(RetrievedArticleV2.extraction_success.is_(True))
+            conditions.append(RetrievedArticle.extraction_success.is_(True))
         stmt = (
             select(func.count())
-            .select_from(RetrievedArticleV2)
+            .select_from(RetrievedArticle)
             .where(and_(*conditions))
         )
         result = await self.session.execute(stmt)
@@ -447,8 +447,8 @@ class RetrievedArticleV2Repository(BaseRepository[RetrievedArticleV2]):
         from sqlalchemy import update
 
         stmt = (
-            update(RetrievedArticleV2)
-            .where(RetrievedArticleV2.id == article_id)
+            update(RetrievedArticle)
+            .where(RetrievedArticle.id == article_id)
             .values(rank_score=rank_score)
         )
         await self.session.execute(stmt)

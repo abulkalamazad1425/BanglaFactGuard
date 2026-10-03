@@ -14,10 +14,10 @@ from app.features.photocard.storage_service import PhotoCardStorageService
 from app.features.sources.repository import SourceRepository
 from app.features.submissions.repository import (
     OcrExtractionRepository,
-    RetrievedArticleV2Repository,
+    RetrievedArticleRepository,
     SubmissionRepository,
 )
-from app.features.verification.repository import ResultV2Repository
+from app.features.verification.repository import ResultRepository
 from app.shared.dependencies import (
     get_article_repo,
     get_async_session,
@@ -64,8 +64,8 @@ async def get_photocard_service(
     storage: PhotoCardStorageService = Depends(get_photocard_storage),
     submission_repo: SubmissionRepository = Depends(get_submission_repo),
     ocr_repo: OcrExtractionRepository = Depends(get_ocr_repo),
-    result_repo: ResultV2Repository = Depends(get_result_repo),
-    article_repo: RetrievedArticleV2Repository = Depends(get_article_repo),
+    result_repo: ResultRepository = Depends(get_result_repo),
+    article_repo: RetrievedArticleRepository = Depends(get_article_repo),
     source_repo: SourceRepository = Depends(get_source_repo),
     cache_service: CacheService = Depends(get_cache_service),
     embedding_service: EmbeddingService = Depends(get_embedding_service),

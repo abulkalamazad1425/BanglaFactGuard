@@ -26,15 +26,15 @@ from app.features.notifications.models import Notification
 from app.features.sources.repository import SourceRepository
 from app.features.submissions.models import Submission
 from app.features.submissions.repository import (
-    RetrievedArticleV2Repository,
+    RetrievedArticleRepository,
     SubmissionRepository,
 )
 from app.features.verification.job_repository import VerificationJobRepository
-from app.features.verification.models import VerificationJob, VerificationResultV2
+from app.features.verification.models import VerificationJob, VerificationResult
 from app.features.verification.pipeline.stages.s02_cache_lookup import CacheLookupStage
 from app.features.verification.pipeline.stages.s12_persistence import PersistenceStage
 from app.features.verification.presenter import load_verification_response
-from app.features.verification.repository import ResultV2Repository
+from app.features.verification.repository import ResultRepository
 from app.features.verification.reuse import result_is_reusable
 from app.features.verification.schemas import VerificationRequest
 from app.features.verification.service import VerificationService
@@ -66,8 +66,8 @@ def _cache(pointer: dict | None = None) -> MagicMock:
 def _service(session, cache=None) -> VerificationService:
     return VerificationService(
         submission_repo=SubmissionRepository(session),
-        result_repo=ResultV2Repository(session),
-        article_repo=RetrievedArticleV2Repository(session),
+        result_repo=ResultRepository(session),
+        article_repo=RetrievedArticleRepository(session),
         source_repo=SourceRepository(session),
         cache_service=cache or _cache(),
         embedding_service=MagicMock(),
@@ -162,7 +162,7 @@ async def test_reuse_copies_result_onto_requesters_own_submission(db):
         assert cached is True and sid != orig.id and status == SubmissionStatus.EXPERT_REVIEW
         mine = await SubmissionRepository(s).get_by_id(sid)
         assert mine.submitter_id == other.id and mine.duplicate_of_submission_id == orig.id
-        res = await ResultV2Repository(s).get_by_submission_id(sid)
+        res = await ResultRepository(s).get_by_submission_id(sid)
         assert res.reused_from_submission_id == orig.id
         assert res.headline_similarity == orig_res.headline_similarity
         assert res.pipeline_version == VERIFICATION_PIPELINE_VERSION
@@ -202,7 +202,7 @@ async def test_force_refresh_bypasses_s02_redis_and_database(db):
         orig, _ = await add_completed_submission(s, headline=HEADLINE, submitter_id=owner.id)
         await s.commit()
         cache = _cache({"submission_id": str(orig.id), "pipeline_version": VERIFICATION_PIPELINE_VERSION})
-        stage = CacheLookupStage(cache, SubmissionRepository(s), ResultV2Repository(s))
+        stage = CacheLookupStage(cache, SubmissionRepository(s), ResultRepository(s))
 
         ctx = make_context(HEADLINE)
         ctx.content_hash = orig.content_hash
@@ -259,7 +259,7 @@ async def test_db_fallback_enforces_freshness_like_redis(db):
         sub, res = await add_completed_submission(s, headline=HEADLINE, submitter_id=u.id)
         _age(res, 3 * 86400)
         await s.commit()
-        stage = CacheLookupStage(_cache(), SubmissionRepository(s), ResultV2Repository(s))
+        stage = CacheLookupStage(_cache(), SubmissionRepository(s), ResultRepository(s))
         ctx = make_context(HEADLINE)
         ctx.content_hash = sub.content_hash
         assert (await stage.execute(ctx)).cache_hit is False
@@ -273,7 +273,7 @@ async def test_stale_redis_pointer_is_rejected_and_invalidated(db):
         cache = _cache({"submission_id": str(sub.id), "pipeline_version": VERIFICATION_PIPELINE_VERSION})
         ctx = make_context(HEADLINE)
         ctx.content_hash = "no-such-hash"
-        out = await CacheLookupStage(cache, SubmissionRepository(s), ResultV2Repository(s)).execute(ctx)
+        out = await CacheLookupStage(cache, SubmissionRepository(s), ResultRepository(s)).execute(ctx)
     assert out.cache_hit is False
     cache.invalidate_claim.assert_awaited_once()
 
@@ -315,7 +315,7 @@ async def _persist(s, *, submission_id=None, headline=HEADLINE, ner=None):
     ctx.submission_id = submission_id
     ctx = await run_analysis(ctx, ner=ner)
     stage = PersistenceStage(
-        SubmissionRepository(s), ResultV2Repository(s), RetrievedArticleV2Repository(s), _cache(), session=s
+        SubmissionRepository(s), ResultRepository(s), RetrievedArticleRepository(s), _cache(), session=s
     )
     return await stage.execute(ctx)
 
@@ -323,7 +323,7 @@ async def _persist(s, *, submission_id=None, headline=HEADLINE, ner=None):
 async def test_s12_writes_all_component_scores_and_no_consensus_label(db):
     async with db() as s:
         out = await _persist(s)
-        res = await ResultV2Repository(s).get_by_submission_id(out.submission_id)
+        res = await ResultRepository(s).get_by_submission_id(out.submission_id)
     assert res.ai_consensus_label is None  # no automated truth vote
     assert res.overall_verdict is None
     assert res.headline_similarity is not None and res.body_similarity is None
@@ -352,7 +352,7 @@ async def test_s12_is_idempotent_per_submission(db):
         await s.commit()
 
         assert first.submission_id == again.submission_id == sub.id
-        n_results = (await s.execute(select(func.count()).select_from(VerificationResultV2))).scalar_one()
+        n_results = (await s.execute(select(func.count()).select_from(VerificationResult))).scalar_one()
         by_type = dict(
             (await s.execute(select(Notification.notification_type, func.count()).group_by(Notification.notification_type))).all()
         )
@@ -367,7 +367,7 @@ async def test_expert_finalization_keeps_automated_snapshot_inspectable(db):
     async with db() as s:
         u = await add_user(s)
         sub, res = await add_completed_submission(s, headline=HEADLINE, submitter_id=u.id, content_status=ContentStatus.MATCHED)
-        await ResultV2Repository(s).update(
+        await ResultRepository(s).update(
             res,
             final_source_status=SourceStatus.CONFIRMED,
             final_content_status=ContentStatus.ALTERED,
@@ -387,7 +387,7 @@ async def test_reverification_never_overwrites_a_reviewed_submission(db):
     async with db() as s:
         u = await add_user(s)
         sub, res = await add_completed_submission(s, headline=HEADLINE, submitter_id=u.id)
-        await ResultV2Repository(s).update(res, overall_verdict=OverallVerdict.REAL, final_source_status=SourceStatus.CONFIRMED)
+        await ResultRepository(s).update(res, overall_verdict=OverallVerdict.REAL, final_source_status=SourceStatus.CONFIRMED)
         sub.status = SubmissionStatus.FINALIZED
         await s.commit()
         snapshot = (res.headline_similarity, res.reasoning, res.created_at)
@@ -399,7 +399,7 @@ async def test_reverification_never_overwrites_a_reviewed_submission(db):
         same = await _persist(s, submission_id=sub.id)
         assert same.submission_id == sub.id
         await s.commit()
-        after = await ResultV2Repository(s).get_by_submission_id(sub.id)
+        after = await ResultRepository(s).get_by_submission_id(sub.id)
         assert (after.headline_similarity, after.reasoning, after.created_at) == snapshot
         assert after.overall_verdict == OverallVerdict.REAL
         assert (await SubmissionRepository(s).get_by_id(sub.id)).status == SubmissionStatus.FINALIZED

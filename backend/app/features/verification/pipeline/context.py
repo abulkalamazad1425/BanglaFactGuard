@@ -110,7 +110,7 @@ class PipelineContext:
     evidence_mentions: list[EntityMention] = field(default_factory=list)
     ner_available: bool = False
 
-    # Everything persisted in verification_results_v2.analysis_details.
+    # Everything persisted in verification_results.analysis_details.
     analysis: AnalysisDetails = field(default_factory=AnalysisDetails)
     # Body comparison diagnostics (HEADLINE_WITH_BODY only).
     body_min_chunk_similarity: float | None = None

@@ -24,15 +24,14 @@ from app.core.constants import ClaimScope, SourceStatus, SubmissionStatus, Submi
 from app.features.auth.models import User  # noqa: E402
 from app.features.sources.models import VerifiedSource  # noqa: E402
 from app.features.submissions.models import Submission  # noqa: E402
-from app.features.verification.models import VerificationResultV2  # noqa: E402
+from app.features.verification.models import VerificationResult  # noqa: E402
 from app.shared.models_registry import Base  # noqa: E402
 from app.shared.utils.hashing import compute_claim_hash  # noqa: E402
 from app.core.constants import VERIFICATION_PIPELINE_VERSION  # noqa: E402
 
 TABLES = [
-    "users", "verified_sources", "submissions", "ocr_extractions", "retrieved_articles_v2",
-    "verification_results_v2", "verification_jobs", "notifications", "source_evidence_queries",
-    "verification_logs",
+    "users", "verified_sources", "submissions", "ocr_extractions", "retrieved_articles",
+    "verification_results", "verification_jobs", "notifications", "source_evidence_queries",
 ]
 
 
@@ -101,7 +100,7 @@ async def add_completed_submission(
     content_status=None,
     date_status=None,
     **result_fields,
-) -> tuple[Submission, VerificationResultV2]:
+) -> tuple[Submission, VerificationResult]:
     from app.core.constants import ContentStatus
 
     scope = ClaimScope.HEADLINE_WITH_BODY if body else ClaimScope.HEADLINE_ONLY
@@ -121,7 +120,7 @@ async def add_completed_submission(
     )
     session.add(sub)
     await session.flush()
-    res = VerificationResultV2(
+    res = VerificationResult(
         id=uuid.uuid4(),
         submission_id=sub.id,
         source_status=source_status,

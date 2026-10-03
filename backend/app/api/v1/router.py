@@ -6,7 +6,6 @@ from app.features.admin.router import router as admin_router
 from app.features.auth.router import router as auth_router
 from app.features.dashboard.router import router as dashboard_router
 from app.features.expert_review.router import router as expert_review_router
-from app.features.feedback.router import router as feedback_router
 from app.features.health.router import router as health_router
 from app.features.multimodal.router import router as multimodal_router
 from app.features.notifications.router import router as notifications_router
@@ -22,7 +21,6 @@ api_router.include_router(admin_router)
 api_router.include_router(auth_router)
 api_router.include_router(dashboard_router)
 api_router.include_router(expert_review_router)
-api_router.include_router(feedback_router)
 api_router.include_router(health_router)
 api_router.include_router(multimodal_router)
 api_router.include_router(notifications_router)

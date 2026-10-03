@@ -22,10 +22,10 @@ import pytest
 
 from app.core.constants import ContentStatus, SourceStatus, VERIFICATION_PIPELINE_VERSION
 from app.features.sources.repository import SourceRepository
-from app.features.submissions.repository import RetrievedArticleV2Repository, SubmissionRepository
+from app.features.submissions.repository import RetrievedArticleRepository, SubmissionRepository
 from app.features.verification.pipeline.stages.s02_cache_lookup import CacheLookupStage
 from app.features.verification.pipeline.stages.s12_persistence import PersistenceStage
-from app.features.verification.repository import ResultV2Repository
+from app.features.verification.repository import ResultRepository
 from app.features.verification.schemas import VerificationRequest
 from app.features.verification.service import VerificationService
 from app.shared.utils.hashing import compute_claim_hash
@@ -61,7 +61,7 @@ async def test_s02_never_hits_on_incomplete_via_db_or_redis(db):
         for cache in (_cache(), _cache({"submission_id": str(sub.id), "pipeline_version": VERIFICATION_PIPELINE_VERSION})):
             ctx = make_context(HEADLINE)
             ctx.content_hash = sub.content_hash
-            out = await CacheLookupStage(cache, SubmissionRepository(s), ResultV2Repository(s)).execute(ctx)
+            out = await CacheLookupStage(cache, SubmissionRepository(s), ResultRepository(s)).execute(ctx)
             assert out.cache_hit is False
 
 
@@ -73,7 +73,7 @@ async def test_s02_hits_on_a_complete_result(db):
         cache = _cache()
         ctx = make_context(HEADLINE)
         ctx.content_hash = sub.content_hash
-        out = await CacheLookupStage(cache, SubmissionRepository(s), ResultV2Repository(s)).execute(ctx)
+        out = await CacheLookupStage(cache, SubmissionRepository(s), ResultRepository(s)).execute(ctx)
         assert out.cache_hit and out.reused_from_submission_id == sub.id
         cache.set_claim_pointer.assert_awaited_once()  # DB hit is written back to Redis
 
@@ -82,7 +82,7 @@ async def _run_s12(s, cache, *, top):
     ctx = make_context(HEADLINE, top=top, search_adequate=top is not None)
     ctx.content_hash = compute_claim_hash(HEADLINE, "prothomalo.com", ctx.claim_scope)
     ctx = await run_analysis(ctx)
-    stage = PersistenceStage(SubmissionRepository(s), ResultV2Repository(s), RetrievedArticleV2Repository(s), cache, session=s)
+    stage = PersistenceStage(SubmissionRepository(s), ResultRepository(s), RetrievedArticleRepository(s), cache, session=s)
     return ctx, await stage.execute(ctx)
 
 
@@ -97,7 +97,7 @@ async def test_s12_skips_the_redis_pointer_for_an_incomplete_result(db):
         ctx = await ra(ctx)
         assert ctx.source_status == SourceStatus.INCOMPLETE
         out = await PersistenceStage(
-            SubmissionRepository(s), ResultV2Repository(s), RetrievedArticleV2Repository(s), cache, session=s
+            SubmissionRepository(s), ResultRepository(s), RetrievedArticleRepository(s), cache, session=s
         ).execute(ctx)
         assert out.persisted
         cache.set_claim_pointer.assert_not_awaited()
@@ -118,7 +118,7 @@ async def test_register_claim_requeues_instead_of_serving_an_incomplete_result(d
         prior, _ = await add_completed_submission(s, headline=HEADLINE, submitter_id=u.id, source_status=SourceStatus.INCOMPLETE)
         await s.commit()
         svc = VerificationService(
-            SubmissionRepository(s), ResultV2Repository(s), RetrievedArticleV2Repository(s), SourceRepository(s),
+            SubmissionRepository(s), ResultRepository(s), RetrievedArticleRepository(s), SourceRepository(s),
             _cache(), MagicMock(), MagicMock(), MagicMock(), MagicMock(),
         )
         sid, status, cached = await svc.register_claim(

@@ -15,7 +15,7 @@ from app.core.constants import (
 from app.features.cache.cache_service import CacheService
 from app.features.submissions.repository import SubmissionRepository
 from app.features.verification.pipeline.context import PipelineContext
-from app.features.verification.repository import ResultV2Repository
+from app.features.verification.repository import ResultRepository
 from app.features.verification.reuse import ResultReuseService, result_is_reusable
 from app.features.verification.schemas import ManipulationFlagsSchema, VerificationScoresSchema
 
@@ -46,7 +46,7 @@ class CacheLookupStage:
         self,
         cache_service: CacheService,
         submission_repo: SubmissionRepository,
-        result_repo: ResultV2Repository,
+        result_repo: ResultRepository,
     ) -> None:
         self.cache_service = cache_service
         self.submission_repo = submission_repo

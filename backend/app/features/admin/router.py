@@ -7,7 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.features.admin.schemas import (
     AdminStatsResponse,
-    AuditLogEntryResponse,
     CreateExpertRequest,
     CredibilityWeightTierRequest,
     CredibilityWeightTierResponse,
@@ -233,17 +232,3 @@ async def update_voting_config(
     svc: AdminService = Depends(_get_service),
 ) -> VotingConfigResponse:
     return await svc.update_voting_config(body, admin_id=current_user.id)
-
-
-@router.get(
-    "/audit-log",
-    response_model=list[AuditLogEntryResponse],
-    summary="Audit log — config changes, finalizations, escalations",
-)
-async def list_audit_log(
-    limit: int = Query(default=100, ge=1, le=500),
-    offset: int = Query(default=0, ge=0),
-    _: User = Depends(_ADMIN_ONLY),
-    svc: AdminService = Depends(_get_service),
-) -> list[AuditLogEntryResponse]:
-    return await svc.list_audit_log(limit=limit, offset=offset)

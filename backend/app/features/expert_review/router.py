@@ -8,10 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.features.auth.models import User
 from app.features.auth.security import require_role
 from app.features.expert_review.repository import (
-    AuditLogRepository,
     CredibilityWeightTierRepository,
     ExpertProfileRepository,
-    ExpertReviewV2Repository,
+    ExpertReviewRepository,
     VotingConfigRepository,
 )
 from app.features.expert_review.schemas import (
@@ -28,7 +27,7 @@ from app.features.multimodal.repository import MultimodalAnalysisRepository
 from app.features.multimodal.storage_service import MultimodalStorageService
 from app.features.photocard.storage_service import PhotoCardStorageService
 from app.features.submissions.repository import SubmissionRepository
-from app.features.verification.repository import ResultV2Repository
+from app.features.verification.repository import ResultRepository
 from app.shared.dependencies import get_async_session
 
 router = APIRouter(prefix="/expert", tags=["Expert Review"])
@@ -48,16 +47,15 @@ def _get_service(
         request.app.state, "photocard_storage", None
     )
     return ExpertReviewService(
-        review_repo=ExpertReviewV2Repository(session),
+        review_repo=ExpertReviewRepository(session),
         profile_repo=ExpertProfileRepository(session),
         tier_repo=CredibilityWeightTierRepository(session),
         submission_repo=SubmissionRepository(session),
-        result_repo=ResultV2Repository(session),
+        result_repo=ResultRepository(session),
         multimodal_repo=MultimodalAnalysisRepository(session),
         voting_config_repo=VotingConfigRepository(session),
         storage=storage,
         photocard_storage=photocard_storage,
-        audit_repo=AuditLogRepository(session),
     )
 
 

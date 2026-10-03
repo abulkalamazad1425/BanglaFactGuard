@@ -5,7 +5,7 @@ keeps their own submission row (owner, type, photo-card image, OCR record,
 metadata). When an identical, fresh, complete verification exists, its
 automated result is copied onto the requester's submission, which is linked to
 the original through `duplicate_of_submission_id` /
-`verification_results_v2.reused_from_submission_id`.
+`verification_results.reused_from_submission_id`.
 
 Expert state is NOT copied: it is read through from the original at display
 time (see presenter), so there is one source of truth for review outcomes and
@@ -34,13 +34,13 @@ from app.core.constants import (
 )
 from app.features.submissions.models import Submission
 from app.features.submissions.repository import SubmissionRepository
-from app.features.verification.models import VerificationResultV2
-from app.features.verification.repository import ResultV2Repository
+from app.features.verification.models import VerificationResult
+from app.features.verification.repository import ResultRepository
 
 logger = structlog.get_logger(__name__)
 
 
-def freshness_seconds(result: VerificationResultV2) -> int:
+def freshness_seconds(result: VerificationResult) -> int:
     redis = get_settings().redis
     if result.source_status == SourceStatus.NOT_FOUND:
         return redis.ttl_not_found_result
@@ -48,7 +48,7 @@ def freshness_seconds(result: VerificationResultV2) -> int:
 
 
 def result_is_reusable(
-    result: VerificationResultV2 | None, *, now: datetime | None = None
+    result: VerificationResult | None, *, now: datetime | None = None
 ) -> tuple[bool, str]:
     """(reusable, reason). The reason is logged; it never reaches users."""
     if result is None or result.source_status is None:
@@ -76,14 +76,14 @@ def result_is_reusable(
 
 class ResultReuseService:
     def __init__(
-        self, submission_repo: SubmissionRepository, result_repo: ResultV2Repository
+        self, submission_repo: SubmissionRepository, result_repo: ResultRepository
     ) -> None:
         self.submission_repo = submission_repo
         self.result_repo = result_repo
 
     async def find_reusable(
         self, content_hash: str, *, exclude_submission_id: uuid.UUID | None = None
-    ) -> tuple[Submission, VerificationResultV2] | None:
+    ) -> tuple[Submission, VerificationResult] | None:
         for candidate in await self.submission_repo.get_reusable_candidates(content_hash):
             if exclude_submission_id and candidate.id == exclude_submission_id:
                 continue
@@ -98,9 +98,9 @@ class ResultReuseService:
         self,
         *,
         source: Submission,
-        source_result: VerificationResultV2,
+        source_result: VerificationResult,
         target: Submission,
-    ) -> VerificationResultV2:
+    ) -> VerificationResult:
         """Copy the automated snapshot onto `target` (idempotent)."""
         existing = await self.result_repo.get_by_submission_id(target.id)
         if existing is not None and existing.source_status is not None:

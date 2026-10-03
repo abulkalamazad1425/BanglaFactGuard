@@ -1,16 +1,11 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, Index, String, Text, JSON
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.shared.base_model import Base, ReprMixin, TimestampMixin, UUIDMixin
-
-if TYPE_CHECKING:
-    from app.features.verification.models import VerifiedClaim
-
 
 class VerifiedSource(UUIDMixin, TimestampMixin, ReprMixin, Base):
 
@@ -124,12 +119,6 @@ class VerifiedSource(UUIDMixin, TimestampMixin, ReprMixin, Base):
         comment="Regex patterns to match valid article URLs",
     )
 
-    claims: Mapped[list["VerifiedClaim"]] = relationship(
-        "VerifiedClaim",
-        back_populates="source",
-        lazy="select",
-        cascade="save-update, merge",
-    )
 
     __table_args__ = (
         Index(

@@ -26,7 +26,7 @@ import pytest
 
 from app.core.constants import ContentStatus, DateStatus, OverallVerdict, SourceStatus, SubmissionType
 from app.features.submissions.models import Submission
-from app.features.verification.models import VerificationResultV2
+from app.features.verification.models import VerificationResult
 from app.features.verification.presenter import load_verification_response
 
 from tests.unit.test_expert_review_finalize import _config, _make_service, _result, _review, _submission
@@ -37,7 +37,7 @@ async def _present(*, submission_type, source, content, date_, reused_from=None)
         id=uuid.uuid4(), submission_type=submission_type, headline="হেডলাইন",
         claimed_source_text="প্রথম আলো", content_hash="h",
     )
-    result = VerificationResultV2(
+    result = VerificationResult(
         id=uuid.uuid4(), submission_id=sub.id, source_status=source, content_status=content,
         date_status=date_, confidence=0.9, reasoning="", reused_from_submission_id=reused_from,
         created_at=datetime.now(timezone.utc),
@@ -125,7 +125,7 @@ async def test_structured_overall_tie_does_not_resolve_toward_ai_implied_fake():
 
 @pytest.mark.asyncio
 async def test_structured_overall_vote_snapshot_has_no_ai_implied_value():
-    """ExpertReviewV2.ai_overall_verdict is NULL for SOURCE_BASED/PHOTO_CARD
+    """ExpertReview.ai_overall_verdict is NULL for SOURCE_BASED/PHOTO_CARD
     votes — there is nothing to snapshot since the automated system never
     computes an Overall verdict for these types."""
     ctx = _make_service()
@@ -174,7 +174,7 @@ async def test_historical_photocard_row_never_exposes_a_body_metric():
         claimed_source_text="প্রথম আলো", content_hash="h",
     )
     # a row written by the old code: body_similarity stored, no scope/version
-    result = VerificationResultV2(
+    result = VerificationResult(
         id=uuid.uuid4(), submission_id=sub.id, source_status=SourceStatus.CONFIRMED,
         content_status=ContentStatus.ALTERED, confidence=0.5, reasoning="",
         body_similarity=0.12, body_keyword_coverage=0.1, created_at=datetime.now(timezone.utc),

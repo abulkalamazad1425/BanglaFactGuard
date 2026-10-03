@@ -16,7 +16,7 @@ from app.features.sources.repository import SourceRepository
 from app.features.sources.resolution import resolve_claimed_source
 from app.features.submissions.models import Submission
 from app.features.submissions.repository import (
-    RetrievedArticleV2Repository,
+    RetrievedArticleRepository,
     SubmissionRepository,
 )
 from app.features.verification.job_repository import VerificationJobRepository
@@ -24,7 +24,7 @@ from app.features.verification.pipeline.context import PipelineContext, build_co
 from app.features.verification.pipeline.factory import build_verification_stages
 from app.features.verification.pipeline.orchestrator import PipelineOrchestrator
 from app.features.verification.presenter import load_verification_response
-from app.features.verification.repository import ResultV2Repository
+from app.features.verification.repository import ResultRepository
 from app.features.verification.reuse import ResultReuseService
 from app.features.verification.schemas import VerificationRequest, VerificationResponse
 from app.shared.utils.hashing import compute_claim_hash
@@ -45,8 +45,8 @@ class VerificationService:
     def __init__(
         self,
         submission_repo: SubmissionRepository,
-        result_repo: ResultV2Repository,
-        article_repo: RetrievedArticleV2Repository,
+        result_repo: ResultRepository,
+        article_repo: RetrievedArticleRepository,
         source_repo: SourceRepository,
         cache_service: CacheService,
         embedding_service: EmbeddingService,

@@ -24,7 +24,7 @@ from app.features.multimodal.storage_service import MultimodalStorageService
 from app.features.photocard.storage_service import PhotoCardStorageService
 from app.features.submissions.models import OcrExtraction, Submission
 from app.features.submissions.repository import SubmissionRepository
-from app.features.verification.models import VerificationResultV2
+from app.features.verification.models import VerificationResult
 from app.shared.dependencies import get_async_session
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
@@ -113,22 +113,22 @@ async def get_public_stats(
     def _sc(status: SourceStatus) -> int:
         return (
             select(func.count())
-            .select_from(VerificationResultV2)
-            .where(VerificationResultV2.source_status == status)
+            .select_from(VerificationResult)
+            .where(VerificationResult.source_status == status)
         )
 
     def _cc(status: ContentStatus) -> int:
         return (
             select(func.count())
-            .select_from(VerificationResultV2)
-            .where(VerificationResultV2.content_status == status)
+            .select_from(VerificationResult)
+            .where(VerificationResult.content_status == status)
         )
 
     def _dc(status: DateStatus) -> int:
         return (
             select(func.count())
-            .select_from(VerificationResultV2)
-            .where(VerificationResultV2.date_status == status)
+            .select_from(VerificationResult)
+            .where(VerificationResult.date_status == status)
         )
 
     source_confirmed = (
@@ -161,8 +161,8 @@ async def get_public_stats(
 
     avg_ms = (
         await session.execute(
-            select(func.avg(VerificationResultV2.avg_verification_time_ms)).where(
-                VerificationResultV2.avg_verification_time_ms.is_not(None)
+            select(func.avg(VerificationResult.avg_verification_time_ms)).where(
+                VerificationResult.avg_verification_time_ms.is_not(None)
             )
         )
     ).scalar_one()
@@ -306,8 +306,8 @@ async def search_explorer(
             )
             continue
 
-        result_stmt = select(VerificationResultV2).where(
-            VerificationResultV2.submission_id == submission.id
+        result_stmt = select(VerificationResult).where(
+            VerificationResult.submission_id == submission.id
         )
         result = (await session.execute(result_stmt)).scalar_one_or_none()
 

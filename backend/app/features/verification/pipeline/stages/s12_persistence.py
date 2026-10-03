@@ -12,13 +12,12 @@ from app.core.constants import (
     SubmissionStatus,
 )
 from app.core.exceptions import PersistenceError
-from app.features.submissions.models import RetrievedArticleV2, SourceEvidenceQuery, Submission
+from app.features.submissions.models import RetrievedArticle, SourceEvidenceQuery, Submission
 from app.features.notifications.service import notify_once
-from app.features.verification.models import VerificationLog
 from app.features.verification.pipeline.context import PipelineContext
-from app.features.submissions.repository import RetrievedArticleV2Repository, SubmissionRepository
+from app.features.submissions.repository import RetrievedArticleRepository, SubmissionRepository
 from app.features.verification.pipeline.stages.s02_cache_lookup import CacheLookupStage
-from app.features.verification.repository import ResultV2Repository
+from app.features.verification.repository import ResultRepository
 from app.features.verification.reuse import result_is_reusable
 from app.features.cache.cache_service import CacheService
 from app.shared.utils.hashing import compute_url_hash
@@ -59,8 +58,8 @@ class PersistenceStage:
     def __init__(
         self,
         submission_repo: SubmissionRepository,
-        result_repo: ResultV2Repository,
-        article_repo: RetrievedArticleV2Repository,
+        result_repo: ResultRepository,
+        article_repo: RetrievedArticleRepository,
         cache_service: CacheService,
         session: AsyncSession | None = None,
     ) -> None:
@@ -117,7 +116,15 @@ class PersistenceStage:
             context.result_id = result.id
 
             await self._persist_search_queries(context, submission.id)
-            await self._persist_logs(context, submission.id)
+            for stage, duration_ms in context.stage_timings.items():
+                event_logger = logger.error if stage in context.stage_errors else logger.info
+                event_logger(
+                    "verification_stage_completed",
+                    submission_id=str(submission.id),
+                    stage=stage,
+                    duration_ms=duration_ms,
+                    error=context.stage_errors.get(stage),
+                )
 
             # Every automated result enters expert review - including a
             # reviewable INCOMPLETE one. No automated overall verdict (and no
@@ -286,7 +293,7 @@ class PersistenceStage:
         if not context.ranked_articles:
             return None
 
-        article_models: list[RetrievedArticleV2] = []
+        article_models: list[RetrievedArticle] = []
         top_article_url = context.top_article.url if context.top_article else None
         top_article_db_id: uuid.UUID | None = None
 
@@ -320,7 +327,7 @@ class PersistenceStage:
                     top_article_db_id = existing.id
                 continue
 
-            model = RetrievedArticleV2(
+            model = RetrievedArticle(
                 submission_id=submission_id,
                 url=article.url[:512],
                 url_hash=url_hash,
@@ -366,37 +373,3 @@ class PersistenceStage:
 
         self.submission_repo.session.add_all(queries)
         await self.submission_repo.session.flush()
-
-    async def _persist_logs(
-        self, context: PipelineContext, submission_id: uuid.UUID
-    ) -> None:
-        from app.core.constants import LogLevel, PipelineStageID as SID
-
-        log_entries: list[VerificationLog] = []
-
-        for stage_key, duration_ms in context.stage_timings.items():
-            try:
-                stage_id = SID(stage_key)
-            except ValueError:
-                continue
-
-            level = (
-                LogLevel.ERROR if stage_key in context.stage_errors else LogLevel.INFO
-            )
-            message = context.stage_errors.get(
-                stage_key, f"Stage {stage_key} completed"
-            )
-
-            log_entries.append(
-                VerificationLog(
-                    submission_id=submission_id,
-                    stage=stage_id,
-                    level=level,
-                    message=message,
-                    metadata_={"duration_ms": duration_ms},
-                    duration_ms=duration_ms,
-                )
-            )
-
-        if log_entries:
-            await self.result_repo.bulk_log(log_entries)

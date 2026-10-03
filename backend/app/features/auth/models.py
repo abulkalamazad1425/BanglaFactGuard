@@ -22,7 +22,6 @@ from app.shared.base_model import Base, ReprMixin, TimestampMixin, UUIDMixin
 
 if TYPE_CHECKING:
     from app.features.users.models import UserProfile
-    from app.features.expert_review.models import ExpertReview
 
 
 class User(UUIDMixin, TimestampMixin, ReprMixin, Base):
@@ -118,11 +117,6 @@ class User(UUIDMixin, TimestampMixin, ReprMixin, Base):
         back_populates="user",
         lazy="select",
         cascade="all, delete-orphan",
-    )
-    reviews: Mapped[list["ExpertReview"]] = relationship(
-        "ExpertReview",
-        back_populates="reviewer",
-        lazy="select",
     )
 
     __table_args__ = (

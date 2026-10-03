@@ -9,7 +9,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import app.features.sources.models
 import app.features.verification.models
-import app.features.articles.models
 
 from sqlalchemy import select
 from app.db.engine import AsyncSessionLocal

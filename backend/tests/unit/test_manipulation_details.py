@@ -13,7 +13,7 @@ Also covers the related durability gap found while wiring this up:
 manipulation_flags was never persisted to the DB at all — it only ever lived
 in the Redis result cache (PersistenceStage._update_redis_cache), so it
 silently reverted to an all-False ManipulationFlagsSchema() once that cache
-entry's TTL expired. The new verification_results_v2.manipulation_flags
+entry's TTL expired. The new verification_results.manipulation_flags
 JSONB column (migration b7d2e4f6a8c1) is the fix; this file covers the
 repository plumbing for it.
 """
@@ -27,7 +27,7 @@ from app.features.verification.analysis.entities import EntityMention
 from app.features.verification.pipeline.stages.s10_manipulation_detector import (
     ManipulationDetectorStage,
 )
-from app.features.verification.repository import ResultV2Repository
+from app.features.verification.repository import ResultRepository
 from pipeline_helpers import article, make_context
 
 
@@ -97,12 +97,12 @@ async def test_unrun_checks_are_not_reported_as_passed():
     assert not ctx.manipulation_flags.any_manipulation_detected
 
 
-# ─── ResultV2Repository.upsert_result — manipulation_flags plumbing ─────
+# ─── ResultRepository.upsert_result — manipulation_flags plumbing ─────
 
 
 @pytest.mark.asyncio
 async def test_upsert_result_passes_manipulation_flags_to_create():
-    repo = ResultV2Repository.__new__(ResultV2Repository)
+    repo = ResultRepository.__new__(ResultRepository)
     repo.session = AsyncMock()
     repo.get_by_submission_id = AsyncMock(return_value=None)  # type: ignore[method-assign]
 
@@ -146,7 +146,7 @@ async def test_upsert_result_passes_manipulation_flags_to_create():
 
 @pytest.mark.asyncio
 async def test_upsert_result_passes_manipulation_flags_to_update():
-    repo = ResultV2Repository.__new__(ResultV2Repository)
+    repo = ResultRepository.__new__(ResultRepository)
     repo.session = AsyncMock()
     existing = MagicMock()
     repo.get_by_submission_id = AsyncMock(return_value=existing)  # type: ignore[method-assign]

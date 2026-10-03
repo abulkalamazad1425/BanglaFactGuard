@@ -17,7 +17,7 @@ from app.core.lifespan import lifespan
 
 # Import every ORM model exactly once, at startup, regardless of which specific
 # repositories any individual router happens to import. SQLAlchemy resolves
-# string-based relationship() references (e.g. `relationship("SearchQuery")`)
+# string-based relationship() references (e.g. `relationship("Submission")`)
 # by looking up the class name in the shared declarative registry, which is
 # only populated as a side effect of that class's module being imported
 # somewhere. Without this, mapper configuration can fail unpredictably

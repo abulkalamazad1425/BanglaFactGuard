@@ -11,35 +11,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.constants import MultimodalPredictionLabel
 from app.core.exceptions import RecordNotFoundError
-from app.features.multimodal.models import MultimodalAnalysis, MultimodalPrediction
+from app.features.multimodal.models import MultimodalAnalysis
 
 logger = structlog.get_logger(__name__)
 _SETTINGS = get_settings()
 
 
-class MultimodalPredictionRepository:
-    """Legacy — frozen. Nothing calls this after the PDF-schema cutover; kept so
-    the pre-cutover multimodal_predictions rows stay queryable if ever needed."""
-
-    def __init__(self, db: AsyncSession) -> None:
-        self._db = db
-
-    async def get_by_id(self, prediction_id: uuid.UUID) -> MultimodalPrediction:
-        result = await self._db.execute(
-            select(MultimodalPrediction).where(MultimodalPrediction.id == prediction_id)
-        )
-        record = result.scalar_one_or_none()
-        if record is None:
-            raise RecordNotFoundError(
-                model="MultimodalPrediction",
-                identifier=str(prediction_id),
-            )
-        return record
-
-
 class MultimodalAnalysisRepository:
-    """Live storage for the /multimodal/predict endpoint (DatabaseDescription.pdf
-    Table 4.9), replacing MultimodalPredictionRepository above."""
+    """Storage for multimodal analysis linked to submissions."""
 
     def __init__(self, db: AsyncSession) -> None:
         self._db = db

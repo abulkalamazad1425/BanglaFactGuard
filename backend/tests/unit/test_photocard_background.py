@@ -29,14 +29,14 @@ from app.features.submissions.access import viewer_can_see
 from app.features.submissions.models import OcrExtraction, Submission
 from app.features.submissions.repository import (
     OcrExtractionRepository,
-    RetrievedArticleV2Repository,
+    RetrievedArticleRepository,
     SubmissionRepository,
 )
 from app.features.verification.job_repository import VerificationJobRepository
 from app.features.verification.jobs import JobDeps, VerificationJobWorker, execute_job
-from app.features.verification.models import VerificationJob, VerificationResultV2
+from app.features.verification.models import VerificationJob, VerificationResult
 from app.features.verification.pipeline.stages.s12_persistence import PersistenceStage
-from app.features.verification.repository import ResultV2Repository
+from app.features.verification.repository import ResultRepository
 from app.shared.utils.hashing import compute_claim_hash
 from db_helpers import add_completed_submission, add_source, add_user, make_session_factory
 from pipeline_helpers import article, make_context, run_analysis
@@ -101,8 +101,8 @@ def _svc(session, *, storage=None, ocr=None) -> PhotoCardService:
         storage=storage or _storage(),
         submission_repo=SubmissionRepository(session),
         ocr_repo=OcrExtractionRepository(session),
-        result_repo=ResultV2Repository(session),
-        article_repo=RetrievedArticleV2Repository(session),
+        result_repo=ResultRepository(session),
+        article_repo=RetrievedArticleRepository(session),
         # SQLite cannot evaluate the JSONB alias-containment lookup; the
         # static alias table resolves the claimed source in these tests.
         source_repo=MagicMock(resolve_source=AsyncMock(return_value=None)),
@@ -144,7 +144,7 @@ class FakeOrchestrator:
         ctx = await run_analysis(ctx)
         session = self.repo.session
         stage = PersistenceStage(
-            self.repo, ResultV2Repository(session), RetrievedArticleV2Repository(session), MagicMock(set_claim_pointer=AsyncMock()), session=session
+            self.repo, ResultRepository(session), RetrievedArticleRepository(session), MagicMock(set_claim_pointer=AsyncMock()), session=session
         )
         return await stage.execute(ctx)
 
@@ -302,7 +302,7 @@ async def test_job_processes_card_into_a_saved_headline_only_result(db):
 
     async with db() as s:
         row = await SubmissionRepository(s).get_by_id(sub.id)
-        res = await ResultV2Repository(s).get_by_submission_id(sub.id)
+        res = await ResultRepository(s).get_by_submission_id(sub.id)
         notes = (await s.execute(select(Notification).where(Notification.user_id == user.id))).scalars().all()
         detail = await _svc(s).get_result(sub.id)
     assert row.status == SubmissionStatus.EXPERT_REVIEW and row.headline == HEADLINE
@@ -366,7 +366,7 @@ async def test_unusable_extraction_fails_the_job_with_a_reason_and_no_automated_
     async with db() as s:
         row = await SubmissionRepository(s).get_by_id(sub.id)
         job = await VerificationJobRepository(s).get_by_submission(sub.id)
-        res = await ResultV2Repository(s).get_by_submission_id(sub.id)
+        res = await ResultRepository(s).get_by_submission_id(sub.id)
         notes = (await s.execute(select(Notification).where(Notification.user_id == user.id))).scalars().all()
         detail = await _svc(s).get_result(sub.id)
     assert row.status == SubmissionStatus.FAILED and "headline" in row.failure_reason.lower()
@@ -400,7 +400,7 @@ async def test_cached_reuse_preserves_photocard_identity_image_and_owner(db):
     async with db() as s:
         row = await SubmissionRepository(s).get_by_id(mine.id)
         ocr = await OcrExtractionRepository(s).get_by_submission_id(mine.id)
-        res = await ResultV2Repository(s).get_by_submission_id(mine.id)
+        res = await ResultRepository(s).get_by_submission_id(mine.id)
         original = await SubmissionRepository(s).get_by_id(orig.id)
         detail = await _svc(s).get_result(mine.id)
     assert row.submission_type == SubmissionType.PHOTO_CARD  # not replaced by a text submission
@@ -514,7 +514,7 @@ async def test_rerunning_a_finished_job_is_a_no_op(db):
     deps = JobDeps(MagicMock(), MagicMock(), MagicMock(), MagicMock(), MagicMock(), ocr_service=_ocr(), photocard_storage=_storage())
     await execute_job(kind="SOURCE_BASED", submission_id=sub.id, payload={}, deps=deps, session_factory=db)
     async with db() as s:
-        assert (await s.execute(select(func.count()).select_from(VerificationResultV2))).scalar_one() == 1
+        assert (await s.execute(select(func.count()).select_from(VerificationResult))).scalar_one() == 1
 
 
 # ── access: pending/failed cards are private to their owner ──────────────

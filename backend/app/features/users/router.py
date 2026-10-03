@@ -20,8 +20,8 @@ from app.features.auth.models import User
 from app.features.auth.security import get_current_user
 from app.features.submissions.models import OcrExtraction, Submission
 from app.features.verification.presenter import effective_expert_row, effective_status
-from app.features.verification.repository import ResultV2Repository
-from app.features.verification.models import VerificationResultV2
+from app.features.verification.repository import ResultRepository
+from app.features.verification.models import VerificationResult
 from app.shared.dependencies import get_async_session
 
 router = APIRouter(prefix="/users", tags=["Users"])
@@ -99,7 +99,7 @@ async def get_my_submissions(
         .limit(limit)
     )
     submissions = (await session.execute(stmt)).scalars().all()
-    result_repo = ResultV2Repository(session)
+    result_repo = ResultRepository(session)
     photocard_storage = getattr(request.app.state, "photocard_storage", None)
     items = []
     for submission in submissions:
@@ -190,22 +190,22 @@ async def get_my_submission_stats(
     def _sc(status: SourceStatus):
         return (
             select(func.count())
-            .select_from(VerificationResultV2)
-            .join(Submission, VerificationResultV2.submission_id == Submission.id)
+            .select_from(VerificationResult)
+            .join(Submission, VerificationResult.submission_id == Submission.id)
             .where(
                 Submission.submitter_id == current_user.id,
-                VerificationResultV2.source_status == status,
+                VerificationResult.source_status == status,
             )
         )
 
     def _cc(status: ContentStatus):
         return (
             select(func.count())
-            .select_from(VerificationResultV2)
-            .join(Submission, VerificationResultV2.submission_id == Submission.id)
+            .select_from(VerificationResult)
+            .join(Submission, VerificationResult.submission_id == Submission.id)
             .where(
                 Submission.submitter_id == current_user.id,
-                VerificationResultV2.content_status == status,
+                VerificationResult.content_status == status,
             )
         )
 

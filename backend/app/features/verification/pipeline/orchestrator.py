@@ -13,7 +13,7 @@ fault-tolerant verification run.
    the orchestrator skips Stages 3–12 and returns immediately.
 
 3. **Per-stage timing**: Each stage is timed; results are stored in
-   `context.stage_timings` and written to `verification_logs` in Stage 12.
+   `context.stage_timings` and emitted to application logs in Stage 12.
 
 4. **Non-fatal fault isolation**: Each stage executes inside a try/except.
    A `StageError` (or any unexpected exception from a non-critical stage)
