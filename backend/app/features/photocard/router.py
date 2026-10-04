@@ -153,7 +153,7 @@ async def verify_photocard_async(
         "There is no confirmation step: extraction and verification happen "
         "in one unattended pass. The card is always verified against its "
         "headline alone (no body/caption). If the card's own text implies "
-        "a different source or date than provided, that conflict is "
+        "a different source than provided, that conflict is "
         "recorded and surfaced (`source_date_conflict`) but never silently "
         "overrides the claimed_source_text/published_date given here — "
         "those are the verification targets.\n\n"

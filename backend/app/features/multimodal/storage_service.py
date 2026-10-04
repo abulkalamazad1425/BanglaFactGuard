@@ -127,6 +127,16 @@ class MultimodalStorageService:
                 details={"object_key": object_key},
             ) from exc
 
+    async def read_image(self, object_key: str) -> bytes:
+        def read() -> bytes:
+            response = self._client.get_object(self._bucket, object_key)
+            try:
+                return response.read()
+            finally:
+                response.close()
+                response.release_conn()
+        return await asyncio.get_running_loop().run_in_executor(_MINIO_POOL, read)
+
     async def delete_image(self, object_key: str) -> None:
         loop = asyncio.get_event_loop()
         try:

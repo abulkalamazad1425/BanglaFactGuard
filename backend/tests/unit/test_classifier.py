@@ -16,7 +16,6 @@ import pytest
 
 from app.core.config import get_settings
 from app.core.constants import (
-    CheckState,
     ClaimScope,
     ContentStatus,
     DateStatus,
@@ -34,6 +33,7 @@ from app.features.verification.analysis.decisions import (
     search_adequate,
 )
 from app.features.verification.pipeline.stages.s11_classifier import ClassifierStage
+from app.features.verification.schemas import ContentCheck, ContentFinding
 from pipeline_helpers import article, make_context
 
 T = get_settings().classification
@@ -50,7 +50,6 @@ def inputs(**kw) -> DecisionInputs:
         headline_keyword_coverage=M(1.0),
         passage_keyword_coverage=M(1.0),
         entity_coverage=Metric(MetricState.NOT_APPLICABLE),
-        check_states={"negation": CheckState.PASSED, "headline": CheckState.PASSED},
     )
     base.update(kw)
     return DecisionInputs(**base)
@@ -76,8 +75,8 @@ def test_same_outlet_topic_similarity_is_not_correspondence():
 
 
 def test_altered_detail_still_corresponds_when_title_matches():
-    # correspondence ignores body metrics and alteration checks entirely
-    corr = assess_correspondence(inputs(body_similarity=M(0.0), check_states={"numbers": CheckState.FAILED}), T)
+    # correspondence ignores body metrics and the content comparison entirely
+    corr = assess_correspondence(inputs(body_similarity=M(0.0)), T)
     assert corr.level == "STRONG"
 
 
@@ -111,49 +110,39 @@ def test_search_adequacy_needs_enough_completed_calls():
 # ── content ─────────────────────────────────────────────────────────────
 
 
-def test_concrete_discrepancy_is_altered_whatever_the_similarity():
-    assert decide_content(inputs(), T, concrete_failures=1)[0] == ContentStatus.ALTERED
+def F(status: str, part: str = "headline", **kw) -> ContentFinding:
+    return ContentFinding(part=part, claim_text="দাবি", status=status, explanation="কারণ", **kw)
 
 
-def test_matched_requires_positive_support_for_every_applicable_claim():
-    assert decide_content(inputs(), T, concrete_failures=0)[0] == ContentStatus.MATCHED
+def check(*findings: ContentFinding, **kw) -> ContentCheck:
+    return ContentCheck(method="test", findings=list(findings), **kw)
+
+
+def test_every_supported_statement_is_matched():
+    status, basis = decide_content(check(F("SUPPORTED"), F("SUPPORTED", "body")))
+    assert status == ContentStatus.MATCHED and len(basis) == 2
+
+
+def test_one_concrete_difference_is_altered_even_beside_support_and_open_statements():
+    status, basis = decide_content(
+        check(F("SUPPORTED"), F("INSUFFICIENT_EVIDENCE", "body"), F("CONTRADICTED", "body", kind="numbers"))
+    )
+    assert status == ContentStatus.ALTERED and basis == ['body "দাবি": কারণ']
 
 
 @pytest.mark.parametrize(
-    "override",
+    "result",
     [
-        dict(headline_similarity=M(0.6)),                                  # weak similarity
-        dict(headline_keyword_coverage=M(0.4)),                            # weak coverage
-        dict(headline_similarity=M(None)),                                 # missing signal
-        dict(entity_coverage=M(0.5)),                                      # claimed entity not found
-        dict(entity_coverage=Metric(MetricState.UNAVAILABLE), headline_keyword_coverage=M(0.8)),  # NER down
-        dict(check_states={"numbers": CheckState.NOT_EVALUATED}),           # check did not run
-        dict(contradiction=0.6),                                           # possible, unvalidated contradiction
+        check(F("SUPPORTED"), F("INSUFFICIENT_EVIDENCE", "body")),  # one statement not established
+        check(F("SUPPORTED"), unchecked_statements=3),              # part of the body not compared
+        check(reason="no comparable text"),                         # comparison could not run
+        check(),                                                    # nothing compared
     ],
 )
-def test_weak_or_missing_support_is_incomplete_never_altered(override):
-    status, basis = decide_content(inputs(**override), T, concrete_failures=0)
+def test_missing_or_partial_evidence_is_incomplete_never_altered(result):
+    status, basis = decide_content(result)
     assert status == ContentStatus.INCOMPLETE
-    assert basis and all(b.startswith("not established") for b in basis)
-
-
-def test_validated_nli_contradiction_may_alter_only_with_passage_premise(monkeypatch):
-    t = T.model_copy(update={"nli_bangla_validated": True})
-    inp = inputs(contradiction=0.9, nli_premise_is_passages=True)
-    assert decide_content(inp, t, concrete_failures=0)[0] == ContentStatus.ALTERED
-    inp = inputs(contradiction=0.9, nli_premise_is_passages=False)
-    assert decide_content(inp, t, concrete_failures=0)[0] != ContentStatus.ALTERED
-    # unvalidated (the default): the same contradiction can only block MATCHED
-    assert decide_content(inputs(contradiction=0.9, nli_premise_is_passages=True), T, concrete_failures=0)[0] == ContentStatus.INCOMPLETE
-
-
-def test_text_with_body_needs_body_support_and_a_complete_comparison():
-    base = dict(scope=ClaimScope.HEADLINE_WITH_BODY, body_similarity=M(0.85), body_keyword_coverage=M(0.9), body_min_chunk_similarity=0.8)
-    assert decide_content(inputs(**base), T, concrete_failures=0)[0] == ContentStatus.MATCHED
-    assert decide_content(inputs(**{**base, "body_similarity": M(0.4)}), T, concrete_failures=0)[0] == ContentStatus.INCOMPLETE
-    assert decide_content(inputs(**{**base, "body_min_chunk_similarity": 0.1}), T, concrete_failures=0)[0] == ContentStatus.INCOMPLETE
-    assert decide_content(inputs(**{**base, "body_complete": False}), T, concrete_failures=0)[0] == ContentStatus.INCOMPLETE
-    assert decide_content(inputs(**{**base, "body_similarity": M(None)}), T, concrete_failures=0)[0] == ContentStatus.INCOMPLETE
+    assert basis or not result.findings
 
 
 # ── date ────────────────────────────────────────────────────────────────
@@ -185,7 +174,7 @@ async def test_classifier_never_emits_an_overall_verdict_and_explains_with_evide
     ctx = await run_analysis(ctx)
     assert ctx.content_status == ContentStatus.ALTERED
     # the reasoning cites the actual discrepancy, not a score-derived guess
-    assert "20" in ctx.reasoning and "10" in ctx.reasoning
+    assert "২০" in ctx.reasoning and "১০" in ctx.reasoning
     assert "different topic focus" not in ctx.reasoning
     assert not hasattr(ctx, "overall_verdict")
     assert ctx.reasoning.rstrip().endswith("Verdict: source CONFIRMED, content ALTERED, date N/A.")

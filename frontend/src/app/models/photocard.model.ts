@@ -51,7 +51,7 @@ export interface PhotoCardVerifyResponse {
   detected_sources: DetectedSource[];
   detected_source_text?: string | null;
   detected_date_text?: string | null;
-  /** True when the card's own text disagrees with the claimed source/date provided. */
+  /** Legacy API name: only detected-source disagreement; extracted dates are never compared. */
   source_date_conflict: boolean;
 
   ocr_raw_text: string;

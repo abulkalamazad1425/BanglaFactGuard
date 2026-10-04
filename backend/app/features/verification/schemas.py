@@ -255,6 +255,53 @@ class NLIAnalysis(BaseModel):
     )
 
 
+class ContentEvidence(BaseModel):
+    """A verbatim quote from the source report."""
+
+    location: str = Field(description="title | body")
+    quote: str
+
+
+class ContentFinding(BaseModel):
+    """How one submitted statement (a headline or body sentence) compares
+    with the source report, with the source text that shows it."""
+
+    part: str = Field(default="headline", description="headline | body")
+    claim_text: str
+    status: str = Field(description="SUPPORTED | CONTRADICTED | INSUFFICIENT_EVIDENCE")
+    kind: str = Field(
+        default="none",
+        description="none | numbers | negation | entity_substitution | entity_role | scope | attribution | modality | semantic",
+    )
+    basis: str = Field(
+        default="none",
+        description="verbatim | facts_preserved | entailment | clauses | conflict | none",
+    )
+    explanation: str
+    evidence: list[ContentEvidence] = Field(default_factory=list)
+    checks: list[str] = Field(
+        default_factory=list,
+        description="Fact types present in the statement (numbers, negation, entities, scope, attribution, modality).",
+    )
+    alignment: float = 0.0
+    nli: dict[str, float] = Field(default_factory=dict)
+    meta: dict[str, str] = Field(default_factory=dict)
+
+
+class ContentCheck(BaseModel):
+    """Statement-by-statement content comparison (local models only)."""
+
+    method: str
+    models: str | None = None
+    nli_reliability: str = "UNVALIDATED_FOR_BANGLA"
+    findings: list[ContentFinding] = Field(default_factory=list)
+    unchecked_statements: int = Field(
+        default=0, description="Submitted statements beyond the comparison limit (not compared)."
+    )
+    source_truncated: bool = False
+    reason: str | None = Field(default=None, description="Why the comparison could not run at all.")
+
+
 class AnalysisDetails(BaseModel):
     """Everything needed to explain and reproduce a result after Redis expiry."""
 
@@ -263,6 +310,7 @@ class AnalysisDetails(BaseModel):
     metrics: dict[str, MetricDetail] = Field(default_factory=dict)
     passages: list[EvidencePassage] = Field(default_factory=list)
     nli: NLIAnalysis | None = None
+    content_check: ContentCheck | None = None
     search: SearchAccounting | None = None
     date: DateAnalysis | None = None
     source_basis: list[str] = Field(default_factory=list)

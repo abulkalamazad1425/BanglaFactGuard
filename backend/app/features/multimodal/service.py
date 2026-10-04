@@ -52,8 +52,10 @@ class MultimodalPredictionService:
         image_bytes: bytes,
         original_filename: str,
         submitter_id: uuid.UUID | None = None,
+        existing_submission: Submission | None = None,
+        stored_image_key: str | None = None,
     ) -> MultimodalPredictionResponse:
-        submission_uuid = uuid.uuid4()
+        submission_uuid = existing_submission.id if existing_submission else uuid.uuid4()
         log = logger.bind(submission_id=str(submission_uuid))
         log.info("multimodal_predict_start", filename=original_filename)
 
@@ -69,14 +71,14 @@ class MultimodalPredictionService:
             combined_emb=combined_emb,
         )
 
-        minio_key = await self._storage.upload_image(
+        minio_key = stored_image_key or await self._storage.upload_image(
             image_bytes=image_bytes,
             original_filename=original_filename,
             submission_id=str(submission_uuid),
         )
         log.info("image_uploaded_to_minio", key=minio_key)
 
-        submission = await self._create_submission(
+        submission = existing_submission or await self._create_submission(
             headline=headline,
             body_text=body_text,
             submitter_id=submitter_id,
@@ -131,6 +133,57 @@ class MultimodalPredictionService:
             is_duplicate_of_id=None,
         )
         return await self._build_response(record=record, is_cached=False)
+
+    async def accept_upload(
+        self, *, headline: str, body_text: str, image_bytes: bytes,
+        original_filename: str, submitter_id: uuid.UUID | None,
+    ) -> Submission:
+        """Store input and queue a job atomically before acknowledging acceptance."""
+        from app.features.verification.job_repository import VerificationJobRepository
+
+        submission = Submission(
+            id=uuid.uuid4(), submission_type=SubmissionType.MULTIMODAL,
+            headline=headline, body_text=body_text, submitter_id=submitter_id,
+            content_hash=compute_text_hash(f"{headline}\n{body_text}"),
+            status=SubmissionStatus.PENDING, processing_phase="QUEUED",
+        )
+        key = await self._storage.upload_image(
+            image_bytes=image_bytes, original_filename=original_filename,
+            submission_id=str(submission.id),
+        )
+        try:
+            await self._submissions.create(submission)
+            if submitter_id:
+                await self._increment_submitter_total_submissions(submitter_id)
+            await VerificationJobRepository(self._db).enqueue(
+                submission.id, "MULTIMODAL",
+                payload={"image_key": key, "filename": original_filename},
+            )
+            await self._db.commit()
+        except Exception:
+            await self._db.rollback()
+            await self._storage.delete_image(key)
+            raise
+        return submission
+
+    async def process_queued(self, submission: Submission, payload: dict) -> None:
+        # A retry after successful persistence must not create another analysis.
+        if await self._repo.get_by_submission_id(submission.id) is None:
+            image = await self._storage.read_image(payload["image_key"])
+            await self.predict(
+                headline=submission.headline or "", body_text=submission.body_text or "",
+                image_bytes=image, original_filename=payload["filename"],
+                submitter_id=submission.submitter_id, existing_submission=submission,
+                stored_image_key=payload["image_key"],
+            )
+        await self._submissions.mark_ai_done(submission.id)
+        if submission.submitter_id:
+            from app.features.notifications.service import notify_once
+            await notify_once(
+                self._db, user_id=submission.submitter_id,
+                title="Analysis ready", body="Your preliminary multimodal result is ready.",
+                notification_type="VERIFICATION_COMPLETE", link_url=f"/verify/{submission.id}",
+            )
 
     async def _create_submission(
         self,

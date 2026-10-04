@@ -16,6 +16,7 @@ import numpy as np
 from app.core.constants import ClaimScope, SearchProvider
 from app.features.articles.schemas import RankedArticleSchema
 from app.features.nlp.ner_service import NERResult
+from app.features.verification.analysis.content_check import ContentComparator
 from app.features.verification.analysis.entities import EntityMention
 from app.features.verification.analysis.text import content_tokens, light_stem
 from app.features.verification.pipeline.context import PipelineContext, build_context
@@ -24,9 +25,6 @@ from app.features.verification.pipeline.stages.s08_similarity_analyzer import (
 )
 from app.features.verification.pipeline.stages.s09_contradiction_detector import (
     ContradictionDetectorStage,
-)
-from app.features.verification.pipeline.stages.s10_manipulation_detector import (
-    ManipulationDetectorStage,
 )
 from app.features.verification.pipeline.stages.s11_classifier import ClassifierStage
 from app.features.verification.schemas import NLIScoresSchema
@@ -132,11 +130,11 @@ async def run_analysis(
     embedder: FakeEmbedder | None = None,
     nli=None,
 ) -> PipelineContext:
-    """S08 -> S09 -> S10 -> S11 with deterministic fakes."""
+    """S08 -> S09 -> S11 (with the local content comparator) over deterministic fakes."""
     embedder = embedder or FakeEmbedder()
     ner = ner or FakeNER()
+    nli = nli or neutral_nli()
     ctx = await SimilarityAnalyzerStage(embedder, ner).execute(ctx)
-    ctx = await ContradictionDetectorStage(nli or neutral_nli()).execute(ctx)
-    ctx = await ManipulationDetectorStage(embedder).execute(ctx)
-    ctx = await ClassifierStage().execute(ctx)
+    ctx = await ContradictionDetectorStage(nli).execute(ctx)
+    ctx = await ClassifierStage(ContentComparator(embedder, nli, ner, nli_validated=False)).execute(ctx)
     return ctx

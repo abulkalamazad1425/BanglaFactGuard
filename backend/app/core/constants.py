@@ -261,7 +261,7 @@ class JobPhase(str, Enum):
 # Bumped whenever scoring/decision logic changes in a way that makes earlier
 # stored scores non-comparable. It is part of claim identity, so results
 # produced by older (defective) logic are never served as current.
-VERIFICATION_PIPELINE_VERSION: str = "v3.0-scope-aware"
+VERIFICATION_PIPELINE_VERSION: str = "v3.1-content-evidence"
 
 
 class PipelineStageID(str, Enum):

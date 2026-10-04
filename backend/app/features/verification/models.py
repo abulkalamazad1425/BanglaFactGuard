@@ -250,7 +250,7 @@ class VerificationJob(UUIDMixin, TimestampMixin, ReprMixin, Base):
         index=True,
     )
     kind: Mapped[str] = mapped_column(
-        String(20), nullable=False, comment="SOURCE_BASED | PHOTO_CARD"
+        String(20), nullable=False, comment="SOURCE_BASED | PHOTO_CARD | MULTIMODAL"
     )
     status: Mapped[str] = mapped_column(
         String(12),

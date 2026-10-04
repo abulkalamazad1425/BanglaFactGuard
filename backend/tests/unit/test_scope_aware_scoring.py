@@ -300,19 +300,33 @@ async def test_weak_scores_without_concrete_discrepancy_are_incomplete():
 
 
 @pytest.mark.asyncio
-async def test_missing_signals_and_neutral_nli_alone_are_incomplete_never_altered():
+async def test_condensed_headline_is_matched_from_the_title_without_ner_or_body():
+    # every word of the shortened headline is in the title, nothing is negated
+    # or changed: a faithful summary, even with NER down and no article body
     ctx = make_context(
         "ঢাকায় সেতুর উদ্বোধন",
         scope=ClaimScope.HEADLINE_ONLY,
-        top=article(TITLE, None),  # no article body: weak evidence
+        top=article(TITLE, None),
     )
     ctx = await run_analysis(ctx, ner=FakeNER([], available=False))
-    assert ctx.content_status != ContentStatus.ALTERED
-    assert ctx.content_status == ContentStatus.INCOMPLETE  # NER unavailable + no body
+    assert ctx.content_status == ContentStatus.MATCHED, ctx.analysis.content_basis
 
 
 @pytest.mark.asyncio
-async def test_high_nli_contradiction_without_validation_cannot_alone_alter_content():
+async def test_unsupported_extra_statement_is_incomplete_never_altered():
+    ctx = make_context(
+        TITLE + "। অনুষ্ঠানে সংঘর্ষ হয়েছে।",
+        scope=ClaimScope.HEADLINE_ONLY,
+        top=article(TITLE, None),
+    )
+    ctx = await run_analysis(ctx, ner=FakeNER([], available=False))
+    assert ctx.source_status == SourceStatus.CONFIRMED
+    assert ctx.content_status == ContentStatus.INCOMPLETE
+    assert ctx.manipulation_flags.check_states["headline"] == CheckState.NOT_EVALUATED
+
+
+@pytest.mark.asyncio
+async def test_unvalidated_nli_contradiction_cannot_turn_an_exact_copy_into_anything_but_matched():
     from unittest.mock import AsyncMock, MagicMock
 
     from app.features.verification.schemas import NLIScoresSchema
@@ -321,8 +335,8 @@ async def test_high_nli_contradiction_without_validation_cannot_alone_alter_cont
     nli.predict = AsyncMock(return_value=NLIScoresSchema(entailment=0.0, contradiction=0.95, neutral=0.05))
     ctx = make_context(TITLE, scope=ClaimScope.HEADLINE_ONLY, top=article(TITLE, LEAD))
     ctx = await run_analysis(ctx, nli=nli)
-    assert ctx.content_status == ContentStatus.INCOMPLETE
-    assert any("contradiction" in b for b in ctx.analysis.content_basis)
+    assert ctx.content_status == ContentStatus.MATCHED
+    assert ctx.manipulation_flags.discrepancies == []
 
 
 @pytest.mark.asyncio

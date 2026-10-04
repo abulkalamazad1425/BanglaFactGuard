@@ -104,7 +104,7 @@ class TestMultimodalPredictEndpoint:
 
         response = client.post(
             "/api/v1/multimodal/predict",
-            data={"headline": "Test", "body_text": "Body"},
+            data={"headline": "Test", "body_text": "Valid body text for validation"},
             files={"image": ("doc.pdf", io.BytesIO(b"fake pdf"), "application/pdf")},
         )
         assert response.status_code == 415

@@ -20,6 +20,7 @@ def _make_fake_record(
     record.body_text = "Test body text"
     record.image_object_key = "multimodal/abc/test.jpg"
     record.prediction = prediction
+    record.expert_overall_verdict = None
     record.confidence_fake = confidence_fake
     record.confidence_real = confidence_real
     record.is_duplicate_of_id = is_duplicate_of_id
@@ -38,10 +39,12 @@ class TestMultimodalPredictionService:
         from app.features.multimodal.service import MultimodalPredictionService
 
         db = AsyncMock()
+        db.add = MagicMock()
         loader = MagicMock()
         loader.is_loaded = True
         storage = AsyncMock()
         storage.upload_image = AsyncMock(return_value="multimodal/abc/test.jpg")
+        storage.get_presigned_url = AsyncMock(return_value="https://images.example/test.jpg")
 
         service = MultimodalPredictionService(db=db, loader=loader, storage=storage)
 

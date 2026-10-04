@@ -1,11 +1,14 @@
 """
 app/features/verification/pipeline/factory.py
 ================================================
-The one place that assembles the 12-stage verification pipeline's stage
-list. `VerificationService` (POST /verify) and `PhotoCardService` (photo-card
+The one place that assembles the verification pipeline's stage list.
+`VerificationService` (POST /verify) and `PhotoCardService` (photo-card
 step 2) both drive this exact same pipeline — a photo-card verdict has to be
 defensible on the same terms as a typed claim — so both call this factory
 instead of maintaining their own copy of the stage list.
+
+Content is compared inside S11 (only once the source is confirmed) by the
+local `ContentComparator`; it replaced the former S10 manipulation detector.
 """
 
 from __future__ import annotations
@@ -26,6 +29,7 @@ from app.features.submissions.repository import (
     RetrievedArticleRepository,
     SubmissionRepository,
 )
+from app.features.verification.analysis.content_check import ContentComparator
 from app.features.verification.pipeline.context import PipelineStage
 from app.features.verification.pipeline.stages.s01_normalizer import (
     InputNormalizerStage,
@@ -51,9 +55,6 @@ from app.features.verification.pipeline.stages.s08_similarity_analyzer import (
 )
 from app.features.verification.pipeline.stages.s09_contradiction_detector import (
     ContradictionDetectorStage,
-)
-from app.features.verification.pipeline.stages.s10_manipulation_detector import (
-    ManipulationDetectorStage,
 )
 from app.features.verification.pipeline.stages.s11_classifier import ClassifierStage
 from app.features.verification.pipeline.stages.s12_persistence import PersistenceStage
@@ -96,8 +97,9 @@ def build_verification_stages(
             ner_service=ner_service,
         ),
         ContradictionDetectorStage(nli_service=nli_service),
-        ManipulationDetectorStage(embedding_service=embedding_service),
-        ClassifierStage(),
+        ClassifierStage(
+            content_comparator=ContentComparator(embedding_service, nli_service, ner_service),
+        ),
         PersistenceStage(
             submission_repo=submission_repo,
             result_repo=result_repo,

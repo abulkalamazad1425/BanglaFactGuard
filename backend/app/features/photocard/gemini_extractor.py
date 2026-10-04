@@ -86,7 +86,8 @@ _SYSTEM_INSTRUCTION = (
     "a publish date printed on the card, include those — but only if they "
     "are actually present as text; leave them null otherwise. If you "
     "cannot find a clear headline at all, return an empty string for "
-    "headline rather than guessing."
+    "headline rather than guessing. Any printed date is archival metadata only: "
+    "do not compare dates or include date-related errors or extraction warnings."
 )
 
 _RESPONSE_SCHEMA = {

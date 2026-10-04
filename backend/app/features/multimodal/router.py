@@ -41,6 +41,36 @@ _SETTINGS = get_settings()
 router = APIRouter(prefix="/multimodal", tags=["Multimodal Fake-News Detection"])
 
 
+@router.post("/predict/async", status_code=status.HTTP_202_ACCEPTED)
+async def predict_async(
+    request: Request,
+    headline: str = Form(..., min_length=1, max_length=2000),
+    body_text: str = Form(..., min_length=10, max_length=50_000),
+    image: UploadFile = File(...),
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User | None = Depends(get_current_user_optional),
+) -> dict:
+    """Accept a durable job; poll /submissions/{id} and then /multimodal/by-submission/{id}."""
+    loader, storage = _get_loader(request), _get_storage(request)
+    if not headline.strip() or len(body_text.strip()) < 10:
+        raise HTTPException(422, "Headline and at least 10 characters of body text are required.")
+    if image.content_type not in _ALLOWED_CONTENT_TYPES:
+        raise HTTPException(415, "Upload a JPEG, PNG, GIF or WebP image.")
+    content = await image.read(_MAX_IMAGE_BYTES + 1)
+    if not content or len(content) > _MAX_IMAGE_BYTES:
+        raise HTTPException(413 if content else 400, "Image must be nonempty and at most 10 MB.")
+    service = MultimodalPredictionService(db=db, loader=loader, storage=storage)
+    submission = await service.accept_upload(
+        headline=headline.strip(), body_text=body_text.strip(), image_bytes=content,
+        original_filename=image.filename or "image.png",
+        submitter_id=current_user.id if current_user else None,
+    )
+    worker = getattr(request.app.state, "job_worker", None)
+    if worker is not None:
+        worker.wake()
+    return {"submission_id": str(submission.id), "status": submission.status, "phase": "QUEUED"}
+
+
 _MAX_IMAGE_BYTES = 10 * 1024 * 1024
 _ALLOWED_CONTENT_TYPES = {
     "image/jpeg",

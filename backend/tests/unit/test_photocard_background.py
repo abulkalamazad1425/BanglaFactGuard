@@ -155,7 +155,7 @@ def patch_pipeline(monkeypatch):
     FakeOrchestrator.cache_hit_from = None
     monkeypatch.setattr("app.features.photocard.service.PipelineOrchestrator", FakeOrchestrator)
     monkeypatch.setattr(
-        "app.features.photocard.service.build_verification_stages", lambda **kw: []
+        "app.features.photocard.service.build_photocard_stages", lambda **kw: []
     )
     monkeypatch.setattr(
         "app.features.photocard.service.extract_headline", AsyncMock(return_value=_extraction())

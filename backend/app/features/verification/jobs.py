@@ -69,6 +69,8 @@ class JobDeps:
     http_client: httpx.AsyncClient
     ocr_service: BanglaOcrService | None = None
     photocard_storage: PhotoCardStorageService | None = None
+    multimodal_loader: Any = None
+    multimodal_storage: Any = None
 
     @classmethod
     def from_app_state(cls, state: Any) -> "JobDeps":
@@ -80,6 +82,8 @@ class JobDeps:
             http_client=state.http_client,
             ocr_service=getattr(state, "photocard_ocr", None),
             photocard_storage=getattr(state, "photocard_storage", None),
+            multimodal_loader=getattr(state, "multimodal_loader", None),
+            multimodal_storage=getattr(state, "multimodal_storage", None),
         )
 
 
@@ -109,7 +113,19 @@ async def execute_job(
         article_repo = RetrievedArticleRepository(session)
         source_repo = SourceRepository(session)
         try:
-            if kind == "PHOTO_CARD":
+            if kind == "MULTIMODAL":
+                from app.features.multimodal.service import MultimodalPredictionService
+                if deps.multimodal_loader is None or not deps.multimodal_loader.is_loaded:
+                    raise PermanentJobError("The multimodal model is unavailable. Please try again later.")
+                if deps.multimodal_storage is None:
+                    raise PermanentJobError("Image storage is unavailable.")
+                await submission_repo.mark_processing(submission_id)
+                await submission_repo.set_phase(submission_id, "VERIFYING")
+                await session.commit()
+                await MultimodalPredictionService(
+                    db=session, loader=deps.multimodal_loader, storage=deps.multimodal_storage,
+                ).process_queued(submission, payload)
+            elif kind == "PHOTO_CARD":
                 service = PhotoCardService(
                     ocr_service=deps.ocr_service or BanglaOcrService(),
                     storage=deps.photocard_storage or PhotoCardStorageService(),

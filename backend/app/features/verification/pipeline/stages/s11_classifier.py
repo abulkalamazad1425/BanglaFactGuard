@@ -6,12 +6,14 @@ from app.core.config import get_settings
 from app.core.constants import (
     VERIFICATION_PIPELINE_VERSION,
     CheckState,
+    ClaimScope,
     ContentStatus,
     DateStatus,
     PipelineStageID,
     SourceStatus,
 )
 from app.core.exceptions import ClassificationError
+from app.features.verification.analysis.content_check import ContentComparator, content_flags
 from app.features.verification.analysis.decisions import (
     DecisionInputs,
     Metric,
@@ -22,7 +24,11 @@ from app.features.verification.analysis.decisions import (
     decide_source,
 )
 from app.features.verification.pipeline.context import PipelineContext
-from app.features.verification.schemas import DateAnalysis, SearchAccounting
+from app.features.verification.schemas import (
+    DateAnalysis,
+    ManipulationFlagsSchema,
+    SearchAccounting,
+)
 
 logger = structlog.get_logger(__name__)
 _SETTINGS = get_settings()
@@ -38,12 +44,13 @@ class ClassifierStage:
              genuine original report look like a different article. An
              adequate search without a corresponding report is NOT_FOUND; a
              failed or inadequate search is INCOMPLETE.
-    CONTENT  Only once the source is CONFIRMED. ALTERED requires a concrete,
-             quotable discrepancy (or a validated contradiction). MATCHED
-             requires positive support for every applicable material claim.
-             Weak scores, neutral NLI, missing signals and checks that did
-             not run are INCOMPLETE — never an automatic ALTERED, and a
-             matching headline never hides an altered body.
+    CONTENT  Only once the source is CONFIRMED, by the local statement-by-
+             statement comparison (`analysis/content_check.py`), identical for
+             photo cards, headline-only and headline + body claims. ALTERED
+             requires a concrete, quotable difference; MATCHED requires every
+             material statement to be supported (verbatim, condensed or
+             paraphrased); missing or genuinely ambiguous evidence is
+             INCOMPLETE. A matching headline never hides an altered body.
     DATE     Claimed day vs the report's datePublished day in Asia/Dhaka,
              independent of content. Missing actual date -> INCOMPLETE; no
              claimed date -> not applicable.
@@ -53,6 +60,9 @@ class ClassifierStage:
     """
 
     stage_id = PipelineStageID.S11_CLASSIFIER
+
+    def __init__(self, content_comparator: ContentComparator | None = None) -> None:
+        self._comparator = content_comparator
 
     async def execute(self, context: PipelineContext) -> PipelineContext:
         t = _SETTINGS.classification
@@ -82,10 +92,7 @@ class ClassifierStage:
                 return context
 
             article = context.top_article
-            flags = context.manipulation_flags
-            content_status, content_basis = decide_content(
-                inp, t, concrete_failures=len(flags.discrepancies)
-            )
+            content_status, content_basis = await self._decide_content(context)
             context.content_status = content_status
             context.analysis.content_basis = content_basis
 
@@ -111,6 +118,35 @@ class ClassifierStage:
                 message=f"Classification failed: {exc}",
             ) from exc
 
+    async def _decide_content(self, context: PipelineContext) -> tuple[ContentStatus, list[str]]:
+        """The same statement-by-statement comparison for a photo-card
+        headline, a headline-only text claim and a headline + body claim."""
+        with_body = context.claim_scope == ClaimScope.HEADLINE_WITH_BODY and context.has_body
+        if self._comparator is None:
+            context.manipulation_flags = ManipulationFlagsSchema(
+                check_states={
+                    "headline": CheckState.NOT_EVALUATED,
+                    "body": CheckState.NOT_EVALUATED if with_body else CheckState.NOT_APPLICABLE,
+                }
+            )
+            return ContentStatus.INCOMPLETE, ["local content comparison is not configured"]
+
+        article = context.top_article
+        check = await self._comparator.compare(
+            context.normalized_headline,
+            context.normalized_body if with_body else None,
+            article.title or "",
+            article.body or "",
+        )
+        context.analysis.content_check = check
+        context.manipulation_flags, context.detected_manipulations = content_flags(
+            check, with_body=with_body
+        )
+        if check.reason:
+            context.record_stage_error(self.stage_id, check.reason)
+            context.analysis.stage_errors = dict(context.stage_errors)
+        return decide_content(check)
+
     # ── inputs ──────────────────────────────────────────────────────────
 
     @staticmethod
@@ -120,25 +156,13 @@ class ClassifierStage:
 
     def _build_inputs(self, context: PipelineContext) -> DecisionInputs:
         m = self._metric
-        states = dict(context.manipulation_flags.check_states)
-        if not states and context.has_evidence:
-            # S10 produced nothing: the checks did not run, which is NOT a pass.
-            states = {"alteration_checks": CheckState.NOT_EVALUATED}
         return DecisionInputs(
             scope=context.claim_scope,
             headline_similarity=m(context, "headline_similarity"),
-            passage_similarity=m(context, "passage_similarity"),
             headline_keyword_coverage=m(context, "headline_keyword_coverage"),
             passage_keyword_coverage=m(context, "passage_keyword_coverage"),
             body_similarity=m(context, "body_similarity"),
-            body_min_chunk_similarity=context.body_min_chunk_similarity,
-            body_keyword_coverage=m(context, "body_keyword_coverage"),
-            body_complete=context.body_complete,
             entity_coverage=m(context, "entity_match"),
-            check_states=states,
-            discrepancy_count=len(context.manipulation_flags.discrepancies),
-            contradiction=context.scores.contradiction_score,
-            nli_premise_is_passages=context.nli_premise == "relevant_passages",
         )
 
     @staticmethod

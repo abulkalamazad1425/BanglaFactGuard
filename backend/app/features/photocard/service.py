@@ -10,7 +10,7 @@ Flow
 2. ``process_submission`` is what the job worker runs, with its own DB
    session: load the stored image -> OCR -> Gemini headline extraction (the
    existing deterministic extractor on any failure / invalid / unusable
-   output) -> the shared 12-stage pipeline against the extracted headline and
+   output) -> shared retrieval plus photo-card content comparison against the headline and
    the USER'S claimed source/date. Image-detected source/date are
    supplementary metadata and never override the user's values.
 
@@ -46,6 +46,7 @@ from app.features.nlp.ner_service import NERService
 from app.features.nlp.nli_service import NLIService
 from app.features.notifications.service import notify_once
 from app.features.photocard.claim_extractor import normalize_for_match
+from app.features.photocard.content_pipeline import build_photocard_stages, compute_photocard_hash
 from app.features.photocard.gemini_extractor import HeadlineExtraction, extract_headline
 from app.features.photocard.ocr_service import (
     BanglaOcrService,
@@ -69,13 +70,10 @@ from app.features.submissions.repository import (
 )
 from app.features.verification.job_repository import VerificationJobRepository
 from app.features.verification.pipeline.context import build_context
-from app.features.verification.pipeline.factory import build_verification_stages
 from app.features.verification.pipeline.orchestrator import PipelineOrchestrator
 from app.features.verification.presenter import load_verification_response
 from app.features.verification.repository import ResultRepository
 from app.features.verification.reuse import ResultReuseService
-from app.shared.utils.bangla_normalizer import normalize_bangla_digits
-from app.shared.utils.hashing import compute_claim_hash
 
 logger = structlog.get_logger(__name__)
 _SETTINGS = get_settings()
@@ -258,7 +256,7 @@ class PhotoCardService:
         )
 
         conflict_warnings = _detect_conflicts(extraction, claimed_source_text, published_date)
-        all_warnings = [*extraction.warnings, *conflict_warnings]
+        all_warnings = _without_date_warnings([*extraction.warnings, *conflict_warnings])
 
         # Persist OCR + provenance regardless of extraction outcome.
         ocr_record.raw_extracted_text = ocr_output.text
@@ -285,10 +283,9 @@ class PhotoCardService:
             )
 
         submission.headline = extraction.headline[:2000]
-        submission.content_hash = compute_claim_hash(
+        submission.content_hash = compute_photocard_hash(
             extraction.headline,
             canonical,
-            ClaimScope.HEADLINE_ONLY,
             published_date=published_date,
         )
         await self.submission_repo.set_phase(submission_id, "VERIFYING")
@@ -376,7 +373,7 @@ class PhotoCardService:
             detected_sources=[],
             detected_source_text=result.detected_source_text,
             detected_date_text=result.detected_date_text,
-            source_date_conflict=bool(result.extraction_warnings),
+            source_date_conflict=result.source_date_conflict,
             ocr_raw_text=result.ocr_raw_text or "",
             ocr_engine=result.ocr_engine or "unknown",
             ocr_confidence=result.ocr_confidence,
@@ -388,8 +385,8 @@ class PhotoCardService:
         )
 
     def _build_stages(self) -> list:
-        """The verification pipeline, assembled exactly as ``/verify`` builds it."""
-        return build_verification_stages(
+        """Shared retrieval with the photo-card-only content comparison policy."""
+        return build_photocard_stages(
             submission_repo=self.submission_repo,
             result_repo=self.result_repo,
             article_repo=self.article_repo,
@@ -421,7 +418,8 @@ class PhotoCardService:
             original_status = original.status if original else None
         from app.features.verification.presenter import effective_status
 
-        warnings = list(ocr_record.extraction_warnings or []) if ocr_record else []
+        # Also suppress historical OCR-date warnings saved before this policy.
+        warnings = _without_date_warnings(ocr_record.extraction_warnings or []) if ocr_record else []
         return PhotoCardResultResponse(
             submission_id=submission.id,
             status=effective_status(submission, original_status),
@@ -488,10 +486,10 @@ def _detect_conflicts(
     claimed_source_text: str,
     published_date: date | None,
 ) -> list[str]:
-    """Image-detected source/date text is preserved and surfaced, never used
-    to silently override the user's own claimed_source_text/published_date.
-    When the two disagree, that disagreement is recorded here rather than
-    resolved — see docs/06-ai-engineering-design.md photo-card section."""
+    """Compare the detected outlet only. Extracted dates are archival metadata:
+    never compare them with a supplied date or generate a date warning.
+    published_date remains accepted for compatibility with existing callers.
+    """
     conflicts: list[str] = []
 
     if extraction.detected_source_text and _source_text_conflicts(
@@ -502,18 +500,6 @@ def _detect_conflicts(
             f'which does not match the claimed source "{claimed_source_text}" provided. '
             "Verification proceeded against the claimed source; this discrepancy is "
             "recorded for expert review."
-        )
-
-    if (
-        extraction.detected_date_text
-        and published_date is not None
-        and _date_text_conflicts(extraction.detected_date_text, published_date)
-    ):
-        conflicts.append(
-            f'The card\'s own text suggests a date ("{extraction.detected_date_text}") '
-            f"that does not clearly match the published date ({published_date.isoformat()}) "
-            "provided. Verification proceeded against the provided published date; this "
-            "discrepancy is recorded for expert review."
         )
 
     return conflicts
@@ -527,18 +513,11 @@ def _source_text_conflicts(detected: str, claimed: str) -> bool:
     return detected_norm not in claimed_norm and claimed_norm not in detected_norm
 
 
-def _date_text_conflicts(detected_text: str, published: date) -> bool:
-    """Best-effort and deliberately conservative: this is a presence check,
-    not a date parser. It only flags a conflict when the published date's
-    year does not appear anywhere in the detected text at all — a card
-    whose visible date text doesn't even share a year with what the user
-    entered is worth an expert's attention; anything short of that is too
-    easy to get wrong with text-only heuristics across date formats and is
-    left unflagged rather than risk a false positive."""
-    digits = re.sub(r"[^0-9]", "", normalize_bangla_digits(detected_text))
-    if not digits:
-        return False
-    return str(published.year) not in digits
+def _without_date_warnings(warnings: list[str]) -> list[str]:
+    """Filter OCR/extractor date commentary, including previously stored warnings.
+    This does not touch the verification pipeline's actual source-date result.
+    """
+    return [w for w in warnings if not re.search(r"\b(?:dates?|years?|months?)\b|তারিখ", w, re.IGNORECASE)]
 
 
 def _clamp(value: float | None) -> float | None:

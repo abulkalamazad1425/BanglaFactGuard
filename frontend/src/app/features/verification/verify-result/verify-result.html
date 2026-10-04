@@ -25,8 +25,8 @@
       @if (p.headline) {<h3 class="claim-preview">{{ p.headline }}</h3>} @else if (p.status === 'FAILED') {<p class="preview-placeholder">No headline could be read from this card.</p>} @else {<p class="preview-placeholder">Reading the headline from the card…</p>}
       @if (imageFailed) {<p class="field-hint">The submitted image is temporarily unavailable.</p>}
       <dl class="meta-grid"><div><dt>Claimed outlet</dt><dd>{{ p.claimed_source_text || 'Not recorded' }}</dd></div><div><dt>Claimed publication date</dt><dd>{{ p.published_date ? (p.published_date | date:'d MMM y') : 'Not provided' }}</dd></div><div><dt>Comparison scope</dt><dd>Headline only</dd></div><div><dt>Submitted</dt><dd>{{ p.created_at | date:'d MMM y' }}</dd></div></dl>
-      @if (p.source_date_conflict) {<div class="note warning"><strong>The card and submitted details differ.</strong><p>The detected source or date differs from what was entered. Verification uses the source and date supplied with the submission.</p></div>}
-      @if (p.detected_source_text || p.detected_date_text) {<dl class="meta-grid"><div><dt>Outlet read from the card</dt><dd>{{ p.detected_source_text || 'Not identified' }}</dd></div><div><dt>Date read from the card</dt><dd>{{ p.detected_date_text || 'Not identified' }}</dd></div></dl>}
+      @if (p.source_date_conflict) {<div class="note warning"><strong>The card and submitted source differ.</strong><p>The detected outlet differs from the claimed source. Verification uses the supplied source.</p></div>}
+      @if (p.detected_source_text) {<dl class="meta-grid"><div><dt>Outlet read from the card</dt><dd>{{ p.detected_source_text }}</dd></div></dl>}
       @if (p.ocr_raw_text) {<details><summary>View all text read from the image</summary><p class="long-text">{{ p.ocr_raw_text }}</p></details>}
       </div></div></section>
     }

@@ -5,8 +5,8 @@ The three dimensions are decided separately and from different evidence:
 * SOURCE   — did the claimed outlet publish a corresponding report?
              (article correspondence + search adequacy; NOT content match)
 * CONTENT  — does the claim carry the same material facts as that report?
-             (concrete discrepancies, positive support; never "similarity
-             was low")
+             (statement-by-statement evidence; a similarity score never
+             decides it either way)
 * DATE     — does the claimed day equal the report's datePublished day in
              Asia/Dhaka? (independent of content)
 
@@ -20,14 +20,18 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date
 
+from typing import TYPE_CHECKING
+
 from app.core.constants import (
-    CheckState,
     ClaimScope,
     ContentStatus,
     DateStatus,
     MetricState,
     SourceStatus,
 )
+
+if TYPE_CHECKING:
+    from app.features.verification.schemas import ContentCheck
 
 
 @dataclass
@@ -46,18 +50,10 @@ class Metric:
 class DecisionInputs:
     scope: ClaimScope
     headline_similarity: Metric = field(default_factory=Metric)
-    passage_similarity: Metric = field(default_factory=Metric)
     headline_keyword_coverage: Metric = field(default_factory=Metric)
     passage_keyword_coverage: Metric = field(default_factory=Metric)
     body_similarity: Metric = field(default_factory=Metric)
-    body_min_chunk_similarity: float | None = None
-    body_keyword_coverage: Metric = field(default_factory=Metric)
-    body_complete: bool = True
     entity_coverage: Metric = field(default_factory=Metric)
-    check_states: dict[str, CheckState] = field(default_factory=dict)
-    discrepancy_count: int = 0
-    contradiction: float | None = None
-    nli_premise_is_passages: bool = False
 
 
 @dataclass
@@ -144,110 +140,46 @@ def decide_source(
     ]
 
 
-def decide_content(
-    inp: DecisionInputs, t, *, concrete_failures: int
-) -> tuple[ContentStatus, list[str]]:
-    """ALTERED only on a concrete discrepancy (or reliable contradiction).
-    MATCHED only on positive support for every applicable material claim.
-    Anything else is INCOMPLETE — never an automatic ALTERED."""
-    if concrete_failures > 0:
-        return ContentStatus.ALTERED, [
-            f"{concrete_failures} concrete discrepancy(ies) between the claim and the source report"
-        ]
+def decide_content(check: ContentCheck) -> tuple[ContentStatus, list[str]]:
+    """Content from the statement-by-statement comparison (see
+    `analysis/content_check.py`).
 
-    if (
-        t.nli_bangla_validated
-        and inp.nli_premise_is_passages
-        and inp.contradiction is not None
-        and inp.contradiction >= t.contradiction_override_threshold
-    ):
-        return ContentStatus.ALTERED, [
-            f"validated NLI contradiction {inp.contradiction:.2f} against the relevant passages"
-        ]
-
-    missing: list[str] = []
-    support: list[str] = []
-
-    # Headline support
-    h = inp.headline_similarity
-    kt = inp.headline_keyword_coverage
-    kw_needed = t.support_keyword_coverage
-    ent = inp.entity_coverage
-    if ent.state == MetricState.UNAVAILABLE:
-        # Entities cannot be checked directly; require stricter lexical coverage
-        # (names are keywords) and say so.
-        kw_needed = t.support_keyword_coverage_no_ner
-        missing_note = "entity coverage unavailable (NER) — stricter keyword coverage required"
-    else:
-        missing_note = None
-
-    if h.ok and h.value >= t.support_headline_sim:
-        support.append(f"headline similarity {h.value:.2f}")
-    elif h.ok and inp.passage_similarity.ok and inp.passage_similarity.value >= t.support_headline_sim:
-        support.append(f"passage similarity {inp.passage_similarity.value:.2f}")
-    else:
-        missing.append(
-            "headline similarity below the support threshold"
-            if h.ok
-            else "headline similarity unavailable"
+    ALTERED   at least one material statement has a concrete, quotable
+              difference from the source.
+    MATCHED   every material statement is supported: verbatim, condensed
+              with its facts preserved, or a faithful paraphrase.
+    INCOMPLETE otherwise: the evidence needed is missing or genuinely
+              ambiguous. A low score alone never leads here, and absence
+              from the source is never ALTERED.
+    """
+    if check.reason:
+        return ContentStatus.INCOMPLETE, [check.reason]
+    contradicted = [f for f in check.findings if f.status == "CONTRADICTED"]
+    if contradicted:
+        return ContentStatus.ALTERED, [_describe(f) for f in contradicted]
+    open_ = [f for f in check.findings if f.status != "SUPPORTED"]
+    if check.findings and not open_ and not check.unchecked_statements:
+        shown = check.findings[:_MAX_BASIS]
+        basis = [_describe(f) for f in shown]
+        if len(check.findings) > len(shown):
+            basis.append(f"{len(check.findings) - len(shown)} more statement(s) likewise supported")
+        return ContentStatus.MATCHED, basis
+    basis = [_describe(f) for f in open_[:_MAX_BASIS]]
+    if len(open_) > _MAX_BASIS:
+        basis.append(f"{len(open_) - _MAX_BASIS} more statement(s) not established")
+    if check.unchecked_statements:
+        basis.append(
+            f"{check.unchecked_statements} submitted statement(s) exceeded the comparison limit and were not compared"
         )
+    return ContentStatus.INCOMPLETE, basis
 
-    if kt.ok and kt.value >= kw_needed:
-        support.append(f"headline keyword coverage {kt.value:.2f}")
-    elif kt.state == MetricState.EMPTY:
-        missing.append("claim yielded no keywords to compare")
-    else:
-        missing.append(
-            f"headline keyword coverage {kt.value:.2f} below {kw_needed:.2f}"
-            if kt.ok
-            else "headline keyword coverage unavailable"
-        )
 
-    if ent.ok:
-        if ent.value >= t.support_entity_coverage:
-            support.append(f"entity coverage {ent.value:.2f}")
-        else:
-            missing.append(f"entity coverage {ent.value:.2f}: some claimed entities were not found in the source")
-    elif missing_note:
-        missing.append(missing_note)
+_MAX_BASIS = 6
 
-    # Alteration checks that could not run block MATCHED (they are not passes).
-    for name, state in inp.check_states.items():
-        if state == CheckState.NOT_EVALUATED:
-            missing.append(f"{name} check could not be evaluated")
-        elif state == CheckState.PASSED:
-            support.append(f"{name} check passed")
 
-    # Body support only when a body was submitted.
-    if inp.scope == ClaimScope.HEADLINE_WITH_BODY:
-        b = inp.body_similarity
-        body_missing: list[str] = []
-        if not b.ok:
-            body_missing.append("submitted-body comparison unavailable")
-        else:
-            if b.value < t.support_body_similarity:
-                body_missing.append(f"body similarity {b.value:.2f} below {t.support_body_similarity:.2f}")
-            if (
-                inp.body_min_chunk_similarity is not None
-                and inp.body_min_chunk_similarity < t.support_body_min_chunk_similarity
-            ):
-                body_missing.append("part of the submitted body has no close counterpart in the source")
-            if inp.body_keyword_coverage.ok and inp.body_keyword_coverage.value < t.support_body_keyword_coverage:
-                body_missing.append("submitted-body keywords are not covered by the source")
-            if not inp.body_complete:
-                body_missing.append("the submitted body was too long to compare in full")
-            if not body_missing:
-                support.append(f"body similarity {b.value:.2f}")
-        missing.extend(body_missing)
-
-    if inp.contradiction is not None and inp.contradiction >= t.possible_contradiction:
-        missing.append(
-            f"possible contradiction signal {inp.contradiction:.2f} from an NLI model not validated on Bangla"
-        )
-
-    if not missing:
-        return ContentStatus.MATCHED, support
-    return ContentStatus.INCOMPLETE, [f"not established: {m}" for m in missing]
+def _describe(finding) -> str:
+    claim = finding.claim_text if len(finding.claim_text) <= 90 else finding.claim_text[:87] + "..."
+    return f'{finding.part} "{claim}": {finding.explanation.rstrip(". ")}'
 
 
 def decide_date(

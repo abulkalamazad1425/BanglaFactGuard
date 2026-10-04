@@ -72,14 +72,13 @@ class PhotoCardVerifyResponse(BaseModel):
     detected_date_text: str | None = Field(
         default=None,
         description=(
-            "Publish date text the extractor found on the card itself. "
-            "Never silently substituted for the user's published_date — "
-            "see source_date_conflict if the two disagree."
+            "Archival date text read from the card. Not compared with any "
+            "date, not displayed by the clients, and never used for warnings."
         ),
     )
     source_date_conflict: bool = Field(
         default=False,
-        description="True when the card's own detected source/date text disagrees with what the user provided — recorded, not resolved; see extraction_warnings for detail.",
+        description="Legacy field name: now only indicates detected source disagreement. Extracted dates never trigger a conflict.",
     )
 
     ocr_raw_text: str

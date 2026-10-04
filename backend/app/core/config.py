@@ -584,23 +584,21 @@ class EmailSettings(BaseSettings):
 
 
 class GeminiSettings(BaseSettings):
-    """Gemini is used for one narrow job: extracting a single news headline
-    from OCR'd photo-card text (see app/features/photocard/gemini_extractor.py).
-    It never sees the raw image, never produces a body/caption, and its
-    output is always validated against the OCR text it was given (a
-    "grounding" check) before being trusted — if the key is unset, the
-    request fails, the response is malformed, or grounding fails, callers
-    fall back to the existing deterministic extractor rather than erroring."""
+    """Gemini is used only for photo-card headline extraction.
+
+    Extraction keeps its deterministic fallback. Photo-card content comparison
+    uses the locally loaded NLP models and does not depend on these settings.
+    """
 
     model_config = SettingsConfigDict(env_prefix="GEMINI_")
 
     api_key: str = Field(
         default="",
-        description="Gemini API key. Empty disables Gemini — extraction falls back to the deterministic extractor for every request.",
+        description="Gemini API key for headline extraction. Empty uses the deterministic extractor.",
     )
     model_name: str = Field(
         default="gemini-2.0-flash",
-        description="Gemini model id used for headline extraction, e.g. gemini-2.0-flash.",
+        description="Gemini model id used for photo-card headline extraction only.",
     )
     base_url: str = Field(
         default="https://generativelanguage.googleapis.com/v1beta",
@@ -608,7 +606,7 @@ class GeminiSettings(BaseSettings):
     )
     timeout_seconds: int = Field(
         default=20,
-        description="HTTP timeout for a single Gemini extraction call.",
+        description="HTTP timeout for a Gemini headline extraction call.",
     )
     min_grounding_overlap: float = Field(
         default=0.5,

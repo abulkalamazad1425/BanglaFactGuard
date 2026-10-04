@@ -23,7 +23,7 @@ from app.features.photocard.gemini_extractor import HeadlineExtraction
 from app.features.photocard.ocr_service import OcrLine, OcrOutput
 from app.features.photocard.service import (
     PhotoCardService,
-    _date_text_conflicts,
+    _without_date_warnings,
     _detect_conflicts,
     _source_text_conflicts,
 )
@@ -61,19 +61,14 @@ def test_source_no_conflict_when_identical():
     assert _source_text_conflicts("prothomalo.com", "prothomalo.com") is False
 
 
-def test_date_conflict_when_year_absent():
-    assert _date_text_conflicts("১৫ মার্চ ২০২৪", date(2026, 5, 20)) is True
+def test_historical_and_extractor_date_warnings_are_hidden():
+    assert _without_date_warnings([
+        'The card\'s own text suggests a date ("৩ অন্টোবর ২০১৬") that does not clearly match the published date (2026-10-03) provided.',
+        "Printed year is unclear", "তারিখ অস্পষ্ট", "Headline OCR is uncertain",
+    ]) == ["Headline OCR is uncertain"]
 
 
-def test_date_no_conflict_when_year_present():
-    assert _date_text_conflicts("১৫ মার্চ ২০২৬", date(2026, 5, 20)) is False
-
-
-def test_date_no_conflict_when_text_has_no_digits():
-    assert _date_text_conflicts("গতকাল", date(2026, 5, 20)) is False
-
-
-def test_detect_conflicts_surfaces_both_when_both_disagree():
+def test_detect_conflicts_surfaces_only_source_when_both_disagree():
     extraction = HeadlineExtraction(
         headline="একটি শিরোনাম",
         detected_source_text="বিবিসি বাংলা",
@@ -83,7 +78,10 @@ def test_detect_conflicts_surfaces_both_when_both_disagree():
         model_version="gemini-2.0-flash",
     )
     warnings = _detect_conflicts(extraction, "prothomalo.com", date(2026, 5, 20))
-    assert len(warnings) == 2
+    assert len(warnings) == 1
+    assert "claimed source" in warnings[0]
+    extraction.detected_source_text = "prothomalo.com"
+    assert _detect_conflicts(extraction, "prothomalo.com", date(2026, 5, 20)) == []
 
 
 def test_detect_conflicts_empty_when_nothing_detected():
