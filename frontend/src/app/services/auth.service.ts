@@ -22,6 +22,64 @@ export class AuthService {
   readonly isAdmin = computed(() => this._user()?.role === 'admin');
   readonly isExpert = computed(() => this._user()?.role === 'expert' || this._user()?.role === 'admin');
 
+  // ── Proactive refresh ───────────────────────────────────────
+  // The access token is short-lived. It is renewed shortly BEFORE it expires
+  // (and whenever the tab wakes, regains focus or comes back online), so
+  // requests do not fail with 401 first. The session ends only on logout or
+  // when the server rejects the refresh token itself.
+  private static readonly REFRESH_LEAD_MS = 60_000;
+  private static readonly RETRY_MS = 30_000;
+  private refreshTimer?: ReturnType<typeof setTimeout>;
+
+  constructor() {
+    this.scheduleRefresh();
+    if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+      const wake = () => { if (document.visibilityState !== 'hidden') this.refreshIfExpiringSoon(); };
+      document.addEventListener('visibilitychange', wake);
+      window.addEventListener('focus', wake);
+      window.addEventListener('online', wake);
+      // Another tab rotated the shared tokens: follow its schedule.
+      window.addEventListener('storage', e => { if (e.key === null || e.key === 'bfg_access_token') this.scheduleRefresh(); });
+    }
+  }
+
+  /** Access-token expiry (ms since epoch) from its JWT `exp`, or null. */
+  private accessExpiry(): number | null {
+    const token = this.storage.getAccessToken();
+    const payload = token?.split('.')[1];
+    if (!payload) return null;
+    try {
+      const json = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
+      return typeof json.exp === 'number' ? json.exp * 1000 : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private scheduleRefresh(delayMs?: number): void {
+    clearTimeout(this.refreshTimer);
+    this.refreshTimer = undefined;
+    if (!this.storage.getRefreshToken()) return;
+    const expiry = this.accessExpiry();
+    if (delayMs === undefined) {
+      if (expiry === null) return;
+      delayMs = expiry - Date.now() - AuthService.REFRESH_LEAD_MS;
+    }
+    this.refreshTimer = setTimeout(() => this.refreshIfExpiringSoon(), Math.min(Math.max(delayMs, 0), 2_147_000_000));
+  }
+
+  /** Refresh now if the access token expires within the lead time. */
+  refreshIfExpiringSoon(): void {
+    if (!this.storage.getRefreshToken()) return;
+    const expiry = this.accessExpiry();
+    if (expiry === null) return; // undecodable: the 401 path still refreshes
+    if (expiry - Date.now() > AuthService.REFRESH_LEAD_MS) { this.scheduleRefresh(); return; }
+    this.refresh().subscribe({
+      // A network/server failure is not a logout: keep the session and retry.
+      error: err => { if (err?.status !== 401 && err?.status !== 403) this.scheduleRefresh(AuthService.RETRY_MS); },
+    });
+  }
+
   // ── Registration ────────────────────────────────────────────
   register(req: RegisterRequest): Observable<User> {
     return this.api.post<User>(API_ENDPOINTS.AUTH_REGISTER, req).pipe(
@@ -34,6 +92,7 @@ export class AuthService {
     return this.api.post<TokenResponse>(API_ENDPOINTS.AUTH_LOGIN, req).pipe(
       tap(tokens => {
         this.storage.setTokens(tokens.access_token, tokens.refresh_token);
+        this.scheduleRefresh();
         this._loadMe();
       })
     );
@@ -43,6 +102,7 @@ export class AuthService {
   private refreshRequest?: Observable<TokenResponse>;
 
   expireSession(): void {
+    clearTimeout(this.refreshTimer);
     this.storage.clearTokens();
     this._user.set(null);
     void this.router.navigate(['/auth/login']);
@@ -65,6 +125,7 @@ export class AuthService {
       // An explicit logout during refresh must not restore the session.
       if (this.storage.getRefreshToken() !== currentToken) throw new HttpErrorResponse({ status: 401 });
       this.storage.setTokens(tokens.access_token, tokens.refresh_token);
+      this.scheduleRefresh();
       return tokens;
     };
     this.refreshRequest = defer(() => typeof navigator !== 'undefined' && navigator.locks
@@ -86,6 +147,7 @@ export class AuthService {
       this.api.post(API_ENDPOINTS.AUTH_LOGOUT, { refresh_token: refreshToken })
         .subscribe({ error: () => { } }); // fire and forget
     }
+    clearTimeout(this.refreshTimer);
     this.storage.clearTokens();
     this._user.set(null);
     this.router.navigate(['/auth/login']);
@@ -140,6 +202,7 @@ export class AuthService {
   private _handleAuthSuccess(user: User): void {
     if (user.access_token) {
       this.storage.setTokens(user.access_token, user.refresh_token ?? '');
+      this.scheduleRefresh();
     }
     // Strip tokens from user object before storing
     const { access_token, refresh_token, token_type, expires_in, ...cleanUser } = user;

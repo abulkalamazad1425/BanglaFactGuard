@@ -133,7 +133,17 @@ class AuthService:
         if not user.is_active:
             raise InactiveAccountError()
 
-        old_token.revoked = True
+        # Rotation: the old token is not revoked outright but expires after a
+        # short grace window, so a client that never received the rotated pair
+        # (lost response, sleeping tab, concurrent tab) can still refresh
+        # instead of being logged out. Logout revokes immediately.
+        grace_until = datetime.now(timezone.utc) + timedelta(
+            seconds=get_settings().auth.refresh_rotation_grace_seconds
+        )
+        expires_at = old_token.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        old_token.expires_at = min(expires_at, grace_until)
         self._users.session.add(old_token)
 
         tokens = await self._issue_token_pair(user)

@@ -436,8 +436,22 @@ class AuthSettings(BaseSettings):
         description="Access token time-to-live in seconds",
     )
     refresh_token_ttl_seconds: int = Field(
-        default=604_800,
-        description="Refresh token time-to-live in seconds",
+        default=31_536_000,
+        description=(
+            "Refresh token time-to-live in seconds (default 365 days). Every "
+            "refresh issues a new token with a fresh lifetime, so a session "
+            "lasts until the user logs out (or is inactive for this long)."
+        ),
+    )
+    refresh_rotation_grace_seconds: int = Field(
+        default=120,
+        ge=0,
+        description=(
+            "How long a just-rotated refresh token stays usable. Covers a "
+            "refresh response that never reached the client (network drop, "
+            "sleeping tab) so the user is not logged out. Logout still "
+            "revokes immediately."
+        ),
     )
     bcrypt_rounds: int = Field(
         default=12,

@@ -15,7 +15,10 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def domain_error_handler(
         request: Request, exc: BanglaFactGuardError
     ) -> JSONResponse:
-        logger.warning(
+        # An expired access token is routine (the client refreshes and
+        # retries), not a fault worth a warning.
+        log = logger.info if type(exc).__name__ == "TokenExpiredError" else logger.warning
+        log(
             "domain_error",
             path=str(request.url),
             error_type=type(exc).__name__,
