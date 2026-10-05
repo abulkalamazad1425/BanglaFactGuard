@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from app.core.constants import (
     ClaimScope,
+    HeadlineCheckStatus,
     SearchProvider,
     SourceStatus,
     SubmissionStatus,
@@ -21,12 +22,7 @@ from app.features.submissions.models import Submission
 from app.features.submissions.repository import RetrievedArticleRepository
 from app.features.verification.models import VerificationResult
 from app.features.verification.repository import ResultRepository
-from app.features.verification.schemas import (
-    AnalysisDetails,
-    ManipulationFlagsSchema,
-    VerificationResponse,
-    VerificationScoresResponse,
-)
+from app.features.verification.schemas import AnalysisDetails, VerificationResponse
 
 
 def resolve_scope(submission: Submission, result: VerificationResult) -> ClaimScope:
@@ -69,23 +65,44 @@ def effective_status(submission: Submission, original_status: SubmissionStatus |
     return submission.status
 
 
-def scores_from_result(result: VerificationResult, scope: ClaimScope) -> VerificationScoresResponse:
-    body_applicable = scope == ClaimScope.HEADLINE_WITH_BODY
-    return VerificationScoresResponse(
-        semantic_similarity=result.semantic_similarity,
-        entity_match=result.entity_match,
-        keyword_overlap=result.keyword_overlap,
-        numerical_consistency=result.numerical_consistency,
-        contradiction_score=result.contradiction_score,
-        headline_similarity=result.headline_similarity,
-        # Never surface a body metric for a headline-only claim, even from a
-        # historical row that stored one.
-        body_similarity=result.body_similarity if body_applicable else None,
-        passage_similarity=result.passage_similarity,
-        headline_keyword_coverage=result.headline_keyword_coverage,
-        passage_keyword_coverage=result.passage_keyword_coverage,
-        body_keyword_coverage=result.body_keyword_coverage if body_applicable else None,
-    )
+def is_headline_result(result: VerificationResult) -> bool:
+    """True for rows written by the Headline Alteration pipeline. Older rows
+    carry a content-level verdict from a different comparison (headline AND
+    body, "no conflict -> matched"); it is never relabelled as a headline
+    verdict."""
+    return result.headline_check_status is not None
+
+
+def parse_analysis(raw: dict | None) -> AnalysisDetails | None:
+    """Validate the stored analysis blob, keeping every section that is still
+    valid. A section written in an older shape (e.g. a pre-v4 headline
+    detail) is dropped instead of hiding the whole result."""
+    if not raw:
+        return None
+    try:
+        return AnalysisDetails.model_validate(raw)
+    except Exception:  # noqa: BLE001
+        pass
+    kept: dict = {}
+    for key, value in raw.items():
+        if key not in AnalysisDetails.model_fields:
+            continue
+        try:
+            AnalysisDetails.model_validate({key: value})
+            kept[key] = value
+        except Exception:  # noqa: BLE001
+            continue
+    try:
+        return AnalysisDetails.model_validate(kept)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _headline_status(result: VerificationResult) -> HeadlineCheckStatus | None:
+    try:
+        return HeadlineCheckStatus(result.headline_check_status) if result.headline_check_status else None
+    except ValueError:
+        return None
 
 
 async def load_verification_response(
@@ -101,14 +118,16 @@ async def load_verification_response(
     scope = resolve_scope(submission, result)
     expert = await effective_expert_row(submission, result, result_repo)
     is_finalized = expert.overall_verdict is not None
+    current = is_headline_result(result)
 
     ai_source = result.source_status or SourceStatus.INCOMPLETE
+    ai_headline = result.content_status if current else None
     displayed_source = (expert.final_source_status if is_finalized else None) or ai_source
-    displayed_content = expert.final_content_status if is_finalized else result.content_status
+    displayed_content = expert.final_content_status if is_finalized else ai_headline
     displayed_date = expert.final_date_status if is_finalized else result.date_status
     was_overridden = is_finalized and (
         (expert.final_source_status is not None and expert.final_source_status != ai_source)
-        or (expert.final_content_status is not None and expert.final_content_status != result.content_status)
+        or (expert.final_content_status is not None and expert.final_content_status != ai_headline)
         or (expert.final_date_status is not None and expert.final_date_status != result.date_status)
     )
 
@@ -116,19 +135,12 @@ async def load_verification_response(
     articles = await article_repo.get_for_submission(
         origin_id, successful_only=True, order_by_rank=True, limit=3
     )
+    # The source S08 selected comes first even when it was not rank #1.
+    articles = sorted(articles, key=lambda a: a.id != result.top_article_id)
 
-    analysis = None
-    if result.analysis_details:
-        try:
-            analysis = AnalysisDetails.model_validate(result.analysis_details)
-        except Exception:  # a malformed historical payload must not hide the result
-            analysis = None
-
-    flags = (
-        ManipulationFlagsSchema(**result.manipulation_flags)
-        if result.manipulation_flags
-        else ManipulationFlagsSchema()
-    )
+    analysis = parse_analysis(result.analysis_details)
+    if analysis is not None and not current:
+        analysis.headline_alteration = None
 
     return VerificationResponse(
         submission_id=submission.id,
@@ -138,10 +150,11 @@ async def load_verification_response(
         review_pending=not is_finalized,
         was_overridden=was_overridden,
         ai_source_status=ai_source,
-        ai_content_status=result.content_status,
+        ai_content_status=ai_headline,
         ai_date_status=result.date_status,
         source_status=displayed_source,
         content_status=displayed_content,
+        headline_check_status=_headline_status(result),
         date_status=displayed_date,
         confidence=result.confidence or 0.0,
         reasoning=result.reasoning or "",
@@ -158,13 +171,12 @@ async def load_verification_response(
             )
             for a in articles
         ],
-        scores=scores_from_result(result, scope),
-        manipulation_flags=flags,
         normalized_source=submission.claimed_source_text,
         cached=result.reused_from_submission_id is not None,
         processing_time_ms=result.avg_verification_time_ms,
         created_at=result.created_at,
         claim_scope=scope,
         pipeline_version=result.pipeline_version,
+        legacy_result=not current,
         analysis=analysis,
     )

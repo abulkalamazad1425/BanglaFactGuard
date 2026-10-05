@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import uuid
 from datetime import datetime
 
 from pydantic import BaseModel, Field, model_validator
@@ -8,10 +7,12 @@ from pydantic import BaseModel, Field, model_validator
 from app.core.constants import (
     ContentStatus,
     DateStatus,
+    HeadlineCheckStatus,
     OverallVerdict,
     SourceStatus,
     SubmissionType,
 )
+from app.features.verification.schemas import BodySimilarityReport, HeadlineAlterationDetail
 
 
 class ExpertVoteRequest(BaseModel):
@@ -110,6 +111,18 @@ class ExpertQueueItemResponse(BaseModel):
     image_url: str | None = Field(
         default=None, description="Multimodal submissions only — the submitted card/photo"
     )
+    headline_check_status: HeadlineCheckStatus | None = Field(
+        default=None,
+        description="Processing status of the Headline Alteration check (why content_status may be null).",
+    )
+    headline_alteration: HeadlineAlterationDetail | None = Field(
+        default=None,
+        description="Headline Alteration detail (claim headline vs. source title only).",
+    )
+    body_similarity: BodySimilarityReport | None = Field(
+        default=None,
+        description="Claim body vs. source body similarity measurements - never a verdict.",
+    )
 
 
 class ExpertHistoryItemResponse(BaseModel):
@@ -140,12 +153,13 @@ class ExpertStatsResponse(BaseModel):
     total_votes: int
     correct_votes: int
     accuracy_pct: float | None
-    current_credibility: float
+    current_credibility: float | None
+    activation_threshold: int = 10
 
 
 class CredibilityScoreResponse(BaseModel):
     user_id: str
-    score: float
+    score: float | None
     total_votes: int
     correct_votes: int
     updated_at: datetime

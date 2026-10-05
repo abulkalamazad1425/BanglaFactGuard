@@ -19,25 +19,28 @@ The website and extension use English interface text while accepting Bangla clai
 
 | Method | Submission type | Inputs | Automated output |
 | --- | --- | --- | --- |
-| Text & source | `SOURCE_BASED` | Headline, claimed source; optional body and claimed publication date | Separate source, content and date findings with supporting evidence |
-| Photo card | `PHOTO_CARD` | Image, claimed source; optional claimed publication date | OCR/extracted headline verified against the supplied source |
+| Text & source | `SOURCE_BASED` | Headline, claimed source; optional body and claimed publication date | Separate source, Headline Alteration and date findings; four body similarity scores when a body is given |
+| Photo card | `PHOTO_CARD` | Image, claimed source; optional claimed publication date | Headline read from the image (Gemini, EasyOCR fallback) verified against the supplied source |
 | Text & image | `MULTIMODAL` | Headline, body text and image | Preliminary `FAKE` / `NON_FAKE` prediction |
 
 ### Source-based and photocard verification
 
-The shared verification pipeline normalizes the claim, resolves its source, checks cached results, searches for source articles, extracts and ranks evidence, and compares the claim with the retrieved report. Content comparison uses local embedding, NLI and NER services plus deterministic checks for material changes. A text submission with a body checks both the headline and body statements; a photocard checks its extracted headline only.
+The shared verification pipeline normalizes the claim, resolves its source, checks reusable results, searches for and ranks source articles, then decides each finding separately: source correspondence (S08), Headline Alteration (S09), body similarity (S10), date (S11), result assembly (S12) and persistence (S13). Local LaBSE, NLI and NER models are used; no external AI service is called for these decisions.
 
-Photocard headline extraction uses OCR, optionally Gemini, and a deterministic fallback. Gemini is used for headline extraction, not for the local content-comparison decision. Model names and thresholds are configurable; see [backend configuration](backend/.env.example) and [content-comparison design](docs/photocard-content-comparison.md).
+- **Headline Alteration** compares the claim headline with the selected source article's **title only** — never its body — for photo cards, headline-only claims and claims with a body alike. An exact match is `MATCHED` immediately. Otherwise deterministic rules (numbers, dates, negation, attribution, subject–object roles, named entities, …) and a semantic assessment (NLI in both directions plus LaBSE) always run: a material difference is `ALTERED`; `MATCHED` needs positive evidence of the same meaning. When neither can be established there is no verdict and `headline_check_status` says why.
+- **Body similarity** (claims with a body only) reports TF-IDF cosine, Jaccard, normalized Levenshtein and LaBSE embedding cosine similarity. These are measurements, never a verdict, and an unavailable score is never shown as 0.
+
+Evidence search creates source-restricted queries from the full headline, all its keywords, and the first 3 and first 4 keywords when available (dated variants of the headline and all-keyword queries when a date is supplied; at most six queries). Both the outlet's own internal search (when configured) and Google search run for every supported publisher. Off-source results are rejected.
+
+Photo cards: Gemini reads the headline, date and outlet name from the original image (transcription only, at most three attempts in total). Only if every attempt fails, EasyOCR and the deterministic extractor are used. Only the headline is verified; the date and outlet read from the card are shown for reference and never compared — the user's selected source and claimed date are used. See [Headline Alteration, body similarity and photo-card extraction](docs/headline-alteration-and-body-similarity.md) and [backend configuration](backend/.env.example).
 
 Result dimensions are independent:
 
 - **Source:** `CONFIRMED`, `NOT_FOUND` or `INCOMPLETE`.
-- **Content:** `MATCHED`, `ALTERED` or `INCOMPLETE` when source evidence is available.
+- **Headline Alteration:** `MATCHED` or `ALTERED` when a corresponding source report was found; otherwise no verdict, with a status (`SOURCE_NOT_FOUND`, `SOURCE_CHECK_INCOMPLETE`, `SOURCE_TITLE_MISSING`, `MODEL_UNAVAILABLE`, `UNDETERMINED`).
 - **Date:** `MATCHED`, `MISMATCHED` or `INCOMPLETE` when applicable.
 
-A missing source is not automatically a fake verdict. An incomplete search is not a confident negative. A date mismatch does not make matching content false. Automated confidence measurements are not the probability that a claim is true.
-
-**Photocard date policy:** dates read from the image may remain archival backend metadata, but are not displayed as an extracted-date field in the website or extension. They are not compared with other dates and do not generate date warnings. This also suppresses older saved extraction warnings. The user-supplied publication date can still be checked against the source article's publication date.
+A missing source is not automatically a fake verdict. An incomplete search is not a confident negative. A date mismatch does not make a matching headline false. Similarity scores and the correspondence strength are not the probability that a claim is true. The website's [FAQ](frontend/src/app/features/faq/faq.html) (`/faq`) explains these findings to users.
 
 ### Multimodal analysis
 
@@ -307,10 +310,36 @@ The suite includes deterministic model/service fakes and database tests. Depende
 
 ## Troubleshooting
 
+### NER model and verification timings
+
+Named-entity recognition uses `arafatfahim/BanglaTag`, a NER-fine-tuned
+`csebuetnlp/banglabert` checkpoint. Set `ML_NER_MODEL_NAME=arafatfahim/BanglaTag`
+in `backend/.env` and restart the backend after changing this setting.
+The base BanglaBERT pretraining checkpoint alone has no trained NER head.
+The service audits entity labels and a Bangla smoke sentence before enabling
+entity metrics; this does not constitute an accuracy benchmark. Institution
+and political-organization labels are mapped to ORG.
+
+Completed text/source and photo-card executions store measured stage durations
+under `verification_results.analysis_details.timings`, including S13 and,
+for photo cards, separate image-download/OCR/source-detection/headline-extraction
+times. Cached executions record only the stages actually executed. Queue wait,
+final transaction commit, expert review and notification polling are not stage
+processing time. Historical results without measurements cannot be broken down
+retroactively. No database migration is required for these JSON fields.
+
+From `backend`, generate a read-only report without resubmitting claims:
+
+```powershell
+.venv\Scripts\python.exe scripts/report_verification_timings.py --limit 10 --output ../docs/recent-verification-timings.md
+```
+
+Model reference: [BanglaTag model card](https://huggingface.co/arafatfahim/BanglaTag).
+
 - **Unknown claimed source:** seed/configure the registered publisher list and use the publisher named in the claim, not necessarily the website displaying it.
 - **Claims remain queued:** keep `JOBS_ENABLED=true`, the backend running, and the database/model/storage dependencies available.
 - **Multimodal unavailable:** check trained weights, tokenizer, model startup logs and MinIO.
-- **Photocard extraction fails:** check OCR installation/Bengali language data and image readability. Failed extraction is not a fake-news verdict.
+- **Photocard extraction fails:** check the Gemini key/model (`GEMINI_*`), the EasyOCR installation and image readability; the result page lists each failed attempt. Failed extraction is not a fake-news verdict.
 - **Facebook capture access error:** activate the Facebook tab and click the pinned extension toolbar icon before selecting an area. A side-panel button alone does not grant access to a new site.
 - **No desktop notification:** check extension ON state, its notification preference, Chrome/OS permissions and Activity. Browser sleep/closure can delay delivery.
 - **Connection settings missing:** the extension intentionally exposes them only to admins.
@@ -321,8 +350,33 @@ The suite includes deterministic model/service fakes and database tests. Depende
 - [Extension setup and usage](extension/README.md)
 - [Extension implementation plan](extension/IMPLEMENTATION_PLAN.md)
 - [Extension verification notes and manual checks](extension/TESTING.md)
-- [Current statement-by-statement content comparison](docs/photocard-content-comparison.md)
+- [Headline Alteration, body similarity and photo-card extraction](docs/headline-alteration-and-body-similarity.md)
 - [AI engineering design](docs/06-ai-engineering-design.md)
 - [Database cleanup notes](docs/database-cleanup-2026-10-03.md)
 
 Design documents can describe earlier iterations; the current implementation and API schemas determine runtime behavior.
+
+
+## UX and personal result notifications
+
+The website and extension use the same three methods: **Text & source**, **Photo card**, and **Text & image**. Every automatic result is preliminary. Text & image shows **Likely real / Likely fake**; the other methods show source, Headline Alteration and date findings, plus body similarity scores when a body was submitted. Final expert verdicts are **Fake, Real, Altered, Misleading**.
+
+- My Submissions includes all three methods. Expert queue and review history support search and pagination.
+- A new expert has no calculated credibility. Votes have weight **1** until **N completed reviews**; later votes use the configured accuracy tier.
+- The selected source and claimed date control photocard verification. The date and outlet read from the card are shown for reference only; they never trigger comparisons or conflict warnings.
+- Notifications are personal: signed-in submitters receive preliminary and final in-app updates; final results are also queued for email. Extension Activity/desktop alerts track that extension user's submissions. There is no all-facts alert feed.
+- Access-token expiry triggers a coordinated refresh; temporary network failures do not clear the website session.
+
+### Upgrade and email delivery
+
+Migration `c7e2a9d4f1b3` (Headline Alteration rework) deletes every submission and its dependent data (results, jobs, articles, queries, extraction records, expert reviews, multimodal analyses, result deliveries and submission notifications). Users, sources, voting configuration, credibility tiers, expert profiles and tokens are not changed. Back up first if old submissions matter.
+
+From `backend`, apply migration `b2f8a4d6c9e1` with `alembic upgrade head` using the project's configured environment, then restart the API. This adds `result_deliveries` and nullable expert credibility. Existing result stages are marked historical to prevent a deployment from emailing old results; later finalizations still notify their submitters.
+
+Set `EMAIL_WEBSITE_URL` to the website's public URL (local default: `http://localhost:4200`). Configure the existing `EMAIL_SMTP_HOST`, `EMAIL_SMTP_PORT`, `EMAIL_SMTP_USER`, `EMAIL_SMTP_PASSWORD`, `EMAIL_FROM_ADDRESS`, and `EMAIL_USE_TLS` settings. For a configured Gmail SMTP account, use its app password where required; the recipient is always the submitter's account email. Never commit credentials.
+
+The API's result-delivery worker reconciles saved results every 15 seconds. Final emails remain queued when SMTP is not configured and retry with backoff after delivery failures. SMTP delivery is at-least-once: a crash after SMTP acceptance but before recording success can produce a duplicate email. No browser tab needs to remain open for server notifications/email. Chrome desktop alerts still require Chrome, an enabled extension, and notification permission.
+
+Rebuild the frontend and extension after updating, then reload `extension/dist` at `chrome://extensions`.
+
+Implementation plan: [UX, sessions and result delivery](docs/ux-consistency-and-notifications-plan.md).

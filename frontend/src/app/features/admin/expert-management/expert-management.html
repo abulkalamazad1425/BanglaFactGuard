@@ -35,7 +35,7 @@
                     <span [style.color]="credColor(exp.credibility_score!)">
                       {{ (exp.credibility_score! * 100).toFixed(1) }}%
                     </span>
-                  } @else { <span class="text-muted">—</span> }
+                  } @else { <span class="text-muted">Not yet calculated</span> }
                 </td>
                 <td>{{ exp.total_votes }}</td>
                 <td>

@@ -2,17 +2,29 @@
 // Verification Models — synced with backend schemas.py
 // ============================================================
 
-// ── 3-dimensional verdict ────────────────────────────────────────────
-// Source, content and date are checked independently: a date mismatch
-// never implies false content, and content is only evaluated once the
-// source is CONFIRMED.
-// INCOMPLETE means the check itself could not be completed (search/retrieval/
-// extraction failure, or the source's own publication date was undeterminable)
-// — distinct from a completed check that found a negative result (NOT_FOUND,
-// MISMATCHED). A failed check must never be displayed as a confident negative.
+// ── Independent findings ─────────────────────────────────────────────
+// Source, Headline Alteration and date are decided separately: a date
+// mismatch never implies an altered headline, and the headline is only
+// compared once the source is CONFIRMED.
+// INCOMPLETE means the check itself could not be completed (search/retrieval
+// failure, or the source's own publication date was undeterminable) — never a
+// confident negative such as NOT_FOUND or MISMATCHED.
 export type SourceStatus = 'CONFIRMED' | 'NOT_FOUND' | 'INCOMPLETE';
-export type ContentStatus = 'MATCHED' | 'ALTERED' | 'INCOMPLETE';
+/** Headline Alteration verdict: the claim headline vs the source TITLE only.
+ *  There is no third verdict; when none was reached `content_status` is null
+ *  and `headline_check_status` says why. */
+export type ContentStatus = 'MATCHED' | 'ALTERED';
 export type DateStatus = 'MATCHED' | 'MISMATCHED' | 'INCOMPLETE';
+/** Processing status of the headline check — separate from the verdict. */
+export type HeadlineCheckStatus =
+  | 'COMPLETED'
+  | 'SOURCE_NOT_FOUND'
+  | 'SOURCE_CHECK_INCOMPLETE'
+  | 'SOURCE_TITLE_MISSING'
+  | 'MODEL_UNAVAILABLE'
+  | 'UNDETERMINED';
+/** Whether the claim-body vs source-body scores were computed. */
+export type BodyComparisonStatus = 'COMPUTED' | 'SKIPPED' | 'UNAVAILABLE';
 
 // ── Overall verdict — voted on by experts for EVERY submission type
 // (source-based, photo card, and multimodal alike), independently of the
@@ -34,10 +46,6 @@ export type SubmissionType = 'SOURCE_BASED' | 'MULTIMODAL' | 'PHOTO_CARD';
  *  HEADLINE_ONLY (no submitted body exists to compare). */
 export type ClaimScope = 'HEADLINE_ONLY' | 'HEADLINE_WITH_BODY';
 
-/** Outcome of one alteration check. PASSED is the only state that may be shown
- *  as a green check; NOT_EVALUATED (could not run) and NOT_APPLICABLE are not passes. */
-export type CheckState = 'PASSED' | 'FAILED' | 'NOT_EVALUATED' | 'NOT_APPLICABLE';
-
 /** Why a score is (or is not) a number. */
 export type MetricState = 'COMPUTED' | 'NOT_APPLICABLE' | 'EMPTY' | 'UNAVAILABLE';
 
@@ -54,36 +62,12 @@ export interface VerificationRequest {
 }
 
 // ── Sub-types returned in VerificationResponse ───────────────────────
-/** Measurements, not probabilities of truth. null = no measurement; the reason
- *  is in `analysis.metrics[name].state` - never render null as 0% or 100%. */
-export interface VerificationScores {
-  semantic_similarity?: number | null;
-  entity_match?: number | null;
-  keyword_overlap?: number | null;
-  numerical_consistency?: number | null;
-  contradiction_score?: number | null;
-  headline_similarity?: number | null;
-  /** Submitted body vs source passages. null for HEADLINE_ONLY (always for photo cards). */
-  body_similarity?: number | null;
-  passage_similarity?: number | null;
-  headline_keyword_coverage?: number | null;
-  passage_keyword_coverage?: number | null;
-  body_keyword_coverage?: number | null;
-}
-
+/** A source-correspondence measurement. null value = no measurement (see state), never 0. */
 export interface MetricDetail {
   state: MetricState;
   value?: number | null;
   reason?: string | null;
   details?: Record<string, unknown>;
-}
-
-export interface EvidencePassage {
-  text: string;
-  score: number;
-  location: string;
-  first_sentence?: number | null;
-  last_sentence?: number | null;
 }
 
 export interface SearchAccounting {
@@ -108,58 +92,79 @@ export interface DateAnalysis {
   timezone?: string;
 }
 
-export interface NLIAnalysis {
-  entailment?: number | null;
-  neutral?: number | null;
-  contradiction?: number | null;
-  premise?: string | null;
-  reliability?: string;
+/** One material difference between the claim headline and the source title. */
+export interface HeadlineDifference {
+  kind: string;
+  detail: string;
+  claim_text: string;
+  source_text: string;
+}
+
+export interface HeadlineSemanticAssessment {
+  available: boolean;
+  entailment_title_to_claim?: number | null;
+  contradiction_title_to_claim?: number | null;
+  entailment_claim_to_title?: number | null;
+  contradiction_claim_to_title?: number | null;
+  /** Raw LaBSE cosine, -1..1. */
+  embedding_cosine?: number | null;
+  reason?: string | null;
+}
+
+/** Headline Alteration — the claim headline compared ONLY with the selected
+ *  source article's title (never its body). */
+export interface HeadlineAlterationDetail {
+  status: HeadlineCheckStatus;
+  verdict?: ContentStatus | null;
+  /** Short, evidence-based basis for the verdict or for its absence. */
+  reason: string;
+  /** True when decided by an exact match before any alteration analysis ran. */
+  exact_match: boolean;
+  basis?: string;
+  claim_headline: string;
+  source_title?: string | null;
+  source_publisher?: string | null;
+  source_url?: string | null;
+  differences?: HeadlineDifference[];
+  semantic?: HeadlineSemanticAssessment | null;
+  ner_available?: boolean;
+  method?: string | null;
+}
+
+/** One body similarity measurement. `value` is the displayed 0–1 score and is
+ *  null when unavailable — never a default 0. */
+export interface BodySimilarityMetric {
+  available: boolean;
+  value?: number | null;
+  raw_value?: number | null;
+  reason?: string | null;
+  details?: Record<string, unknown>;
+}
+
+/** Claim body vs source body — similarity MEASUREMENTS only, never a truth,
+ *  alteration or contradiction verdict. */
+export interface BodySimilarityReport {
+  status: BodyComparisonStatus;
+  reason?: string | null;
+  tfidf_cosine?: BodySimilarityMetric | null;
+  jaccard?: BodySimilarityMetric | null;
+  normalized_levenshtein?: BodySimilarityMetric | null;
+  semantic_cosine?: BodySimilarityMetric | null;
+  claim_chars?: number | null;
+  source_chars?: number | null;
 }
 
 export interface AnalysisDetails {
   pipeline_version?: string | null;
   claim_scope?: ClaimScope | null;
-  metrics: Record<string, MetricDetail>;
-  passages: EvidencePassage[];
-  nli?: NLIAnalysis | null;
+  /** Source-correspondence measurements. */
+  metrics?: Record<string, MetricDetail>;
   search?: SearchAccounting | null;
+  source_basis?: string[];
+  headline_alteration?: HeadlineAlterationDetail | null;
+  body_similarity?: BodySimilarityReport | null;
   date?: DateAnalysis | null;
-  source_basis: string[];
-  content_basis: string[];
   stage_errors?: Record<string, string>;
-}
-
-export interface DiscrepancyDetail {
-  kind: string;
-  claim_text: string;
-  evidence_text?: string | null;
-  detail: string;
-  part: 'headline' | 'body' | string;
-}
-
-export interface AlteredNumberDetail {
-  claimed: string;
-  nearest_in_article?: string | null;
-}
-
-export interface SubstitutedEntityDetail {
-  entity_type: string;
-  claimed: string[];
-  article_same_type: string[];
-}
-
-/** A boolean is true ONLY when a concrete discrepancy was found; false does NOT
- *  mean "verified". Read `check_states`; an empty map (historical rows) means
- *  the checks were not evaluated. */
-export interface ManipulationFlags {
-  headline_manipulated?: boolean;
-  body_altered?: boolean;
-  numbers_altered?: boolean;
-  entities_replaced?: boolean;
-  altered_numbers?: AlteredNumberDetail[];
-  substituted_entities?: SubstitutedEntityDetail[];
-  check_states?: Record<string, CheckState>;
-  discrepancies?: DiscrepancyDetail[];
 }
 
 export interface MatchedArticle {
@@ -208,13 +213,14 @@ export interface VerificationResponse {
   ai_content_status?: ContentStatus | null;
   ai_date_status?: DateStatus | null;
   source_status: SourceStatus;
+  /** Headline Alteration verdict (MATCHED | ALTERED), or null. */
   content_status?: ContentStatus | null;
+  headline_check_status?: HeadlineCheckStatus | null;
   date_status?: DateStatus | null;
+  /** Source-correspondence strength — not a probability of truth. */
   confidence: number;
   reasoning: string;
   matched_articles: MatchedArticle[];
-  scores: VerificationScores;
-  manipulation_flags: ManipulationFlags;
   normalized_source?: string | null;
   cached: boolean;
   processing_time_ms?: number | null;
@@ -223,11 +229,14 @@ export interface VerificationResponse {
   /** What `confidence` means: a measurement summary, not a probability of truth. */
   confidence_meaning?: string;
   pipeline_version?: string | null;
+  /** Stored by the pre-Headline-Alteration pipeline: its old content verdict is not shown. */
+  legacy_result?: boolean;
   analysis?: AnalysisDetails | null;
 }
 
 // ── Submission history item from GET /users/me/submissions ───────────
 export interface SubmissionSummary {
+  prediction?: string | null;
   submission_id: string;
   submission_type: SubmissionType;
   /** null for a just-accepted photo card (the headline is extracted in the background). */
@@ -314,35 +323,4 @@ export interface SubmissionLookup {
   processing_phase?: ProcessingPhase | null;
   failure_reason?: string | null;
   created_at: string;
-}
-
-// ── Old evidence/check types kept for backward compat ────────────────
-export interface EvidenceArticle {
-  title: string;
-  url: string;
-  source: string;
-  semantic_similarity?: number;
-  nli_score?: number;
-  published_at?: string;
-}
-
-export interface VerificationCheck {
-  stage: string;
-  passed: boolean;
-  detail?: string;
-}
-
-// Kept for verify-result component compatibility
-export interface VerificationResult {
-  submission_id: string;
-  source_status: SourceStatus;
-  content_status?: ContentStatus | null;
-  date_status?: DateStatus | null;
-  confidence: number;
-  explanation?: string;
-  evidence_articles?: EvidenceArticle[];
-  checks?: VerificationCheck[];
-  processing_time_ms?: number;
-  created_at?: string;
-  status?: SubmissionStatus;
 }

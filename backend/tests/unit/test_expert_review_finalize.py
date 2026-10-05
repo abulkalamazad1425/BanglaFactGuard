@@ -60,12 +60,15 @@ def _config(
 def _make_service():
     review_repo = AsyncMock()
     profile_repo = AsyncMock()
+    profile_repo.get_or_create.return_value = SimpleNamespace(total_votes=0, correct_votes=0)
     tier_repo = AsyncMock()
     submission_repo = AsyncMock()
     result_repo = AsyncMock()
     multimodal_repo = AsyncMock()
     voting_config_repo = AsyncMock()
     review_repo.session = MagicMock()
+    review_repo.session.refresh = AsyncMock()
+    voting_config_repo.get_or_create.return_value = _config()
     svc = ExpertReviewService(
         review_repo=review_repo,
         profile_repo=profile_repo,

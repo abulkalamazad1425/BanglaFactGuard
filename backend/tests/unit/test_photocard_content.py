@@ -1,20 +1,18 @@
-"""Photo-card wiring: same content check as text claims, own result identity.
+"""Photo-card wiring: the same stages and headline rule as text claims, its own result identity."""
 
-The content policy itself is pinned in test_content_check.py.
-"""
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from app.core.constants import ClaimScope, PipelineStageID
-from app.features.photocard.content_pipeline import (
+from app.features.photocard.verification_stages import (
     PhotocardNormalizerStage,
     build_photocard_stages,
     compute_photocard_hash,
 )
-from app.features.verification.analysis.content_check import ContentComparator
+from app.features.verification.analysis.headline_comparison import HeadlineComparator
 from app.features.verification.pipeline.factory import build_verification_stages
-from app.features.verification.pipeline.stages.s11_classifier import ClassifierStage
+from app.features.verification.pipeline.stages.s09_headline_alteration import HeadlineAlterationStage
 from app.shared.utils.hashing import compute_claim_hash
 from pipeline_helpers import make_context
 
@@ -33,13 +31,12 @@ def test_photo_cards_and_text_share_every_stage_but_the_normalizer():
     text = build_verification_stages(**kwargs)
     card = build_photocard_stages(**kwargs)
     assert [s.stage_id for s in text] == [s.stage_id for s in card]
-    assert PipelineStageID.S10_MANIPULATION_DETECTOR not in {s.stage_id for s in text}
     assert type(card[0]) is PhotocardNormalizerStage
     assert all(type(a) is type(b) for a, b in zip(text[1:], card[1:]))
-    classifier = next(s for s in card if s.stage_id == PipelineStageID.S11_CLASSIFIER)
-    assert type(classifier) is ClassifierStage
-    comparator = classifier._comparator
-    assert isinstance(comparator, ContentComparator)
+    headline = next(s for s in card if s.stage_id == PipelineStageID.S09_HEADLINE_ALTERATION)
+    assert type(headline) is HeadlineAlterationStage
+    comparator = headline._comparator
+    assert isinstance(comparator, HeadlineComparator)
     assert comparator.nli is kwargs["nli_service"] and comparator.ner is kwargs["ner_service"]
     assert comparator.embedder is kwargs["embedding_service"]
 

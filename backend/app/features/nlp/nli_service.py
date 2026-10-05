@@ -1,7 +1,8 @@
 ﻿"""
-app/services/nli_service.py
-=============================
-Natural Language Inference (NLI) service for contradiction detection (Stage 9).
+app/features/nlp/nli_service.py
+================================
+Natural Language Inference (NLI) service used by the Headline Alteration
+semantic assessment (S09: source title vs claim headline).
 
 ## Model
 
@@ -29,7 +30,7 @@ well-documented mechanism this family of models relies on for languages
 outside its evaluation set, but is not independently validated here. A
 genuine Bangla NLI accuracy evaluation (labeled Bangla NLI pairs) should
 still happen separately before this score is trusted for high-stakes
-decisions; see docs/06-ai-engineering-design.md S09.
+decisions.
 
 ## Why a cross-encoder (not bi-encoder)?
 
@@ -49,8 +50,8 @@ HuggingFace `pipeline` is synchronous; runs in a dedicated `ThreadPoolExecutor`.
 ## Output
 
 Returns `NLIScoresSchema` with entailment/contradiction/neutral probabilities.
-The `contradiction_score` field in `VerificationScoresSchema` is set to the
-NLI contradiction probability.
+Used only by the Headline Alteration comparison (source title vs claim
+headline, in both directions) - never on article bodies.
 """
 
 from __future__ import annotations

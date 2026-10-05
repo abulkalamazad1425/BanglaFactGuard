@@ -21,7 +21,7 @@ from app.core.constants import (
 )
 from app.core.exceptions import ImageStorageUnavailableError, PermanentJobError
 from app.features.notifications.models import Notification
-from app.features.photocard.gemini_extractor import HeadlineExtraction
+from app.features.photocard.claim_extraction import METHOD_GEMINI, PhotocardExtraction
 from app.features.photocard.ocr_service import OcrLine, OcrOutput
 from app.features.photocard.service import PhotoCardService
 from app.features.sources.repository import SourceRepository
@@ -35,7 +35,7 @@ from app.features.submissions.repository import (
 from app.features.verification.job_repository import VerificationJobRepository
 from app.features.verification.jobs import JobDeps, VerificationJobWorker, execute_job
 from app.features.verification.models import VerificationJob, VerificationResult
-from app.features.verification.pipeline.stages.s12_persistence import PersistenceStage
+from app.features.verification.pipeline.stages.s13_result_persistence import ResultPersistenceStage
 from app.features.verification.repository import ResultRepository
 from app.shared.utils.hashing import compute_claim_hash
 from db_helpers import add_completed_submission, add_source, add_user, make_session_factory
@@ -78,17 +78,24 @@ def _ocr() -> MagicMock:
     return ocr
 
 
-def _extraction(headline: str = HEADLINE, **kw) -> HeadlineExtraction:
+def _extraction(headline: str = HEADLINE, **kw) -> PhotocardExtraction:
     base = dict(
         headline=headline,
-        detected_source_text=None,
-        detected_date_text=None,
-        warnings=[],
-        extractor_used="EXISTING_FALLBACK",
-        model_version=None,
+        date_text=None,
+        source_text=None,
+        method=METHOD_GEMINI if headline else None,
+        gemini_attempts=1,
+        fallback_used=False,
+        model_version="gemini-test",
+        diagnostics={"gemini": {"model": "gemini-test", "attempts": [{"attempt": 1, "outcome": "success"}]}},
+        timings_ms={"gemini_extraction": 5},
     )
     base.update(kw)
-    return HeadlineExtraction(**base)
+    return PhotocardExtraction(**base)
+
+
+def _extractor(extraction: PhotocardExtraction):
+    return lambda **kw: MagicMock(extract=AsyncMock(return_value=extraction))
 
 
 def _svc(session, *, storage=None, ocr=None) -> PhotoCardService:
@@ -143,7 +150,7 @@ class FakeOrchestrator:
         )
         ctx = await run_analysis(ctx)
         session = self.repo.session
-        stage = PersistenceStage(
+        stage = ResultPersistenceStage(
             self.repo, ResultRepository(session), RetrievedArticleRepository(session), MagicMock(set_claim_pointer=AsyncMock()), session=session
         )
         return await stage.execute(ctx)
@@ -157,13 +164,7 @@ def patch_pipeline(monkeypatch):
     monkeypatch.setattr(
         "app.features.photocard.service.build_photocard_stages", lambda **kw: []
     )
-    monkeypatch.setattr(
-        "app.features.photocard.service.extract_headline", AsyncMock(return_value=_extraction())
-    )
-    monkeypatch.setattr(
-        "app.features.photocard.service.SourceDetector",
-        lambda repo: MagicMock(detect=AsyncMock(return_value=[])),
-    )
+    monkeypatch.setattr("app.features.photocard.service.PhotocardClaimExtractor", _extractor(_extraction()))
 
 
 async def _accept(session, user_id=None, **kw):
@@ -307,12 +308,19 @@ async def test_job_processes_card_into_a_saved_headline_only_result(db):
         detail = await _svc(s).get_result(sub.id)
     assert row.status == SubmissionStatus.EXPERT_REVIEW and row.headline == HEADLINE
     assert row.content_hash == compute_claim_hash(HEADLINE, "prothomalo.com", ClaimScope.HEADLINE_ONLY, published_date=CLAIMED_DATE)
-    assert res.claim_scope == "HEADLINE_ONLY" and res.body_similarity is None and res.ai_consensus_label is None
+    assert res.claim_scope == "HEADLINE_ONLY" and res.body_comparison_status == "SKIPPED"
+    assert res.ai_consensus_label is None and res.headline_check_status == "COMPLETED"
+    timings = res.analysis_details["timings"]
+    assert set(timings["preprocessing_ms"]) == {"image_download", "gemini_extraction"}
+    assert all(ms >= 0 for ms in timings["preprocessing_ms"].values())
+    assert timings["cache_hit"] is False
     assert [n.link_url for n in notes] == [f"/verify/{sub.id}"]  # one notification, correct link
     # the detail page works: image, extracted headline, headline-only scope, no overall verdict
     assert detail.image_url and detail.headline == HEADLINE and detail.claim_scope == ClaimScope.HEADLINE_ONLY
     assert detail.verification.overall_verdict is None and detail.verification.review_pending
-    assert detail.verification.scores.body_similarity is None
+    assert detail.verification.analysis.body_similarity.status.value == "SKIPPED"
+    assert detail.extraction_method == "GEMINI_IMAGE" and detail.extraction_attempts == 1
+    assert detail.fallback_used is False and detail.ocr_engine is None
 
 
 # ── 22: user source/date are authoritative ───────────────────────────────
@@ -320,8 +328,8 @@ async def test_job_processes_card_into_a_saved_headline_only_result(db):
 
 async def test_image_detected_source_and_date_never_overwrite_user_values(db, monkeypatch):
     monkeypatch.setattr(
-        "app.features.photocard.service.extract_headline",
-        AsyncMock(return_value=_extraction(detected_source_text="যুগান্তর", detected_date_text="১ জানুয়ারি ২০২০")),
+        "app.features.photocard.service.PhotocardClaimExtractor",
+        _extractor(_extraction(source_text="যুগান্তর", date_text="১ জানুয়ারি ২০২০")),
     )
     async with db() as s:
         _, sub = await _accept(s, None, claimed="প্রথম আলো", published=CLAIMED_DATE)
@@ -335,8 +343,12 @@ async def test_image_detected_source_and_date_never_overwrite_user_values(db, mo
         row = await SubmissionRepository(s).get_by_id(sub.id)
         ocr = await OcrExtractionRepository(s).get_by_submission_id(sub.id)
     assert row.claimed_source_text == "প্রথম আলো" and row.published_date == CLAIMED_DATE
-    assert ocr.detected_source_text == "যুগান্তর" and ocr.detected_date_text == "১ জানুয়ারি ২০২০"  # kept as metadata
-    assert any("does not match" in w or "does not clearly match" in w for w in ocr.extraction_warnings)
+    assert ocr.detected_source_text == "যুগান্তর" and ocr.detected_date_text == "১ জানুয়ারি ২০২০"  # raw, display only
+    assert ocr.extraction_warnings == []
+    async with db() as s:
+        detail = await _svc(s).get_result(sub.id)
+    assert detail.extracted_source_text == "যুগান্তর" and detail.extracted_date_text == "১ জানুয়ারি ২০২০"
+    assert detail.claimed_source_text == "প্রথম আলো" and detail.published_date == CLAIMED_DATE
 
 
 # ── 21/27: extraction failure is terminal, explained, notified once ──────
@@ -344,8 +356,13 @@ async def test_image_detected_source_and_date_never_overwrite_user_values(db, mo
 
 async def test_unusable_extraction_fails_the_job_with_a_reason_and_no_automated_result(db, monkeypatch):
     monkeypatch.setattr(
-        "app.features.photocard.service.extract_headline",
-        AsyncMock(return_value=_extraction(headline="", warnings=["No Bangla claim text survived cleaning."])),
+        "app.features.photocard.service.PhotocardClaimExtractor",
+        _extractor(_extraction(
+            headline="", fallback_used=True, gemini_attempts=3,
+            warnings=["No Bangla claim text survived cleaning."],
+            failure_reason="No readable headline could be extracted from the OCR text.",
+            diagnostics={"gemini": {"attempts": [{"attempt": i, "outcome": "timeout"} for i in (1, 2, 3)]}},
+        )),
     )
     async with db() as s:
         user = await add_user(s)
@@ -371,12 +388,13 @@ async def test_unusable_extraction_fails_the_job_with_a_reason_and_no_automated_
         detail = await _svc(s).get_result(sub.id)
     assert row.status == SubmissionStatus.FAILED and "headline" in row.failure_reason.lower()
     assert job.status == "FAILED" and job.attempts == 1  # permanent: not retried
-    assert res is None  # never Source Not Found / Content Altered: no check ran
+    assert res is None  # never Source Not Found / a headline verdict: no check ran
     assert [n.notification_type for n in notes] == ["VERIFICATION_FAILED"]
     assert detail.status == SubmissionStatus.FAILED and detail.failure_reason == row.failure_reason
     assert detail.verification is None
-    # ocr text is still kept for the owner / experts
-    assert detail.headline is None
+    assert detail.headline is None  # nothing fabricated
+    assert detail.fallback_used is True and detail.extraction_attempts == 3
+    assert detail.extraction_failures[:3] == [f"Image extraction attempt {i} timed out." for i in (1, 2, 3)]
 
 
 # ── 19: cache reuse keeps the photo card's identity ──────────────────────
@@ -405,11 +423,12 @@ async def test_cached_reuse_preserves_photocard_identity_image_and_owner(db):
         detail = await _svc(s).get_result(mine.id)
     assert row.submission_type == SubmissionType.PHOTO_CARD  # not replaced by a text submission
     assert row.submitter_id == me.id and original.submitter_id == owner_of_original.id
-    assert ocr.image_object_key and ocr.raw_extracted_text == HEADLINE
+    assert ocr.image_object_key and ocr.extractor_used == "GEMINI_IMAGE"
+    assert ocr.raw_extracted_text == "" and ocr.ocr_engine == "not_run"  # EasyOCR never ran
     assert row.duplicate_of_submission_id == orig.id and res.reused_from_submission_id == orig.id
     assert row.status == SubmissionStatus.EXPERT_REVIEW
     assert detail.submission_id == mine.id and detail.image_url and detail.verification.cached is True
-    assert detail.verification.scores.body_similarity is None  # still headline-only
+    assert detail.verification.claim_scope == ClaimScope.HEADLINE_ONLY  # still headline-only
 
 
 async def test_force_refresh_reaches_the_pipeline(db):

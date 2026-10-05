@@ -31,7 +31,7 @@
               <div class="notif-title">{{ readableExplanation(n.title) }}</div>
               <div class="notif-message">{{ readableExplanation(n.body) }}</div>
               <button class="btn btn-ghost btn-sm" (click)="markRead(n)">Mark as read</button><div class="notif-meta">
-                <span class="badge badge-primary text-xs">Update</span>
+                <span class="badge badge-primary text-xs">{{ n.notification_type === 'VERIFICATION_COMPLETE' ? 'Preliminary result' : n.notification_type === 'EXPERT_REVIEW_COMPLETE' ? 'Final result' : 'Update' }}</span>
                 <span class="text-muted text-xs">{{ n.created_at | date:'MMM d, y, HH:mm' }}</span>
               </div>
             </div>

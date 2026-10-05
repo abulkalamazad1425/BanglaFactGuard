@@ -22,7 +22,7 @@ cd backend
 .\.venv\Scripts\python.exe run.py
 ```
 
-If the project's virtual environment has another name, activate/use that environment instead. The API should run at `http://localhost:8000/api/v1`. Existing installations should restart the backend to load the new multimodal background endpoint. Keep the verification worker enabled. The existing durable `verification_jobs` table is reused; this change adds no new migration.
+If the project's virtual environment has another name, activate/use that environment instead. The API should run at `http://localhost:8000/api/v1`. Existing installations should restart the backend to load the new multimodal background endpoint. Keep the verification worker enabled. Run the current backend migrations (`alembic upgrade head`) before restarting; the UX update adds personal result delivery and uncalculated expert credibility.
 
 In a separate terminal:
 
@@ -86,7 +86,7 @@ Headline, body and image are required. Body must contain at least 10 non-whitesp
 - Desktop alerts require Chrome and OS notification permissions and the extension to be ON. Browser closure, sleep, Do Not Disturb or disabling the extension can delay/suppress desktop alerts. Saved Activity and the unread badge remain the fallback. Reopening Chrome/turning ON catches up.
 - Notification clicks open the extension Activity page; **View details** opens the website. Website login is separate when a private pending result requires authentication.
 - Source not found is not automatically a fake verdict. Incomplete retrieval is shown as incomplete. Date mismatch does not imply a false story. Multimodal predictions are clearly preliminary; expert verdict is separate.
-- Photocard OCR dates are not displayed or compared. Extracted-date warnings are suppressed for both newly processed cards and older saved Activity entries; supplied-date versus source-article checks still appear normally.
+- Photocard OCR dates are not displayed or compared. Extracted source/date conflict warnings are suppressed for both newly processed cards and older saved Activity entries; supplied-date versus source-article checks still appear normally.
 
 ## Connection settings and permissions
 

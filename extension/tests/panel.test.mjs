@@ -50,7 +50,7 @@ test('English side panel supports independent headline/body selection, persisten
     input(document.querySelector('input[list="sources"]'),'prothomalo.com');await tick();
     document.querySelector('form').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));await tick();
     assert.equal(submitted.headline,'Selected headline');assert.equal(submitted.body_text,selected);
-    assert.match(document.body.textContent,/Claim accepted/);
+    assert.match(document.body.textContent,/Claim received/);
     button('Verify').click();await tick();button('Photo card').click();await tick();
     assert.ok(button('Select screenshot area'));assert.equal(document.querySelectorAll('textarea').length,0);
     button('Text & image').click();await tick();assert.equal(document.querySelectorAll('textarea')[1].required,true);

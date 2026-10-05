@@ -31,6 +31,28 @@ class ResultRepository(BaseRepository[VerificationResult]):
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def record_timings(
+        self, submission_id: uuid.UUID, *, stage_ms: dict[str, int],
+        pipeline_ms: int, preprocessing_ms: dict[str, int] | None = None,
+        cache_hit: bool = False,
+    ) -> None:
+        from app.features.verification.schemas import ExecutionTimings
+
+        result = await self.get_by_submission_id(submission_id)
+        if result is None:
+            return
+        timings = ExecutionTimings(
+            stage_ms=stage_ms, preprocessing_ms=preprocessing_ms or {},
+            pipeline_ms=pipeline_ms, cache_hit=cache_hit,
+        )
+        result.analysis_details = {
+            **(result.analysis_details or {}),
+            "timings": timings.model_dump(mode="json"),
+        }
+        # A reused result keeps its evidence, but reports THIS execution's time.
+        result.avg_verification_time_ms = pipeline_ms
+        await self.session.flush()
+
     async def get_results_by_source_status(
         self,
         source_status: SourceStatus,
@@ -57,21 +79,15 @@ class ResultRepository(BaseRepository[VerificationResult]):
         date_status: DateStatus | None,
         confidence: float,
         reasoning: str,
-        semantic_similarity: float | None,
-        entity_match: float | None,
-        contradiction_score: float | None,
-        keyword_overlap: float | None,
-        numerical_consistency: float | None,
+        headline_check_status: str | None = None,
+        headline_exact_match: bool | None = None,
+        body_comparison_status: str | None = None,
+        headline_similarity: float | None = None,
+        headline_keyword_coverage: float | None = None,
+        passage_keyword_coverage: float | None = None,
         top_article_id: uuid.UUID | None = None,
         ai_preliminary_label: str | None = None,
         avg_verification_time_ms: int | None = None,
-        manipulation_flags: dict | None = None,
-        headline_similarity: float | None = None,
-        body_similarity: float | None = None,
-        passage_similarity: float | None = None,
-        headline_keyword_coverage: float | None = None,
-        passage_keyword_coverage: float | None = None,
-        body_keyword_coverage: float | None = None,
         claim_scope: str | None = None,
         pipeline_version: str | None = None,
         analysis_details: dict | None = None,
@@ -89,24 +105,18 @@ class ResultRepository(BaseRepository[VerificationResult]):
         fields = dict(
             source_status=source_status,
             content_status=content_status,
+            headline_check_status=headline_check_status,
+            headline_exact_match=headline_exact_match,
+            body_comparison_status=body_comparison_status,
             date_status=date_status,
             confidence=confidence,
             reasoning=reasoning,
-            semantic_similarity=semantic_similarity,
-            entity_match=entity_match,
-            contradiction_score=contradiction_score,
-            keyword_overlap=keyword_overlap,
-            numerical_consistency=numerical_consistency,
+            headline_similarity=headline_similarity,
+            headline_keyword_coverage=headline_keyword_coverage,
+            passage_keyword_coverage=passage_keyword_coverage,
             top_article_id=top_article_id,
             ai_preliminary_label=ai_preliminary_label,
             avg_verification_time_ms=avg_verification_time_ms,
-            manipulation_flags=manipulation_flags,
-            headline_similarity=headline_similarity,
-            body_similarity=body_similarity,
-            passage_similarity=passage_similarity,
-            headline_keyword_coverage=headline_keyword_coverage,
-            passage_keyword_coverage=passage_keyword_coverage,
-            body_keyword_coverage=body_keyword_coverage,
             claim_scope=claim_scope,
             pipeline_version=pipeline_version,
             analysis_details=analysis_details,

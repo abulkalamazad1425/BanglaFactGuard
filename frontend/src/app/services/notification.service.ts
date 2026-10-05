@@ -1,4 +1,4 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, inject, signal, effect } from '@angular/core';
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import { ApiService } from './api.service';
@@ -19,7 +19,7 @@ export class NotificationService {
 
   constructor() {
     // Load initial count on service init (silent, no error propagation needed)
-    this.refreshCount();
+    effect(() => { this.auth.user(); this.unreadCount.set(0); this.refreshCount(); });
   }
 
   /** GET /api/v1/notifications?limit=&offset=&unread_only= */
@@ -58,8 +58,8 @@ export class NotificationService {
     );
   }
 
-  /** Start periodic polling every 60s (call once in AppComponent) */
-  startPolling(intervalMs = 60_000): void {
+  /** Start periodic polling every 15s (call once in AppComponent) */
+  startPolling(intervalMs = 15_000): void {
     setInterval(() => this.refreshCount(), intervalMs);
   }
 }

@@ -6,10 +6,10 @@ from typing import Callable, TypeVar
 
 import structlog
 
-from app.core.config import get_settings
 from app.core.constants import (
     ContentStatus,
     DateStatus,
+    HeadlineCheckStatus,
     MultimodalPredictionLabel,
     OverallVerdict,
     SourceStatus,
@@ -19,7 +19,6 @@ from app.core.constants import (
 from app.core.exceptions import (
     DomainValidationError,
     PermissionDeniedError,
-    RecordNotFoundError,
 )
 from app.features.expert_review.models import ExpertReview, VotingConfig
 from app.features.expert_review.overall_verdict import derive_ai_overall_verdict_multimodal
@@ -36,6 +35,7 @@ from app.features.expert_review.schemas import (
     ExpertStatsResponse,
     ExpertTopArticle,
 )
+from app.features.verification.presenter import is_headline_result, parse_analysis
 from app.features.multimodal.models import MultimodalAnalysis
 from app.features.multimodal.repository import MultimodalAnalysisRepository
 from app.features.multimodal.storage_service import MultimodalStorageService
@@ -47,8 +47,6 @@ from app.features.verification.repository import ResultRepository
 from app.features.verification.verdict_compat import format_verdict_display
 
 logger = structlog.get_logger(__name__)
-_SETTINGS = get_settings()
-_AUTH = _SETTINGS.auth
 _NEUTRAL_WEIGHT = 1.0
 
 _STRUCTURED_TYPES = (SubmissionType.SOURCE_BASED, SubmissionType.PHOTO_CARD)
@@ -150,6 +148,20 @@ class ExpertReviewService:
             body_snippet=(body[:400] + "…") if body and len(body) > 400 else body,
         )
 
+    @staticmethod
+    def _headline_alteration_and_body(result: VerificationResult | None):
+        """Headline Alteration detail + body similarity report from the
+        persisted analysis blob (the same source presenter.py reads), so the
+        expert view shows the identical detail after save/reload. Legacy rows
+        never surface an old content verdict as a headline detail."""
+        if result is None:
+            return None, None
+        analysis = parse_analysis(result.analysis_details)
+        if analysis is None:
+            return None, None
+        headline = analysis.headline_alteration if is_headline_result(result) else None
+        return headline, analysis.body_similarity
+
     async def _build_queue_item(
         self, submission: Submission, *, full_body: bool
     ) -> ExpertQueueItemResponse:
@@ -166,6 +178,7 @@ class ExpertReviewService:
                 if submission.submission_type == SubmissionType.PHOTO_CARD
                 else None
             )
+            headline_alteration, body_similarity = self._headline_alteration_and_body(result)
             return ExpertQueueItemResponse(
                 submission_id=str(submission.id),
                 submission_type=submission.submission_type,
@@ -179,13 +192,19 @@ class ExpertReviewService:
                 # expert decision (see §6 of the business requirements).
                 ai_overall_verdict=None,
                 source_status=result.source_status if result else None,
-                content_status=result.content_status if result else None,
+                content_status=result.content_status if result and is_headline_result(result) else None,
+                headline_check_status=(
+                    HeadlineCheckStatus(result.headline_check_status)
+                    if result and result.headline_check_status else None
+                ),
                 date_status=result.date_status if result else None,
                 ai_confidence=result.confidence if result else None,
                 submitted_at=submission.created_at,
                 vote_count=vote_count,
                 top_article=top_article,
                 image_url=image_url,
+                headline_alteration=headline_alteration,
+                body_similarity=body_similarity,
             )
 
         mm = await self._multimodal.get_by_submission_id(submission.id)
@@ -216,23 +235,21 @@ class ExpertReviewService:
         *,
         limit: int = 20,
         offset: int = 0,
+        q: str = "",
     ) -> list[ExpertQueueItemResponse]:
-        submissions = await self._submissions.get_recent(
-            status=SubmissionStatus.EXPERT_REVIEW, limit=100
+        from sqlalchemy import select, or_
+        voted = select(ExpertReview.submission_id).where(ExpertReview.reviewer_id == expert_id)
+        stmt = select(Submission).where(
+            Submission.status == SubmissionStatus.EXPERT_REVIEW,
+            Submission.duplicate_of_submission_id.is_(None),
+            Submission.id.not_in(voted),
+            or_(Submission.submitter_id.is_(None), Submission.submitter_id != expert_id),
         )
-
-        already_voted_ids = {
-            r.submission_id
-            for r in await self._reviews.get_history_for_expert(expert_id, limit=10000)
-        }
-
-        queue_items = []
-        for submission in submissions:
-            if submission.id in already_voted_ids:
-                continue
-            queue_items.append(await self._build_queue_item(submission, full_body=False))
-
-        return queue_items[offset : offset + limit]
+        if q.strip():
+            term = q.strip().replace("%", r"\%").replace("_", r"\_")
+            stmt = stmt.where(or_(*[c.ilike(f"%{term}%", escape="\\") for c in (Submission.headline, Submission.body_text, Submission.claimed_source_text)]))
+        rows = (await self._session.execute(stmt.order_by(Submission.created_at.desc(), Submission.id.desc()).offset(offset).limit(limit))).scalars().all()
+        return [await self._build_queue_item(row, full_body=False) for row in rows]
 
     async def submit_vote(
         self,
@@ -286,7 +303,7 @@ class ExpertReviewService:
                 )
             ai_source, ai_content, ai_date = (
                 result.source_status,
-                result.content_status,
+                result.content_status if is_headline_result(result) else None,
                 result.date_status,
             )
             # No AI-implied Overall exists for this type — the automated
@@ -307,7 +324,7 @@ class ExpertReviewService:
 
         config = await self._voting_config.get_or_create()
         profile = await self._profiles.get_or_create(
-            expert_id, initial_score=_AUTH.initial_expert_credibility
+            expert_id
         )
         weight, tier = await self._resolve_weight(profile, config)
 
@@ -350,7 +367,7 @@ class ExpertReviewService:
         (N) lifetime completed reviews, every vote counts as weight 1.0
         regardless of tier — this is `weight_applied`, snapshotted onto the
         vote row so later tier/config changes never retroactively alter it."""
-        if profile.total_votes < config.activation_threshold_votes:
+        if not profile.total_votes or profile.total_votes < config.activation_threshold_votes:
             return _NEUTRAL_WEIGHT, None
         accuracy_pct = (profile.correct_votes / profile.total_votes) * 100
         tier = await self._tiers.resolve_tier_for_accuracy(accuracy_pct)
@@ -426,9 +443,10 @@ class ExpertReviewService:
         *,
         limit: int = 50,
         offset: int = 0,
+        q: str = "",
     ) -> list[ExpertHistoryItemResponse]:
         reviews = await self._reviews.get_history_for_expert(
-            expert_id, limit=limit, offset=offset
+            expert_id, limit=limit, offset=offset, q=q
         )
         items = []
         for r in reviews:
@@ -488,12 +506,13 @@ class ExpertReviewService:
         from app.features.auth.models import User
 
         profile = await self._profiles.get_or_create(
-            expert_id, initial_score=_AUTH.initial_expert_credibility
+            expert_id
         )
         user: User | None = await self._profiles.session.get(User, expert_id)
+        config = await self._voting_config.get_or_create()
         accuracy = (
             round(profile.correct_votes / profile.total_votes * 100, 1)
-            if profile.total_votes > 0
+            if profile.total_votes > 0 and profile.total_votes >= config.activation_threshold_votes
             else None
         )
         return ExpertStatsResponse(
@@ -502,7 +521,8 @@ class ExpertReviewService:
             total_votes=profile.total_votes,
             correct_votes=profile.correct_votes,
             accuracy_pct=accuracy,
-            current_credibility=round(profile.credibility_score, 4),
+            current_credibility=(round(profile.correct_votes / profile.total_votes, 4) if profile.total_votes and profile.total_votes >= config.activation_threshold_votes else None),
+            activation_threshold=config.activation_threshold_votes,
         )
 
     async def _finalize_or_escalate(self, submission: Submission) -> None:
@@ -619,14 +639,16 @@ class ExpertReviewService:
         """Correctness is judged on the Overall verdict uniformly across all
         submission types — the one dimension every expert votes on, and the
         headline judgment call the platform ultimately publishes."""
-        for review in reviews:
+        config = await self._voting_config.get_or_create()
+        for review in sorted(reviews, key=lambda r: str(r.reviewer_id)):
             if review.reviewer_id is None:
                 continue
             is_correct = review.vote_overall_verdict == final_overall
             profile = await self._profiles.get_or_create(review.reviewer_id)
+            await self._session.refresh(profile, with_for_update=True)
             new_total = profile.total_votes + 1
             new_correct = profile.correct_votes + (1 if is_correct else 0)
-            new_score = round(new_correct / new_total, 4) if new_total else 0.5
+            new_score = round(new_correct / new_total, 4) if new_total >= config.activation_threshold_votes else None
             await self._profiles.update(
                 profile,
                 total_votes=new_total,
@@ -640,14 +662,16 @@ def _ai_label_structured(result: VerificationResult | None) -> str | None:
     if result is None:
         return None
     return format_verdict_display(
-        result.source_status, result.content_status, result.date_status
+        result.source_status,
+        result.content_status if is_headline_result(result) else None,
+        result.date_status,
     )
 
 
 def _ai_label_multimodal(mm: MultimodalAnalysis | None) -> str | None:
     if mm is None:
         return None
-    return "Fake" if mm.prediction == MultimodalPredictionLabel.FAKE else "Real (Non-Fake)"
+    return "Likely fake" if mm.prediction == MultimodalPredictionLabel.FAKE else "Likely real"
 
 
 def _review_to_response(r: ExpertReview) -> ExpertReviewResponse:

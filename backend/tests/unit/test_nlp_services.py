@@ -3,7 +3,7 @@
 What this proves: the services refuse to present a model that fails their
 wiring audit as if it were working, and report "unavailable" instead of
 "no entities"/"entailment". What it does NOT prove: anything about the
-accuracy of the real sahajBERT-NER or mDeBERTa checkpoints on Bangla.
+accuracy of the real BanglaBERT NER or mDeBERTa checkpoints on Bangla.
 """
 
 from __future__ import annotations
@@ -36,6 +36,8 @@ BIO = {0: "O", 1: "B-PER", 2: "I-PER", 3: "B-ORG", 4: "I-ORG", 5: "B-LOC", 6: "I
 
 def test_label_mapping_strips_bio_and_rejects_generic_labels():
     assert _base_type("B-PER") == "PER" and _base_type("I-LOC") == "LOC" and _base_type("ORG") == "ORG"
+    assert _base_type("B-INST") == "ORG" and _base_type("I-POL") == "ORG"
+    assert _base_type("B-DATE") is None
     assert _base_type("O") is None and _base_type("LABEL_1") is None
 
 

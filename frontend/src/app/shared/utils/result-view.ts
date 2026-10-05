@@ -1,280 +1,226 @@
 // ============================================================
 // Result presentation rules — pure functions shared by the detail page,
-// photo-card page, expert view and history, so a status badge, its reasoning
-// and its checklist can never disagree.
+// photo-card page, expert view and history, so a finding, its explanation
+// and its evidence can never disagree.
 //
 // Rules enforced here (and unit-tested in result-view.spec.ts):
-//  * A green check means a COMPLETED PASSING check. NOT_EVALUATED / unavailable
-//    are neutral "not evaluated" rows, never greens. Historical rows with no
-//    recorded check states render as "not recorded", not as passes.
-//  * NOT_APPLICABLE checks are omitted (no "passed body-authenticity check"
-//    on a photo card).
-//  * A null score is "not applicable" / "unavailable" - never 0% or 100%.
-//  * Body metrics exist only for claims that carried a submitted body.
+//  * Headline Alteration has exactly two verdicts (matched / altered). When
+//    none was reached, the reason is shown — never a guessed verdict.
+//  * A legacy result's old content verdict is never shown as a headline verdict.
+//  * Body similarity scores are measurements only, shown apart from the
+//    headline verdict. An unavailable score is "Unavailable" with its reason,
+//    never 0 or 0%.
 // ============================================================
 
 import {
   AnalysisDetails,
-  CheckState,
+  BodySimilarityMetric,
+  BodySimilarityReport,
   ClaimScope,
-  DiscrepancyDetail,
-  ManipulationFlags,
-  MetricState,
-  VerificationScores,
+  HeadlineCheckStatus,
+  VerificationResponse,
 } from '../../models/verification.model';
-
-export interface CheckRow {
-  key: string;
-  title: string;
-  state: CheckState | 'NOT_RECORDED';
-  icon: '✓' | '✗' | '—';
-  cls: 'passed' | 'failed' | 'unknown';
-  desc: string;
-  discrepancies: DiscrepancyDetail[];
-}
-
-export interface ScoreRow {
-  key: string;
-  label: string;
-  hint: string;
-  value: number | null;
-  /** "87.5%" or "Not applicable" / "Unavailable" - never a fabricated number. */
-  display: string;
-  state: MetricState | 'MISSING';
-  note?: string;
-  color: string;
-}
 
 export function hasBody(scope: ClaimScope | null | undefined): boolean {
   return scope === 'HEADLINE_WITH_BODY';
 }
 
-export function formatPercent(v: number | null | undefined, digits = 1): string {
+export function formatPercent(v: number | null | undefined, digits = 0): string {
   return v == null ? '—' : `${(v * 100).toFixed(digits)}%`;
 }
 
-const CHECK_META: Record<string, { title: string; pass: string; fail: string }> = {
-  headline: {
-    title: 'Headline vs source report',
-    pass: 'No concrete difference found between the submitted headline and the source report.',
-    fail: 'The submitted headline differs from the source report.',
+// ── Headline Alteration ──────────────────────────────────────────────────
+
+export type HeadlineTone = 'matched' | 'altered' | 'none';
+
+export interface HeadlineView {
+  tone: HeadlineTone;
+  title: string;
+  summary: string;
+}
+
+export const HEADLINE_STATUS_TEXT: Record<HeadlineCheckStatus, { title: string; summary: string }> = {
+  COMPLETED: { title: 'Compared', summary: '' },
+  SOURCE_NOT_FOUND: {
+    title: 'Not compared',
+    summary: 'No corresponding report was found in the selected outlet, so there is no title to compare with.',
   },
-  body: {
-    title: 'Submitted body vs source report',
-    pass: 'No concrete difference found between the submitted body and the source report.',
-    fail: 'The submitted body differs from the source report.',
+  SOURCE_CHECK_INCOMPLETE: {
+    title: 'Not compared',
+    summary: 'The source search could not be completed, so the headline was not compared. This is not a finding about the headline.',
   },
-  numbers: {
-    title: 'Numbers and units',
-    pass: 'Claimed numbers match the source report.',
-    fail: 'A claimed number differs from the source report.',
+  SOURCE_TITLE_MISSING: {
+    title: 'No verdict',
+    summary: 'The source report has no readable title, so the headline could not be compared.',
   },
-  negation: {
-    title: 'Negation',
-    pass: 'The claim and the source agree on what is affirmed or denied.',
-    fail: 'The claim affirms what the source denies (or the reverse).',
+  MODEL_UNAVAILABLE: {
+    title: 'No verdict',
+    summary: 'The meaning comparison was unavailable, so no verdict was reached. This does not mean the headline was altered.',
   },
-  entities: {
-    title: 'People, places and organisations (roles)',
-    pass: 'No substituted or swapped entity found.',
-    fail: 'An entity was substituted or its role swapped.',
-  },
-  scope: {
-    title: 'Scope and quantifiers',
-    pass: 'Quantifiers (all / some / at least / at most) agree with the source.',
-    fail: 'A scope or quantifier differs from the source.',
-  },
-  attribution: {
-    title: 'Attribution',
-    pass: 'The statement is attributed to the same speaker as in the source.',
-    fail: 'The statement is attributed to a different speaker than in the source.',
-  },
-  modality: {
-    title: 'Plans vs completed events',
-    pass: 'The claim and the source agree on whether this happened or is only planned/possible.',
-    fail: 'The claim and the source disagree on whether this happened or is only planned/possible.',
+  UNDETERMINED: {
+    title: 'No verdict',
+    summary: 'Neither the same meaning nor a meaningful difference could be established, so no verdict was reached.',
   },
 };
 
-const CHECK_ORDER = ['headline', 'body', 'numbers', 'negation', 'entities', 'scope', 'attribution', 'modality'];
-
-function discrepanciesFor(flags: ManipulationFlags, key: string): DiscrepancyDetail[] {
-  const all = flags.discrepancies ?? [];
-  switch (key) {
-    case 'headline':
-      return all.filter((d) => d.part === 'headline');
-    case 'body':
-      return all.filter((d) => d.part === 'body');
-    case 'numbers':
-      return all.filter((d) => d.kind === 'numbers');
-    case 'negation':
-      return all.filter((d) => d.kind === 'negation');
-    case 'entities':
-      return all.filter((d) => d.kind === 'entity_substitution' || d.kind === 'entity_role');
-    case 'scope':
-      return all.filter((d) => d.kind === 'scope');
-    case 'attribution':
-      return all.filter((d) => d.kind === 'attribution');
-    case 'modality':
-      return all.filter((d) => d.kind === 'modality');
-    default:
-      return [];
+/** The headline finding for the summary card. The AI verdict is replaced by
+ *  the expert's when finalized (`content_status` already carries that). */
+export function headlineView(r: VerificationResponse): HeadlineView {
+  if (r.content_status === 'MATCHED') {
+    return { tone: 'matched', title: 'Headline matched', summary: 'The claim headline has the same meaning as the source title.' };
   }
+  if (r.content_status === 'ALTERED') {
+    return { tone: 'altered', title: 'Headline altered', summary: 'The claim headline differs meaningfully from the source title. See the evidence below.' };
+  }
+  if (r.legacy_result) {
+    return {
+      tone: 'none',
+      title: 'Not available',
+      summary: 'This result was recorded by an earlier version of the checker; it has no Headline Alteration verdict.',
+    };
+  }
+  const status: HeadlineCheckStatus =
+    r.headline_check_status ??
+    (r.source_status === 'NOT_FOUND' ? 'SOURCE_NOT_FOUND' : 'SOURCE_CHECK_INCOMPLETE');
+  return { tone: 'none', ...HEADLINE_STATUS_TEXT[status] };
 }
 
-export function buildCheckRows(
-  flags: ManipulationFlags | null | undefined,
-  scope: ClaimScope | null | undefined,
-): CheckRow[] {
-  const f = flags ?? {};
-  const states = f.check_states ?? {};
-
-  // Historical result: no check states were recorded. Never infer passes from
-  // default-false booleans - show what was flagged and say the rest was not recorded.
-  if (Object.keys(states).length === 0) {
-    const rows: CheckRow[] = [];
-    const legacy: Array<[boolean | undefined, string, string]> = [
-      [f.headline_manipulated, 'headline', CHECK_META['headline'].fail],
-      [f.body_altered, 'body', CHECK_META['body'].fail],
-      [f.numbers_altered, 'numbers', CHECK_META['numbers'].fail],
-      [f.entities_replaced, 'entities', CHECK_META['entities'].fail],
-    ];
-    for (const [flag, key, fail] of legacy) {
-      if (flag && (key !== 'body' || hasBody(scope))) {
-        rows.push({
-          key,
-          title: CHECK_META[key].title,
-          state: 'FAILED',
-          icon: '✗',
-          cls: 'failed',
-          desc: fail,
-          discrepancies: discrepanciesFor(f, key),
-        });
-      }
-    }
-    rows.push({
-      key: 'not-recorded',
-      title: 'Detailed alteration checks',
-      state: 'NOT_RECORDED',
-      icon: '—',
-      cls: 'unknown',
-      desc: 'Detailed check results were not recorded for this older result, so no check is shown as passed.',
-      discrepancies: [],
-    });
-    return rows;
-  }
-
-  const rows: CheckRow[] = [];
-  for (const key of CHECK_ORDER) {
-    const state = states[key];
-    if (state === undefined || state === 'NOT_APPLICABLE') continue;
-    if (key === 'body' && !hasBody(scope)) continue; // photo cards / headline-only: never shown
-    const meta = CHECK_META[key];
-    if (state === 'PASSED') {
-      rows.push({ key, title: meta.title, state, icon: '✓', cls: 'passed', desc: meta.pass, discrepancies: [] });
-    } else if (state === 'FAILED') {
-      rows.push({
-        key,
-        title: meta.title,
-        state,
-        icon: '✗',
-        cls: 'failed',
-        desc: meta.fail,
-        discrepancies: discrepanciesFor(f, key),
-      });
-    } else {
-      rows.push({
-        key,
-        title: meta.title,
-        state,
-        icon: '—',
-        cls: 'unknown',
-        desc: 'Not evaluated — the information needed to run this check was not available.',
-        discrepancies: [],
-      });
-    }
-  }
-  return rows;
-}
-
-const COLORS = {
-  blue: '#3b82f6',
-  purple: '#8b5cf6',
-  indigo: '#6366f1',
-  cyan: '#06b6d4',
-  pink: '#ec4899',
+export const DIFFERENCE_LABELS: Record<string, string> = {
+  numbers: 'Number changed',
+  date: 'Date changed',
+  negation: 'Negation reversed',
+  modality: 'Planned vs. completed',
+  scope: 'Quantifier changed',
+  subject_object: 'Roles reversed (who did what to whom)',
+  attribution: 'Attribution changed',
+  denial: 'Denial removed',
+  entity: 'Person, place or organisation changed',
+  main_point: 'Main statement differs',
 };
 
-interface RowSpec {
-  key: keyof VerificationScores;
-  metricKey: string;
+export function differenceLabel(kind: string): string {
+  return DIFFERENCE_LABELS[kind] ?? 'Meaningful difference';
+}
+
+// ── Body similarity (measurements only — never a verdict) ───────────────
+
+export type BodyMetricKey = 'tfidf_cosine' | 'jaccard' | 'normalized_levenshtein' | 'semantic_cosine';
+
+export interface BodyMetricSpec {
+  key: BodyMetricKey;
   label: string;
-  hint: string;
-  color: string;
-  bodyOnly?: boolean;
+  measures: string;
+  range: string;
 }
 
-const SCORE_SPECS: RowSpec[] = [
-  { key: 'headline_similarity', metricKey: 'headline_similarity', label: 'Headline similarity to source title',
-    hint: 'Text similarity between the submitted headline and the source report\'s title. A measurement, not a probability of truth.', color: COLORS.blue },
-  { key: 'passage_similarity', metricKey: 'passage_similarity', label: 'Support in relevant source passages',
-    hint: 'Similarity to the sentences of the source article that discuss this claim (with surrounding context). Supporting evidence, not a body match.', color: COLORS.blue },
-  { key: 'headline_keyword_coverage', metricKey: 'headline_keyword_coverage', label: 'Headline keywords found in source title',
-    hint: 'Share of the claim\'s keywords (weighted) that occur in the source title.', color: COLORS.indigo },
-  { key: 'passage_keyword_coverage', metricKey: 'passage_keyword_coverage', label: 'Claim keywords found in source passages',
-    hint: 'Share of the claim\'s keywords that occur in the source title and relevant passages.', color: COLORS.indigo },
-  { key: 'entity_match', metricKey: 'entity_match', label: 'Claimed entities found in source',
-    hint: 'Share of people/places/organisations named in the claim that the source evidence also names. Extra entities in the source are not penalised.', color: COLORS.purple },
-  { key: 'numerical_consistency', metricKey: 'numerical_consistency', label: 'Claimed numbers supported by source',
-    hint: 'Share of numbers in the claim that appear (same value and unit) in the source evidence.', color: COLORS.cyan },
-  { key: 'body_similarity', metricKey: 'body_similarity', label: 'Submitted body vs source body',
-    hint: 'Submitted body compared passage-by-passage with the source article. Only exists when a body was submitted.', color: COLORS.blue, bodyOnly: true },
-  { key: 'body_keyword_coverage', metricKey: 'body_keyword_coverage', label: 'Submitted-body keywords found in source',
-    hint: 'Share of keywords of the submitted body that occur in the source article.', color: COLORS.indigo, bodyOnly: true },
-  { key: 'contradiction_score', metricKey: 'contradiction', label: 'Possible contradiction',
-    hint: 'This automated comparison has not been validated for Bengali. A high value needs review and is not proof of a contradiction.', color: COLORS.pink },
+export const BODY_METRICS: BodyMetricSpec[] = [
+  {
+    key: 'tfidf_cosine',
+    label: 'TF-IDF cosine similarity',
+    measures: 'How much the two texts share their important words, giving distinctive words more weight than common ones.',
+    range: '0 = no important words in common · 1 = the same words in the same proportions',
+  },
+  {
+    key: 'jaccard',
+    label: 'Jaccard similarity',
+    measures: 'The share of unique words used by both texts: words in common ÷ all distinct words.',
+    range: '0 = no word in common · 1 = exactly the same vocabulary',
+  },
+  {
+    key: 'normalized_levenshtein',
+    label: 'Normalized Levenshtein similarity',
+    measures: 'How few character edits turn one text into the other: 1 − edits ÷ length of the longer text. Low when one text is much longer.',
+    range: '0 = entirely different characters · 1 = identical text',
+  },
+  {
+    key: 'semantic_cosine',
+    label: 'Semantic similarity (LaBSE embedding cosine)',
+    measures: 'Meaning-based closeness from a multilingual sentence-embedding model, so reworded text can still score high. Long texts are compared passage by passage.',
+    range: '0 = unrelated meaning · 1 = the same meaning (negative raw values are shown as 0)',
+  },
 ];
 
-export function buildScoreRows(
-  scores: VerificationScores | null | undefined,
-  analysis: AnalysisDetails | null | undefined,
-  scope: ClaimScope | null | undefined,
-): ScoreRow[] {
-  const s = scores ?? {};
-  const rows: ScoreRow[] = [];
-  for (const spec of SCORE_SPECS) {
-    if (spec.bodyOnly && !hasBody(scope)) continue; // no Body Match for headline-only / photo cards
-    const raw = s[spec.key] as number | null | undefined;
-    const metric = analysis?.metrics?.[spec.metricKey];
-    if (raw != null) {
-      rows.push({ key: spec.key, label: spec.label, hint: spec.hint, value: raw,
-        display: formatPercent(raw), state: 'COMPUTED', color: spec.color });
-      continue;
-    }
-    // null: say why. Rows nobody could ever compute (no metric info, not a core row) are skipped.
-    if (metric) {
-      if (metric.state === 'NOT_APPLICABLE' && spec.key !== 'entity_match' && spec.key !== 'numerical_consistency') continue;
-      rows.push({
-        key: spec.key, label: spec.label, hint: spec.hint, value: null,
-        display: metric.state === 'NOT_APPLICABLE' ? 'Not applicable'
-          : metric.state === 'EMPTY' ? 'No comparable keywords' : 'Unavailable',
-        state: metric.state, note: metric.reason ?? undefined, color: spec.color,
-      });
-    } else if (spec.key === 'headline_similarity') {
-      rows.push({ key: spec.key, label: spec.label, hint: spec.hint, value: null,
-        display: 'Not recorded', state: 'MISSING', color: spec.color });
-    }
-  }
-  return rows;
+export type ScoreBand = 'High' | 'Moderate' | 'Low';
+
+/** A descriptive band for a 0–1 similarity score. It describes overlap only. */
+export function scoreBand(value: number): ScoreBand {
+  if (value >= 0.75) return 'High';
+  if (value >= 0.4) return 'Moderate';
+  return 'Low';
 }
 
-/** Wording for the single "strength" number. It is NOT a probability of truth. */
-export const STRENGTH_LABEL = 'Check strength';
-export const STRENGTH_HELP =
-  'Mean of the similarity / coverage measurements behind this automated result. ' +
-  'It summarises how much evidence was measured — it is not the probability that the claim is true.';
+export interface BodyMetricRow extends BodyMetricSpec {
+  available: boolean;
+  /** 0–1, or null when unavailable. */
+  value: number | null;
+  /** "82%" or "Unavailable" — never a fabricated number. */
+  display: string;
+  band: ScoreBand | null;
+  note: string | null;
+}
 
-export function strengthFor(confidence: number | null | undefined, sourceStatus?: string | null): string {
-  if (sourceStatus === 'INCOMPLETE') return '—';
-  return confidence == null ? '—' : `${(confidence * 100).toFixed(0)}%`;
+export function buildBodyMetricRows(report: BodySimilarityReport | null | undefined): BodyMetricRow[] {
+  if (!report || report.status === 'SKIPPED') return [];
+  return BODY_METRICS.map((spec) => {
+    const m: BodySimilarityMetric | null | undefined = report[spec.key];
+    const value = m?.available && m.value != null ? m.value : null;
+    return {
+      ...spec,
+      available: value !== null,
+      value,
+      display: value === null ? 'Unavailable' : formatPercent(value),
+      band: value === null ? null : scoreBand(value),
+      note: value === null ? (m?.reason ?? report.reason ?? 'This score could not be computed.') : bodyMetricNote(spec.key, m),
+    };
+  });
+}
+
+function bodyMetricNote(key: BodyMetricKey, m: BodySimilarityMetric | null | undefined): string | null {
+  const d = m?.details ?? {};
+  if (key === 'normalized_levenshtein' && d['truncated']) {
+    return `Compared on the first ${d['claim_chars_compared']} / ${d['source_chars_compared']} characters of very long texts.`;
+  }
+  if (key === 'semantic_cosine' && (d['claim_truncated'] || d['source_truncated'])) {
+    return 'Very long text: only the first passages were compared.';
+  }
+  return null;
+}
+
+/** Why the body section has no scores, or null when it does. */
+export function bodySectionMessage(report: BodySimilarityReport | null | undefined, scope: ClaimScope | null | undefined): string | null {
+  if (!hasBody(scope)) return null;
+  if (!report) return 'Body similarity was not recorded for this result.';
+  if (report.status === 'COMPUTED') return null;
+  return report.reason ?? 'Body similarity is unavailable for this result.';
+}
+
+// ── Source correspondence measurements (reviewer detail) ────────────────
+
+export interface MeasurementRow {
+  key: string;
+  label: string;
+  value: number | null;
+  display: string;
+  note: string | null;
+}
+
+const CORRESPONDENCE_SPECS: Array<{ key: string; label: string }> = [
+  { key: 'headline_title_similarity', label: 'Headline / source title similarity' },
+  { key: 'title_keyword_coverage', label: 'Claim keywords found in the source title' },
+  { key: 'passage_keyword_coverage', label: 'Claim keywords found in the source title and passages' },
+];
+
+export function buildCorrespondenceRows(analysis: AnalysisDetails | null | undefined): MeasurementRow[] {
+  const metrics = analysis?.metrics ?? {};
+  return CORRESPONDENCE_SPECS.filter((s) => metrics[s.key]).map((s) => {
+    const m = metrics[s.key];
+    const value = m.state === 'COMPUTED' && m.value != null ? m.value : null;
+    return {
+      key: s.key,
+      label: s.label,
+      value,
+      display: value === null ? 'Unavailable' : formatPercent(value),
+      note: value === null ? (m.reason ?? null) : null,
+    };
+  });
 }

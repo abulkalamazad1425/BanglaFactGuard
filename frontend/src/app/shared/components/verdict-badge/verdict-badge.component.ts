@@ -12,28 +12,34 @@ import {
 // Expert review now votes on the same (source/content/date) structure as the
 // AI verdict model below, via [sourceStatus]/[contentStatus]/[dateStatus].
 const LABEL_CONFIG: Record<string, { text: string; cls: string; icon: string }> = {
+  'FAKE': { text: 'Likely fake', cls: 'badge-false', icon: '!' },
+  'NON_FAKE': { text: 'Likely real', cls: 'badge-true', icon: '✓' },
+  'REAL': { text: 'Likely real', cls: 'badge-true', icon: '✓' },
   'TRUE': { text: 'True', cls: 'badge-true', icon: '✓' },
   'FALSE': { text: 'False', cls: 'badge-false', icon: '✗' },
   'PARTIALLY_TRUE': { text: 'Partially True', cls: 'badge-partial', icon: '◑' },
-  'NOT_FOUND_IN_CLAIMED_SOURCE': { text: 'Not Found', cls: 'badge-not-found', icon: '?' },
+  'NOT_FOUND_IN_CLAIMED_SOURCE': { text: 'Not Found', cls: 'badge-not-found', icon: '' },
 };
 
 const SOURCE_CONFIG: Record<SourceStatus, { text: string; cls: string; icon: string }> = {
-  CONFIRMED: { text: 'Source Confirmed', cls: 'badge-true', icon: '✓' },
-  NOT_FOUND: { text: 'Source Not Found', cls: 'badge-not-found', icon: '?' },
-  INCOMPLETE: { text: 'Source Check Incomplete', cls: 'badge-incomplete', icon: '⚠' },
+  CONFIRMED: { text: 'Source confirmed', cls: 'badge-true', icon: '✓' },
+  // No icon: "Source not found" is never prefixed with a question mark.
+  NOT_FOUND: { text: 'Source not found', cls: 'badge-not-found', icon: '' },
+  INCOMPLETE: { text: 'Source check incomplete', cls: 'badge-incomplete', icon: '⚠' },
 };
 
+// The content status is the Headline Alteration verdict — the claim headline
+// compared with the source article's TITLE only (never its body). Only two
+// verdicts exist; a missing verdict renders no headline badge.
 const CONTENT_CONFIG: Record<ContentStatus, { text: string; cls: string; icon: string }> = {
-  MATCHED: { text: 'Content Matched', cls: 'badge-true', icon: '✓' },
-  ALTERED: { text: 'Content Altered', cls: 'badge-partial', icon: '◑' },
-  INCOMPLETE: { text: 'Content Check Incomplete', cls: 'badge-incomplete', icon: '⚠' },
+  MATCHED: { text: 'Headline matched', cls: 'badge-true', icon: '✓' },
+  ALTERED: { text: 'Headline altered', cls: 'badge-partial', icon: '◑' },
 };
 
 const DATE_CONFIG: Record<DateStatus, { text: string; cls: string; icon: string }> = {
-  MATCHED: { text: 'Date Matched', cls: 'badge-true', icon: '✓' },
-  MISMATCHED: { text: 'Date Mismatch', cls: 'badge-partial', icon: '📅' },
-  INCOMPLETE: { text: 'Date Check Incomplete', cls: 'badge-incomplete', icon: '⚠' },
+  MATCHED: { text: 'Date matched', cls: 'badge-true', icon: '✓' },
+  MISMATCHED: { text: 'Date mismatch', cls: 'badge-partial', icon: '📅' },
+  INCOMPLETE: { text: 'Date check incomplete', cls: 'badge-incomplete', icon: '⚠' },
 };
 
 const OVERALL_CONFIG: Record<OverallVerdict, { text: string; cls: string; icon: string }> = {
@@ -62,7 +68,7 @@ type BadgeConfig = { text: string; cls: string; icon: string };
   template: `
     @for (badge of badges; track badge.text) {
       <span class="badge" [ngClass]="badge.cls">
-        <span class="badge-icon">{{ badge.icon }}</span>
+        @if (badge.icon) {<span class="badge-icon" aria-hidden="true">{{ badge.icon }}</span>}
         {{ badge.text }}
       </span>
     }
@@ -70,10 +76,14 @@ type BadgeConfig = { text: string; cls: string; icon: string };
   host: { '[class.inline]': 'true' },
   styles: [`
     :host { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+    .badge { padding: 8px 12px; font-size: 14px; font-weight: 750; line-height: 1.4; border: 1px solid currentColor; }
     .badge-icon { font-weight: 700; }
   `],
 })
 export class VerdictBadgeComponent {
+  private _preliminary = false;
+  @Input() set preliminary(value: boolean) { this._preliminary = value; this.recompute(); }
+
   @Input() set label(val: string | null | undefined) {
     this._legacyLabel = val ?? null;
     this.recompute();
@@ -113,7 +123,7 @@ export class VerdictBadgeComponent {
     // fallback only used when neither of the above is set.
     if (this._overallVerdict || this._sourceStatus) {
       const badges: BadgeConfig[] = [];
-      if (this._overallVerdict) badges.push(OVERALL_CONFIG[this._overallVerdict]);
+      if (this._overallVerdict) badges.push(this._preliminary ? (LABEL_CONFIG[this._overallVerdict] || OVERALL_CONFIG[this._overallVerdict]) : OVERALL_CONFIG[this._overallVerdict]);
       if (this._sourceStatus) badges.push(SOURCE_CONFIG[this._sourceStatus]);
       if (this._contentStatus) badges.push(CONTENT_CONFIG[this._contentStatus]);
       if (this._dateStatus) badges.push(DATE_CONFIG[this._dateStatus]);

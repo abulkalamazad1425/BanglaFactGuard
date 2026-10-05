@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.features.photocard.claim_extractor import (
+from app.features.photocard.ocr_fallback_extractor import (
     bangla_ratio,
     extract_claim,
     normalize_for_match,

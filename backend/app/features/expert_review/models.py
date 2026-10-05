@@ -29,8 +29,8 @@ class ExpertProfile(UUIDMixin, TimestampMixin, ReprMixin, Base):
     )
     area_of_expertise: Mapped[str] = mapped_column(String(255), nullable=False)
     credential_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    credibility_score: Mapped[float] = mapped_column(
-        Float, nullable=False, default=0.5
+    credibility_score: Mapped[float | None] = mapped_column(
+        Float, nullable=True, default=None
     )
     total_votes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     correct_votes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

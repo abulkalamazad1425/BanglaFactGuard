@@ -126,3 +126,21 @@ test('non-admins can still use ON/OFF and notification preferences',async()=>{
   reset();await send('settings',{settings:{enabled:false,notifications:false}});
   assert.equal(data.settings.enabled,false);assert.equal(data.settings.notifications,false);assert.equal(requests,0);
 });
+
+test('expired access refreshes; temporary refresh failure keeps credentials',async()=>{
+  const savedFetch=globalThis.fetch;
+  try {
+    reset();data.auth={user:{id:'alice'},access_token:'old',refresh_token:'refresh'};
+    data['claim:one']=claim({owner:'alice'});
+    let failRefresh=true;
+    globalThis.fetch=async(url,options)=> {
+      if(url.endsWith('/auth/refresh')) return {ok:!failRefresh,status:failRefresh?503:200,json:async()=>({access_token:'new',refresh_token:'rotated'})};
+      if(options.headers.Authorization==='Bearer old')return {ok:false,status:401,json:async()=>({})};
+      return {ok:true,status:200,json:async()=>({status:'EXPERT_REVIEW',result:{source_status:'CONFIRMED'}})};
+    };
+    await send('poll',{force:true});
+    assert.equal(data.auth.refresh_token,'refresh');assert.equal(notifications.length,0);
+    failRefresh=false;await send('poll',{force:true});
+    assert.equal(data.auth.refresh_token,'rotated');assert.equal(notifications.length,1);
+  } finally {globalThis.fetch=savedFetch;}
+});

@@ -1,5 +1,5 @@
 import { readableExplanation } from '../../../shared/utils/presentation';
-import { Component, OnInit, inject, signal, computed } from '@angular/core';
+import { Component, OnInit, OnDestroy, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { NotificationService } from '../../../services/notification.service';
@@ -13,7 +13,7 @@ import { ToastService } from '../../../shared/services/toast.service';
   templateUrl: './notification-list.html',
   styleUrls: ['./notification-list.scss']
 })
-export class NotificationListComponent implements OnInit {
+export class NotificationListComponent implements OnInit, OnDestroy {
   readonly readableExplanation = readableExplanation;
   private readonly notifSvc = inject(NotificationService);
   private readonly toast = inject(ToastService);
@@ -25,7 +25,13 @@ export class NotificationListComponent implements OnInit {
   // Computed to avoid arrow functions in template
   readonly hasUnread = computed(() => this.notifications().some(n => !n.is_read));
 
+  private timer?: ReturnType<typeof setInterval>;
   ngOnInit(): void {
+    this.load();
+    this.timer ??= setInterval(() => { if (!document.hidden) this.load(); }, 15000);
+  }
+  ngOnDestroy(): void { if (this.timer) clearInterval(this.timer); }
+  load(): void {
     this.notifSvc.list(50).subscribe({
       next: n => { this.notifications.set(n); this.loading.set(false); this.loadError.set(false); },
       error: () => { this.loading.set(false); this.loadError.set(true); },

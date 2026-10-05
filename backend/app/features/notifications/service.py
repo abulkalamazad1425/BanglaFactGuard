@@ -30,6 +30,9 @@ async def notify_once(
 ) -> bool:
     """Insert the notification unless an identical one exists. Returns True
     when a new row was written. Never raises."""
+    if notification_type == "VERIFICATION_COMPLETE":
+        title = "Preliminary result ready"
+        body = "Your automatic check is complete. View your result."
     try:
         existing = (
             await session.execute(

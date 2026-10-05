@@ -57,21 +57,6 @@ STOPWORDS: frozenset[str] = frozenset(
     }
 )
 
-_MAGNITUDES: dict[str, int] = {
-    "শত": 100, "হাজার": 1_000, "লাখ": 100_000, "লক্ষ": 100_000,
-    "কোটি": 10_000_000,
-}
-
-# Spelled-out numerals (excluding এক "one/a" and নয় which is also "is not").
-_WORD_NUMBERS: dict[str, int] = {
-    "দুই": 2, "তিন": 3, "চার": 4, "পাঁচ": 5, "ছয়": 6, "সাত": 7, "আট": 8,
-    "দশ": 10, "বিশ": 20, "ত্রিশ": 30, "চল্লিশ": 40, "পঞ্চাশ": 50, "ষাট": 60,
-    "সত্তর": 70, "আশি": 80, "নব্বই": 90,
-}
-
-# Longest first. Applied repeatedly (see light_stem) so inflected and bare
-# forms converge on one key.
-# (suffix, replacement): "ার"/"ায়" keep the aa-kar so ঢাকার/ঢাকায়/ঢাকা converge.
 _SUFFIXES: tuple[tuple[str, str], ...] = (
     ("গুলোর", ""), ("গুলির", ""), ("গুলো", ""), ("গুলি", ""), ("দের", ""),
     ("েরা", ""), ("ের", ""), ("কে", ""), ("তে", ""), ("টির", ""), ("টি", ""),
@@ -187,37 +172,3 @@ def chunk_text(text: str, *, max_chars: int = 450, max_chunks: int = 120) -> tup
         chunks.append(cur)
     truncated = len(chunks) > max_chunks
     return chunks[:max_chunks], truncated
-
-
-def parse_number_phrases(text: str) -> list[tuple[float, str | None, str]]:
-    """(value, unit, surface) triples. Magnitude words fold into the value
-    (১০ লাখ -> 1_000_000); the unit is the next non-magnitude token."""
-    toks = tokenize(text)
-    out: list[tuple[float, str | None, str]] = []
-    i = 0
-    while i < len(toks):
-        tok = toks[i]
-        nxt = toks[i + 1] if i + 1 < len(toks) else ""
-        word_val = _WORD_NUMBERS.get(tok)
-        if word_val is not None and nxt and nxt not in STOPWORDS:
-            toks[i] = tok = str(word_val)
-        if is_number_token(tok):
-            try:
-                value = float(tok.replace(",", ""))
-            except ValueError:
-                i += 1
-                continue
-            j = i + 1
-            surface = tok
-            while j < len(toks) and toks[j] in _MAGNITUDES:
-                value *= _MAGNITUDES[toks[j]]
-                surface += f" {toks[j]}"
-                j += 1
-            unit = None
-            if j < len(toks) and not is_number_token(toks[j]) and toks[j] not in STOPWORDS:
-                unit = light_stem(toks[j])
-            out.append((value, unit, surface))
-            i = j
-        else:
-            i += 1
-    return out

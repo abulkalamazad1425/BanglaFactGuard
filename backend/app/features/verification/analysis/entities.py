@@ -13,9 +13,8 @@ surname is reported as *ambiguous*, not matched.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
-from app.core.constants import MetricState
 from app.features.verification.analysis.text import light_stem, tokenize
 
 # Equivalence classes of surface forms. Normalised at import with the same
@@ -75,32 +74,6 @@ class EntityMatch:
             "type": self.type,
             "status": self.status,
             "matched_to": self.matched_to,
-        }
-
-
-@dataclass
-class EntityCoverage:
-    state: MetricState
-    value: float | None
-    matches: list[EntityMatch] = field(default_factory=list)
-    reason: str | None = None
-
-    @property
-    def matched(self) -> list[str]:
-        return [m.claimed for m in self.matches if m.matched]
-
-    @property
-    def unmatched(self) -> list[str]:
-        return [m.claimed for m in self.matches if not m.matched]
-
-    def to_dict(self) -> dict:
-        return {
-            "state": self.state.value,
-            "value": self.value,
-            "matches": [m.to_dict() for m in self.matches],
-            "matched": self.matched,
-            "unmatched": self.unmatched,
-            "reason": self.reason,
         }
 
 
@@ -173,74 +146,7 @@ def _windows(tokens: tuple[str, ...], max_n: int):
             yield tokens[i : i + n]
 
 
-def entity_coverage(
-    claim_mentions: list[EntityMention],
-    evidence_mentions: list[EntityMention],
-    evidence_text: str,
-    *,
-    ner_available: bool,
-) -> EntityCoverage:
-    """Fraction of claimed entities present in the evidence.
-
-    UNAVAILABLE when NER could not run (never 0 and never passed);
-    NOT_APPLICABLE when the claim names no entities (never an artificial 100%).
-    """
-    if not ner_available:
-        return EntityCoverage(MetricState.UNAVAILABLE, None, reason="NER unavailable")
-
-    seen: set[tuple[str, ...]] = set()
-    unique: list[EntityMention] = []
-    for m in claim_mentions:
-        if m.key and m.key not in seen:
-            seen.add(m.key)
-            unique.append(m)
-    if not unique:
-        return EntityCoverage(
-            MetricState.NOT_APPLICABLE, None, reason="no claim entities detected"
-        )
-
-    ev_tokens = tuple(light_stem(t) for t in tokenize(evidence_text))
-    matches = [match_entity(m, evidence_mentions, ev_tokens) for m in unique]
-    matched = sum(1 for m in matches if m.matched)
-    return EntityCoverage(
-        MetricState.COMPUTED, round(matched / len(matches), 4), matches=matches
-    )
-
-
 # ── grammatical role (surface case marking) ──────────────────────────────
-
-def detect_role(sentence: str, mention_text: str) -> str:
-    """Coarse grammatical role from Bangla case marking on the mention's last
-    token in `sentence`: SUBJECT (unmarked/nominative), OBJECT (-কে),
-    POSSESSOR (-র/-ের/-দের), LOCATIVE (-তে/-য়/-ে), AGENT (দ্বারা/কর্তৃক),
-    SOURCE (থেকে), or UNKNOWN when the mention is not found.
-
-    A *role* is not an entity *type*: two PER mentions can hold different
-    roles, so substitution checks compare (type, role) together.
-    """
-    toks = tokenize(sentence)
-    mkey = entity_key(mention_text)
-    if not mkey:
-        return "UNKNOWN"
-    stems = [light_stem(t) for t in toks]
-    for i in range(len(stems) - len(mkey) + 1):
-        if tuple(stems[i : i + len(mkey)]) == mkey:
-            last = i + len(mkey) - 1
-            raw = toks[last]
-            nxt = toks[last + 1] if last + 1 < len(toks) else ""
-            if nxt in {"দ্বারা", "কর্তৃক"}:
-                return "AGENT"
-            if nxt == "থেকে":
-                return "SOURCE"
-            if raw.endswith("কে"):
-                return "OBJECT"
-            if raw.endswith(("দের", "ের")) or (raw.endswith("র") and len(raw) > 3 and raw[-2] == "া"):
-                return "POSSESSOR"
-            if raw.endswith(("তে", "ায়")):
-                return "LOCATIVE"
-            return "SUBJECT"
-    return "UNKNOWN"
-
 
 def mentions_in_sentence(sentence: str, mentions: list[EntityMention]) -> list[EntityMention]:
     """Mentions whose normalised token sequence occurs in `sentence`."""

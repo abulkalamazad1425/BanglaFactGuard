@@ -1,73 +1,18 @@
-    <div class="history-page">
-      <div class="container" style="padding-top:48px; padding-bottom:80px;">
-        <div class="page-header animate-in">
-          <h1>My Review History</h1>
-          <p>Your past expert votes and their outcomes</p>
-        </div>
-
-        @if (loadError()) {<div class="service-notice" role="alert"><p>This list could not be loaded. Please try again.</p><button class="btn btn-secondary" (click)="ngOnInit()">Try again</button></div>}
-        @if (loading()) { <div class="loading-overlay"><div class="spinner"></div></div> }
-
-        @if (!loading() && !loadError() && history().length === 0) {
-          <div class="empty-state card text-center">
-            <div style="font-size:64px;margin-bottom:16px;">📋</div>
-            <h3>No reviews yet</h3>
-            <p>Start reviewing claims from the expert queue.</p>
-            <a routerLink="/expert/queue" class="btn btn-primary mt-4">Go to Queue</a>
-          </div>
-        }
-
-        @if (!loading() && history().length > 0) {
-          <div class="table-card card animate-in">
-            <table class="data-table">
-              <thead><tr>
-                <th>Headline</th>
-                <th>Your Vote</th>
-                <th>Automated findings</th>
-                <th>Final</th>
-                <th>Match</th>
-                <th>Date</th>
-              </tr></thead>
-              <tbody>
-                @for (h of history(); track h.review_id) {
-                  <tr>
-                    <td class="headline-cell">{{ h.headline || h.submission_id | slice:0:70 }}...</td>
-                    <td>
-                      <app-verdict-badge
-                        [overallVerdict]="h.vote_overall_verdict"
-                        [sourceStatus]="h.vote_source_status"
-                        [contentStatus]="h.vote_content_status"
-                        [dateStatus]="h.vote_date_status" />
-                    </td>
-                    <td>
-                      <app-verdict-badge
-                        [overallVerdict]="h.ai_overall_verdict"
-                        [sourceStatus]="h.ai_source_status"
-                        [contentStatus]="h.ai_content_status"
-                        [dateStatus]="h.ai_date_status" />
-                    </td>
-                    <td>
-                      @if (h.final_overall_verdict) {
-                        <app-verdict-badge
-                          [overallVerdict]="h.final_overall_verdict"
-                          [sourceStatus]="h.final_source_status"
-                          [contentStatus]="h.final_content_status"
-                          [dateStatus]="h.final_date_status" />
-                      } @else { <span class="text-muted">Pending</span> }
-                    </td>
-                    <td>
-                      @if (h.matched !== null && h.matched !== undefined) {
-                        <span [class]="h.matched ? 'text-success' : 'text-error'">
-                          {{ h.matched ? '✓ Match' : '✗ Differ' }}
-                        </span>
-                      } @else { <span class="text-muted">—</span> }
-                    </td>
-                    <td class="text-muted text-sm">{{ h.voted_at | date:'MMM d, y' }}</td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          </div>
-        }
-      </div>
-    </div>
+<div class="history-page"><div class="container history-container">
+  <header class="page-header"><div><h1>My Review History</h1><p>Your votes alongside the final expert verdict.</p></div><a class="btn btn-primary" routerLink="/expert/queue">Review claims</a></header>
+  <form class="search-toolbar" (submit)="$event.preventDefault(); search(searchInput.value)"><label for="history-search">Search reviews</label><div class="search-row"><input #searchInput id="history-search" class="form-control" type="search" maxlength="200" placeholder="Headline or source"><button class="btn btn-primary" [disabled]="loading()">Search</button></div></form>
+  @if (loadError()) {<div role="alert" class="service-notice"><p>Could not load your reviews.</p><button class="btn btn-secondary" (click)="load()">Try again</button></div>}
+  @if (loading()) {<div class="loading-overlay" role="status" aria-label="Loading reviews"><div class="spinner"></div></div>}
+  @if (!loading() && !loadError() && !history().length) {<div class="empty-state card"><h2>No reviews found</h2><p>Try another search or return to the review queue.</p></div>}
+  <div class="submission-list">@for (h of history(); track h.review_id) {
+    <article class="card submission-card">
+      <div class="submission-meta"><span>{{ h.submission_type === 'MULTIMODAL' ? 'Text & image' : h.submission_type === 'PHOTO_CARD' ? 'Photo card' : 'Text & source' }}</span><time>{{ h.voted_at | date:'MMM d, y' }}</time></div>
+      <h2><a [routerLink]="['/verify',h.submission_id]">{{ h.headline || 'View submitted claim' }}</a></h2>
+      <div class="review-outcomes"><div><h3>Your vote</h3><app-verdict-badge [overallVerdict]="h.vote_overall_verdict" /></div><div><h3>Final result</h3>@if (h.final_overall_verdict) {<app-verdict-badge [overallVerdict]="h.final_overall_verdict" />} @else {<span class="badge badge-pending">Expert review pending</span>}</div></div>
+      @if (h.matched !== null) {<p class="text-muted">{{ h.matched ? 'Your vote matches the final verdict.' : 'The final verdict differs from your vote.' }}</p>}
+      <details><summary>Preliminary findings and your checks</summary><div class="review-outcomes"><div><h3>Preliminary</h3><app-verdict-badge [preliminary]="true" [overallVerdict]="h.ai_overall_verdict" [sourceStatus]="h.ai_source_status" [contentStatus]="h.ai_content_status" [dateStatus]="h.ai_date_status" /></div><div><h3>Your checks</h3><app-verdict-badge [sourceStatus]="h.vote_source_status" [contentStatus]="h.vote_content_status" [dateStatus]="h.vote_date_status" /></div></div></details>
+      <a class="btn btn-secondary btn-sm" [routerLink]="['/verify',h.submission_id]">View evidence →</a>
+    </article>
+  }</div>
+  <nav class="pagination" aria-label="Review pages"><button class="btn btn-ghost" [disabled]="offset() === 0 || loading()" (click)="prev()">← Previous</button><span>Page {{ page() }}</span><button class="btn btn-ghost" [disabled]="history().length < limit || loading()" (click)="next()">Next →</button></nav>
+</div></div>

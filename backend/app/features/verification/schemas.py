@@ -6,10 +6,11 @@ from datetime import date, datetime
 from pydantic import BaseModel, Field, field_validator
 
 from app.core.constants import (
-    CheckState,
+    BodyComparisonStatus,
     ClaimScope,
     ContentStatus,
     DateStatus,
+    HeadlineCheckStatus,
     MetricState,
     OverallVerdict,
     SourceStatus,
@@ -35,184 +36,14 @@ class NLIScoresSchema(BaseModel):
     }
 
 
-class VerificationScoresSchema(BaseModel):
-    """Measurements, not probabilities of truth. A null value means "no
-    measurement" — the reason is in `AnalysisDetails.metrics[<name>].state`
-    (NOT_APPLICABLE / EMPTY / UNAVAILABLE), never 0% or 100%."""
-
-    semantic_similarity: float | None = Field(
-        default=None,
-        ge=0.0,
-        le=1.0,
-        description=(
-            "Applicable semantic similarity. HEADLINE_ONLY: headline vs source "
-            "title. HEADLINE_WITH_BODY: 0.3*headline + 0.7*body (both applicable)."
-        ),
-    )
-    entity_match: float | None = Field(
-        default=None,
-        ge=0.0,
-        le=1.0,
-        description="Directional coverage of the claim's entities in the source evidence (no penalty for extra source entities).",
-    )
-    keyword_overlap: float | None = Field(
-        default=None,
-        ge=0.0,
-        le=1.0,
-        description="Headline keyword coverage against the source title (alias of headline_keyword_coverage).",
-    )
-    numerical_consistency: float | None = Field(
-        default=None,
-        ge=0.0,
-        le=1.0,
-        description="Share of claimed numbers supported by the source; null when the claim has no numbers.",
-    )
-    contradiction_score: float | None = Field(default=None, ge=0.0, le=1.0)
-
-    headline_similarity: float | None = Field(
-        default=None,
-        ge=0.0,
-        le=1.0,
-        description="Embedding cosine similarity between the submitted headline and the source title.",
-    )
-    body_similarity: float | None = Field(
-        default=None,
-        ge=0.0,
-        le=1.0,
-        description=(
-            "Submitted body vs aligned source passages. NULL (not applicable) "
-            "unless a body was submitted - never computed for photo cards."
-        ),
-    )
-    passage_similarity: float | None = Field(
-        default=None,
-        ge=0.0,
-        le=1.0,
-        description="Headline vs the most relevant source passages (supporting evidence; not a body match).",
-    )
-    headline_keyword_coverage: float | None = Field(default=None, ge=0.0, le=1.0)
-    passage_keyword_coverage: float | None = Field(default=None, ge=0.0, le=1.0)
-    body_keyword_coverage: float | None = Field(default=None, ge=0.0, le=1.0)
-
-    model_config = {
-        "json_schema_extra": {
-            "example": {
-                "semantic_similarity": 0.91,
-                "entity_match": 0.85,
-                "keyword_overlap": 0.78,
-                "numerical_consistency": 1.0,
-                "contradiction_score": 0.04,
-            }
-        }
-    }
-
-
-class AlteredNumberDetail(BaseModel):
-    """One number present in the claim but absent from the article, with the
-    closest number the article did contain (if any) — e.g. claimed "১০০ জন"
-    where the article says "১০ জন" surfaces as claimed="১০০ জন",
-    nearest_in_article="১০"."""
-
-    claimed: str
-    nearest_in_article: str | None = Field(
-        default=None,
-        description="Closest numeral actually found in the article, or null if none was close.",
-    )
-
-
-class SubstitutedEntityDetail(BaseModel):
-    """A same-type entity substitution S10 detected — e.g. the claim names a
-    PER the article never mentions, while the article names a different PER
-    of the same role."""
-
-    entity_type: str = Field(description="PER, LOC, or ORG")
-    claimed: list[str]
-    article_same_type: list[str] = Field(
-        description="Entities of the same type the article mentions instead."
-    )
-
-
-class DiscrepancyDetail(BaseModel):
-    """One concrete, quotable disagreement between the claim and the source."""
-
-    kind: str = Field(
-        description="numbers | negation | entity_substitution | entity_role | scope | attribution | modality"
-    )
-    claim_text: str
-    evidence_text: str | None = None
-    detail: str
-    part: str = Field(default="headline", description="headline | body")
-
-
-class ManipulationFlagsSchema(BaseModel):
-    """Alteration findings. A boolean is True ONLY when a concrete discrepancy
-    was found; False does NOT mean "verified" - consult `check_states`, where
-    a check that did not run is NOT_EVALUATED and one that does not apply is
-    NOT_APPLICABLE. Rows persisted before check_states existed have an empty
-    map and must be read as "not evaluated"."""
-
-    headline_manipulated: bool = Field(default=False)
-    body_altered: bool = Field(default=False)
-    numbers_altered: bool = Field(default=False)
-    entities_replaced: bool = Field(default=False)
-
-    altered_numbers: list[AlteredNumberDetail] = Field(
-        default_factory=list,
-        description="Set when numbers_altered is True: which claimed numbers differ from the source, and the source's number.",
-    )
-    substituted_entities: list[SubstitutedEntityDetail] = Field(
-        default_factory=list,
-        description="Set when entities_replaced is True: which claimed entity replaced which source entity (same type and role).",
-    )
-    check_states: dict[str, CheckState] = Field(
-        default_factory=dict,
-        description=(
-            "headline | body | numbers | negation | entities | scope | "
-            "attribution | modality -> PASSED | FAILED | NOT_EVALUATED | NOT_APPLICABLE"
-        ),
-    )
-    discrepancies: list[DiscrepancyDetail] = Field(default_factory=list)
-
-    @property
-    def any_manipulation_detected(self) -> bool:
-        return any(
-            [
-                self.headline_manipulated,
-                self.body_altered,
-                self.numbers_altered,
-                self.entities_replaced,
-            ]
-        ) or bool(self.discrepancies)
-
-    model_config = {
-        "json_schema_extra": {
-            "example": {
-                "headline_manipulated": True,
-                "body_altered": False,
-                "numbers_altered": True,
-                "entities_replaced": False,
-                "altered_numbers": [{"claimed": "5", "nearest_in_article": "10"}],
-                "substituted_entities": [],
-                "check_states": {"numbers": "FAILED", "body": "NOT_APPLICABLE"},
-                "discrepancies": [],
-            }
-        }
-    }
-
-
 class MetricDetail(BaseModel):
+    """A source-correspondence measurement plus the state that explains it.
+    A null value is "no measurement" (see `state`), never 0."""
+
     state: MetricState
     value: float | None = None
     reason: str | None = None
     details: dict = Field(default_factory=dict)
-
-
-class EvidencePassage(BaseModel):
-    text: str
-    score: float
-    location: str = Field(default="body", description="title | body")
-    first_sentence: int | None = None
-    last_sentence: int | None = None
 
 
 class SearchAccounting(BaseModel):
@@ -244,62 +75,97 @@ class DateAnalysis(BaseModel):
     timezone: str = "Asia/Dhaka"
 
 
-class NLIAnalysis(BaseModel):
-    entailment: float | None = None
-    neutral: float | None = None
-    contradiction: float | None = None
-    premise: str | None = Field(default=None, description="relevant_passages | title_only")
-    reliability: str = Field(
-        default="UNVALIDATED_FOR_BANGLA",
-        description="The NLI model has not been validated on Bangla; it can block MATCHED but never alone cause ALTERED.",
-    )
+class HeadlineDifference(BaseModel):
+    """One material difference between the claim headline and the source title."""
 
-
-class ContentEvidence(BaseModel):
-    """A verbatim quote from the source report."""
-
-    location: str = Field(description="title | body")
-    quote: str
-
-
-class ContentFinding(BaseModel):
-    """How one submitted statement (a headline or body sentence) compares
-    with the source report, with the source text that shows it."""
-
-    part: str = Field(default="headline", description="headline | body")
-    claim_text: str
-    status: str = Field(description="SUPPORTED | CONTRADICTED | INSUFFICIENT_EVIDENCE")
     kind: str = Field(
-        default="none",
-        description="none | numbers | negation | entity_substitution | entity_role | scope | attribution | modality | semantic",
+        description="numbers | date | negation | modality | scope | subject_object | attribution | denial | entity | main_point"
+    )
+    detail: str
+    claim_text: str
+    source_text: str
+
+
+class HeadlineSemanticAssessment(BaseModel):
+    """Local-model evidence for a non-exact comparison (title vs headline only)."""
+
+    available: bool
+    entailment_title_to_claim: float | None = Field(default=None, ge=0.0, le=1.0)
+    contradiction_title_to_claim: float | None = Field(default=None, ge=0.0, le=1.0)
+    entailment_claim_to_title: float | None = Field(default=None, ge=0.0, le=1.0)
+    contradiction_claim_to_title: float | None = Field(default=None, ge=0.0, le=1.0)
+    embedding_cosine: float | None = Field(
+        default=None, ge=-1.0, le=1.0, description="LaBSE cosine of headline vs title (raw, -1..1)."
+    )
+    reason: str | None = None
+
+
+class HeadlineAlterationDetail(BaseModel):
+    """Headline Alteration — the claim headline compared ONLY with the
+    selected source article's title (never its body). `verdict` is MATCHED,
+    ALTERED or null; when null, `status` says why (source not found, search
+    incomplete, title missing, model unavailable, undetermined)."""
+
+    status: HeadlineCheckStatus
+    verdict: ContentStatus | None = None
+    reason: str = Field(description="Short, evidence-based basis for the verdict or for its absence.")
+    exact_match: bool = Field(
+        default=False,
+        description="True when the verdict was decided by an exact match, before any alteration analysis ran.",
     )
     basis: str = Field(
         default="none",
-        description="verbatim | facts_preserved | entailment | clauses | conflict | none",
+        description="exact | same_words | semantic_equivalence | material_difference | semantic_divergence | none",
     )
-    explanation: str
-    evidence: list[ContentEvidence] = Field(default_factory=list)
-    checks: list[str] = Field(
-        default_factory=list,
-        description="Fact types present in the statement (numbers, negation, entities, scope, attribution, modality).",
-    )
-    alignment: float = 0.0
-    nli: dict[str, float] = Field(default_factory=dict)
-    meta: dict[str, str] = Field(default_factory=dict)
+    claim_headline: str
+    source_title: str | None = None
+    source_publisher: str | None = None
+    source_url: str | None = None
+    differences: list[HeadlineDifference] = Field(default_factory=list)
+    semantic: HeadlineSemanticAssessment | None = None
+    ner_available: bool = False
+    method: str | None = None
 
 
-class ContentCheck(BaseModel):
-    """Statement-by-statement content comparison (local models only)."""
+class BodySimilarityMetric(BaseModel):
+    """One claim-body vs source-body similarity measurement. `value` is the
+    displayed 0-1 score (null when unavailable - never a default 0);
+    `raw_value` keeps the metric's raw output (semantic cosine may be
+    negative); `reason` explains unavailability."""
 
-    method: str
-    models: str | None = None
-    nli_reliability: str = "UNVALIDATED_FOR_BANGLA"
-    findings: list[ContentFinding] = Field(default_factory=list)
-    unchecked_statements: int = Field(
-        default=0, description="Submitted statements beyond the comparison limit (not compared)."
-    )
-    source_truncated: bool = False
-    reason: str | None = Field(default=None, description="Why the comparison could not run at all.")
+    available: bool
+    value: float | None = Field(default=None, ge=0.0, le=1.0)
+    raw_value: float | None = None
+    reason: str | None = None
+    details: dict = Field(default_factory=dict)
+
+
+class BodySimilarityReport(BaseModel):
+    """Claim body vs source body - similarity MEASUREMENTS only, never a
+    truth, alteration or contradiction verdict, and never an input to the
+    Headline Alteration verdict."""
+
+    status: BodyComparisonStatus
+    reason: str | None = None
+    tfidf_cosine: BodySimilarityMetric | None = None
+    jaccard: BodySimilarityMetric | None = None
+    normalized_levenshtein: BodySimilarityMetric | None = None
+    semantic_cosine: BodySimilarityMetric | None = None
+    claim_chars: int | None = None
+    source_chars: int | None = None
+
+
+class ExecutionTimings(BaseModel):
+    """Measured wall times for this execution, in milliseconds.
+
+    Pipeline time excludes photo preprocessing, queue wait and the final
+    transaction commit. Missing stages were skipped, not measured as zero.
+    """
+
+    stage_ms: dict[str, int] = Field(default_factory=dict)
+    preprocessing_ms: dict[str, int] = Field(default_factory=dict)
+    pipeline_ms: int
+    cache_hit: bool = False
 
 
 class AnalysisDetails(BaseModel):
@@ -307,15 +173,16 @@ class AnalysisDetails(BaseModel):
 
     pipeline_version: str | None = None
     claim_scope: ClaimScope | None = None
-    metrics: dict[str, MetricDetail] = Field(default_factory=dict)
-    passages: list[EvidencePassage] = Field(default_factory=list)
-    nli: NLIAnalysis | None = None
-    content_check: ContentCheck | None = None
+    metrics: dict[str, MetricDetail] = Field(
+        default_factory=dict, description="Source-correspondence measurements."
+    )
     search: SearchAccounting | None = None
-    date: DateAnalysis | None = None
     source_basis: list[str] = Field(default_factory=list)
-    content_basis: list[str] = Field(default_factory=list)
+    headline_alteration: HeadlineAlterationDetail | None = None
+    body_similarity: BodySimilarityReport | None = None
+    date: DateAnalysis | None = None
     stage_errors: dict[str, str] = Field(default_factory=dict)
+    timings: ExecutionTimings | None = None
 
 
 class VerificationRequest(BaseModel):
@@ -369,10 +236,6 @@ class VerificationRequest(BaseModel):
     }
 
 
-class VerificationScoresResponse(VerificationScoresSchema):
-    pass
-
-
 class VerificationResponse(BaseModel):
 
     submission_id: uuid.UUID
@@ -413,10 +276,14 @@ class VerificationResponse(BaseModel):
     content_status: ContentStatus | None = Field(
         default=None,
         description=(
-            "How the claimed content compares to the source. Only set when "
-            "source_status is CONFIRMED — there is nothing to compare "
-            "against when the source never published the story."
+            "Headline Alteration verdict (MATCHED | ALTERED): the claim headline "
+            "compared with the source title only. Null when no verdict was "
+            "reached - see headline_check_status for why."
         ),
+    )
+    headline_check_status: HeadlineCheckStatus | None = Field(
+        default=None,
+        description="Processing/availability status of the Headline Alteration check (separate from the verdict).",
     )
     date_status: DateStatus | None = Field(
         default=None,
@@ -426,13 +293,12 @@ class VerificationResponse(BaseModel):
             "mismatch does not imply the content itself is false."
         ),
     )
-    confidence: float = Field(..., ge=0.0, le=1.0)
+    confidence: float = Field(
+        ..., ge=0.0, le=1.0,
+        description="Source-correspondence strength (mean of the correspondence measurements). Not a probability of truth.",
+    )
     reasoning: str
     matched_articles: list[RankedArticleSchema] = Field(default_factory=list)
-    scores: VerificationScoresResponse
-    manipulation_flags: ManipulationFlagsSchema = Field(
-        default_factory=ManipulationFlagsSchema
-    )
     normalized_source: str | None = None
     cached: bool = False
     processing_time_ms: int | None = None
@@ -447,12 +313,21 @@ class VerificationResponse(BaseModel):
     )
     confidence_meaning: str = Field(
         default=(
-            "Automated check strength: the mean of the applicable similarity/"
-            "coverage measurements behind this result. It is a measurement "
-            "summary, not the probability that the claim is true."
+            "Source-correspondence strength: the mean of the headline/title "
+            "similarity and keyword-coverage measurements used to decide "
+            "whether the claimed outlet carried this report. It is not the "
+            "probability that the claim is true."
         ),
     )
     pipeline_version: str | None = None
+    legacy_result: bool = Field(
+        default=False,
+        description=(
+            "True for a result stored by the pre-Headline-Alteration pipeline. Its "
+            "old content-level verdict is NOT shown as a headline verdict "
+            "(ai_content_status is null for such rows)."
+        ),
+    )
     analysis: AnalysisDetails | None = None
 
     model_config = {
@@ -468,19 +343,7 @@ class VerificationResponse(BaseModel):
                     "different date than claimed."
                 ),
                 "matched_articles": [],
-                "scores": {
-                    "semantic_similarity": 0.91,
-                    "entity_match": 0.88,
-                    "keyword_overlap": 0.79,
-                    "numerical_consistency": 1.0,
-                    "contradiction_score": 0.04,
-                },
-                "manipulation_flags": {
-                    "headline_manipulated": False,
-                    "body_altered": False,
-                    "numbers_altered": False,
-                    "entities_replaced": False,
-                },
+                "headline_check_status": "COMPLETED",
                 "normalized_source": "prothomalo.com",
                 "cached": False,
                 "processing_time_ms": 4231,

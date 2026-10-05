@@ -19,8 +19,17 @@ export class ExpertHistoryComponent implements OnInit {
   readonly loadError = signal(false);
   readonly history = signal<ExpertHistoryItem[]>([]);
 
-  ngOnInit(): void {
-    this.expertSvc.getHistory(50).subscribe({
+  query = '';
+  readonly offset = signal(0);
+  readonly limit = 20;
+  readonly page = () => Math.floor(this.offset() / this.limit) + 1;
+  search(value: string): void { this.query = value.trim(); this.offset.set(0); this.load(); }
+  prev(): void { this.offset.update(o => Math.max(0, o - this.limit)); this.load(); }
+  next(): void { this.offset.update(o => o + this.limit); this.load(); }
+  ngOnInit(): void { this.load(); }
+  load(): void {
+    this.loading.set(true);
+    this.expertSvc.getHistory(this.limit, this.offset(), this.query).subscribe({
       next: h => { this.history.set(h); this.loading.set(false); this.loadError.set(false); },
       error: () => { this.loading.set(false); this.loadError.set(true); },
     });

@@ -50,9 +50,9 @@
             <p class="card-subtitle">Source and content are checked independently</p>
             <div class="breakdown-list">
               <app-score-bar label="Source Confirmed ✓" [value]="sourceConfirmedRatio()" color="var(--success)" />
-              <app-score-bar label="Source Not Found ?" [value]="sourceNotFoundRatio()" color="var(--text-muted)" />
-              <app-score-bar label="Content Matched ✓" [value]="contentMatchedRatio()" color="var(--success)" />
-              <app-score-bar label="Content Altered ◑" [value]="contentAlteredRatio()" color="var(--warning)" />
+              <app-score-bar label="Source not found" [value]="sourceNotFoundRatio()" color="var(--text-muted)" />
+              <app-score-bar label="Headline Matched ✓" [value]="contentMatchedRatio()" color="var(--success)" />
+              <app-score-bar label="Headline Altered ◑" [value]="contentAlteredRatio()" color="var(--warning)" />
             </div>
             <div class="breakdown-counts">
               <span class="text-success">{{ stats()!.verdict_breakdown.source_confirmed_count }} CONFIRMED</span>

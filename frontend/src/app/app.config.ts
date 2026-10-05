@@ -1,5 +1,5 @@
 import { ApplicationConfig, provideZoneChangeDetection } from '@angular/core';
-import { provideRouter, withViewTransitions } from '@angular/router';
+import { provideRouter, withInMemoryScrolling, withViewTransitions } from '@angular/router';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import { APP_ROUTES } from './routes/app.routes';
@@ -9,9 +9,10 @@ import { errorInterceptor } from './core/interceptors/error.interceptor';
 export const appConfig: ApplicationConfig = {
   providers: [
     provideZoneChangeDetection({ eventCoalescing: true }),
-    provideRouter(APP_ROUTES, withViewTransitions()),
+    // Anchor scrolling lets links such as /faq#body-scores open the right answer.
+    provideRouter(APP_ROUTES, withViewTransitions(), withInMemoryScrolling({ anchorScrolling: 'enabled' })),
     provideHttpClient(
-      withInterceptors([authInterceptor, errorInterceptor])
+      withInterceptors([errorInterceptor, authInterceptor])
     ),
     provideAnimationsAsync(),
   ],

@@ -51,29 +51,24 @@ async def test_full_pipeline_execution(
 
         with (
             patch(
-                "app.features.search.newsdata_client.NewsDataClient.search_entries",
+                "app.features.search.pygooglenews_client.PyGoogleNewsClient.search_entries",
                 new_callable=AsyncMock,
-            ) as mock_newsdata,
+            ) as mock_pgn,
             patch(
-                "app.features.search.google_cse_client.GoogleCSEClient.search_entries",
+                "app.features.search.internal_site_client.InternalSiteSearchClient.search_entries",
                 new_callable=AsyncMock,
-            ) as mock_google,
-            patch(
-                "app.features.search.duckduckgo_client.DuckDuckGoClient.search_entries",
-                new_callable=AsyncMock,
-            ) as mock_ddg,
+            ) as mock_internal,
             patch(
                 "app.features.verification.pipeline.stages.s06_article_extractor.ArticleExtractorStage.execute"
             ) as mock_extract,
         ):
-            mock_newsdata.return_value = [
+            mock_pgn.return_value = [
                 (
                     "https://prothomalo.com/article/456",
                     "শেখ হাসিনা নতুন উড়ালসড়ক উদ্বোধন করলেন",
                 )
             ]
-            mock_google.return_value = []
-            mock_ddg.return_value = []
+            mock_internal.return_value = []
 
             async def dummy_extract_exec(context):
                 from app.features.articles.schemas import RankedArticleSchema
@@ -85,7 +80,7 @@ async def test_full_pipeline_execution(
                         title="শেখ হাসিনা নতুন উড়ালসড়ক উদ্বোধন করলেন",
                         body="আজ নতুন উড়ালসড়ক উদ্বোধন করেন প্রধানমন্ত্রী।",
                         rank_score=0.95,
-                        search_provider=SearchProvider.NEWSDATA,
+                        search_provider=SearchProvider.PY_GOOGLE_NEWS,
                     )
                 ]
                 return context
@@ -124,19 +119,7 @@ async def test_pipeline_cache_hit(
         "date_status": None,
         "confidence": 0.94,
         "reasoning": "Cached reason",
-        "scores": {
-            "semantic_similarity": 0.91,
-            "entity_match": 0.85,
-            "keyword_overlap": 0.78,
-            "numerical_consistency": 1.0,
-            "contradiction_score": 0.04,
-        },
-        "manipulation_flags": {
-            "headline_manipulated": False,
-            "body_altered": False,
-            "numbers_altered": False,
-            "entities_replaced": False,
-        },
+        "headline_check_status": "COMPLETED",
         "matched_articles": [],
         "submission_id": None,
         "normalized_source": "prothomalo.com",

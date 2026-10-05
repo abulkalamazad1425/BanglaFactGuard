@@ -4,7 +4,6 @@ import { RouterLink } from '@angular/router';
 import { VerificationService } from '../../../services/verification.service';
 import { SubmissionSummary, SubmissionStats } from '../../../models/verification.model';
 import { VerdictBadgeComponent } from '../../../shared/components/verdict-badge/verdict-badge.component';
-import { STRENGTH_HELP } from '../../../shared/utils/result-view';
 
 /**
  * My Submissions. Rows exist from the moment a submission is accepted —
@@ -32,7 +31,6 @@ export class SubmissionHistoryComponent implements OnInit, OnDestroy {
   readonly stats = signal<SubmissionStats | null>(null);
   readonly offset = signal(0);
   readonly limit = 20;
-  readonly strengthHelp = STRENGTH_HELP;
 
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -60,7 +58,7 @@ export class SubmissionHistoryComponent implements OnInit, OnDestroy {
         next: s => {
           this.submissions.set(s);
           this.loading.set(false); this.loadError.set(false);
-          if (s.some(x => this.isRunning(x))) this.ensureRefresh(); else this.stopRefresh();
+          if (s.some(x => !x.is_finalized && !this.isFailed(x))) this.ensureRefresh(); else this.stopRefresh();
         },
         error: () => { this.loading.set(false); this.loadError.set(true); },
       });
@@ -72,7 +70,7 @@ export class SubmissionHistoryComponent implements OnInit, OnDestroy {
       if (typeof document !== 'undefined' && document.hidden) return;
       this.load(true);
       this.refreshStats();
-    }, 6000);
+    }, 15000);
   }
 
   private stopRefresh(): void {
@@ -95,11 +93,11 @@ export class SubmissionHistoryComponent implements OnInit, OnDestroy {
   }
 
   hasResult(s: SubmissionSummary): boolean {
-    return !this.isRunning(s) && !this.isFailed(s) && s.source_status !== null;
+    return !this.isRunning(s) && !this.isFailed(s) && Boolean(s.source_status || s.prediction || s.overall_verdict);
   }
 
   typeLabel(t: string): string {
-    return t === 'PHOTO_CARD' ? '🖼️ Photo card' : t === 'MULTIMODAL' ? 'Text and image' : '🔎 Text claim';
+    return t === 'PHOTO_CARD' ? 'Photo card' : t === 'MULTIMODAL' ? 'Text & image' : 'Text & source';
   }
 
   /** What to show where the headline would be — a pending photo card has none yet. */

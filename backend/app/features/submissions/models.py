@@ -288,47 +288,60 @@ class OcrExtraction(UUIDMixin, TimestampMixin, ReprMixin, Base):
         Boolean,
         nullable=False,
         default=False,
-        comment=(
-            "Legacy from the two-step extract-then-confirm flow. The "
-            "unattended Gemini extraction flow never sets this (there is no "
-            "user confirmation step); it stays False on every row it writes."
-        ),
+        comment="Legacy from the retired extract-then-confirm flow; always False.",
     )
 
     extractor_used: Mapped[str | None] = mapped_column(
         String(30),
         nullable=True,
-        comment="GEMINI | EXISTING_FALLBACK — which extractor actually produced the final headline for this card.",
+        comment="GEMINI_IMAGE | OCR_FALLBACK - which extraction path produced the headline (NULL when none did).",
     )
 
     extraction_model_version: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
-        comment="Gemini model id used (e.g. gemini-2.0-flash), NULL when extractor_used=EXISTING_FALLBACK.",
+        comment="Gemini model id when extractor_used=GEMINI_IMAGE, else NULL.",
+    )
+
+    extraction_attempts: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        comment="Gemini attempts made for this card (first request included, at most 3).",
+    )
+
+    fallback_used: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        comment="True when EasyOCR + the deterministic fallback extractor ran.",
+    )
+
+    extraction_details: Mapped[dict | None] = mapped_column(
+        JSONB,
+        nullable=True,
+        comment=(
+            "Extraction diagnostics: per-attempt Gemini outcomes, the raw validated "
+            "Gemini fields, fallback OCR engine and the failure reason."
+        ),
     )
 
     extraction_warnings: Mapped[list | None] = mapped_column(
         JSONB,
         nullable=True,
-        comment=(
-            "Extraction-time warnings as a JSON array of strings — from the "
-            "extractor itself (e.g. 'OCR text heavily garbled') and/or a "
-            "detected-vs-claimed source/date conflict, which is recorded "
-            "here rather than ever silently overriding the user's claimed "
-            "source/date."
-        ),
+        comment="Warnings from the fallback extractor (e.g. low-confidence lines dropped).",
     )
 
     detected_source_text: Mapped[str | None] = mapped_column(
-        String(255),
+        Text,
         nullable=True,
-        comment="Source/outlet name the extractor found in the card's own text, independent of the user's claimed_source_text — may conflict with it.",
+        comment="Outlet name printed on the card, raw. Display only; never compared with the user's selected source.",
     )
 
     detected_date_text: Mapped[str | None] = mapped_column(
-        String(255),
+        Text,
         nullable=True,
-        comment="Publish date text the extractor found in the card's own text, independent of the user's published_date — may conflict with it.",
+        comment="Date printed on the card, raw (format unchanged). Display only; never compared with any date.",
     )
 
     submission: Mapped["Submission"] = relationship(

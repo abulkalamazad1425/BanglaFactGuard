@@ -6,13 +6,12 @@ import {
   PhotoCardAccepted,
   PhotoCardResultResponse,
   PhotoCardVerifyRequest,
-  PhotoCardVerifyResponse,
 } from '../models/photocard.model';
 
 // ── Photo Card Service ────────────────────────────────────────────────
 // Background submission: the card is stored and a durable server-side job is
-// queued, then the API answers 202 straight away. OCR, headline extraction
-// (Gemini, deterministic fallback) and verification continue on the server
+// queued, then the API answers 202 straight away. Extraction (Gemini on the
+// original image, EasyOCR fallback) and verification continue on the server
 // whether or not the browser stays open; the result is read by submission id.
 @Injectable({ providedIn: 'root' })
 export class PhotoCardService {
@@ -35,14 +34,6 @@ export class PhotoCardService {
   submitAsync(request: PhotoCardVerifyRequest): Observable<PhotoCardAccepted> {
     return this.api.postFormData<PhotoCardAccepted>(
       API_ENDPOINTS.PHOTOCARD_VERIFY_ASYNC,
-      this.toForm(request),
-    );
-  }
-
-  /** POST /photocard/verify — synchronous, kept for compatibility (holds the request open). */
-  verify(request: PhotoCardVerifyRequest): Observable<PhotoCardVerifyResponse> {
-    return this.api.postFormData<PhotoCardVerifyResponse>(
-      API_ENDPOINTS.PHOTOCARD_VERIFY,
       this.toForm(request),
     );
   }

@@ -8,15 +8,16 @@ from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
 import structlog
 
 from app.core.config import get_settings
-from app.core.constants import PipelineStageID, QueryType, SearchCallOutcome, SearchProvider
+from app.core.constants import (
+    PipelineStageID,
+    SearchCallOutcome,
+    SearchProvider,
+)
 from app.features.verification.analysis.decisions import search_adequate
 from app.shared.utils.domains import allowed_domains_for, is_allowed_host
 from app.features.verification.pipeline.context import PipelineContext
 from app.features.articles.schemas import CandidateArticleSchema
-from app.features.search.newsdata_client import NewsDataClient
-from app.features.search.google_cse_client import GoogleCSEClient
 from app.features.search.pygooglenews_client import PyGoogleNewsClient
-from app.features.search.duckduckgo_client import DuckDuckGoClient
 from app.features.search.internal_site_client import InternalSiteSearchClient
 from app.features.cache.cache_service import CacheService
 from app.shared.utils.hashing import compute_search_query_hash
@@ -27,10 +28,7 @@ logger = structlog.get_logger(__name__)
 
 _PROVIDER_PRIORITY: dict[SearchProvider, int] = {
     SearchProvider.INTERNAL_SITE: 0,
-    SearchProvider.NEWSDATA: 1,
-    SearchProvider.GOOGLE_CUSTOM_SEARCH: 2,
-    SearchProvider.DDG: 3,
-    SearchProvider.PY_GOOGLE_NEWS: 4,
+    SearchProvider.PY_GOOGLE_NEWS: 1,
 }
 
 _STRIP_PARAMS = frozenset(
@@ -97,30 +95,17 @@ def _canonicalise_url(url: str) -> str:
         return url
 
 
-def _build_keyword_query(text: str, max_words: int) -> str:
-    clean = re.sub(r"site:\S+\s*", "", text).strip()
-    clean = re.sub(r"[।?!\'\"(){}\\[\\]<>،؟]", " ", clean)
-    clean = re.sub(r"\s+", " ", clean).strip()
-    return " ".join(clean.split()[:max_words])
-
-
 class SourceSearchStage:
 
     stage_id = PipelineStageID.S04_SOURCE_SEARCH
 
     def __init__(
         self,
-        newsdata_client: NewsDataClient,
-        google_cse_client: GoogleCSEClient,
         pygooglenews_client: PyGoogleNewsClient,
-        duckduckgo_client: DuckDuckGoClient,
         internal_site_client: InternalSiteSearchClient,
         cache_service: CacheService,
     ) -> None:
-        self.newsdata_client = newsdata_client
-        self.google_cse_client = google_cse_client
         self.pygooglenews_client = pygooglenews_client
-        self.duckduckgo_client = duckduckgo_client
         self.internal_site_client = internal_site_client
         self.cache_service = cache_service
 
@@ -136,6 +121,9 @@ class SourceSearchStage:
             return context
 
         domain = context.normalized_source
+        if not domain:
+            context.record_stage_error(self.stage_id, "A selected source is required for search")
+            return context
         source_config = getattr(context, "source_config", None)
         article_url_patterns: list[str] | None = (
             source_config.get("article_url_patterns") if source_config else None
@@ -143,9 +131,6 @@ class SourceSearchStage:
 
         providers_with_clients = [
             (SearchProvider.INTERNAL_SITE, self.internal_site_client),
-            (SearchProvider.NEWSDATA, self.newsdata_client),
-            (SearchProvider.GOOGLE_CUSTOM_SEARCH, self.google_cse_client),
-            (SearchProvider.DDG, self.duckduckgo_client),
             (SearchProvider.PY_GOOGLE_NEWS, self.pygooglenews_client),
         ]
 
@@ -295,30 +280,12 @@ class SourceSearchStage:
         query_text: str,
         domain: str | None,
     ) -> bool:
-        qt = query_type.upper()
-
-        if provider == SearchProvider.INTERNAL_SITE:
-
-            if qt in ("DATE_BOUND", "ENTITIES"):
-                return False
-
-        if provider == SearchProvider.NEWSDATA:
-
-            if qt in ("HEADLINE", "SITE_RESTRICTED"):
-                return False
-
-        if provider == SearchProvider.PY_GOOGLE_NEWS:
-            # KEYWORDS used to be withheld here on the assumption that the
-            # web-index providers would cover it. In practice this is often
-            # the only provider answering, and a keyword query is what finds
-            # a story whose headline was reworded after publication — an
-            # exact-headline query returns nothing for those, while the
-            # keyword form found the article. Date strings inside the query
-            # text remain unhelpful; the date is applied as a range instead.
-            if qt == "DATE_BOUND":
-                return False
-
-        return True
+        if not domain:
+            return False
+        # The outlet's own ("internal") search runs for every source that has
+        # an `internal_search_url` (unconfigured ones are recorded as SKIPPED);
+        # Google (PY_GOOGLE_NEWS) runs for every source as well.
+        return provider in (SearchProvider.INTERNAL_SITE, SearchProvider.PY_GOOGLE_NEWS)
 
     def _adapt_query(
         self,
@@ -327,24 +294,14 @@ class SourceSearchStage:
         domain: str | None,
         query_type: str = "",
     ) -> str:
-        content_only = re.sub(r"site:\S+\s*", "", query).strip()
-
+        if not domain:
+            return ""
+        content = re.sub(r"\bsite:\S+\s*", "", query, flags=re.IGNORECASE).strip()
+        # The internal endpoint already belongs to the selected outlet.
+        # Preserve every keyword instead of truncating to a shorter variant.
         if provider == SearchProvider.INTERNAL_SITE:
-            return _build_keyword_query(content_only, max_words=6)
-
-        if provider == SearchProvider.NEWSDATA:
-            kw = _build_keyword_query(content_only, max_words=7)
-            return kw[:80]
-
-        if provider == SearchProvider.PY_GOOGLE_NEWS:
-
-            if domain:
-                return f"site:{domain} {content_only}"
-            return content_only
-
-        if domain:
-            return f"site:{domain} {content_only}"
-        return content_only
+            return content
+        return f"site:{domain} {content}"
 
     async def _call_provider(
         self,

@@ -27,7 +27,10 @@ async function request(path, { method = 'GET', body, anonymous = false, retry = 
   if (response.status === 401 && session && retry) {
     refreshing ||= (async () => {
       const res = await fetch(cfg.api + '/auth/refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refresh_token: session.refresh_token }), signal: AbortSignal.timeout(15000) });
-      if (!res.ok) throw Error('Your session expired. Please sign in again.');
+      if (!res.ok) {
+        if ([401,403].includes(res.status)) { await chrome.storage.local.remove('auth'); throw Error('Your session expired. Please sign in again.'); }
+        throw Error('Sign-in could not be refreshed. Please try again shortly.');
+      }
       const tokens = await res.json();
       await chrome.storage.local.set({ auth: { ...session, ...tokens } });
     })().finally(() => { refreshing = null; });

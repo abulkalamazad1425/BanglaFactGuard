@@ -34,7 +34,7 @@ describe('Fact Explorer archive', () => {
   it('does not turn a missing source into a fake verdict', async () => {
     service.searchExplorer.and.returnValue(of(response([REVIEW])));
     const harness = await RouterTestingHarness.create('/dashboard?review=review');
-    expect(harness.routeNativeElement!.textContent).toContain('does not establish that the claim is false');
+    expect(harness.routeNativeElement!.textContent).toContain('does not make a claim fake');
     expect(harness.routeNativeElement!.querySelector('.badge-false')).toBeNull();
     expect(harness.routeNativeElement!.textContent).toContain('Under expert review');
   });

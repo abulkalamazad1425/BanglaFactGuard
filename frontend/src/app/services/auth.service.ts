@@ -1,6 +1,8 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
-import { Observable, tap, catchError, throwError } from 'rxjs';
+import { Observable, tap, catchError, throwError, defer, finalize, shareReplay, firstValueFrom, timeout } from 'rxjs';
+import { HttpBackend, HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { environment } from '../../environments/environment';
 import { API_ENDPOINTS } from '../core/constants/api-endpoints.constant';
 import { LoginRequest, RegisterRequest, TokenResponse, User, UserProfile, UpdateProfileRequest } from '../models/user.model';
 import { ApiService } from './api.service';
@@ -37,20 +39,44 @@ export class AuthService {
     );
   }
 
+  private readonly rawHttp = new HttpClient(inject(HttpBackend));
+  private refreshRequest?: Observable<TokenResponse>;
+
+  expireSession(): void {
+    this.storage.clearTokens();
+    this._user.set(null);
+    void this.router.navigate(['/auth/login']);
+  }
+
   // ── Refresh ─────────────────────────────────────────────────
   refresh(): Observable<TokenResponse> {
-    const refreshToken = this.storage.getRefreshToken();
-    return this.api.post<TokenResponse>(API_ENDPOINTS.AUTH_REFRESH, {
-      refresh_token: refreshToken,
-    }).pipe(
-      tap(tokens => {
-        this.storage.setTokens(tokens.access_token, tokens.refresh_token);
-      }),
+    if (this.refreshRequest) return this.refreshRequest;
+    const originalToken = this.storage.getRefreshToken();
+    const originalOwner = this.storage.getUser<User>()?.id;
+    const exchange = async (): Promise<TokenResponse> => {
+      const currentToken = this.storage.getRefreshToken();
+      if (this.storage.getUser<User>()?.id !== originalOwner) throw new HttpErrorResponse({ status: 401 });
+      // Another tab may have rotated the shared refresh token while we waited.
+      if (currentToken && currentToken !== originalToken) {
+        return { access_token: this.storage.getAccessToken()!, refresh_token: currentToken, token_type: 'bearer', expires_in: 0 };
+      }
+      if (!currentToken) throw new HttpErrorResponse({ status: 401 });
+      const tokens = await firstValueFrom(this.rawHttp.post<TokenResponse>(environment.apiUrl + API_ENDPOINTS.AUTH_REFRESH, { refresh_token: currentToken }).pipe(timeout(15000)));
+      // An explicit logout during refresh must not restore the session.
+      if (this.storage.getRefreshToken() !== currentToken) throw new HttpErrorResponse({ status: 401 });
+      this.storage.setTokens(tokens.access_token, tokens.refresh_token);
+      return tokens;
+    };
+    this.refreshRequest = defer(() => typeof navigator !== 'undefined' && navigator.locks
+      ? navigator.locks.request('banglafactguard-refresh', exchange) : exchange()).pipe(
       catchError(err => {
-        this.logout();
+        if ((err.status === 401 || err.status === 403) && this.storage.getRefreshToken() === originalToken) this.expireSession();
         return throwError(() => err);
-      })
+      }),
+      finalize(() => { this.refreshRequest = undefined; }),
+      shareReplay({ bufferSize: 1, refCount: false }),
     );
+    return this.refreshRequest;
   }
 
   // ── Logout ──────────────────────────────────────────────────
@@ -73,7 +99,6 @@ export class AuthService {
         this.storage.setUser(user);
       }),
       catchError(err => {
-        this._user.set(null);
         return throwError(() => err);
       })
     );

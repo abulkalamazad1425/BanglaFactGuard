@@ -47,27 +47,6 @@ class SourceNormalizationError(BanglaFactGuardError):
     http_status_code = 422
 
 
-class PhotoCardExtractionFailedError(BanglaFactGuardError):
-    """Neither Gemini nor the deterministic fallback produced a usable
-    headline from the card's OCR text. This is distinct from — and must
-    never be reported as — SourceNotFoundError or a content_status of
-    ALTERED: the automated checks never ran at all, because there was no
-    claim text to check in the first place."""
-
-    http_status_code = 422
-
-    def __init__(self, ocr_text: str, warnings: list[str]) -> None:
-        super().__init__(
-            message=(
-                "Could not extract a readable headline from this photo card. "
-                "Try a sharper or less cluttered image."
-            ),
-            details={"ocr_text_preview": ocr_text[:500], "warnings": warnings},
-        )
-        self.ocr_text = ocr_text
-        self.warnings = warnings
-
-
 class ImageStorageUnavailableError(BanglaFactGuardError):
     """The card image could not be stored. A photo-card submission is only
     acknowledged once its image bytes are durably stored (the background job
@@ -125,7 +104,7 @@ class QueryGenerationError(StageError):
 class SearchError(StageError):
 
     def __init__(self, message: str, details: dict[str, Any] | None = None) -> None:
-        # Raised by search clients (currently: DuckDuckGoClient) that don't
+        # Raised by search clients that don't
         # carry a stage_id of their own — StageError requires one, so it's
         # hardcoded to the only stage that constructs this error.
         super().__init__(
@@ -223,36 +202,6 @@ class GoogleRSSError(ExternalAPIError):
     def __init__(self, message: str, status_code: int | None = None) -> None:
         super().__init__(
             provider="google_rss", message=message, status_code=status_code
-        )
-
-
-class DDGError(ExternalAPIError):
-
-    def __init__(self, message: str, status_code: int | None = None) -> None:
-        super().__init__(provider="ddg", message=message, status_code=status_code)
-
-
-class NewsDataError(ExternalAPIError):
-
-    def __init__(
-        self,
-        message: str,
-        status_code: int | None = None,
-        details: dict[str, Any] | None = None,
-    ) -> None:
-        super().__init__(
-            provider="newsdata",
-            message=message,
-            status_code=status_code,
-            details=details,
-        )
-
-
-class GoogleCSEError(ExternalAPIError):
-
-    def __init__(self, message: str, status_code: int | None = None) -> None:
-        super().__init__(
-            provider="google_custom_search", message=message, status_code=status_code
         )
 
 

@@ -32,7 +32,7 @@ from app.features.submissions.repository import (
 from app.features.verification.job_repository import VerificationJobRepository
 from app.features.verification.models import VerificationJob, VerificationResult
 from app.features.verification.pipeline.stages.s02_cache_lookup import CacheLookupStage
-from app.features.verification.pipeline.stages.s12_persistence import PersistenceStage
+from app.features.verification.pipeline.stages.s13_result_persistence import ResultPersistenceStage
 from app.features.verification.presenter import load_verification_response
 from app.features.verification.repository import ResultRepository
 from app.features.verification.reuse import result_is_reusable
@@ -156,6 +156,7 @@ async def test_reuse_copies_result_onto_requesters_own_submission(db):
         owner = await add_user(s)
         other = await add_user(s)
         orig, orig_res = await add_completed_submission(s, headline=HEADLINE, submitter_id=owner.id)
+        orig_res.analysis_details = {"timings": {"stage_ms": {"s04_source_search": 12345}}}
         await s.commit()
         sid, status, cached = await _service(s).register_claim(_req(), submitter_id=other.id)
 
@@ -164,6 +165,8 @@ async def test_reuse_copies_result_onto_requesters_own_submission(db):
         assert mine.submitter_id == other.id and mine.duplicate_of_submission_id == orig.id
         res = await ResultRepository(s).get_by_submission_id(sid)
         assert res.reused_from_submission_id == orig.id
+        assert "timings" not in res.analysis_details
+        assert orig_res.analysis_details["timings"]["stage_ms"]["s04_source_search"] == 12345
         assert res.headline_similarity == orig_res.headline_similarity
         assert res.pipeline_version == VERIFICATION_PIPELINE_VERSION
         # original untouched, no job queued, requester notified once
@@ -234,8 +237,13 @@ async def test_result_reusability_rules(db):
 
         _, inc_source = await add_completed_submission(s, headline="তিন", submitter_id=u.id, source_status=SourceStatus.INCOMPLETE)
         assert result_is_reusable(inc_source) == (False, "incomplete_check")
-        _, inc_content = await add_completed_submission(s, headline="চার", submitter_id=u.id, content_status=ContentStatus.INCOMPLETE)
-        assert result_is_reusable(inc_content) == (False, "incomplete_check")
+        _, no_verdict = await add_completed_submission(s, headline="চার", submitter_id=u.id, headline_check_status="UNDETERMINED")
+        no_verdict.content_status = None
+        assert result_is_reusable(no_verdict) == (False, "no_headline_verdict")
+        _, body_missing = await add_completed_submission(
+            s, headline="সাত", submitter_id=u.id, body="বডি", body_comparison_status="UNAVAILABLE"
+        )
+        assert result_is_reusable(body_missing) == (False, "body_scores_unavailable")
         _, inc_date = await add_completed_submission(s, headline="পাঁচ", submitter_id=u.id, date_status=DateStatus.INCOMPLETE)
         assert result_is_reusable(inc_date) == (False, "incomplete_check")
 
@@ -282,19 +290,47 @@ async def test_stale_redis_pointer_is_rejected_and_invalidated(db):
 
 
 async def test_result_is_identical_after_redis_expiry_and_ignores_stale_cache(db):
+    analysis = {
+        "pipeline_version": VERIFICATION_PIPELINE_VERSION,
+        "headline_alteration": {
+            "status": "COMPLETED", "verdict": "MATCHED", "reason": "exact", "exact_match": True,
+            "claim_headline": HEADLINE, "source_title": HEADLINE,
+        },
+        "body_similarity": {"status": "COMPUTED", "jaccard": {"available": True, "value": 0.66}},
+    }
     async with db() as s:
         u = await add_user(s)
         sub, res = await add_completed_submission(
-            s, headline=HEADLINE, submitter_id=u.id, body="বডি", headline_similarity=0.77, body_similarity=0.66
+            s, headline=HEADLINE, submitter_id=u.id, body="বডি", headline_similarity=0.77, analysis_details=analysis
         )
         await s.commit()
-        stale = {"scores": {"headline_similarity": 0.01, "body_similarity": 0.02}}
+        stale = {"headline_check_status": "UNDETERMINED", "body_similarity": {"jaccard": 0.01}}
         with_cache = await _service(s, _cache(stale)).get_result(sub.id)
         no_cache = await _service(s, _cache(None)).get_result(sub.id)
     assert with_cache.model_dump() == no_cache.model_dump()
-    assert no_cache.scores.headline_similarity == 0.77 and no_cache.scores.body_similarity == 0.66
-    assert no_cache.manipulation_flags.check_states["numbers"].value == "PASSED"
+    assert no_cache.analysis.body_similarity.jaccard.value == 0.66
+    assert no_cache.analysis.headline_alteration.exact_match is True
+    assert no_cache.headline_check_status.value == "COMPLETED"
     assert no_cache.analysis is not None and no_cache.pipeline_version == VERIFICATION_PIPELINE_VERSION
+
+
+async def test_legacy_content_verdict_is_never_relabelled_as_a_headline_verdict(db):
+    """A row from the old pipeline (no headline_check_status, an old
+    content-level verdict and an old-shaped analysis blob) still loads, but
+    its content verdict is not shown as Headline Alteration."""
+    legacy_analysis = {"pipeline_version": "v3.3", "headline_alteration": {"reason": "old", "kind": "none"},
+                       "metrics": {}, "passages": [], "content_check": {"method": "x"}}
+    async with db() as s:
+        u = await add_user(s)
+        sub, _ = await add_completed_submission(
+            s, headline=HEADLINE, submitter_id=u.id, pipeline_version="v3.3", content_status=ContentStatus.ALTERED,
+            headline_check_status=None, analysis_details=legacy_analysis,
+        )
+        await s.commit()
+        r = await _service(s).get_result(sub.id)
+    assert r.legacy_result is True
+    assert r.ai_content_status is None and r.content_status is None and r.headline_check_status is None
+    assert r.analysis is not None and r.analysis.headline_alteration is None
 
 
 # ── 30: no automated overall verdict ─────────────────────────────────────
@@ -314,29 +350,30 @@ async def _persist(s, *, submission_id=None, headline=HEADLINE, ner=None):
     ctx.content_hash = compute_claim_hash(headline, "prothomalo.com", ctx.claim_scope)
     ctx.submission_id = submission_id
     ctx = await run_analysis(ctx, ner=ner)
-    stage = PersistenceStage(
+    stage = ResultPersistenceStage(
         SubmissionRepository(s), ResultRepository(s), RetrievedArticleRepository(s), _cache(), session=s
     )
     return await stage.execute(ctx)
 
 
-async def test_s12_writes_all_component_scores_and_no_consensus_label(db):
+async def test_s13_writes_the_result_columns_and_no_consensus_label(db):
     async with db() as s:
         out = await _persist(s)
         res = await ResultRepository(s).get_by_submission_id(out.submission_id)
     assert res.ai_consensus_label is None  # no automated truth vote
     assert res.overall_verdict is None
-    assert res.headline_similarity is not None and res.body_similarity is None
-    assert res.headline_keyword_coverage == 1.0
+    assert res.headline_similarity is not None and res.headline_keyword_coverage == 1.0
+    assert res.content_status == ContentStatus.MATCHED and res.headline_check_status == "COMPLETED"
+    assert res.headline_exact_match is True and res.body_comparison_status == "SKIPPED"
     assert res.claim_scope == "HEADLINE_ONLY" and res.pipeline_version == VERIFICATION_PIPELINE_VERSION
-    assert res.analysis_details["metrics"]["body_similarity"]["state"] == "NOT_APPLICABLE"
-    assert res.manipulation_flags["check_states"]["body"] == "NOT_APPLICABLE"
+    assert res.analysis_details["headline_alteration"]["source_title"] == HEADLINE
+    assert res.analysis_details["body_similarity"]["status"] == "SKIPPED"
 
 
 # ── 29: idempotent persistence, no duplicate results/notifications ───────
 
 
-async def test_s12_is_idempotent_per_submission(db):
+async def test_s13_is_idempotent_per_submission(db):
     async with db() as s:
         owner = await add_user(s)
         expert = await add_user(s, role="expert")
@@ -357,7 +394,7 @@ async def test_s12_is_idempotent_per_submission(db):
             (await s.execute(select(Notification.notification_type, func.count()).group_by(Notification.notification_type))).all()
         )
     assert n_results == 1
-    assert by_type == {"VERIFICATION_COMPLETE": 1, "EXPERT_REVIEW_AVAILABLE": 1}
+    assert by_type == {"VERIFICATION_COMPLETE": 1}
 
 
 # ── 31: expert finalization / refresh never mutate the automated snapshot ─

@@ -30,6 +30,7 @@ export class MultimodalComponent {
   submitted = false;
   errorMsg: string | null = null;
   result: MultimodalPredictionResult | null = null;
+  accepted: { submission_id: string; status: string } | null = null;
 
   onFileChange(event: Event): void {
     const input = event.target as HTMLInputElement;
@@ -68,9 +69,9 @@ export class MultimodalComponent {
     this.errorMsg = null;
     this.result = null;
 
-    this.svc.predict(this.headline, this.bodyText, this.selectedFile).subscribe({
+    this.svc.submitAsync(this.headline, this.bodyText, this.selectedFile).subscribe({
       next: (r) => {
-        this.result = r;
+        this.accepted = r;
         this.loading = false;
       },
       error: (err) => {

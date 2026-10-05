@@ -38,9 +38,10 @@ import { RouterLink } from '@angular/router';
           <!-- Platform -->
           <div class="footer-section">
             <h4>Platform</h4>
-            <a routerLink="/verify">Verify a Claim</a>
-            <a routerLink="/multimodal">Text and image</a>
-            <a routerLink="/photo-card">Verify a photocard</a><a routerLink="/dashboard">Fact Explorer</a>
+            <a routerLink="/verify">Text &amp; source</a>
+            <a routerLink="/multimodal">Text &amp; image</a>
+            <a routerLink="/photo-card">Photo card</a><a routerLink="/dashboard">Fact Explorer</a>
+            <a routerLink="/faq">FAQ</a>
             <a routerLink="/auth/register">Create Account</a>
           </div>
 

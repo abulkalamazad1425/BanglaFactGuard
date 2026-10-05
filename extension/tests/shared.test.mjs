@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { summarize, cropRect, validateDraft, EMPTY_DRAFT } from '../src/shared.js';
+import { summarize, cropRect, validateDraft, EMPTY_DRAFT, resultLine } from '../src/shared.js';
 
 test('source absent and incomplete never imply FAKE or a final verdict',()=>{
   for(const source_status of ['NOT_FOUND','INCOMPLETE']) {
@@ -11,7 +11,15 @@ test('source absent and incomplete never imply FAKE or a final verdict',()=>{
 });
 test('expert finalization is a separate stage from the multimodal AI prediction',()=>{
   const s=summarize('MULTIMODAL',{prediction:'FAKE',expert_overall_verdict:'REAL'},{status:'FINALIZED'});
-  assert.equal(s.stage,'final:REAL');assert.equal(s.lines[0],'Expert verdict: REAL');
+  assert.equal(s.stage,'final:REAL');assert.equal(s.lines[0],'Final verdict: Real');
+});
+test('preliminary predictions and historical Activity use readable consistent labels',()=>{
+  for (const [prediction,label] of [['FAKE','Likely fake'],['NON_FAKE','Likely real']]) {
+    const result=summarize('MULTIMODAL',{prediction});
+    assert.deepEqual(result.lines,[`AI prediction: ${label}`]);
+    assert.equal(resultLine(`AI prediction: ${prediction} (preliminary)`),`AI prediction: ${label}`);
+  }
+  assert.equal(resultLine('Expert verdict: MISLEADING'),'Final verdict: Misleading');
 });
 test('queued multimodal claims have no prediction and failures preserve the explanation',()=>{
   assert.deepEqual(summarize('MULTIMODAL',{status:'PENDING'}).lines,[]);
@@ -19,7 +27,7 @@ test('queued multimodal claims have no prediction and failures preserve the expl
   assert.equal(s.stage,'failed');assert.equal(s.error,'Unreadable card');
 });
 test('photocard warnings and extracted headline survive summary mapping',()=>{
-  const s=summarize('PHOTO_CARD',{status:'EXPERT_REVIEW',headline:'Extracted claim',extraction_warnings:['Date conflict','Headline OCR is uncertain'],verification:{source_status:'CONFIRMED',date_status:'MISMATCHED'}});
+  const s=summarize('PHOTO_CARD',{status:'EXPERT_REVIEW',headline:'Extracted claim',extraction_warnings:['Date conflict','Detected source mismatch','Headline OCR is uncertain'],verification:{source_status:'CONFIRMED',date_status:'MISMATCHED'}});
   assert.equal(s.headline,'Extracted claim');assert.deepEqual(s.warnings,['Headline OCR is uncertain']);assert.equal(s.final,false);
   assert.ok(s.lines.includes('Date: Date mismatch')); // Actual source verification is unaffected.
 });
@@ -33,4 +41,11 @@ test('multimodal body and a real bounded image are required; whitespace is rejec
   d.body_text='Article body text';
   assert.throws(()=>validateDraft(d,null),/image/);
   assert.doesNotThrow(()=>validateDraft(d,new Blob(['image'],{type:'image/png'})));
+});
+test('headline alteration shows only matched/altered, or says there is no verdict',()=>{
+  const lines=s=>summarize('SOURCE_BASED',{status:'EXPERT_REVIEW',result:s}).lines;
+  assert.ok(lines({source_status:'CONFIRMED',content_status:'ALTERED'}).includes('Headline Alteration: Altered'));
+  assert.ok(lines({source_status:'CONFIRMED',content_status:null}).includes('Headline Alteration: No verdict'));
+  assert.ok(!lines({source_status:'NOT_FOUND',content_status:null}).some(l=>l.startsWith('Headline Alteration')));
+  assert.ok(!lines({source_status:'NOT_FOUND'}).some(l=>/\?\s*Not found/.test(l)));
 });

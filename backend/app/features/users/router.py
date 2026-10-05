@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -19,7 +18,7 @@ from app.core.constants import (
 from app.features.auth.models import User
 from app.features.auth.security import get_current_user
 from app.features.submissions.models import OcrExtraction, Submission
-from app.features.verification.presenter import effective_expert_row, effective_status
+from app.features.verification.presenter import effective_expert_row, effective_status, is_headline_result
 from app.features.verification.repository import ResultRepository
 from app.features.verification.models import VerificationResult
 from app.shared.dependencies import get_async_session
@@ -43,6 +42,7 @@ class SubmissionSummary(BaseModel):
     date_status: DateStatus | None = None
     # Expert-finalized only; None while the claim is still under review.
     overall_verdict: OverallVerdict | None = None
+    prediction: str | None = None
     is_finalized: bool = False
     ai_confidence: float | None
     image_url: str | None = None
@@ -100,6 +100,7 @@ async def get_my_submissions(
     )
     submissions = (await session.execute(stmt)).scalars().all()
     result_repo = ResultRepository(session)
+    from app.features.multimodal.models import MultimodalAnalysis
     photocard_storage = getattr(request.app.state, "photocard_storage", None)
     items = []
     for submission in submissions:
@@ -107,6 +108,9 @@ async def get_my_submissions(
         expert = await effective_expert_row(submission, result, result_repo) if result else None
         is_finalized = bool(expert and expert.overall_verdict)
 
+        mm = await session.scalar(select(MultimodalAnalysis).where(MultimodalAnalysis.submission_id == submission.id)) if submission.submission_type == SubmissionType.MULTIMODAL else None
+        if mm:
+            is_finalized = bool(mm.expert_overall_verdict)
         original_status = None
         if submission.duplicate_of_submission_id:
             original = (
@@ -141,7 +145,8 @@ async def get_my_submissions(
                     else None
                 ),
                 content_status=(
-                    (expert.final_content_status if is_finalized else result.content_status)
+                    (expert.final_content_status if is_finalized else
+                     result.content_status if is_headline_result(result) else None)
                     if result
                     else None
                 ),
@@ -150,7 +155,8 @@ async def get_my_submissions(
                     if result
                     else None
                 ),
-                overall_verdict=expert.overall_verdict if is_finalized else None,
+                overall_verdict=mm.expert_overall_verdict if mm else expert.overall_verdict if is_finalized else None,
+                prediction=mm.prediction if mm else None,
                 is_finalized=is_finalized,
                 ai_confidence=result.confidence if result else None,
                 image_url=image_url,

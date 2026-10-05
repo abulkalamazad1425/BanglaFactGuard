@@ -4,20 +4,22 @@ export const ownerOf = auth => auth?.user?.id || 'guest';
 export const terminal = status => ['FINALIZED', 'FAILED'].includes(status);
 export const ready = status => ['EXPERT_REVIEW', 'FINALIZED', 'ESCALATED'].includes(status);
 // Applied to fresh responses and cached Activity entries from older builds.
-export const withoutDateWarnings = warnings => (warnings || []).filter(w => !/\b(?:dates?|years?|months?)\b|তারিখ/i.test(w));
+export const withoutDateWarnings = warnings => (warnings || []).filter(w => !/\b(?:dates?|years?|months?|source|outlet|publisher)\b|তারিখ/i.test(w));
 export function summarize(type, data, lookup = {}) {
   const result = type === 'PHOTO_CARD' ? data.verification : type === 'SOURCE_BASED' ? data.result : data;
   const status = data.status || lookup.status || 'EXPERT_REVIEW';
   const final = result?.overall_verdict || result?.expert_overall_verdict;
   const lines = [];
-  const names = { CONFIRMED: 'Found in claimed source', NOT_FOUND: 'Not found in claimed source', INCOMPLETE: 'Check incomplete', MATCHED: 'Matched', ALTERED: 'Altered', MISMATCHED: 'Date mismatch' };
+  const names = { CONFIRMED: 'Confirmed', NOT_FOUND: 'Not found', INCOMPLETE: 'Check incomplete', MATCHED: 'Matched', ALTERED: 'Altered', MISMATCHED: 'Date mismatch' };
   if (result && type !== 'MULTIMODAL') {
     lines.push(`Source: ${names[result.source_status] || 'Not assessed'}`);
-    if (result.content_status) lines.push(`Content: ${names[result.content_status] || result.content_status}`);
+    // Headline Alteration has only two verdicts; a confirmed source without one says so.
+    if (result.content_status) lines.push(`Headline Alteration: ${names[result.content_status] || result.content_status}`);
+    else if (result.source_status === 'CONFIRMED') lines.push('Headline Alteration: No verdict');
     if (result.date_status) lines.push(`Date: ${names[result.date_status] || result.date_status}`);
   }
-  if (result?.prediction && type === 'MULTIMODAL') lines.push(`AI prediction: ${result.prediction} (preliminary)`);
-  if (final) lines.unshift(`Expert verdict: ${final}`);
+  if (result?.prediction && type === 'MULTIMODAL') lines.push(`AI prediction: ${result.prediction === 'FAKE' ? 'Likely fake' : 'Likely real'}`);
+  if (final) lines.unshift(`Final verdict: ${final.charAt(0) + final.slice(1).toLowerCase()}`);
   return { status, stage: status === 'FAILED' ? 'failed' : final && status === 'FINALIZED' ? `final:${final}` : result && ready(status) ? 'preliminary' : null,
     phase: data.phase || lookup.processing_phase, lines, headline: data.headline || lookup.headline,
     error: data.error || data.failure_reason || lookup.failure_reason,
@@ -38,4 +40,11 @@ export function cropRect(rect, view, bitmap) {
   return { x: Math.round(x * bitmap.width / view.width), y: Math.round(y * bitmap.height / view.height),
     width: Math.max(1, Math.round(Math.min(rect.width, view.width - x) * bitmap.width / view.width)),
     height: Math.max(1, Math.round(Math.min(rect.height, view.height - y) * bitmap.height / view.height)) };
+}
+
+export function resultLine(line) {
+  return line.replace(/AI prediction: (?:NON_FAKE|REAL)(?: \(preliminary\))?/, 'AI prediction: Likely real')
+    .replace(/AI prediction: FAKE(?: \(preliminary\))?/, 'AI prediction: Likely fake')
+    .replace(/Expert verdict: (\w+)/, (_, v) => `Final verdict: ${v[0]+v.slice(1).toLowerCase()}`)
+    .replace('Source: Found in claimed source', 'Source: Confirmed').replace('Source: Not found in claimed source', 'Source: Not found');
 }

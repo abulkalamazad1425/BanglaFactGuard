@@ -17,28 +17,25 @@
                   <p class="text-muted text-sm">System-computed based on voting accuracy</p>
                 </div>
                 <div class="cred-score" [style.color]="scoreColor()">
-                  {{ (stats()!.current_credibility * 100).toFixed(1) }}%
+                  {{ stats()!.current_credibility === null ? 'Not yet calculated' : ((stats()!.current_credibility! * 100).toFixed(1) + '%') }}
                 </div>
               </div>
-              <div style="margin-top:20px;">
-                <app-score-bar label="Credibility" [value]="stats()!.current_credibility" [color]="scoreColor()" />
+              @if (stats()!.current_credibility !== null) {<div style="margin-top:20px;">
+                <app-score-bar label="Credibility" [value]="stats()!.current_credibility!" [color]="scoreColor()" />
               </div>
-              <div class="cred-legend">
-                <span>🔴 Low (0–40%)</span>
-                <span>🟡 Medium (40–70%)</span>
-                <span>🟢 High (70–100%)</span>
-              </div>
+              } @else {<p class="text-muted">{{ stats()!.total_votes }} / {{ stats()!.activation_threshold }} completed reviews. Each vote has weight 1 until activation.</p>}
+
             </div>
 
             <!-- Stats Grid -->
             <div class="grid-3" style="margin-top:24px;">
               <div class="stat-card card text-center">
                 <span class="stat-num">{{ stats()!.total_votes }}</span>
-                <span class="stat-lbl">Total Votes</span>
+                <span class="stat-lbl">Completed reviews</span>
               </div>
               <div class="stat-card card text-center text-success">
                 <span class="stat-num">{{ stats()!.correct_votes }}</span>
-                <span class="stat-lbl">Correct Votes</span>
+                <span class="stat-lbl">Votes matching final result</span>
               </div>
               <div class="stat-card card text-center">
                 <span class="stat-num">{{ stats()!.accuracy_pct !== null ? stats()!.accuracy_pct + '%' : 'N/A' }}</span>

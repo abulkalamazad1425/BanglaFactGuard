@@ -68,7 +68,7 @@ class RefreshTokenRepository(BaseRepository[RefreshToken]):
                 RefreshToken.revoked.is_(False),
                 RefreshToken.expires_at > now,
             )
-            .limit(1)
+            .limit(1).with_for_update()
         )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()

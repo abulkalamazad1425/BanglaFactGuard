@@ -39,8 +39,7 @@ const VERIFICATION: VerificationResponse = {
   confidence: 0.9,
   reasoning: 'ok',
   matched_articles: [],
-  scores: { headline_similarity: 0.95, body_similarity: null },
-  manipulation_flags: { check_states: { headline: 'PASSED', body: 'NOT_APPLICABLE' } },
+  headline_check_status: 'COMPLETED',
   cached: false,
   created_at: '2026-06-07T10:05:00Z',
   claim_scope: 'HEADLINE_ONLY',
@@ -78,7 +77,7 @@ describe('VerifyResultComponent (photo card, returning later)', () => {
     expect(el.querySelector('img.media-image')?.getAttribute('src')).toBe('https://minio/p1.png');
     expect(el.textContent).toContain('Reading the headline from the card');
     expect(el.textContent).toContain('You can leave this page');
-    expect(el.textContent).not.toContain('Awaiting expert review'); // not shown as a completed result
+    expect(el.textContent).not.toContain('Expert review pending.'); // not shown as a completed result
     fixture.destroy();
   });
 
@@ -96,9 +95,9 @@ describe('VerifyResultComponent (photo card, returning later)', () => {
     const callsWhenDone = photocard.getResult.calls.count();
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
-    expect(el.textContent).toContain('Awaiting expert review');   // preliminary: no overall truth badge
+    expect(el.textContent).toContain('Expert review pending.');   // preliminary: no overall truth badge
     expect(el.textContent).toContain('শিরোনাম');
-    expect(el.querySelector('.scores-grid')?.textContent).not.toContain('Body');
+    expect(el.textContent).not.toContain('BODY SIMILARITY'); // a photo card has no body scores
 
     tick(12000);
     expect(photocard.getResult.calls.count()).toBe(callsWhenDone); // completed: polling stopped
@@ -146,5 +145,48 @@ describe('VerifyResultComponent (photo card, returning later)', () => {
     expect(el.textContent).toContain('We could not read the headline');
     expect(el.textContent).toContain('No verdict was reached');
     fixture.destroy();
+  });
+});
+
+
+describe('VerifyResultComponent (photo card extraction preview)', () => {
+  function render(card: PhotoCardResultResponse): HTMLElement {
+    TestBed.configureTestingModule({
+      imports: [VerifyResultComponent],
+      providers: [
+        provideRouter([]),
+        { provide: ActivatedRoute, useValue: { snapshot: { paramMap: { get: () => 'p1' } } } },
+        { provide: SubmissionsService, useValue: { getLookup: () => of({ ...LOOKUP, status: 'EXPERT_REVIEW' }) } },
+        { provide: PhotoCardService, useValue: { getResult: () => of(card) } },
+        { provide: VerificationService, useValue: {} },
+        { provide: MultimodalService, useValue: {} },
+      ],
+    });
+    const fixture = TestBed.createComponent(VerifyResultComponent);
+    fixture.detectChanges();
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  it('shows the date and outlet read from the card for reference, beside the user-selected values', () => {
+    const el = render(pendingCard({
+      status: 'EXPERT_REVIEW', phase: 'DONE', headline: 'শিরোনাম', verification: VERIFICATION,
+      extraction_method: 'GEMINI_IMAGE', extraction_attempts: 2,
+      extracted_date_text: '০৫ অক্টোবর, ২০২৬', extracted_source_text: 'প্রথম আলো',
+    }));
+    expect(el.textContent).toContain('Date shown on the card');
+    expect(el.textContent).toContain('০৫ অক্টোবর, ২০২৬');
+    expect(el.textContent).toContain('uses the outlet and date you selected');
+    expect(el.textContent).toContain('succeeded on attempt 2 of 3');
+  });
+
+  it('hides card date/outlet fields when the card shows none', () => {
+    const el = render(pendingCard({
+      status: 'EXPERT_REVIEW', phase: 'DONE', headline: 'শিরোনাম', verification: VERIFICATION,
+      extraction_method: 'OCR_FALLBACK', extraction_attempts: 3, fallback_used: true,
+      extraction_failures: ['Image extraction attempt 1 timed out.'],
+    }));
+    expect(el.textContent).not.toContain('Date shown on the card');
+    expect(el.textContent).not.toContain('Outlet shown on the card');
+    expect(el.textContent).toContain('text recognition (OCR)');
   });
 });

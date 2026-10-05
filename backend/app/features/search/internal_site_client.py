@@ -3,7 +3,7 @@ import httpx
 from typing import Optional
 from bs4 import BeautifulSoup
 import structlog
-from urllib.parse import urljoin, urlparse
+from urllib.parse import quote_plus, urljoin, urlparse
 from datetime import date
 
 from app.shared.utils.article_url_heuristics import is_probable_article
@@ -32,20 +32,10 @@ _MAX_RESULTS = 15
 _MIN_TOKEN_CHARS = 3
 
 
-def _build_keyword_query(raw: str, max_words: int = 8) -> str:
-
-    clean = re.sub(r"site:\S+\s*", "", raw).strip()
-
-    clean = re.sub(r'[?!\'"(){}\[\]<>:;,\u0964\u09f7]', " ", clean)
-
-    clean = re.sub(r"\s+", " ", clean).strip()
-    words = clean.split()
-
-    priority_words = [w for w in words if len(w) >= 4]
-    short_words = [w for w in words if len(w) < 4]
-
-    selected = (priority_words + short_words)[:max_words]
-    return " ".join(selected)
+def _build_keyword_query(raw: str) -> str:
+    """Keep the complete headline/keyword query for the outlet's own search."""
+    clean = re.sub(r"\bsite:\S+\s*", "", raw, flags=re.IGNORECASE)
+    return re.sub(r"\s+", " ", clean).strip()
 
 
 class InternalSiteSearchError(Exception):
@@ -67,11 +57,11 @@ class InternalSiteSearchClient:
         if not source_config or not source_config.get("internal_search_url"):
             return []
 
-        kw_query = _build_keyword_query(query, max_words=6)
+        kw_query = _build_keyword_query(query)
         if not kw_query:
             return []
 
-        search_url = source_config["internal_search_url"].format(query=kw_query)
+        search_url = source_config["internal_search_url"].format(query=quote_plus(kw_query))
         patterns: list[str] = source_config.get("article_url_patterns", [])
 
         logger.debug(

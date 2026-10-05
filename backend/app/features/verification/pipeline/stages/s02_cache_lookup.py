@@ -7,8 +7,6 @@ import structlog
 
 from app.core.constants import (
     VERIFICATION_PIPELINE_VERSION,
-    ContentStatus,
-    DateStatus,
     PipelineStageID,
     SourceStatus,
 )
@@ -17,7 +15,6 @@ from app.features.submissions.repository import SubmissionRepository
 from app.features.verification.pipeline.context import PipelineContext
 from app.features.verification.repository import ResultRepository
 from app.features.verification.reuse import ResultReuseService, result_is_reusable
-from app.features.verification.schemas import ManipulationFlagsSchema, VerificationScoresSchema
 
 logger = structlog.get_logger(__name__)
 
@@ -29,8 +26,9 @@ class CacheLookupStage:
     source, claimed date, scope, pipeline version — see
     `hashing.compute_claim_hash`). Redis holds only a *pointer* to the
     submission that produced the last complete result; the database row is
-    authoritative and is re-validated (current pipeline version, no INCOMPLETE
-    dimension, freshness — shorter for NOT_FOUND) on every hit, so stale or
+    authoritative and is re-validated (current pipeline version, no incomplete
+    dimension or missing headline verdict, freshness — shorter for NOT_FOUND)
+    on every hit, so stale or
     incompatible cached scores can never overlay a stored result. The same
     freshness rules apply to the database fallback as to Redis.
 
@@ -124,33 +122,12 @@ class CacheLookupStage:
 
     @staticmethod
     def _populate(context: PipelineContext, source_submission_id: uuid.UUID, result) -> None:
+        """Mark the hit. The reused automated result itself is copied by the
+        service layer (`ResultReuseService.materialize`); nothing of it is
+        replayed into this context."""
         context.cache_hit = True
         context.reused_from_submission_id = source_submission_id
-        context.cached_source_status = SourceStatus(result.source_status)
-        context.cached_content_status = (
-            ContentStatus(result.content_status) if result.content_status else None
-        )
-        context.cached_date_status = DateStatus(result.date_status) if result.date_status else None
-        context.cached_confidence = result.confidence
-        context.cached_reasoning = result.reasoning or ""
-        context.cached_scores = VerificationScoresSchema(
-            semantic_similarity=result.semantic_similarity,
-            entity_match=result.entity_match,
-            contradiction_score=result.contradiction_score,
-            keyword_overlap=result.keyword_overlap,
-            numerical_consistency=result.numerical_consistency,
-            headline_similarity=result.headline_similarity,
-            body_similarity=result.body_similarity,
-            passage_similarity=result.passage_similarity,
-            headline_keyword_coverage=result.headline_keyword_coverage,
-            passage_keyword_coverage=result.passage_keyword_coverage,
-            body_keyword_coverage=result.body_keyword_coverage,
-        )
-        context.cached_manipulation_flags = (
-            ManipulationFlagsSchema(**result.manipulation_flags)
-            if result.manipulation_flags
-            else ManipulationFlagsSchema()
-        )
+        context.source_status = SourceStatus(result.source_status)
 
     @staticmethod
     async def write_pointer(

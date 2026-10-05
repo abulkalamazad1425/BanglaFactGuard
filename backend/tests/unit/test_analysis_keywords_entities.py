@@ -1,15 +1,10 @@
-"""Keyword coverage, entity coverage and passage selection (acceptance
-criteria 3, 5, 6, 7, 8) — deterministic, no models."""
+"""Keyword coverage, entity matching, passage selection and chunking -
+deterministic, no models."""
 
 from __future__ import annotations
 
 from app.core.constants import MetricState
-from app.features.verification.analysis.entities import (
-    EntityMention,
-    detect_role,
-    entity_coverage,
-    match_entity,
-)
+from app.features.verification.analysis.entities import EntityMention, match_entity
 from app.features.verification.analysis.keywords import keyword_coverage
 from app.features.verification.analysis.passages import select_relevant_passages
 from app.features.verification.analysis.text import chunk_text, light_stem, tokenize
@@ -62,38 +57,7 @@ class TestKeywordCoverage:
         assert "দেয়নি" in r.unmatched
 
 
-class TestEntityCoverage:
-    def test_all_claim_entities_present_plus_extra_article_entities_is_full(self):
-        claim = [EntityMention("ঢাকা", "LOC"), EntityMention("শেখ হাসিনা", "PER")]
-        evidence = [
-            EntityMention("ঢাকা", "LOC"),
-            EntityMention("শেখ হাসিনা", "PER"),
-            EntityMention("খালেদা জিয়া", "PER"),
-            EntityMention("চট্টগ্রাম", "LOC"),
-            EntityMention("বিএনপি", "ORG"),
-        ]
-        cov = entity_coverage(claim, evidence, "ঢাকা শেখ হাসিনা খালেদা জিয়া চট্টগ্রাম", ner_available=True)
-        assert cov.state == MetricState.COMPUTED
-        assert cov.value == 1.0  # no penalty for the three extra article entities
-
-    def test_missing_entities_are_listed(self):
-        claim = [EntityMention("ঢাকা", "LOC"), EntityMention("রফিকুল ইসলাম", "PER")]
-        evidence = [EntityMention("ঢাকা", "LOC")]
-        cov = entity_coverage(claim, evidence, "ঢাকা", ner_available=True)
-        assert cov.value == 0.5
-        assert cov.unmatched == ["রফিকুল ইসলাম"]
-        assert cov.matched == ["ঢাকা"]
-
-    def test_no_claim_entities_is_not_applicable_not_100_percent(self):
-        cov = entity_coverage([], [EntityMention("ঢাকা", "LOC")], "ঢাকা", ner_available=True)
-        assert cov.state == MetricState.NOT_APPLICABLE
-        assert cov.value is None
-
-    def test_ner_failure_is_unavailable_not_zero_or_pass(self):
-        cov = entity_coverage([EntityMention("ঢাকা", "LOC")], [], "ঢাকা", ner_available=False)
-        assert cov.state == MetricState.UNAVAILABLE
-        assert cov.value is None
-
+class TestEntityMatching:
     def test_inflected_surface_matches_bare_form(self):
         m = match_entity(EntityMention("ঢাকার", "LOC"), [EntityMention("ঢাকা", "LOC")], ())
         assert m.status == "exact"
@@ -127,18 +91,6 @@ class TestEntityCoverage:
             (),
         )
         assert m.status == "span"
-
-    def test_text_presence_when_evidence_ner_missed_it(self):
-        cov = entity_coverage(
-            [EntityMention("সিলেট", "LOC")], [], "বন্যায় সিলেট বিপর্যস্ত", ner_available=True
-        )
-        assert cov.value == 1.0
-
-    def test_role_is_not_type(self):
-        s = "আব্দুল করিম রফিককে মেরেছেন"
-        assert detect_role(s, "রফিক") == "OBJECT"
-        assert detect_role(s, "আব্দুল করিম") == "SUBJECT"
-
 
 class TestPassages:
     BODY = (
@@ -176,28 +128,14 @@ class TestChunking:
         assert truncated and len(chunks) == 5
 
 
-class TestKeywordDefectRegression:
-    """Confirmed root cause of the old zero keyword overlap: two independently
-    selected top-N YAKE lists (6 unigrams vs 10 uni+bigrams of title+full body)
-    compared with a symmetric Jaccard. An article that CONTAINS the identical
-    title could still score 0."""
+class TestKeywordCoverageOnLongEvidence:
+    """Coverage checks the evidence text directly, so an article that contains
+    the identical title always has complete coverage, however long its body."""
 
     BODY = " ".join(
         f"আজ বিকেলে আবহাওয়া অধিদপ্তর জানিয়েছে দেশের নদীর পানি বাড়ছে এবং তাপমাত্রা {i} ডিগ্রি থাকবে বন্যার আশঙ্কা রয়েছে কৃষকেরা উদ্বিগ্ন।"
         for i in range(30)
     ) + " প্রধান উপদেষ্টা ঢাকায় নতুন সেতুর উদ্বোধন করেছেন।"
-
-    def test_old_independent_top_n_overlap_can_be_zero_for_a_matching_article(self):
-        pytest = __import__("pytest")
-        pytest.importorskip("yake")
-        from app.shared.utils.keyword_extractor import (
-            compute_weighted_keyword_overlap,
-            extract_keywords_with_scores,
-        )
-
-        claim = extract_keywords_with_scores(TITLE, max_ngram_size=1, num_keywords=6)
-        art = extract_keywords_with_scores(TITLE + " " + self.BODY, max_ngram_size=2, num_keywords=10)
-        assert compute_weighted_keyword_overlap(claim, art) == 0.0  # the defect
 
     def test_coverage_checks_the_evidence_text_directly(self):
         assert keyword_coverage(TITLE, TITLE + " " + self.BODY).value == 1.0

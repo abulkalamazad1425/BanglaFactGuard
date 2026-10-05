@@ -22,8 +22,8 @@ export function verificationFailure(reason?: string | null): string {
 }
 
 export function predictionLabel(value?: string | null): string {
-  if (value === 'FAKE') return 'Likely fake';
-  if (value === 'REAL' || value === 'NON_FAKE') return 'Likely real';
+  if (value === 'FAKE' || value === 'Likely fake') return 'Likely fake';
+  if (value === 'REAL' || value === 'NON_FAKE' || value === 'Likely real') return 'Likely real';
   return 'Result unavailable';
 }
 

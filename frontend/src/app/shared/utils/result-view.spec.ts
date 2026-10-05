@@ -1,111 +1,125 @@
-import { ManipulationFlags } from '../../models/verification.model';
-import { buildCheckRows, buildScoreRows, hasBody, strengthFor } from './result-view';
+import { BodySimilarityReport, VerificationResponse } from '../../models/verification.model';
+import {
+  bodySectionMessage,
+  buildBodyMetricRows,
+  buildCorrespondenceRows,
+  differenceLabel,
+  hasBody,
+  headlineView,
+  scoreBand,
+} from './result-view';
+
+function response(overrides: Partial<VerificationResponse> = {}): VerificationResponse {
+  return {
+    submission_id: 's1',
+    source_status: 'CONFIRMED',
+    content_status: 'MATCHED',
+    headline_check_status: 'COMPLETED',
+    confidence: 0.9,
+    reasoning: '',
+    matched_articles: [],
+    cached: false,
+    created_at: '2026-10-05T00:00:00Z',
+    ...overrides,
+  };
+}
 
 describe('result-view', () => {
-  describe('buildCheckRows', () => {
-    it('shows only COMPLETED PASSING checks as green; unrun checks are neutral, not passes', () => {
-      const flags: ManipulationFlags = {
-        check_states: {
-          headline: 'PASSED',
-          body: 'NOT_APPLICABLE',
-          numbers: 'NOT_EVALUATED',
-          negation: 'PASSED',
-          entities: 'NOT_EVALUATED',
-          scope: 'NOT_APPLICABLE',
-        },
-      };
-      const rows = buildCheckRows(flags, 'HEADLINE_ONLY');
-      const byKey = Object.fromEntries(rows.map((r) => [r.key, r]));
-      expect(byKey['headline'].cls).toBe('passed');
-      expect(byKey['negation'].icon).toBe('✓');
-      expect(byKey['numbers'].cls).toBe('unknown');
-      expect(byKey['numbers'].icon).toBe('—');
-      expect(byKey['entities'].cls).toBe('unknown');
-      expect(rows.some((r) => r.cls === 'passed' && r.state !== 'PASSED')).toBeFalse();
+  describe('headlineView', () => {
+    it('shows only the two headline verdicts', () => {
+      expect(headlineView(response()).title).toBe('Headline matched');
+      expect(headlineView(response({ content_status: 'ALTERED' })).title).toBe('Headline altered');
     });
 
-    it('never shows a body check for a photo card / headline-only claim, even if one is present', () => {
-      const flags: ManipulationFlags = { check_states: { headline: 'PASSED', body: 'PASSED' } };
-      expect(buildCheckRows(flags, 'HEADLINE_ONLY').map((r) => r.key)).not.toContain('body');
-      expect(buildCheckRows(flags, 'HEADLINE_WITH_BODY').map((r) => r.key)).toContain('body');
+    it('explains a missing verdict instead of guessing one', () => {
+      const v = headlineView(response({ content_status: null, headline_check_status: 'UNDETERMINED' }));
+      expect(v.tone).toBe('none');
+      expect(v.title).toBe('No verdict');
+      expect(v.summary).toContain('no verdict');
     });
 
-    it('omits NOT_APPLICABLE checks', () => {
-      const flags: ManipulationFlags = { check_states: { headline: 'PASSED', numbers: 'NOT_APPLICABLE' } };
-      expect(buildCheckRows(flags, 'HEADLINE_ONLY').map((r) => r.key)).toEqual(['headline']);
+    it('keeps source-not-found and a failed search apart', () => {
+      const notFound = headlineView(response({ source_status: 'NOT_FOUND', content_status: null, headline_check_status: 'SOURCE_NOT_FOUND' }));
+      const failed = headlineView(response({ source_status: 'INCOMPLETE', content_status: null, headline_check_status: 'SOURCE_CHECK_INCOMPLETE' }));
+      expect(notFound.summary).toContain('No corresponding report');
+      expect(failed.summary).toContain('could not be completed');
+      expect(notFound.summary).not.toEqual(failed.summary);
     });
 
-    it('a failed check carries the quoted discrepancy', () => {
-      const flags: ManipulationFlags = {
-        check_states: { numbers: 'FAILED' },
-        discrepancies: [
-          { kind: 'numbers', claim_text: 'বন্যায় ৫ জন নিহত', evidence_text: 'বন্যায় ১০ জন নিহত', detail: 'claimed 5, source states 10', part: 'headline' },
-        ],
-      };
-      const [row] = buildCheckRows(flags, 'HEADLINE_ONLY');
-      expect(row.cls).toBe('failed');
-      expect(row.icon).toBe('✗');
-      expect(row.discrepancies.length).toBe(1);
-      expect(row.discrepancies[0].evidence_text).toContain('১০');
-    });
-
-    it('historical rows with no recorded states never show greens', () => {
-      const rows = buildCheckRows({ headline_manipulated: false, body_altered: false }, 'HEADLINE_ONLY');
-      expect(rows.length).toBe(1);
-      expect(rows[0].state).toBe('NOT_RECORDED');
-      expect(rows[0].cls).toBe('unknown');
-    });
-
-    it('historical rows still surface a legacy flag that WAS set', () => {
-      const rows = buildCheckRows({ numbers_altered: true }, 'HEADLINE_ONLY');
-      expect(rows.some((r) => r.key === 'numbers' && r.cls === 'failed')).toBeTrue();
+    it('never relabels a legacy content verdict as a headline verdict', () => {
+      const v = headlineView(response({ content_status: null, headline_check_status: null, legacy_result: true }));
+      expect(v.tone).toBe('none');
+      expect(v.summary).toContain('earlier version');
     });
   });
 
-  describe('buildScoreRows', () => {
-    it('never renders a Body Match for a headline-only claim, even if a legacy value is present', () => {
-      const rows = buildScoreRows({ headline_similarity: 0.9, body_similarity: 0.12 }, null, 'HEADLINE_ONLY');
-      expect(rows.map((r) => r.key)).not.toContain('body_similarity');
-      expect(rows.map((r) => r.key)).not.toContain('body_keyword_coverage');
+  describe('body metric rows', () => {
+    const report: BodySimilarityReport = {
+      status: 'COMPUTED',
+      tfidf_cosine: { available: true, value: 0.82 },
+      jaccard: { available: true, value: 0.31 },
+      normalized_levenshtein: { available: true, value: 0.55, details: { truncated: true, claim_chars_compared: 20000, source_chars_compared: 20000 } },
+      semantic_cosine: { available: false, value: null, reason: 'embedding model failed' },
+    };
+
+    it('labels every metric with its range and explanation', () => {
+      const rows = buildBodyMetricRows(report);
+      expect(rows.map((r) => r.key)).toEqual(['tfidf_cosine', 'jaccard', 'normalized_levenshtein', 'semantic_cosine']);
+      expect(rows[0].label).toBe('TF-IDF cosine similarity');
+      expect(rows.every((r) => r.range.includes('0 =') && r.measures.length > 20)).toBeTrue();
+      expect(rows[3].label).toContain('LaBSE');
+      expect(rows[3].label).not.toContain('BERTScore');
     });
 
-    it('shows body metrics for text with a submitted body', () => {
-      const rows = buildScoreRows({ headline_similarity: 0.9, body_similarity: 0.8 }, null, 'HEADLINE_WITH_BODY');
-      expect(rows.find((r) => r.key === 'body_similarity')?.display).toBe('80.0%');
+    it('shows a failed metric as unavailable with its reason, never as 0', () => {
+      const sem = buildBodyMetricRows(report)[3];
+      expect(sem.available).toBeFalse();
+      expect(sem.value).toBeNull();
+      expect(sem.display).toBe('Unavailable');
+      expect(sem.note).toBe('embedding model failed');
+      expect(buildBodyMetricRows(report)[0].display).toBe('82%');
     });
 
-    it('renders unknown scores as not applicable / unavailable, never 0% or 100%', () => {
-      const rows = buildScoreRows(
-        { headline_similarity: 0.9, entity_match: null, numerical_consistency: null },
-        {
-          metrics: {
-            entity_match: { state: 'UNAVAILABLE', reason: 'NER unavailable' },
-            numerical_consistency: { state: 'NOT_APPLICABLE', reason: 'claim contains no numbers' },
-          },
-          passages: [], source_basis: [], content_basis: [],
-        },
-        'HEADLINE_ONLY',
-      );
-      const ent = rows.find((r) => r.key === 'entity_match')!;
-      const num = rows.find((r) => r.key === 'numerical_consistency')!;
-      expect(ent.value).toBeNull();
-      expect(ent.display).toBe('Unavailable');
-      expect(ent.note).toBe('NER unavailable');
-      expect(num.display).toBe('Not applicable');
-      expect(rows.every((r) => r.display !== '0.0%' && r.display !== '100.0%' || r.value !== null)).toBeTrue();
+    it('keeps successful scores when another metric fails and notes truncation', () => {
+      const rows = buildBodyMetricRows(report);
+      expect(rows.filter((r) => r.available).length).toBe(3);
+      expect(rows[2].note).toContain('first 20000');
     });
 
-    it('a genuine zero is shown as 0.0%', () => {
-      const rows = buildScoreRows({ headline_keyword_coverage: 0 }, null, 'HEADLINE_ONLY');
-      expect(rows.find((r) => r.key === 'headline_keyword_coverage')?.display).toBe('0.0%');
+    it('describes bands without implying truth', () => {
+      expect(scoreBand(0.8)).toBe('High');
+      expect(scoreBand(0.5)).toBe('Moderate');
+      expect(scoreBand(0.1)).toBe('Low');
+    });
+
+    it('a skipped comparison has no rows, and unavailable reasons are surfaced', () => {
+      expect(buildBodyMetricRows({ status: 'SKIPPED', reason: 'no body' })).toEqual([]);
+      expect(bodySectionMessage({ status: 'UNAVAILABLE', reason: 'The source body could not be extracted.' }, 'HEADLINE_WITH_BODY'))
+        .toBe('The source body could not be extracted.');
+      expect(bodySectionMessage(report, 'HEADLINE_WITH_BODY')).toBeNull();
+      expect(bodySectionMessage(report, 'HEADLINE_ONLY')).toBeNull();
     });
   });
 
-  it('hasBody / strengthFor', () => {
+  it('labels each kind of headline difference', () => {
+    expect(differenceLabel('subject_object')).toContain('who did what to whom');
+    expect(differenceLabel('main_point')).toBe('Main statement differs');
+    expect(differenceLabel('something-new')).toBe('Meaningful difference');
+  });
+
+  it('correspondence measurements never render a missing value as 0%', () => {
+    const rows = buildCorrespondenceRows({
+      metrics: {
+        headline_title_similarity: { state: 'COMPUTED', value: 0.74 },
+        title_keyword_coverage: { state: 'UNAVAILABLE', value: null, reason: 'source article has no title' },
+      },
+    });
+    expect(rows.map((r) => r.display)).toEqual(['74%', 'Unavailable']);
+  });
+
+  it('body applies only to claims with a submitted body', () => {
     expect(hasBody('HEADLINE_WITH_BODY')).toBeTrue();
     expect(hasBody('HEADLINE_ONLY')).toBeFalse();
-    expect(hasBody(undefined)).toBeFalse();
-    expect(strengthFor(0.8, 'CONFIRMED')).toBe('80%');
-    expect(strengthFor(0, 'INCOMPLETE')).toBe('—');
+    expect(hasBody(null)).toBeFalse();
   });
 });

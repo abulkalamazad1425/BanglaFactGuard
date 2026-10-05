@@ -120,13 +120,13 @@ export class ExpertReviewDetailComponent implements OnInit {
       return 'You selected Real, but the claimed source was not found. Explain the independent evidence supporting your overall decision. A missing report alone does not prove the claim false.';
     }
     if (overall === 'REAL' && content === 'ALTERED') {
-      return 'Overall is "Real" but Content is "Altered" — consider whether Misleading or Altered fits the Overall verdict better.';
+      return 'Overall is "Real" but Headline Alteration is "Altered" — consider whether Misleading or Altered fits the Overall verdict better.';
     }
     if (overall === 'FAKE' && source === 'CONFIRMED' && content === 'MATCHED') {
-      return 'Overall is "Fake" even though Source is confirmed and Content matches — double-check this is intended.';
+      return 'Overall is "Fake" even though Source is confirmed and the headline matches — double-check this is intended.';
     }
     if (overall === 'ALTERED' && content === 'MATCHED') {
-      return 'Overall is "Altered" but Content is "Matched" — consider whether Real fits better if nothing was actually changed.';
+      return 'Overall is "Altered" but Headline Alteration is "Matched" — consider whether Real fits better if nothing was actually changed.';
     }
     return null;
   });

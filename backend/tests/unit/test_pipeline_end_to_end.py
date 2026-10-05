@@ -1,4 +1,4 @@
-"""The real S01-S12 stage classes wired together over a real (SQLite)
+"""The real S01-S13 stage classes wired together over a real (SQLite)
 database, with only the outside world faked: search providers, the article
 HTTP fetch, and the ML services (deterministic stand-ins from
 pipeline_helpers). Proves the wiring - identity, retrieval, extraction,
@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock
 import httpx
 import pytest
 
-from app.core.constants import ContentStatus, DateStatus, SourceStatus, SubmissionStatus
+from app.core.constants import BodyComparisonStatus, ContentStatus, DateStatus, HeadlineCheckStatus, SourceStatus, SubmissionStatus
 from app.features.sources.repository import SourceRepository
 from app.features.submissions.repository import RetrievedArticleRepository, SubmissionRepository
 from app.features.verification.pipeline import factory
@@ -22,7 +22,7 @@ from app.features.verification.pipeline.orchestrator import PipelineOrchestrator
 from app.features.verification.presenter import load_verification_response
 from app.features.verification.repository import ResultRepository
 from db_helpers import add_source, add_user, make_session_factory
-from pipeline_helpers import FakeEmbedder, FakeNER, neutral_nli
+from pipeline_helpers import FakeEmbedder, FakeNER, FakeNLI
 
 ARTICLE_URL = "https://www.prothomalo.com/bangladesh/district/abc12345def"
 TITLE = "প্রধান উপদেষ্টা ঢাকায় নতুন সেতুর উদ্বোধন করেছেন"
@@ -56,7 +56,7 @@ async def env(monkeypatch, tmp_path):
         await s.commit()
 
     def patch_providers(entries=None, exc=None):
-        for name in ("NewsDataClient", "GoogleCSEClient", "PyGoogleNewsClient", "DuckDuckGoClient", "InternalSiteSearchClient"):
+        for name in ("PyGoogleNewsClient", "InternalSiteSearchClient"):
             monkeypatch.setattr(factory, name, lambda *a, _e=entries, _x=exc, **k: FakeProvider(_e, _x))
 
     patch_providers([(ARTICLE_URL, TITLE)])
@@ -105,7 +105,7 @@ class SimpleEnv:
             cache_service=cache,
             embedding_service=FakeEmbedder(),
             ner_service=ner or FakeNER(),
-            nli_service=neutral_nli(),
+            nli_service=FakeNLI(),
             http_client=http,
         )
         ctx = build_context(
@@ -123,13 +123,15 @@ async def test_full_pipeline_confirms_matches_and_persists_everything(env):
         assert ctx.persisted and ctx.cache_hit is False
         assert (ctx.source_status, ctx.content_status, ctx.date_status) == (
             SourceStatus.CONFIRMED, ContentStatus.MATCHED, DateStatus.MATCHED,
-        ), (ctx.analysis.source_basis, ctx.analysis.content_basis)
+        ), (ctx.analysis.source_basis, ctx.analysis.headline_alteration)
+        assert ctx.analysis.headline_alteration.exact_match is True
         assert ctx.top_article.published_date_source == "json_ld.datePublished"  # dateModified ignored
 
         sub = await SubmissionRepository(s).get_by_id(ctx.submission_id)
         assert sub.status == SubmissionStatus.EXPERT_REVIEW
         res = await ResultRepository(s).get_by_submission_id(sub.id)
-        assert res.body_similarity is None and res.claim_scope == "HEADLINE_ONLY"
+        assert res.body_comparison_status == "SKIPPED" and res.claim_scope == "HEADLINE_ONLY"
+        assert res.headline_check_status == "COMPLETED" and res.headline_exact_match is True
         assert res.headline_keyword_coverage == 1.0 and res.ai_consensus_label is None
         r = await load_verification_response(
             sub, result_repo=ResultRepository(s), article_repo=RetrievedArticleRepository(s)
@@ -147,13 +149,33 @@ async def test_wrong_claimed_date_is_matched_plus_mismatched_end_to_end(env):
         assert ctx.date_status == DateStatus.MISMATCHED
 
 
-async def test_changed_number_in_headline_is_altered_end_to_end(env, monkeypatch):
-    altered = TITLE.replace("নতুন", "৫ নতুন")
+async def test_changed_number_in_headline_is_altered_end_to_end(env):
+    altered = TITLE.replace("নতুন", "৫টি নতুন")
     async with env.sessions() as s:
-        ctx, _ = await env.run(s, headline=altered + " ১০০ কোটি টাকা")
-        # the source never states "100 crore": unsupported -> not evaluated, never ALTERED by absence alone
-        assert ctx.content_status != ContentStatus.ALTERED
-        assert ctx.manipulation_flags.check_states["numbers"].value in {"NOT_EVALUATED", "PASSED"}
+        ctx, _ = await env.run(s, headline=altered)
+        assert ctx.source_status == SourceStatus.CONFIRMED
+        assert ctx.content_status == ContentStatus.ALTERED
+        detail = ctx.analysis.headline_alteration
+        assert detail.source_title == TITLE and any(d.kind == "numbers" for d in detail.differences)
+
+
+async def test_body_scores_and_headline_detail_survive_save_and_reload(env):
+    async with env.sessions() as s:
+        ctx, _ = await env.run(s, headline=TITLE, body=PARA)
+        assert ctx.analysis.body_similarity.status == BodyComparisonStatus.COMPUTED
+        await s.commit()
+    async with env.sessions() as s:
+        sub = await SubmissionRepository(s).get_by_id(ctx.submission_id)
+        r = await load_verification_response(sub, result_repo=ResultRepository(s), article_repo=RetrievedArticleRepository(s))
+        assert r.content_status == ContentStatus.MATCHED and r.headline_check_status == HeadlineCheckStatus.COMPLETED
+        ha = r.analysis.headline_alteration
+        assert ha.claim_headline == TITLE and ha.source_title == TITLE and ha.source_url == ARTICLE_URL
+        assert ha.exact_match is True and ha.reason
+        body = r.analysis.body_similarity
+        assert body.status == BodyComparisonStatus.COMPUTED
+        for metric in (body.tfidf_cosine, body.jaccard, body.normalized_levenshtein, body.semantic_cosine):
+            assert metric.available and 0.0 <= metric.value <= 1.0
+        assert r.legacy_result is False
 
 
 async def test_all_providers_failing_end_to_end_is_incomplete_not_not_found(env):
@@ -202,22 +224,33 @@ async def test_service_verify_returns_the_db_result_and_reuse_gives_each_user_th
         def service() -> VerificationService:
             return VerificationService(
                 SubmissionRepository(s), ResultRepository(s), RetrievedArticleRepository(s),
-                SourceRepository(s), cache, FakeEmbedder(), FakeNER(), neutral_nli(), http,
+                SourceRepository(s), cache, FakeEmbedder(), FakeNER(), FakeNLI(), http,
             )
 
         req = VerificationRequest(headline=TITLE, claimed_source_text="প্রথম আলো", published_date=date(2026, 6, 7))
         first = await service().verify(req, submitter_id=owner.id)
         assert first.cached is False and first.source_status == SourceStatus.CONFIRMED
         assert first.processing_time_ms is not None and first.overall_verdict is None
+        assert first.analysis.timings is not None
+        assert first.analysis.timings.cache_hit is False
+        assert "s13_result_persistence" in first.analysis.timings.stage_ms
+        assert "s09_headline_alteration" in first.analysis.timings.stage_ms
+        assert "s04_source_search" in first.analysis.timings.stage_ms
+        assert all(ms >= 0 for ms in first.analysis.timings.stage_ms.values())
         await s.commit()
 
         second = await service().verify(req, submitter_id=other.id)
         assert second.cached is True
+        assert second.analysis.timings.cache_hit is True
+        assert set(second.analysis.timings.stage_ms) == {"s01_normalizer", "s02_cache_lookup"}
+        stored = await ResultRepository(s).get_by_submission_id(second.submission_id)
+        assert stored.analysis_details["timings"] == second.analysis.timings.model_dump()
         assert second.submission_id != first.submission_id  # their own submission, not the owner's
         mine = await SubmissionRepository(s).get_by_id(second.submission_id)
         assert mine.submitter_id == other.id and mine.duplicate_of_submission_id == first.submission_id
         # same saved content as the original, read through the one presenter
         a, b = first.model_dump(), second.model_dump()
-        for key in ("source_status", "content_status", "date_status", "scores", "manipulation_flags", "claim_scope"):
+        for key in ("source_status", "content_status", "headline_check_status", "date_status", "claim_scope"):
             assert a[key] == b[key], key
+        assert a["analysis"]["headline_alteration"] == b["analysis"]["headline_alteration"]
     await http.aclose()

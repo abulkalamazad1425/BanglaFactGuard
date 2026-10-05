@@ -11,9 +11,12 @@ Expert state is NOT copied: it is read through from the original at display
 time (see presenter), so there is one source of truth for review outcomes and
 a later finalization of the original is reflected on every copy.
 
-Reusable means: produced by the current pipeline version, no INCOMPLETE
-dimension (an incomplete check is never a settled answer), and fresh —
-Source NOT_FOUND has a shorter freshness window than a found report. Expert-
+Reusable means: produced by the current pipeline version (so a result from
+older logic is never served as a result of the current logic), no incomplete
+dimension (an incomplete check is never a settled answer): the source check
+completed, a confirmed source has a headline verdict, the date check is not
+INCOMPLETE and claim-body scores are not UNAVAILABLE; and fresh — Source
+NOT_FOUND has a shorter freshness window than a found report. Expert-
 finalized results are not subject to the automated freshness window.
 """
 
@@ -27,8 +30,9 @@ import structlog
 from app.core.config import get_settings
 from app.core.constants import (
     VERIFICATION_PIPELINE_VERSION,
-    ContentStatus,
+    BodyComparisonStatus,
     DateStatus,
+    HeadlineCheckStatus,
     SourceStatus,
     SubmissionStatus,
 )
@@ -55,12 +59,17 @@ def result_is_reusable(
         return False, "no_result"
     if result.pipeline_version != VERIFICATION_PIPELINE_VERSION:
         return False, "pipeline_version_mismatch"
-    if (
-        result.source_status == SourceStatus.INCOMPLETE
-        or result.content_status == ContentStatus.INCOMPLETE
-        or result.date_status == DateStatus.INCOMPLETE
-    ):
+    if result.source_status == SourceStatus.INCOMPLETE or result.date_status == DateStatus.INCOMPLETE:
         return False, "incomplete_check"
+    if result.source_status == SourceStatus.CONFIRMED and (
+        result.content_status is None or result.headline_check_status != HeadlineCheckStatus.COMPLETED.value
+    ):
+        return False, "no_headline_verdict"
+    if (
+        result.source_status == SourceStatus.CONFIRMED
+        and result.body_comparison_status == BodyComparisonStatus.UNAVAILABLE.value
+    ):
+        return False, "body_scores_unavailable"
     if result.overall_verdict is not None:  # expert-finalized: durable
         return True, "finalized"
     created = result.created_at
@@ -110,26 +119,20 @@ class ResultReuseService:
             target.id,
             source_status=source_result.source_status,
             content_status=source_result.content_status,
+            headline_check_status=source_result.headline_check_status,
+            headline_exact_match=source_result.headline_exact_match,
+            body_comparison_status=source_result.body_comparison_status,
             date_status=source_result.date_status,
             confidence=source_result.confidence or 0.0,
             reasoning=source_result.reasoning or "",
-            semantic_similarity=source_result.semantic_similarity,
-            entity_match=source_result.entity_match,
-            contradiction_score=source_result.contradiction_score,
-            keyword_overlap=source_result.keyword_overlap,
-            numerical_consistency=source_result.numerical_consistency,
-            top_article_id=source_result.top_article_id,
-            avg_verification_time_ms=source_result.avg_verification_time_ms,
-            manipulation_flags=source_result.manipulation_flags,
             headline_similarity=source_result.headline_similarity,
-            body_similarity=source_result.body_similarity,
-            passage_similarity=source_result.passage_similarity,
             headline_keyword_coverage=source_result.headline_keyword_coverage,
             passage_keyword_coverage=source_result.passage_keyword_coverage,
-            body_keyword_coverage=source_result.body_keyword_coverage,
+            top_article_id=source_result.top_article_id,
+            avg_verification_time_ms=source_result.avg_verification_time_ms,
             claim_scope=source_result.claim_scope,
             pipeline_version=source_result.pipeline_version,
-            analysis_details=source_result.analysis_details,
+            analysis_details={k: v for k, v in (source_result.analysis_details or {}).items() if k != "timings"},
             reused_from_submission_id=source.id,
         )
         target.duplicate_of_submission_id = source.id

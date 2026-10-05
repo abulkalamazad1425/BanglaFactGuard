@@ -7,8 +7,9 @@ reader of stored results may treat it as a settled answer.
 
 Covers (against a real SQLite database):
 - S02's database path and Redis path never hit on an INCOMPLETE result.
-- S12 never writes the Redis pointer for an INCOMPLETE result, and does for a
-  complete one.
+- S13 never writes the Redis pointer for an INCOMPLETE result or a confirmed
+  source without a headline verdict, and does for a complete one.
+- a result from an older pipeline version is never reused.
 - register_claim does not hand back an INCOMPLETE result as "already
   verified" - it queues a fresh run.
 """
@@ -24,7 +25,7 @@ from app.core.constants import ContentStatus, SourceStatus, VERIFICATION_PIPELIN
 from app.features.sources.repository import SourceRepository
 from app.features.submissions.repository import RetrievedArticleRepository, SubmissionRepository
 from app.features.verification.pipeline.stages.s02_cache_lookup import CacheLookupStage
-from app.features.verification.pipeline.stages.s12_persistence import PersistenceStage
+from app.features.verification.pipeline.stages.s13_result_persistence import ResultPersistenceStage
 from app.features.verification.repository import ResultRepository
 from app.features.verification.schemas import VerificationRequest
 from app.features.verification.service import VerificationService
@@ -78,15 +79,15 @@ async def test_s02_hits_on_a_complete_result(db):
         cache.set_claim_pointer.assert_awaited_once()  # DB hit is written back to Redis
 
 
-async def _run_s12(s, cache, *, top):
+async def _run_s13(s, cache, *, top):
     ctx = make_context(HEADLINE, top=top, search_adequate=top is not None)
     ctx.content_hash = compute_claim_hash(HEADLINE, "prothomalo.com", ctx.claim_scope)
     ctx = await run_analysis(ctx)
-    stage = PersistenceStage(SubmissionRepository(s), ResultRepository(s), RetrievedArticleRepository(s), cache, session=s)
+    stage = ResultPersistenceStage(SubmissionRepository(s), ResultRepository(s), RetrievedArticleRepository(s), cache, session=s)
     return ctx, await stage.execute(ctx)
 
 
-async def test_s12_skips_the_redis_pointer_for_an_incomplete_result(db):
+async def test_s13_skips_the_redis_pointer_for_an_incomplete_result(db):
     async with db() as s:
         cache = _cache()
         # no article + inadequate search => Source INCOMPLETE
@@ -96,17 +97,17 @@ async def test_s12_skips_the_redis_pointer_for_an_incomplete_result(db):
 
         ctx = await ra(ctx)
         assert ctx.source_status == SourceStatus.INCOMPLETE
-        out = await PersistenceStage(
+        out = await ResultPersistenceStage(
             SubmissionRepository(s), ResultRepository(s), RetrievedArticleRepository(s), cache, session=s
         ).execute(ctx)
         assert out.persisted
         cache.set_claim_pointer.assert_not_awaited()
 
 
-async def test_s12_writes_the_redis_pointer_for_a_complete_result(db):
+async def test_s13_writes_the_redis_pointer_for_a_complete_result(db):
     async with db() as s:
         cache = _cache()
-        ctx, out = await _run_s12(s, cache, top=article(HEADLINE, HEADLINE + "।"))
+        ctx, out = await _run_s13(s, cache, top=article(HEADLINE, HEADLINE + "।"))
         assert ctx.content_status == ContentStatus.MATCHED
         cache.set_claim_pointer.assert_awaited_once()
         assert json.loads(cache.set_claim_pointer.await_args.args[1])["submission_id"] == str(out.submission_id)
@@ -125,3 +126,31 @@ async def test_register_claim_requeues_instead_of_serving_an_incomplete_result(d
             VerificationRequest(headline=HEADLINE, claimed_source_text="প্রথম আলো"), submitter_id=u.id
         )
     assert cached is False and sid != prior.id and status.value == "PENDING"
+
+
+@pytest.mark.parametrize("status", ["UNDETERMINED", "MODEL_UNAVAILABLE", "SOURCE_TITLE_MISSING"])
+async def test_confirmed_source_without_a_headline_verdict_is_never_reused(db, status):
+    async with db() as s:
+        u = await add_user(s)
+        sub, _ = await add_completed_submission(
+            s, headline=HEADLINE, submitter_id=u.id, content_status=None, headline_check_status=status
+        )
+        sub_result = await ResultRepository(s).get_by_submission_id(sub.id)
+        sub_result.content_status = None
+        await s.commit()
+        ctx = make_context(HEADLINE)
+        ctx.content_hash = sub.content_hash
+        out = await CacheLookupStage(_cache(), SubmissionRepository(s), ResultRepository(s)).execute(ctx)
+        assert out.cache_hit is False
+
+
+async def test_result_from_an_older_pipeline_version_is_never_reused(db):
+    async with db() as s:
+        u = await add_user(s)
+        sub, _ = await add_completed_submission(s, headline=HEADLINE, submitter_id=u.id, pipeline_version="v3.3-banglabert-ner")
+        await s.commit()
+        for cache in (_cache(), _cache({"submission_id": str(sub.id), "pipeline_version": VERIFICATION_PIPELINE_VERSION})):
+            ctx = make_context(HEADLINE)
+            ctx.content_hash = sub.content_hash
+            out = await CacheLookupStage(cache, SubmissionRepository(s), ResultRepository(s)).execute(ctx)
+            assert out.cache_hit is False

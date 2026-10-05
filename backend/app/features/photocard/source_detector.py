@@ -32,7 +32,7 @@ from dataclasses import dataclass
 import structlog
 from Levenshtein import ratio as levenshtein_ratio
 
-from app.features.photocard.claim_extractor import normalize_for_match as _normalise
+from app.features.photocard.ocr_fallback_extractor import normalize_for_match as _normalise
 from app.features.sources.models import VerifiedSource
 from app.features.sources.repository import SourceRepository
 from app.shared.utils.bangla_normalizer import extract_canonical_domain

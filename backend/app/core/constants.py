@@ -14,7 +14,7 @@ class SourceStatus(str, Enum):
     actually ran and came up empty; INCOMPLETE means the search or retrieval
     itself failed (every provider errored, every fetch failed) and no
     conclusion could be reached either way. A failed check must never be
-    reported as a confident negative — see s11_classifier.py.
+    reported as a confident negative — see s08_source_correspondence.py.
     """
 
     CONFIRMED = "CONFIRMED"
@@ -23,21 +23,58 @@ class SourceStatus(str, Enum):
 
 
 class ContentStatus(str, Enum):
-    """How the claimed content compares to the source once CONFIRMED.
+    """Headline Alteration verdict — the claim headline compared with the
+    selected source article's TITLE only (never its body).
 
-    Only meaningful when source_status is CONFIRMED — there is nothing to
-    compare content against when the source never published the story (that
-    case is represented as NULL/not-applicable, not INCOMPLETE). MATCHED
-    covers paraphrase and reordering that preserve the same facts; ALTERED is
-    reserved for material factual changes (numbers, names, outcomes) or
-    outright contradiction. INCOMPLETE means the source WAS confirmed but the
-    evidence needed to compare content (e.g. the article body) could not be
-    retrieved or was too ambiguous to judge.
+    Only two verdicts exist. MATCHED needs positive evidence (an exact match,
+    or a semantic equivalence established by the comparator); ALTERED needs a
+    material difference (names, numbers, dates, negation, attribution,
+    subject-object roles or the main point). When neither can be established
+    there is NO verdict (NULL) and `HeadlineCheckStatus` says why — a missing
+    verdict is never written as MATCHED, ALTERED or a third "incomplete"
+    verdict.
     """
 
     MATCHED = "MATCHED"
     ALTERED = "ALTERED"
-    INCOMPLETE = "INCOMPLETE"
+
+
+class HeadlineCheckStatus(str, Enum):
+    """Processing/availability status of the Headline Alteration check —
+    separate from the verdict itself (`ContentStatus`).
+
+    COMPLETED               a verdict (MATCHED / ALTERED) was reached.
+    SOURCE_NOT_FOUND        an adequate search found no corresponding report.
+    SOURCE_CHECK_INCOMPLETE the search/retrieval itself failed or was
+                            inadequate — never presented as SOURCE_NOT_FOUND.
+    SOURCE_TITLE_MISSING    a source report was found but has no title.
+    MODEL_UNAVAILABLE       the semantic model needed for a non-exact
+                            comparison was unavailable.
+    UNDETERMINED            the comparison ran but established neither
+                            equivalence nor a material difference.
+    """
+
+    COMPLETED = "COMPLETED"
+    SOURCE_NOT_FOUND = "SOURCE_NOT_FOUND"
+    SOURCE_CHECK_INCOMPLETE = "SOURCE_CHECK_INCOMPLETE"
+    SOURCE_TITLE_MISSING = "SOURCE_TITLE_MISSING"
+    MODEL_UNAVAILABLE = "MODEL_UNAVAILABLE"
+    UNDETERMINED = "UNDETERMINED"
+
+
+class BodyComparisonStatus(str, Enum):
+    """Whether the claim-body vs source-body similarity scores were computed.
+
+    COMPUTED     at least one of the four metrics produced a value.
+    SKIPPED      the claim has no body (headline-only text or a photo card).
+    UNAVAILABLE  the claim has a body but there is nothing to compare it with
+                 (no corresponding source, no extracted source body) or every
+                 metric failed. Never reported as a score of 0.
+    """
+
+    COMPUTED = "COMPUTED"
+    SKIPPED = "SKIPPED"
+    UNAVAILABLE = "UNAVAILABLE"
 
 
 class DateStatus(str, Enum):
@@ -134,21 +171,6 @@ class ExtractionMethod(str, Enum):
     BEAUTIFULSOUP = "beautifulsoup"
 
 
-class NLILabel(str, Enum):
-
-    ENTAILMENT = "entailment"
-    CONTRADICTION = "contradiction"
-    NEUTRAL = "neutral"
-
-
-class ManipulationType(str, Enum):
-
-    HEADLINE_MANIPULATED = "headline_manipulated"
-    BODY_ALTERED = "body_altered"
-    NUMBERS_ALTERED = "numbers_altered"
-    ENTITIES_REPLACED = "entities_replaced"
-
-
 class LogLevel(str, Enum):
 
     INFO = "INFO"
@@ -206,20 +228,6 @@ class MultimodalPredictionLabel(str, Enum):
     NON_FAKE = "NON_FAKE"
 
 
-class CheckState(str, Enum):
-    """Outcome of one alteration/consistency check — never inferred from a
-    default-False flag. PASSED means the check ran to completion and found no
-    concrete discrepancy; NOT_EVALUATED means it could not run (missing
-    signal, failed model, absent evidence) and is NOT a pass; NOT_APPLICABLE
-    means the check does not apply to this claim scope (e.g. any submitted-body
-    check for a photo card)."""
-
-    PASSED = "PASSED"
-    FAILED = "FAILED"
-    NOT_EVALUATED = "NOT_EVALUATED"
-    NOT_APPLICABLE = "NOT_APPLICABLE"
-
-
 class MetricState(str, Enum):
     """Why a score is (or is not) a number.
 
@@ -261,7 +269,7 @@ class JobPhase(str, Enum):
 # Bumped whenever scoring/decision logic changes in a way that makes earlier
 # stored scores non-comparable. It is part of claim identity, so results
 # produced by older (defective) logic are never served as current.
-VERIFICATION_PIPELINE_VERSION: str = "v3.1-content-evidence"
+VERIFICATION_PIPELINE_VERSION: str = "v4.0-headline-title-body-scores"
 
 
 class PipelineStageID(str, Enum):
@@ -273,11 +281,12 @@ class PipelineStageID(str, Enum):
     S05_EVIDENCE_RETRIEVAL = "s05_evidence_retrieval"
     S06_ARTICLE_EXTRACTOR = "s06_article_extractor"
     S07_EVIDENCE_RANKER = "s07_evidence_ranker"
-    S08_SIMILARITY_ANALYZER = "s08_similarity_analyzer"
-    S09_CONTRADICTION_DETECTOR = "s09_contradiction_detector"
-    S10_MANIPULATION_DETECTOR = "s10_manipulation_detector"
-    S11_CLASSIFIER = "s11_classifier"
-    S12_PERSISTENCE = "s12_persistence"
+    S08_SOURCE_CORRESPONDENCE = "s08_source_correspondence"
+    S09_HEADLINE_ALTERATION = "s09_headline_alteration"
+    S10_BODY_SIMILARITY = "s10_body_similarity"
+    S11_DATE_VERIFICATION = "s11_date_verification"
+    S12_RESULT_ASSEMBLY = "s12_result_assembly"
+    S13_RESULT_PERSISTENCE = "s13_result_persistence"
 
 
 KNOWN_SOURCE_ALIASES: dict[str, str] = {
@@ -329,7 +338,7 @@ KNOWN_SOURCE_ALIASES: dict[str, str] = {
 }
 
 
-MAX_SEARCH_QUERIES: int = 10
+MAX_SEARCH_QUERIES: int = 6
 
 
 MAX_CONCURRENT_FETCHES: int = 10

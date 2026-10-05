@@ -17,7 +17,6 @@ from app.features.verification.pipeline.context import PipelineContext
 from app.features.articles.schemas import CandidateArticleSchema, RankedArticleSchema
 from app.features.cache.cache_service import CacheService
 from app.shared.utils.dates import ParsedPublication, parse_publication
-from app.shared.utils.hashing import compute_url_hash
 from app.shared.utils.text_cleaner import clean_extracted_text, clean_title
 
 logger = structlog.get_logger(__name__)
@@ -425,7 +424,6 @@ class ArticleExtractorStage:
             )
             meta = trafilatura.extract_metadata(html, url=url)
             title = author = None
-            pub_date = None
             if meta:
                 title = meta.title or None
                 author = meta.author or None

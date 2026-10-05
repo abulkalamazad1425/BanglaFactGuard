@@ -1,27 +1,28 @@
-"""Photo-card stage list: the text pipeline with photo-card cache identity.
+"""The shared verification stages, wired for a photo card.
 
-Content checking is NOT special-cased here. A photo-card headline is compared
-by the same `ContentComparator` (inside the shared S11 classifier) as a
-headline-only text claim; only result identity differs.
+A photo card runs the very same S01-S13 pipeline as a typed claim; only the
+normaliser differs, so that the result identity (content hash) of a card is
+computed under the photo-card rules: headline only, never a body.
 """
 
 from __future__ import annotations
 
 from app.core.config import get_settings
 from app.core.constants import VERIFICATION_PIPELINE_VERSION, ClaimScope, PipelineStageID
-from app.features.verification.analysis.content_check import METHOD
+from app.features.verification.analysis.headline_comparison import METHOD
 from app.features.verification.pipeline.factory import build_verification_stages
 from app.features.verification.pipeline.stages.s01_normalizer import InputNormalizerStage
 from app.shared.utils.hashing import compute_claim_hash
 
 
 def compute_photocard_hash(headline: str, source: str, *, published_date=None) -> str:
-    """Never reuse results computed under another content method or model."""
+    """Never reuse a result computed under another pipeline version, headline
+    comparison method or model set."""
     settings = get_settings()
     models = f"{settings.ml.embedding_model_name}:{settings.ml.nli_model_name}:{settings.ml.ner_model_name}"
     return compute_claim_hash(
         headline, source, ClaimScope.HEADLINE_ONLY, published_date=published_date,
-        version=f"{VERIFICATION_PIPELINE_VERSION}:{METHOD}:{models}:{settings.classification.nli_bangla_validated}",
+        version=f"{VERIFICATION_PIPELINE_VERSION}:{METHOD}:{models}",
     )
 
 
@@ -38,11 +39,9 @@ class PhotocardNormalizerStage(InputNormalizerStage):
 
 
 def build_photocard_stages(**kwargs):
-    """The shared stages, with the photo-card normalizer for result identity.
-
-    Dispatch is explicit from PhotoCardService, never inferred from
-    HEADLINE_ONLY (which also represents text submissions without a body).
-    """
+    """The shared stages with the photo-card normaliser. Dispatch is explicit
+    from PhotoCardService, never inferred from HEADLINE_ONLY (which also
+    describes text claims submitted without a body)."""
     return [
         PhotocardNormalizerStage(source_repo=kwargs["source_repo"])
         if stage.stage_id == PipelineStageID.S01_NORMALIZER

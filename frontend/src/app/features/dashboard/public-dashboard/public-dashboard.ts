@@ -124,21 +124,6 @@ export class PublicDashboardComponent implements OnInit {
     this.activeFilters.set((Object.keys(values) as FilterKey[]).filter(key => !!values[key]).map(key => ({ key, label: labels[key] })));
   }
   imageFailed(id: string): void { this.failedImages.update(ids => new Set([...ids, id])); }
-  methodLabel(method: string): string { return ({ SOURCE_BASED: 'News text', PHOTO_CARD: 'Photocard', MULTIMODAL: 'Text and image' } as Record<string, string>)[method] || 'News check'; }
+  methodLabel(method: string): string { return ({ SOURCE_BASED: 'Text & source', PHOTO_CARD: 'Photo card', MULTIMODAL: 'Text & image' } as Record<string, string>)[method] || 'News check'; }
   verdictLabel(verdict: string): string { return ({ REAL: 'Real', FAKE: 'Fake', MISLEADING: 'Misleading', ALTERED: 'Altered' } as Record<string, string>)[verdict] || ''; }
-  finding(item: ExplorerItem): string {
-    if (item.submission_type === 'MULTIMODAL') return item.is_finalized
-      ? 'Expert review is complete. Read the full report for the assessment and its limitations.'
-      : 'A preliminary assessment is available. Expert review is needed before a final decision.';
-    let text = item.source_status === 'CONFIRMED' ? 'A related report was found on the claimed news outlet.'
-      : item.source_status === 'NOT_FOUND' ? 'No matching report was found in the available source search. This does not establish that the claim is false.'
-      : 'The source check is incomplete. The available findings do not establish whether the claim is true or false.';
-    if (item.source_status === 'CONFIRMED') {
-      if (item.content_status === 'MATCHED') text += ' The checked content matches.';
-      else if (item.content_status === 'ALTERED') text += ' Differences were found in the checked content.';
-      else text += ' The content check is incomplete.';
-    }
-    if (item.date_status === 'MISMATCHED') text += ' The claimed date does not match the source.';
-    return text;
-  }
 }

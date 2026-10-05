@@ -22,7 +22,7 @@ describe('PhotoCardComponent (background submission)', () => {
   let toast: jasmine.SpyObj<ToastService>;
 
   function setup() {
-    svc = jasmine.createSpyObj('PhotoCardService', ['submitAsync', 'getResult', 'verify']);
+    svc = jasmine.createSpyObj('PhotoCardService', ['submitAsync', 'getResult']);
     pending = jasmine.createSpyObj('PendingVerificationsService', ['track']);
     toast = jasmine.createSpyObj('ToastService', ['error', 'success']);
     TestBed.configureTestingModule({
@@ -43,12 +43,11 @@ describe('PhotoCardComponent (background submission)', () => {
     return { fixture, cmp };
   }
 
-  it('submits through the 202 endpoint, never the synchronous one', () => {
+  it('submits through the 202 background endpoint', () => {
     const { cmp } = setup();
     svc.submitAsync.and.returnValue(of(ACCEPTED));
     cmp.verify();
     expect(svc.submitAsync).toHaveBeenCalled();
-    expect(svc.verify).not.toHaveBeenCalled();
   });
 
   it('after acceptance the user can leave: shows a received state with links and does not poll', () => {

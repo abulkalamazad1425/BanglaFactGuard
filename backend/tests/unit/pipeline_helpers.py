@@ -1,39 +1,41 @@
-"""Deterministic stand-ins for the ML services, used by orchestration tests.
+"""Deterministic stand-ins for the ML services, used by stage/orchestration tests.
 
-These fakes make stage logic testable; they say NOTHING about the accuracy of
-LaBSE, the NER checkpoint or the NLI model. The "embedding" is a hashed
-bag-of-stems vector, so identical text scores 1.0 and unrelated text ~0.
+These fakes make decision logic testable; they say NOTHING about the accuracy
+of LaBSE, the NER checkpoint or the NLI model. The "embedding" is a hashed
+bag-of-stems vector (identical text -> 1.0, unrelated text -> ~0). The NLI
+fake returns uninformative scores unless a pair is explicitly scripted.
 """
 
 from __future__ import annotations
 
 import zlib
 from datetime import date
-from unittest.mock import AsyncMock, MagicMock
 
 import numpy as np
 
 from app.core.constants import ClaimScope, SearchProvider
 from app.features.articles.schemas import RankedArticleSchema
 from app.features.nlp.ner_service import NERResult
-from app.features.verification.analysis.content_check import ContentComparator
 from app.features.verification.analysis.entities import EntityMention
+from app.features.verification.analysis.headline_comparison import HeadlineComparator
 from app.features.verification.analysis.text import content_tokens, light_stem
 from app.features.verification.pipeline.context import PipelineContext, build_context
-from app.features.verification.pipeline.stages.s08_similarity_analyzer import (
-    SimilarityAnalyzerStage,
-)
-from app.features.verification.pipeline.stages.s09_contradiction_detector import (
-    ContradictionDetectorStage,
-)
-from app.features.verification.pipeline.stages.s11_classifier import ClassifierStage
+from app.features.verification.pipeline.stages.s08_source_correspondence import SourceCorrespondenceStage
+from app.features.verification.pipeline.stages.s09_headline_alteration import HeadlineAlterationStage
+from app.features.verification.pipeline.stages.s10_body_similarity import BodySimilarityStage
+from app.features.verification.pipeline.stages.s11_date_verification import DateVerificationStage
+from app.features.verification.pipeline.stages.s12_result_assembly import ResultAssemblyStage
 from app.features.verification.schemas import NLIScoresSchema
 
 DIM = 512
+UNINFORMATIVE = NLIScoresSchema(entailment=0.30, contradiction=0.10, neutral=0.60)
+ENTAILS = NLIScoresSchema(entailment=0.97, contradiction=0.01, neutral=0.02)
+CONTRADICTS = NLIScoresSchema(entailment=0.01, contradiction=0.95, neutral=0.04)
 
 
 class FakeEmbedder:
-    def __init__(self) -> None:
+    def __init__(self, *, fail: bool = False) -> None:
+        self.fail = fail
         self.similarity_calls: list[tuple[str, str]] = []
         self.batch_calls: list[list[str]] = []
 
@@ -47,11 +49,37 @@ class FakeEmbedder:
 
     async def encode_batch(self, texts):
         self.batch_calls.append(list(texts))
+        if self.fail:
+            raise RuntimeError("embedding model down")
         return [self._vec(t) for t in texts]
 
     async def compute_similarity(self, a: str, b: str) -> float:
         self.similarity_calls.append((a, b))
+        if self.fail:
+            raise RuntimeError("embedding model down")
         return max(0.0, min(1.0, float(np.dot(self._vec(a), self._vec(b)))))
+
+
+class FakeNLI:
+    """`scripted[(premise, hypothesis)]` wins; identical texts entail;
+    everything else is uninformative. `available=False` -> None."""
+
+    def __init__(self, scripted: dict | None = None, *, default: NLIScoresSchema = UNINFORMATIVE,
+                 available: bool = True) -> None:
+        self.scripted = scripted or {}
+        self.default = default
+        self.available = available
+        self.calls: list[tuple[str, str]] = []
+
+    async def predict(self, premise: str, hypothesis: str):
+        self.calls.append((premise, hypothesis))
+        if not self.available:
+            return None
+        if (premise, hypothesis) in self.scripted:
+            return self.scripted[(premise, hypothesis)]
+        if premise.strip() == hypothesis.strip():
+            return ENTAILS
+        return self.default
 
 
 class FakeNER:
@@ -67,16 +95,8 @@ class FakeNER:
         return NERResult(True, [m for m in self.known if m.text in text])
 
 
-def neutral_nli() -> MagicMock:
-    nli = MagicMock()
-    nli.predict = AsyncMock(
-        return_value=NLIScoresSchema(entailment=0.3, contradiction=0.1, neutral=0.6)
-    )
-    return nli
-
-
 def article(
-    title: str,
+    title: str | None,
     body: str | None = None,
     *,
     published: date | None = date(2026, 6, 7),
@@ -100,6 +120,7 @@ def make_context(
     scope: ClaimScope | None = None,
     published_date: date | None = None,
     top: RankedArticleSchema | None = None,
+    articles: list[RankedArticleSchema] | None = None,
     search_adequate: bool | None = True,
 ) -> PipelineContext:
     ctx = build_context(
@@ -112,10 +133,11 @@ def make_context(
     ctx.normalized_headline = ctx.raw_headline
     ctx.normalized_body = ctx.raw_news_body
     ctx.normalized_source = "prothomalo.com"
-    if top is not None:
-        ctx.top_article = top
-        ctx.ranked_articles = [top]
-        ctx.extracted_articles = [top]
+    ranked = articles if articles is not None else ([top] if top is not None else [])
+    if ranked:
+        ctx.top_article = ranked[0]
+        ctx.ranked_articles = list(ranked)
+        ctx.extracted_articles = list(ranked)
     ctx.search_attempted = 4
     ctx.search_success = 3
     ctx.search_success_empty = 1
@@ -128,13 +150,15 @@ async def run_analysis(
     *,
     ner: FakeNER | None = None,
     embedder: FakeEmbedder | None = None,
-    nli=None,
+    nli: FakeNLI | None = None,
 ) -> PipelineContext:
-    """S08 -> S09 -> S11 (with the local content comparator) over deterministic fakes."""
+    """S08 -> S12 (everything after retrieval except persistence) over fakes."""
     embedder = embedder or FakeEmbedder()
+    nli = nli or FakeNLI()
     ner = ner or FakeNER()
-    nli = nli or neutral_nli()
-    ctx = await SimilarityAnalyzerStage(embedder, ner).execute(ctx)
-    ctx = await ContradictionDetectorStage(nli).execute(ctx)
-    ctx = await ClassifierStage(ContentComparator(embedder, nli, ner, nli_validated=False)).execute(ctx)
+    ctx = await SourceCorrespondenceStage(embedder).execute(ctx)
+    ctx = await HeadlineAlterationStage(HeadlineComparator(nli, embedder, ner)).execute(ctx)
+    ctx = await BodySimilarityStage(embedder).execute(ctx)
+    ctx = await DateVerificationStage().execute(ctx)
+    ctx = await ResultAssemblyStage().execute(ctx)
     return ctx

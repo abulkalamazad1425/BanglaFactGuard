@@ -94,6 +94,7 @@ async def test_s03_skips_body_queries_when_headline_only():
         claim_scope=ClaimScope.HEADLINE_ONLY,
     )
     context.normalized_headline = context.raw_headline
+    context.normalized_source = "prothomalo.com"
     context.normalized_body = "অর্থমন্ত্রী জাতীয় সংসদে নতুন অর্থ বছরের বাজেট পেশ করছেন।"
 
     stage = QueryGeneratorStage()
@@ -108,13 +109,14 @@ async def test_s03_skips_body_queries_when_headline_only():
 
 
 @pytest.mark.asyncio
-async def test_s03_includes_body_queries_when_headline_with_body():
+async def test_s03_skips_body_queries_when_headline_with_body():
     context = build_context(
         headline="বাজেট ২০২৬ ঘোষণা",
         claimed_source="prothomalo.com",
         news_body="অর্থমন্ত্রী জাতীয় সংসদে নতুন অর্থ বছরের বাজেট পেশ করছেন। শিক্ষা খাতে বরাদ্দ বৃদ্ধি।",
     )
     context.normalized_headline = context.raw_headline
+    context.normalized_source = "prothomalo.com"
     context.normalized_body = context.raw_news_body
 
     stage = QueryGeneratorStage()
@@ -125,7 +127,7 @@ async def test_s03_includes_body_queries_when_headline_with_body():
     body_queries = [
         q for q, t in context.search_queries if t == QueryType.BODY_SUMMARY.value
     ]
-    assert len(body_queries) > 0
+    assert body_queries == []
 
 
 # S08 scope handling (no body similarity / weighting for HEADLINE_ONLY, chunked

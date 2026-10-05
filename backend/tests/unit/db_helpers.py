@@ -120,26 +120,34 @@ async def add_completed_submission(
     )
     session.add(sub)
     await session.flush()
+    confirmed = source_status == SourceStatus.CONFIRMED
+    verdict = content_status if content_status is not None else (ContentStatus.MATCHED if confirmed else None)
+    headline_status = result_fields.pop(
+        "headline_check_status",
+        "COMPLETED" if verdict is not None
+        else "SOURCE_NOT_FOUND" if source_status == SourceStatus.NOT_FOUND
+        else "SOURCE_CHECK_INCOMPLETE" if source_status == SourceStatus.INCOMPLETE
+        else "UNDETERMINED",
+    )
     res = VerificationResult(
         id=uuid.uuid4(),
         submission_id=sub.id,
         source_status=source_status,
-        content_status=content_status
-        if content_status is not None
-        else (ContentStatus.MATCHED if source_status == SourceStatus.CONFIRMED else None),
+        content_status=verdict,
+        headline_check_status=headline_status,
+        headline_exact_match=result_fields.pop("headline_exact_match", False if verdict else None),
+        body_comparison_status=result_fields.pop("body_comparison_status", "COMPUTED" if body else "SKIPPED"),
         date_status=date_status,
         confidence=0.9,
         reasoning="r",
-        semantic_similarity=result_fields.pop("semantic_similarity", 0.91),
         headline_similarity=result_fields.pop("headline_similarity", 0.91),
-        body_similarity=result_fields.pop("body_similarity", None),
-        passage_similarity=0.8,
         headline_keyword_coverage=1.0,
-        keyword_overlap=1.0,
+        passage_keyword_coverage=1.0,
         claim_scope=scope.value,
         pipeline_version=pipeline_version,
-        manipulation_flags={"check_states": {"numbers": "PASSED"}, "discrepancies": []},
-        analysis_details={"pipeline_version": pipeline_version, "metrics": {}, "passages": []},
+        analysis_details=result_fields.pop(
+            "analysis_details", {"pipeline_version": pipeline_version, "metrics": {}}
+        ),
         **result_fields,
     )
     session.add(res)

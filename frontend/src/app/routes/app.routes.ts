@@ -29,6 +29,7 @@ export const APP_ROUTES: Routes = [
       { path: 'verify/:id',loadComponent: () => import('../features/verification/verify-result/verify-result').then(m => m.VerifyResultComponent) },
       { path: 'multimodal',loadComponent: () => import('../features/multimodal/multimodal').then(m => m.MultimodalComponent) },
       { path: 'photo-card',loadComponent: () => import('../features/photocard/photocard').then(m => m.PhotoCardComponent) },
+      { path: 'faq',       loadComponent: () => import('../features/faq/faq').then(m => m.FaqComponent) },
 
       // Authenticated
       {

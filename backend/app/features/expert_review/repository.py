@@ -25,7 +25,7 @@ class ExpertProfileRepository(BaseRepository[ExpertProfile]):
         self,
         user_id: uuid.UUID,
         *,
-        initial_score: float = 0.5,
+        initial_score: float | None = None,  # Legacy caller compatibility; never used to seed a score.
         area_of_expertise: str = "General",
     ) -> ExpertProfile:
         existing = await self.get_by_user_id(user_id)
@@ -34,7 +34,7 @@ class ExpertProfileRepository(BaseRepository[ExpertProfile]):
         record = ExpertProfile(
             user_id=user_id,
             area_of_expertise=area_of_expertise,
-            credibility_score=initial_score,
+            credibility_score=None,
             total_votes=0,
             correct_votes=0,
             completed_reviews_count=0,
@@ -138,6 +138,7 @@ class ExpertReviewRepository(BaseRepository[ExpertReview]):
         *,
         limit: int = 50,
         offset: int = 0,
+        q: str = "",
     ) -> list[ExpertReview]:
         stmt = (
             select(ExpertReview)
@@ -146,6 +147,11 @@ class ExpertReviewRepository(BaseRepository[ExpertReview]):
             .offset(offset)
             .limit(limit)
         )
+        if q.strip():
+            from sqlalchemy import or_
+            from app.features.submissions.models import Submission
+            term = q.strip().replace("%", r"\%").replace("_", r"\_")
+            stmt = stmt.join(Submission, Submission.id == ExpertReview.submission_id).where(or_(Submission.headline.ilike(f"%{term}%", escape="\\"), Submission.claimed_source_text.ilike(f"%{term}%", escape="\\")))
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 

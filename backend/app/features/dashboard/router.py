@@ -18,13 +18,13 @@ from app.core.constants import (
     SubmissionStatus,
     SubmissionType,
 )
-from app.features.expert_review.overall_verdict import derive_ai_overall_verdict_multimodal
 from app.features.multimodal.models import MultimodalAnalysis
 from app.features.multimodal.storage_service import MultimodalStorageService
 from app.features.photocard.storage_service import PhotoCardStorageService
 from app.features.submissions.models import OcrExtraction, Submission
 from app.features.submissions.repository import SubmissionRepository
 from app.features.verification.models import VerificationResult
+from app.features.verification.presenter import is_headline_result
 from app.shared.dependencies import get_async_session
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
@@ -57,6 +57,7 @@ class TopSourceItem(BaseModel):
 
 
 class ExplorerItem(BaseModel):
+    prediction: str | None = None
     submission_id: str
     headline: str | None
     submission_type: SubmissionType
@@ -276,12 +277,7 @@ async def search_explorer(
                 if mm and multimodal_storage
                 else None
             )
-            overall = (
-                mm.expert_overall_verdict
-                or derive_ai_overall_verdict_multimodal(mm.prediction)
-                if mm
-                else None
-            )
+            overall = mm.expert_overall_verdict if mm else None
             items.append(
                 ExplorerItem(
                     submission_id=str(submission.id),
@@ -289,6 +285,7 @@ async def search_explorer(
                     submission_type=submission.submission_type,
                     claimed_source_text=None,
                     overall_verdict=overall,
+                    prediction=mm.prediction if mm else None,
                     is_finalized=bool(mm and mm.expert_overall_verdict),
                     confidence=(
                         (
@@ -337,7 +334,8 @@ async def search_explorer(
                     (result.final_source_status or result.source_status) if result else None
                 ),
                 content_status=(
-                    (result.final_content_status if is_finalized else result.content_status)
+                    (result.final_content_status if is_finalized else
+                     result.content_status if is_headline_result(result) else None)
                     if result
                     else None
                 ),

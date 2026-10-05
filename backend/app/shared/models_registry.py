@@ -23,7 +23,7 @@ from app.features.expert_review.models import CredibilityWeightTier, ExpertProfi
 from app.features.multimodal.models import MultimodalAnalysis
 
 
-from app.features.notifications.models import Notification
+from app.features.notifications.models import Notification, ResultDelivery
 
 
 from app.features.submissions.models import (

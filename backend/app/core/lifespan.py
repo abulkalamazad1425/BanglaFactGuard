@@ -147,6 +147,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     else:
         log.warning("job_worker_disabled")
 
+    from app.features.notifications.delivery import ResultDeliveryWorker
+    app.state.result_delivery_worker = ResultDeliveryWorker()
+    app.state.result_delivery_worker.start()
+
     log.info("bangla_fact_guard_ready")
 
     yield
@@ -154,6 +158,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     log.info("bangla_fact_guard_shutting_down")
     if app.state.job_worker is not None:
         await app.state.job_worker.stop()
+    await app.state.result_delivery_worker.stop()
     await app.state.http_client.aclose()
     await redis_client.aclose()
     log.info("bangla_fact_guard_shutdown_complete")

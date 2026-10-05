@@ -93,6 +93,7 @@ export interface TopSource {
 
 // ── Fact Explorer — GET /dashboard/explorer ───────────────────────────
 export interface ExplorerItem {
+  prediction?: string | null;
   submission_id: string;
   headline: string | null;
   submission_type: 'SOURCE_BASED' | 'MULTIMODAL' | 'PHOTO_CARD';

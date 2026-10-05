@@ -103,6 +103,10 @@ class VerificationService:
         context = await orchestrator.run(context)
 
         submission = await self._submission_for(context, request, submitter_id, submission_id)
+        await self.result_repo.record_timings(
+            submission.id, stage_ms=context.stage_timings,
+            pipeline_ms=context.elapsed_ms, cache_hit=context.cache_hit,
+        )
         response = await load_verification_response(
             submission, result_repo=self.result_repo, article_repo=self.article_repo
         )

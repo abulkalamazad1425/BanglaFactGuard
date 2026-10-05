@@ -62,7 +62,7 @@ export class VerifyResultComponent implements OnInit, OnDestroy {
   copyFailed = false;
   imageFailed = false;
   readonly inputRoute = computed(() => this.kind() === 'PHOTO_CARD' ? '/photo-card' : this.kind() === 'MULTIMODAL' ? '/multimodal' : '/verify');
-  readonly methodLabel = computed(() => this.kind() === 'PHOTO_CARD' ? 'Photocard' : this.kind() === 'MULTIMODAL' ? 'Text and image' : 'News text');
+  readonly methodLabel = computed(() => this.kind() === 'PHOTO_CARD' ? 'Photo card' : this.kind() === 'MULTIMODAL' ? 'Text & image' : 'Text & source');
   submissionId: string | null = null;
 
   private pollTimer: ReturnType<typeof setInterval> | null = null;
@@ -96,7 +96,7 @@ export class VerifyResultComponent implements OnInit, OnDestroy {
     const phase = this.photocardResult()?.phase ?? this.lookup()?.processing_phase;
     switch (phase) {
       case 'QUEUED': return 'Waiting to start';
-      case 'EXTRACTING': return 'Reading the card and extracting its headline';
+      case 'EXTRACTING': return 'Reading the headline, date and source from the card';
       case 'VERIFYING': return 'Checking the headline against the claimed source';
       default: return 'Working';
     }
@@ -203,6 +203,15 @@ export class VerifyResultComponent implements OnInit, OnDestroy {
   }
 
   /* ─── Shared template helpers ─── */
+
+  /** How the headline was read, in plain words (no model names). */
+  extractionSummary(p: PhotoCardResultResponse): string {
+    if (p.extraction_method === 'GEMINI_IMAGE') {
+      const n = p.extraction_attempts ?? 1;
+      return `Read directly from the image${n > 1 ? ` (succeeded on attempt ${n} of 3)` : ''}.`;
+    }
+    return 'Image reading was unavailable, so the headline was recovered with text recognition (OCR).';
+  }
 
   /** Lifecycle states in which a saved automated result exists. */
   isReviewed(status: string | undefined): boolean {

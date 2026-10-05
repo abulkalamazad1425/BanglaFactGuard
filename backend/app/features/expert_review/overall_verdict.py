@@ -4,7 +4,7 @@ Business rule: the automated system never decides an Overall verdict
 (Fake/Real/Misleading/Altered) for SOURCE_BASED or PHOTO_CARD claims — those
 only ever get the three structured checks (source/content/date status), and
 Overall is exclusively an expert-review outcome for them, with no AI-implied
-default. See ``app/features/verification/pipeline/stages/s11_classifier.py``,
+default. See ``app/features/verification/pipeline/stages/s12_result_assembly.py``,
 which has never produced an Overall verdict, and
 ``ExpertReviewService._finalize_or_escalate``'s structured branch, which
 passes no tie-break preference for the Overall vote tally.

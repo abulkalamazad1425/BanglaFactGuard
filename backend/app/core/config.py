@@ -5,7 +5,7 @@ from functools import lru_cache
 from typing import Literal
 
 from dotenv import load_dotenv
-from pydantic import AnyUrl, Field, field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 load_dotenv()
@@ -122,14 +122,11 @@ class MLSettings(BaseSettings):
     )
 
     ner_model_name: str = Field(
-        default="neuropark/sahajBERT-NER",
+        default="arafatfahim/BanglaTag",
         description=(
-            "Bangla-specific NER model (PER/LOC/ORG). csebuetnlp/banglabert "
-            "is an ELECTRA *pretraining* checkpoint with no token-"
-            "classification head — loading it via the HF `ner` pipeline "
-            "silently initialises a random, untrained 2-label classifier "
-            "that never emits PER/LOC/ORG, so extract_entities() always "
-            "returned []. See docs/06-ai-engineering-design.md S08/S10."
+            "BanglaBERT (csebuetnlp/banglabert) fine-tuned for NER. "
+            "Use a trained token-classification checkpoint with PER/LOC/ORG "
+            "labels, not the base ELECTRA pretraining model."
         ),
     )
     ner_thread_workers: int = Field(
@@ -252,8 +249,12 @@ class OcrSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="OCR_")
 
     engine: Literal["auto", "tesseract", "easyocr"] = Field(
-        default="auto",
-        description="'auto' prefers Tesseract and falls back to EasyOCR",
+        default="easyocr",
+        description=(
+            "OCR engine for the photo-card FALLBACK path (used only after every "
+            "Gemini image-extraction attempt failed). Default EasyOCR; 'auto' "
+            "prefers Tesseract and falls back to EasyOCR."
+        ),
     )
 
     tesseract_cmd: str = Field(
@@ -362,32 +363,6 @@ class SearchSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="SEARCH_")
 
-    newsdata_api_key: str = Field(
-        default="",
-        description="API key for NewsData.io",
-    )
-    newsdata_base_url: str = Field(
-        default="https://newsdata.io/api/1/latest",
-        description="NewsData.io latest news API endpoint",
-    )
-    newsdata_timeout_seconds: int = Field(default=15)
-    newsdata_max_results: int = Field(default=10)
-
-    google_cse_api_key: str = Field(
-        default="",
-        description="API key for Google Custom Search",
-    )
-    google_cse_cx: str = Field(
-        default="",
-        description="Search Engine ID (cx) for Google Custom Search",
-    )
-    google_cse_base_url: str = Field(
-        default="https://customsearch.googleapis.com/customsearch/v1",
-        description="Google Custom Search JSON API endpoint",
-    )
-    google_cse_timeout_seconds: int = Field(default=15)
-    google_cse_max_results: int = Field(default=10)
-
     pygooglenews_timeout_seconds: int = Field(default=15)
     pygooglenews_max_results: int = Field(default=10)
 
@@ -402,71 +377,27 @@ class SearchSettings(BaseSettings):
 
 
 class ClassificationThresholds(BaseSettings):
+    """Source-correspondence and search-adequacy thresholds.
+
+    The Headline Alteration verdict has its own documented constants in
+    `analysis/headline_comparison.py`; body similarity has no thresholds at
+    all (it produces measurements only, never a verdict).
+    """
 
     model_config = SettingsConfigDict(env_prefix="THRESHOLD_")
 
-    true_threshold: float = Field(default=0.65)
-    partial_threshold: float = Field(default=0.45)
-    false_threshold: float = Field(default=0.25)
-
-    contradiction_override_threshold: float = Field(default=0.70)
-    headline_sim_threshold: float = Field(default=0.55)
-    body_sim_high: float = Field(default=0.75)
-    body_altered_threshold: float = Field(default=0.50)
-    entity_replaced_threshold: float = Field(default=0.45)
-
-    true_min_semantic_similarity: float = Field(default=0.70)
-    true_min_entity_match: float = Field(default=0.65)
-    true_max_contradiction: float = Field(default=0.20)
-
-    false_min_contradiction: float = Field(default=0.70)
-
-    partial_min_semantic_similarity: float = Field(default=0.40)
-
-    not_found_max_semantic_similarity: float = Field(
-        default=0.30,
-        description="If best candidate semantic similarity is below this, verdict is NOT_FOUND",
-    )
-
-    min_evidence_threshold: float = Field(
-        default=0.25,
-        description="Articles below this semantic similarity are discarded as evidence",
-    )
-
-    body_altered_min_keyword_overlap: float = Field(
-        default=0.30,
-        description=(
-            "Minimum keyword overlap required alongside low semantic similarity "
-            "to trigger body_altered flag. Distinguishes 'wrong article retrieved' "
-            "(low keyword overlap) from 'article body was altered' (topic matches "
-            "but content differs)."
-        ),
-    )
-    nli_temperature: float = Field(
-        default=1.5,
-        description=(
-            "Temperature scaling factor for NLI probability calibration. "
-            "Values > 1.0 flatten overconfident DeBERTa outputs, reducing "
-            "false-positive contradiction triggers at the 0.5 soft-penalty "
-            "threshold in S11. Set to 1.0 to disable calibration."
-        ),
-    )
-    nli_title_only_attenuation: float = Field(
-        default=0.6,
-        description=(
-            "Multiplier applied to NLI scores when the premise is title-only "
-            "(article body absent). Attenuates the signal because title-only "
-            "NLI is far less reliable than body-based NLI."
-        ),
-    )
     # ── source correspondence (does the claimed outlet carry THIS report?) ──
+    corr_headline_sim_alone: float = Field(
+        default=0.85,
+        description="Headline/source-title similarity at/above which the report corresponds without further lexical support (near-identical wording).",
+    )
     corr_headline_sim_strong: float = Field(
         default=0.72,
-        description="Headline↔source-title similarity at/above which the report corresponds on its own.",
+        description="Headline/title similarity that corresponds strongly when the claim's keywords also appear in the title.",
     )
     corr_headline_sim_plausible: float = Field(
         default=0.55,
-        description="Minimum headline↔title similarity for a plausible correspondence (needs lexical support).",
+        description="Minimum headline/title similarity for a plausible correspondence (needs lexical support).",
     )
     corr_keyword_title_plausible: float = Field(
         default=0.50,
@@ -474,34 +405,11 @@ class ClassificationThresholds(BaseSettings):
     )
     corr_keyword_passage_plausible: float = Field(
         default=0.60,
-        description="Claim-keyword coverage of the relevant passages that counts as lexical support.",
+        description="Claim-keyword coverage of the source passages discussing the claim that counts as lexical support.",
     )
     corr_keyword_only_title: float = Field(
         default=0.70,
         description="Title keyword coverage required when no embedding similarity is available.",
-    )
-    # ── content support (MATCHED needs positive support, never absence of contradiction) ──
-    support_headline_sim: float = Field(default=0.75)
-    support_keyword_coverage: float = Field(default=0.70)
-    support_keyword_coverage_no_ner: float = Field(
-        default=0.85,
-        description="Stricter keyword coverage required when entity coverage cannot be computed.",
-    )
-    support_entity_coverage: float = Field(default=0.80)
-    support_body_similarity: float = Field(default=0.70)
-    support_body_min_chunk_similarity: float = Field(default=0.50)
-    support_body_keyword_coverage: float = Field(default=0.60)
-    possible_contradiction: float = Field(
-        default=0.50,
-        description="NLI contradiction at/above which a possible contradiction blocks MATCHED.",
-    )
-    nli_bangla_validated: bool = Field(
-        default=False,
-        description=(
-            "Set True only after the NLI model has been evaluated on labelled "
-            "Bangla pairs. While False a high NLI contradiction can block "
-            "MATCHED but can never, on its own, produce ALTERED."
-        ),
     )
     # ── search adequacy ──
     search_min_successful_calls: int = Field(
@@ -512,20 +420,6 @@ class ClassificationThresholds(BaseSettings):
         default=0.5,
         description="Minimum share of attempted provider calls that must complete for adequacy.",
     )
-
-    max_single_dimension_weight: float = Field(
-        default=0.65,
-        description=(
-            "Maximum effective weight any single score dimension can receive "
-            "after re-normalisation when other dimensions are missing. Prevents "
-            "a single dimension (e.g. semantic_similarity at 0.45/0.45 = 1.0 "
-            "effective weight) from unilaterally driving the verdict."
-        ),
-    )
-
-    @property
-    def contradiction_threshold(self) -> float:
-        return self.contradiction_override_threshold
 
 
 class AuthSettings(BaseSettings):
@@ -551,7 +445,7 @@ class AuthSettings(BaseSettings):
     )
     initial_expert_credibility: float = Field(
         default=0.5,
-        description="Credibility score assigned to new expert accounts",
+        description="Deprecated compatibility setting; new expert credibility is uncalculated until activation",
     )
     min_expert_votes_to_finalize: int = Field(
         default=3,
@@ -574,6 +468,7 @@ class EmailSettings(BaseSettings):
     use_tls: bool = Field(default=True)
     from_address: str = Field(default="no-reply@banglafactguard.local")
     from_name: str = Field(default="BanglaFactGuard")
+    website_url: str = Field(default="http://localhost:4200", pattern=r"^https?://[^\s]+$")
 
     otp_length: int = Field(default=6)
     otp_ttl_minutes: int = Field(default=10)
@@ -584,21 +479,21 @@ class EmailSettings(BaseSettings):
 
 
 class GeminiSettings(BaseSettings):
-    """Gemini is used only for photo-card headline extraction.
-
-    Extraction keeps its deterministic fallback. Photo-card content comparison
-    uses the locally loaded NLP models and does not depend on these settings.
+    """Gemini is used only for photo-card field extraction (headline, date,
+    source) from the ORIGINAL image. EasyOCR + the deterministic extractor
+    are the fallback. Gemini's date/source are display-only; they are never
+    compared with anything.
     """
 
     model_config = SettingsConfigDict(env_prefix="GEMINI_")
 
     api_key: str = Field(
         default="",
-        description="Gemini API key for headline extraction. Empty uses the deterministic extractor.",
+        description="Gemini API key for photo-card extraction. Empty skips Gemini and uses the OCR fallback.",
     )
     model_name: str = Field(
         default="gemini-2.0-flash",
-        description="Gemini model id used for photo-card headline extraction only.",
+        description="Gemini model id used for photo-card image extraction only.",
     )
     base_url: str = Field(
         default="https://generativelanguage.googleapis.com/v1beta",
@@ -606,21 +501,18 @@ class GeminiSettings(BaseSettings):
     )
     timeout_seconds: int = Field(
         default=20,
-        description="HTTP timeout for a Gemini headline extraction call.",
+        description="HTTP timeout for ONE Gemini extraction attempt.",
     )
-    min_grounding_overlap: float = Field(
-        default=0.5,
-        description=(
-            "Minimum fraction of the extracted headline's significant words "
-            "that must actually appear in the OCR text for the extraction to "
-            "be trusted. Below this, Gemini's output is treated as "
-            "ungrounded/hallucinated and discarded in favour of the "
-            "deterministic fallback — this is also the mechanical backstop "
-            "against prompt injection embedded in OCR'd text: even if "
-            "injected instructions change what Gemini returns, an "
-            "ungrounded headline fails this check regardless of why it "
-            "diverged from the source text."
-        ),
+    max_attempts: int = Field(
+        default=3,
+        ge=1,
+        le=3,
+        description="Total Gemini attempts per card, the first request included (never more than 3).",
+    )
+    retry_base_delay_seconds: float = Field(
+        default=1.0,
+        ge=0.0,
+        description="Exponential backoff base between attempts (1s, 2s).",
     )
 
     @property

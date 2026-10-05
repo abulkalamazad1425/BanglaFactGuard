@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime
+from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import CheckConstraint, Date, DateTime, Enum, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Enum, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -39,7 +39,7 @@ class VerificationResult(UUIDMixin, TimestampMixin, ReprMixin, Base):
         index=True,
         comment=(
             "The AI pipeline's own call — an immutable snapshot, written once "
-            "by s11_classifier.py and never overwritten by expert review. See "
+            "by the verification pipeline and never overwritten by expert review. See "
             "final_source_status for the expert-finalized value, which may "
             "differ from this one."
         ),
@@ -49,8 +49,35 @@ class VerificationResult(UUIDMixin, TimestampMixin, ReprMixin, Base):
         Enum(ContentStatus, name="content_status_enum", create_type=True),
         nullable=True,
         comment=(
-            "The AI's own call — immutable, see source_status. Only set when "
-            "source_status is CONFIRMED."
+            "Headline Alteration verdict (MATCHED | ALTERED): the claim headline "
+            "vs the selected source TITLE only. The AI's own call — immutable, "
+            "see source_status. NULL when no verdict was reached; "
+            "headline_check_status says why."
+        ),
+    )
+
+    headline_check_status: Mapped[str | None] = mapped_column(
+        String(32),
+        nullable=True,
+        comment=(
+            "HeadlineCheckStatus: COMPLETED | SOURCE_NOT_FOUND | SOURCE_CHECK_INCOMPLETE "
+            "| SOURCE_TITLE_MISSING | MODEL_UNAVAILABLE | UNDETERMINED. Processing "
+            "status of the headline check, separate from the verdict."
+        ),
+    )
+
+    headline_exact_match: Mapped[bool | None] = mapped_column(
+        Boolean,
+        nullable=True,
+        comment="True when the headline verdict came from an exact match with the source title.",
+    )
+
+    body_comparison_status: Mapped[str | None] = mapped_column(
+        String(24),
+        nullable=True,
+        comment=(
+            "BodyComparisonStatus: COMPUTED | SKIPPED | UNAVAILABLE. The four body "
+            "similarity scores themselves live in analysis_details.body_similarity."
         ),
     )
 
@@ -73,7 +100,7 @@ class VerificationResult(UUIDMixin, TimestampMixin, ReprMixin, Base):
     final_content_status: Mapped[ContentStatus | None] = mapped_column(
         Enum(ContentStatus, name="content_status_enum", create_type=False),
         nullable=True,
-        comment="Expert-finalized Content verdict — NULL until finalized, or if final_source_status is NOT_FOUND.",
+        comment="Expert-finalized Headline Alteration verdict — NULL until finalized, or if final_source_status is NOT_FOUND.",
     )
 
     final_date_status: Mapped[DateStatus | None] = mapped_column(
@@ -124,29 +151,18 @@ class VerificationResult(UUIDMixin, TimestampMixin, ReprMixin, Base):
         nullable=True,
     )
 
-    semantic_similarity: Mapped[float | None] = mapped_column(Float, nullable=True)
-
-    entity_match: Mapped[float | None] = mapped_column(Float, nullable=True)
-
-    contradiction_score: Mapped[float | None] = mapped_column(Float, nullable=True)
-
-    keyword_overlap: Mapped[float | None] = mapped_column(Float, nullable=True)
-
-    numerical_consistency: Mapped[float | None] = mapped_column(Float, nullable=True)
-
     avg_verification_time_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
-    # ── Component scores (applicable ones only; NULL = no measurement) ──────
-    headline_similarity: Mapped[float | None] = mapped_column(Float, nullable=True)
-    body_similarity: Mapped[float | None] = mapped_column(
-        Float,
-        nullable=True,
-        comment="Submitted body vs aligned source passages. NULL for HEADLINE_ONLY claims (always for photo cards).",
+    # ── Source-correspondence measurements (NULL = no measurement) ──────────
+    headline_similarity: Mapped[float | None] = mapped_column(
+        Float, nullable=True, comment="LaBSE cosine of claim headline vs selected source title (correspondence)."
     )
-    passage_similarity: Mapped[float | None] = mapped_column(Float, nullable=True)
-    headline_keyword_coverage: Mapped[float | None] = mapped_column(Float, nullable=True)
-    passage_keyword_coverage: Mapped[float | None] = mapped_column(Float, nullable=True)
-    body_keyword_coverage: Mapped[float | None] = mapped_column(Float, nullable=True)
+    headline_keyword_coverage: Mapped[float | None] = mapped_column(
+        Float, nullable=True, comment="Share of claim keywords found in the source title (correspondence)."
+    )
+    passage_keyword_coverage: Mapped[float | None] = mapped_column(
+        Float, nullable=True, comment="Share of claim keywords found in the title + relevant source passages (correspondence)."
+    )
 
     claim_scope: Mapped[str | None] = mapped_column(
         String(24),
@@ -162,10 +178,10 @@ class VerificationResult(UUIDMixin, TimestampMixin, ReprMixin, Base):
         JSONB,
         nullable=True,
         comment=(
-            "AnalysisDetails payload: metric states and diagnostics, selected "
-            "evidence passages, NLI output, search accounting, date "
-            "provenance and the decision basis. Durable source for result "
-            "display after the Redis entry expires."
+            "AnalysisDetails payload: correspondence measurements, search "
+            "accounting, source basis, Headline Alteration detail, body "
+            "similarity scores, date analysis and timings. Durable source for "
+            "result display after the Redis entry expires."
         ),
     )
     reused_from_submission_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -173,24 +189,6 @@ class VerificationResult(UUIDMixin, TimestampMixin, ReprMixin, Base):
         ForeignKey("submissions.id", ondelete="SET NULL"),
         nullable=True,
         comment="Set when this result row is an automated-result copy of an earlier identical verification.",
-    )
-
-    manipulation_flags: Mapped[dict | None] = mapped_column(
-        JSONB,
-        nullable=True,
-        comment=(
-            "Full ManipulationFlagsSchema payload (the 4 booleans plus "
-            "altered_numbers/substituted_entities detail) from s10_"
-            "manipulation_detector.py's last run. NULL on rows written "
-            "before this column existed, or when S10 never ran. Previously "
-            "this only ever lived in the Redis result cache and was lost "
-            "once that entry's TTL expired — GET /verify/{id} would then "
-            "silently show no manipulation detected even when the original "
-            "run found some, with nothing to show experts reviewing an "
-            "older claim. This column is now the durable, authoritative "
-            "source; the Redis cache remains a fast-path best-effort read "
-            "for a fresh result."
-        ),
     )
 
     submission: Mapped["Submission"] = relationship(
@@ -211,14 +209,6 @@ class VerificationResult(UUIDMixin, TimestampMixin, ReprMixin, Base):
         CheckConstraint(
             "confidence IS NULL OR (confidence >= 0.0 AND confidence <= 1.0)",
             name="ck_verification_results_confidence_range",
-        ),
-        CheckConstraint(
-            "semantic_similarity IS NULL OR (semantic_similarity >= 0.0 AND semantic_similarity <= 1.0)",
-            name="ck_verification_results_semantic_similarity_range",
-        ),
-        CheckConstraint(
-            "contradiction_score IS NULL OR (contradiction_score >= 0.0 AND contradiction_score <= 1.0)",
-            name="ck_verification_results_contradiction_score_range",
         ),
         Index(
             "ix_verification_results_status_created",

@@ -28,12 +28,14 @@ router = APIRouter(prefix="/verify", tags=["Verification"])
     status_code=status.HTTP_200_OK,
     summary="Verify a news claim against its claimed source",
     description=(
-        "Submit a news headline and claimed source. The system searches the "
-        "source's website, extracts and ranks articles, computes multi-dimensional "
-        "similarity, detects manipulation, and returns a 3-dimensional verdict: "
-        "source_status (CONFIRMED | NOT_FOUND), content_status (MATCHED | ALTERED, "
-        "set only when the source is CONFIRMED), and date_status "
-        "(MATCHED | MISMATCHED, set only when both dates are known)."
+        "Submit a news headline and claimed source (optionally a body and a "
+        "claimed date). The system finds the corresponding source report and "
+        "returns independent findings: source_status (CONFIRMED | NOT_FOUND | "
+        "INCOMPLETE); the Headline Alteration verdict content_status (MATCHED | "
+        "ALTERED, headline vs source title only, null with headline_check_status "
+        "explaining why when no verdict was reached); date_status; and, when a "
+        "body was submitted, four body similarity scores (measurements only, "
+        "never a verdict) in analysis.body_similarity."
     ),
     responses={
         200: {"description": "Verification result (may be cached)"},

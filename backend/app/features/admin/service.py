@@ -7,7 +7,6 @@ import structlog
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_settings
 from app.core.constants import ContentStatus, DateStatus, SourceStatus, SubmissionStatus
 from app.core.exceptions import (
     DomainValidationError,
@@ -41,7 +40,6 @@ from app.features.submissions.models import Submission
 from app.features.verification.models import VerificationResult
 
 logger = structlog.get_logger(__name__)
-_SETTINGS = get_settings()
 
 
 def _validate_password(password: str) -> None:
@@ -84,7 +82,6 @@ class AdminService:
 
         profile = await self._profiles.get_or_create(
             user.id,
-            initial_score=_SETTINGS.auth.initial_expert_credibility,
             area_of_expertise=req.expertise_area or "General",
         )
 
@@ -415,6 +412,14 @@ class AdminService:
         row = await repo.get_or_create()
         updates = req.model_dump(exclude_unset=True)
         row = await repo.update(row, **updates)
+        if "activation_threshold_votes" in updates:
+            from sqlalchemy import case, update
+            from app.features.expert_review.models import ExpertProfile
+            await self._session.execute(update(ExpertProfile).values(credibility_score=case(
+                ((ExpertProfile.total_votes > 0) & (ExpertProfile.total_votes >= row.activation_threshold_votes),
+                 ExpertProfile.correct_votes * 1.0 / func.nullif(ExpertProfile.total_votes, 0)),
+                else_=None,
+            )))
         logger.info("voting_config_updated", **updates)
         return _voting_config_to_response(row)
 

@@ -1,98 +1,90 @@
-﻿"""
-tests/unit/test_query_generator.py
-====================================
-Unit tests for Stage 3: Search Query Generator (`QueryGeneratorStage`).
-"""
+from datetime import date
+from unittest.mock import patch
 
 import pytest
-from datetime import date
-from app.features.verification.pipeline.stages.s03_query_generator import (
-    QueryGeneratorStage,
-)
-from app.features.verification.pipeline.context import PipelineContext, build_context
+
 from app.core.constants import QueryType
+from app.core.exceptions import QueryGenerationError
+from app.features.verification.pipeline.context import build_context
+from app.features.verification.pipeline.stages.s03_query_generator import QueryGeneratorStage
+
+MODULE = "app.features.verification.pipeline.stages.s03_query_generator"
+KEYWORDS = ["bridge", "river", "city", "opened", "minister", "traffic", "public", "today"]
+
+
+def context(published=None, body=None):
+    ctx = build_context(headline="New bridge opened for public traffic today",
+                        claimed_source="prothomalo.com", published_date=published,
+                        news_body=body)
+    ctx.normalized_headline = ctx.raw_headline
+    ctx.normalized_source = "prothomalo.com"
+    ctx.normalized_body = body
+    return ctx
 
 
 @pytest.mark.asyncio
-async def test_query_generation_basic():
-    """Verify standard headline and keyword query variants are generated."""
-    context = build_context(
-        headline="প্রধানমন্ত্রী শেখ হাসিনা নতুন ফ্লাইওভার উদ্বোধন করলেন",
-        claimed_source="prothomalo.com",
-    )
-
-    context.normalized_headline = context.raw_headline
-
-    stage = QueryGeneratorStage()
-    context = await stage.execute(context)
-
-    assert len(context.search_queries) >= 1
-
-    assert context.search_queries[0] == (
-        context.normalized_headline,
-        QueryType.HEADLINE.value,
-    )
-
-    keyword_queries = [
-        q for q, t in context.search_queries if t == QueryType.KEYWORDS.value
-    ]
-    assert len(keyword_queries) <= 1
+@pytest.mark.parametrize("dated", [False, True])
+async def test_all_keywords_in_one_source_restricted_query(dated):
+    ctx = context(date(2026, 10, 4) if dated else None)
+    with patch(f"{MODULE}.extract_headline_keywords", return_value=KEYWORDS) as extract:
+        await QueryGeneratorStage().execute(ctx)
+    extract.assert_called_once_with(ctx.normalized_headline, top_n=8)
+    base = [(f"site:prothomalo.com {ctx.normalized_headline}", QueryType.HEADLINE.value),
+            ("site:prothomalo.com " + " ".join(KEYWORDS), QueryType.KEYWORDS.value)]
+    expected = base + [("site:prothomalo.com " + " ".join(KEYWORDS[:3]), QueryType.KEYWORDS.value),
+                       ("site:prothomalo.com " + " ".join(KEYWORDS[:4]), QueryType.KEYWORDS.value)]
+    if dated:
+        expected += [(q + " 04 October 2026", QueryType.DATE_BOUND.value) for q, _ in base]
+    assert ctx.search_queries == expected
 
 
 @pytest.mark.asyncio
-async def test_query_generation_with_date():
-    """Verify that a date-bound query is generated when published_date is set."""
-    context = build_context(
-        headline="রোহিঙ্গা ক্যাম্পে অগ্নিকাণ্ড",
-        claimed_source="prothomalo.com",
-        published_date=date(2026, 5, 20),
-    )
-    context.normalized_headline = context.raw_headline
-
-    stage = QueryGeneratorStage()
-    context = await stage.execute(context)
-
-    date_bound_queries = [
-        q for q, t in context.search_queries if t == QueryType.DATE_BOUND.value
-    ]
-    assert len(date_bound_queries) == 1
-    assert "2026 May 20" in date_bound_queries[0]
+@pytest.mark.parametrize("keywords,extra", [
+    (["bridge", "river"], []),
+    (["bridge", "river", "city"], []),  # first 3 == all keywords: not repeated
+    (["bridge", "river", "city", "opened"], ["bridge river city"]),
+    (["bridge", "river", "city", "opened", "minister"], ["bridge river city", "bridge river city opened"]),
+])
+async def test_first_three_and_four_keyword_queries_only_when_available(keywords, extra):
+    ctx = context()
+    with patch(f"{MODULE}.extract_headline_keywords", return_value=keywords):
+        await QueryGeneratorStage().execute(ctx)
+    texts = [q.removeprefix("site:prothomalo.com ") for q, _ in ctx.search_queries]
+    assert texts == [ctx.normalized_headline, " ".join(keywords), *extra]
 
 
 @pytest.mark.asyncio
-async def test_query_generation_with_body():
-    """Verify that body-summary query is generated when body text is available."""
-    context = build_context(
-        headline="বাজেট ২০২৬ ঘোষণা",
-        claimed_source="prothomalo.com",
-        news_body="অর্থমন্ত্রী জাতীয় সংসদে নতুন অর্থ বছরের বাজেট পেশ করছেন। এতে শিক্ষা খাতে বরাদ্দ বৃদ্ধি করা হয়েছে।",
-    )
-    context.normalized_headline = context.raw_headline
-    context.normalized_body = context.raw_news_body
-
-    stage = QueryGeneratorStage()
-    context = await stage.execute(context)
-
-    body_summary_queries = [
-        q for q, t in context.search_queries if t == QueryType.BODY_SUMMARY.value
-    ]
-    assert len(body_summary_queries) == 1
+async def test_body_and_entities_do_not_change_search():
+    plain = context()
+    with_body = context(body="Completely unrelated body keywords must never be searched")
+    with_body.claim_entities = ["Another entity"]
+    with patch(f"{MODULE}.extract_headline_keywords", return_value=KEYWORDS):
+        await QueryGeneratorStage().execute(plain)
+        await QueryGeneratorStage().execute(with_body)
+    assert plain.search_queries == with_body.search_queries
+    assert with_body.normalized_body  # still available for content verification
 
 
 @pytest.mark.asyncio
-async def test_query_generation_max_limit():
-    """Verify that queries list does not exceed MAX_SEARCH_QUERIES (5)."""
-    context = build_context(
-        headline="এই খবরটি অনেক বড় এবং এতে অনেক রকম তথ্য রয়েছে",
-        claimed_source="prothomalo.com",
-        news_body="এখানে অনেক লম্বা বডি টেক্সট আছে যাতে ৫টি এর বেশি কুয়েরি জেনারেট হতে পারে সহজে।",
-        published_date=date(2026, 6, 7),
-    )
-    context.normalized_headline = context.raw_headline
-    context.normalized_body = context.raw_news_body
-    context.claim_entities = ["খবর", "তথ্য", "বডি"]
+async def test_duplicate_headline_and_keywords_are_not_searched_twice():
+    ctx = context(date(2026, 10, 4))
+    with patch(f"{MODULE}.extract_headline_keywords", return_value=ctx.normalized_headline.split()):
+        await QueryGeneratorStage().execute(ctx)
+    texts = [q for q, _ in ctx.search_queries]
+    assert len(texts) == len(set(texts)) == 4  # headline, first 3, first 4, headline + date
 
-    stage = QueryGeneratorStage()
-    context = await stage.execute(context)
 
-    assert len(context.search_queries) <= 5
+@pytest.mark.asyncio
+async def test_missing_keywords_keeps_valid_headline_search():
+    ctx = context()
+    with patch(f"{MODULE}.extract_headline_keywords", return_value=[]):
+        await QueryGeneratorStage().execute(ctx)
+    assert len(ctx.search_queries) == 1
+
+
+@pytest.mark.asyncio
+async def test_missing_source_never_generates_unrestricted_search():
+    ctx = context()
+    ctx.normalized_source = None
+    with pytest.raises(QueryGenerationError):
+        await QueryGeneratorStage().execute(ctx)

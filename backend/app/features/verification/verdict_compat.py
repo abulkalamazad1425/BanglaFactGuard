@@ -39,8 +39,7 @@ def format_verdict_display(
         return "Source: CHECK INCOMPLETE"
 
     parts = [f"Source: {source_status.value}"]
-    if content_status is not None:
-        parts.append(f"Content: {content_status.value}")
+    parts.append(f"Headline: {content_status.value}" if content_status is not None else "Headline: NO VERDICT")
     if date_status is not None:
         parts.append(f"Date: {date_status.value}")
     return " · ".join(parts)

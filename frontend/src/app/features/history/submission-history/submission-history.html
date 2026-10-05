@@ -1,112 +1,27 @@
-    <div class="history-page">
-      <div class="container" style="padding-top:48px; padding-bottom:80px;">
-        <div class="page-header animate-in">
-          <h1>My Submissions</h1>
-          <p>Your fact-checking history</p>
-        </div>
-
-        @if (stats()) {
-          <div class="stats-grid animate-in">
-            <div class="stat-card card">
-              <span class="stat-num">{{ stats()!.total }}</span>
-              <span class="stat-lbl">Total</span>
-            </div>
-            <div class="stat-card card text-success">
-              <span class="stat-num">{{ stats()!.source_confirmed }}</span>
-              <span class="stat-lbl">Source Confirmed</span>
-            </div>
-            <div class="stat-card card text-error">
-              <span class="stat-num">{{ stats()!.source_not_found }}</span>
-              <span class="stat-lbl">Source Not Found</span>
-            </div>
-            <div class="stat-card card text-success">
-              <span class="stat-num">{{ stats()!.content_matched }}</span>
-              <span class="stat-lbl">Content Matched</span>
-            </div>
-            <div class="stat-card card text-warning">
-              <span class="stat-num">{{ stats()!.content_altered }}</span>
-              <span class="stat-lbl">Content Altered</span>
-            </div>
-            <div class="stat-card card">
-              <span class="stat-num">{{ stats()!.pending }}</span>
-              <span class="stat-lbl">In progress</span>
-            </div>
-          </div>
-        }
-
-        @if (loadError()) {<div class="service-notice" role="alert"><p>This list could not be loaded. Please try again.</p><button class="btn btn-secondary" (click)="load()">Try again</button></div>}
-        @if (loading()) { <div class="loading-overlay"><div class="spinner"></div></div> }
-
-        @if (!loading() && !loadError() && submissions().length === 0) {
-          <div class="empty-state card text-center">
-            <div style="font-size:64px; margin-bottom:16px;">📭</div>
-            <h3>No submissions yet</h3>
-            <p>Start verifying news claims to see them here.</p>
-            <a routerLink="/verify" class="btn btn-primary mt-4">Verify a Claim</a>
-          </div>
-        }
-
-        @if (!loading() && submissions().length > 0) {
-          <div class="table-card card animate-in">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>Submission</th>
-                  <th>Source</th>
-                  <th>Status</th>
-
-                  <th>Submitted</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (s of submissions(); track s.submission_id) {
-                  <tr [class.row-running]="isRunning(s)" [class.row-failed]="isFailed(s)">
-                    <td class="headline-cell">
-                      <div class="submission-cell">
-                        @if (s.image_url) {
-                          <img [src]="s.image_url" class="thumb" alt="" />
-                        } @else if (s.submission_type === 'PHOTO_CARD') {
-                          <span class="thumb thumb-placeholder">🖼️</span>
-                        }
-                        <div>
-                          <div [class.text-muted]="!s.headline">{{ truncate(headlineText(s), 80) }}</div>
-                          <span class="type-tag">{{ typeLabel(s.submission_type) }}</span>
-                        </div>
-                      </div>
-                    </td>
-                    <td class="source-cell text-muted text-sm">{{ (s.claimed_source_text || '—') | slice:0:40 }}</td>
-                    <td>
-                      @if (isRunning(s)) {
-                        <span class="badge badge-pending"><span class="mini-spinner"></span> {{ phaseText(s) }}…</span>
-                      } @else if (isFailed(s)) {
-                        <span class="badge badge-incomplete">Check incomplete</span>
-                        @if (s.failure_reason) { <div class="text-muted text-xs fail-reason">No verdict reached. Open the result for next steps.</div> }
-                      } @else if (hasResult(s)) {
-                        @if (!s.is_finalized) { <div class="text-muted text-xs">⏳ Preliminary · awaiting experts</div> }
-                        <app-verdict-badge
-                          [overallVerdict]="s.is_finalized ? s.overall_verdict : null"
-                          [sourceStatus]="s.source_status"
-                          [contentStatus]="s.content_status"
-                          [dateStatus]="s.date_status" />
-                      } @else {
-                        <span class="text-muted">—</span>
-                      }
-                    </td>
-
-                    <td class="text-muted text-sm">{{ s.submitted_at | date:'MMM d, y, HH:mm' }}</td>
-                    <td><a [routerLink]="['/verify', s.submission_id]" class="btn btn-ghost btn-sm">{{ isRunning(s) ? 'Progress' : 'View' }}</a></td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          </div>
-
-          <div class="pagination">
-            <button class="btn btn-ghost btn-sm" [disabled]="offset() === 0" (click)="prev()">← Prev</button>
-            <span class="text-muted text-sm">Page {{ page() }}</span>
-            <button class="btn btn-ghost btn-sm" [disabled]="submissions().length < limit" (click)="next()">Next →</button>
-          </div>
-        }
+<div class="history-page"><div class="container history-container">
+  <header class="page-header"><div><h1>My Submissions</h1><p>Your preliminary findings and expert-reviewed results.</p></div><a routerLink="/verify" class="btn btn-primary">Submit a claim</a></header>
+  <div class="history-summary"><span><strong>{{ stats()?.total ?? '—' }}</strong> submissions</span><a routerLink="/notifications">Your notifications →</a></div>
+  <p class="text-muted">You can continue browsing while checks run. Final results will also be emailed to your account.</p>
+  @if (loadError()) {<div class="service-notice" role="alert"><p>Could not load your submissions.</p><button class="btn btn-secondary" (click)="load()">Try again</button></div>}
+  @if (loading()) {<div class="loading-overlay" role="status" aria-label="Loading submissions"><div class="spinner"></div></div>}
+  @if (!loading() && !loadError() && !submissions().length) {<div class="empty-state card"><h2>No submissions on this page</h2><p>Submit a claim or return to the previous page.</p></div>}
+  <div class="submission-list">
+  @for (s of submissions(); track s.submission_id) {
+    <article class="card submission-card">
+      <div class="submission-meta"><span class="type-tag">{{ typeLabel(s.submission_type) }}</span><time>{{ s.submitted_at | date:'MMM d, y, HH:mm' }}</time></div>
+      <h2><a [routerLink]="['/verify',s.submission_id]">{{ headlineText(s) }}</a></h2>
+      @if (s.claimed_source_text) {<p class="text-muted">{{ s.claimed_source_text }}</p>}
+      <div class="submission-outcome" aria-live="polite">
+        @if (isRunning(s)) {<span class="badge badge-pending">{{ phaseText(s) }}</span>}
+        @else if (isFailed(s)) {<span class="badge badge-incomplete">Check incomplete</span>}
+        @else if (hasResult(s)) {
+          <span class="outcome-stage">{{ s.is_finalized ? 'Final result' : 'Preliminary result · expert review pending' }}</span>
+          <app-verdict-badge [label]="s.prediction" [overallVerdict]="s.is_finalized ? s.overall_verdict : null" [sourceStatus]="s.source_status" [contentStatus]="s.content_status" [dateStatus]="s.date_status" />
+        } @else {<span class="badge badge-pending">Expert review pending</span>}
       </div>
-    </div>
+      <a [routerLink]="['/verify',s.submission_id]" class="btn btn-secondary btn-sm">{{ isRunning(s) ? 'View progress' : 'View details' }} →</a>
+    </article>
+  }
+  </div>
+  <nav class="pagination" aria-label="Submission pages"><button class="btn btn-ghost" [disabled]="offset() === 0 || loading()" (click)="prev()">← Previous</button><span>Page {{ page() }}</span><button class="btn btn-ghost" [disabled]="submissions().length < limit || loading()" (click)="next()">Next →</button></nav>
+</div></div>

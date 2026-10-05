@@ -21,6 +21,8 @@ export class ExpertQueueComponent implements OnInit {
   readonly loading = signal(true);
   readonly loadError = signal(false);
   readonly queue = signal<ExpertQueueItem[]>([]);
+  query = '';
+  search(value: string): void { this.query = value.trim(); this.offset.set(0); this.load(); }
   readonly offset = signal(0);
   readonly limit = 20;
   readonly page = () => Math.floor(this.offset() / this.limit) + 1;
@@ -29,7 +31,7 @@ export class ExpertQueueComponent implements OnInit {
 
   load(): void {
     this.loading.set(true);
-    this.expertSvc.getQueue(this.limit, this.offset())
+    this.expertSvc.getQueue(this.limit, this.offset(), this.query)
       .subscribe({ next: q => { this.queue.set(q); this.loading.set(false); this.loadError.set(false); }, error: () => { this.loading.set(false); this.loadError.set(true); } });
   }
 
@@ -42,9 +44,9 @@ export class ExpertQueueComponent implements OnInit {
 
   typeLabel(t: ExpertQueueItem['submission_type']): string {
     const labels: Record<string, string> = {
-      SOURCE_BASED: 'Source-Based',
-      PHOTO_CARD: 'Photo Card',
-      MULTIMODAL: 'Text and image',
+      SOURCE_BASED: 'Text & source',
+      PHOTO_CARD: 'Photo card',
+      MULTIMODAL: 'Text & image',
     };
     return labels[t] ?? 'News check';
   }

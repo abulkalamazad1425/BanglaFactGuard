@@ -137,29 +137,30 @@ async def test_register_claim_proceeds_normally_when_source_resolves():
     assert submission_id == created.id
 
 
-# ─── PhotoCardService.verify() — same guard ─────────────────────────────
+# ─── PhotoCardService.accept_upload() — same guard ──────────────────────
 
 
 @pytest.mark.asyncio
-async def test_photocard_verify_raises_source_not_found_before_running_ocr():
+async def test_photocard_upload_raises_source_not_found_before_storing_or_extracting():
     svc = PhotoCardService.__new__(PhotoCardService)
     svc.submission_repo = AsyncMock()
     svc.ocr_repo = AsyncMock()
     svc.source_repo = AsyncMock()
     svc.source_repo.resolve_source.return_value = None
     svc.ocr_service = AsyncMock()
+    svc.storage = AsyncMock()
 
     with pytest.raises(SourceNotFoundError):
-        await svc.verify(
+        await svc.accept_upload(
             image_bytes=b"fake-image-bytes",
             original_filename="card.jpg",
             claimed_source_text="কোনো অজানা পত্রিকা",
             published_date=None,
         )
 
+    svc.storage.upload.assert_not_awaited()
     svc.ocr_service.recognize.assert_not_awaited()
-
-    svc.submission_repo.update.assert_not_awaited()
+    svc.submission_repo.create.assert_not_awaited()
 
 
 # ─── s01_normalizer.py — defense-in-depth backstop ──────────────────────

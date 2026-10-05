@@ -2,7 +2,16 @@
 // Expert Models — synced with backend expert_review/schemas.py
 // ============================================================
 
-import { ContentStatus, DateStatus, OverallVerdict, SourceStatus, SubmissionType } from './verification.model';
+import {
+  BodySimilarityReport,
+  ContentStatus,
+  DateStatus,
+  HeadlineAlterationDetail,
+  HeadlineCheckStatus,
+  OverallVerdict,
+  SourceStatus,
+  SubmissionType,
+} from './verification.model';
 
 // ── Queue item from GET /expert/queue ────────────────────────────────
 export interface ExpertTopArticle {
@@ -32,6 +41,12 @@ export interface ExpertQueueItem {
   top_article?: ExpertTopArticle | null;
   /** Multimodal submissions only — the submitted card/photo. */
   image_url?: string | null;
+  /** Why content_status (the headline verdict) may be null. */
+  headline_check_status?: HeadlineCheckStatus | null;
+  /** Headline Alteration detail (claim headline vs. source title only). */
+  headline_alteration?: HeadlineAlterationDetail | null;
+  /** Claim body vs. source body similarity measurements — never a verdict. */
+  body_similarity?: BodySimilarityReport | null;
 }
 
 // ── Review detail from GET /expert/queue/{submission_id} ────────────
@@ -101,13 +116,14 @@ export interface ExpertStats {
   total_votes?: number;
   correct_votes?: number;
   accuracy_pct?: number | null;
-  current_credibility: number;
+  current_credibility: number | null;
+  activation_threshold?: number;
 }
 
 // ── Credibility from GET /expert/credibility ─────────────────────────
 export interface CredibilityScore {
   user_id: string;
-  score: number;
+  score: number | null;
   total_votes: number;
   correct_votes: number;
   updated_at: string;

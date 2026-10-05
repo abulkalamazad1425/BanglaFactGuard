@@ -26,6 +26,7 @@ from app.core.config import get_settings
 from app.shared.models_registry import Base
 from app.main import create_app
 from app.features.sources.models import VerifiedSource
+from app.features.nlp.ner_service import NERResult
 from app.features.verification.schemas import NLIScoresSchema
 from app.features.cache.cache_service import CacheService
 from app.features.nlp.embedding_service import EmbeddingService
@@ -102,8 +103,7 @@ def mock_embedding_service() -> MagicMock:
 def mock_ner_service() -> MagicMock:
     service = MagicMock(spec=NERService)
     service.load = AsyncMock()
-    service.extract_entities = AsyncMock(return_value=["ঢাকা", "বাংলাদেশ"])
-    service.compute_entity_overlap = MagicMock(return_value=1.0)
+    service.extract_mentions = AsyncMock(return_value=NERResult(True, []))
     return service
 
 
@@ -119,36 +119,14 @@ def mock_nli_service() -> MagicMock:
 
 @pytest.fixture
 def mock_search_clients() -> dict[str, MagicMock]:
-    from app.features.search.newsdata_client import NewsDataClient
-    from app.features.search.google_cse_client import GoogleCSEClient
     from app.features.search.pygooglenews_client import PyGoogleNewsClient
-    from app.features.search.duckduckgo_client import DuckDuckGoClient
+    from app.features.search.internal_site_client import InternalSiteSearchClient
 
-    newsdata = MagicMock(spec=NewsDataClient)
-    newsdata.search_entries = AsyncMock(
-        return_value=[
-            (
-                "https://prothomalo.com/article/123",
-                "শেখ হাসিনা নতুন উড়ালসড়ক উদ্বোধন করলেন",
-            )
-        ]
-    )
-
-    google_cse = MagicMock(spec=GoogleCSEClient)
-    google_cse.search_entries = AsyncMock(return_value=[])
-
-    pygooglenews = MagicMock(spec=PyGoogleNewsClient)
-    pygooglenews.search_entries = AsyncMock(return_value=[])
-
-    ddg = MagicMock(spec=DuckDuckGoClient)
-    ddg.search_entries = AsyncMock(return_value=[])
-
-    return {
-        "newsdata": newsdata,
-        "google_cse": google_cse,
-        "pygooglenews": pygooglenews,
-        "ddg": ddg,
-    }
+    pgn = MagicMock(spec=PyGoogleNewsClient)
+    pgn.search_entries = AsyncMock(return_value=[])
+    internal = MagicMock(spec=InternalSiteSearchClient)
+    internal.search_entries = AsyncMock(return_value=[])
+    return {"pygooglenews": pgn, "internal_site": internal}
 
 
 @pytest.fixture

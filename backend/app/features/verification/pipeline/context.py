@@ -3,28 +3,33 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from typing import Any, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 from app.core.constants import (
     ClaimScope,
     ContentStatus,
     DateStatus,
-    ManipulationType,
+    HeadlineCheckStatus,
     PipelineStageID,
     SourceStatus,
 )
 from app.features.articles.schemas import CandidateArticleSchema, RankedArticleSchema
-from app.features.verification.analysis.entities import EntityMention
-from app.features.verification.schemas import (
-    AnalysisDetails,
-    ManipulationFlagsSchema,
-    NLIScoresSchema,
-    VerificationScoresSchema,
-)
+from app.features.verification.schemas import AnalysisDetails
 
 
 @dataclass
 class PipelineContext:
+    """Shared state passed through the verification stages.
+
+    Each decision has its own owner:
+      S08 source correspondence  -> source_status, analysis.metrics/search/source_basis
+      S09 headline alteration    -> content_status (MATCHED | ALTERED | None),
+                                    headline_check_status, analysis.headline_alteration
+      S10 body similarity        -> analysis.body_similarity (measurements only)
+      S11 date verification      -> date_status, analysis.date
+      S12 result assembly        -> confidence, reasoning, analysis bookkeeping
+      S13 result persistence     -> result_id, persisted
+    """
 
     request_id: uuid.UUID = field(default_factory=uuid.uuid4)
     submission_id: uuid.UUID | None = None
@@ -47,29 +52,17 @@ class PipelineContext:
     # The service layer materialises a result copy for the requester's own
     # submission; the pipeline itself never repoints `submission_id`.
     reused_from_submission_id: uuid.UUID | None = None
-    cached_source_status: SourceStatus | None = None
-    cached_content_status: ContentStatus | None = None
-    cached_date_status: DateStatus | None = None
-    cached_confidence: float | None = None
-    cached_reasoning: str | None = None
-    cached_scores: VerificationScoresSchema | None = None
-    cached_manipulation_flags: ManipulationFlagsSchema | None = None
-    cached_matched_articles: list[RankedArticleSchema] = field(default_factory=list)
 
     search_queries: list[tuple[str, str]] = field(default_factory=list)
+    claim_keywords: list[str] = field(default_factory=list)
 
     candidate_urls: list[CandidateArticleSchema] = field(default_factory=list)
     search_provider_used: str | None = None
 
-    # Attempted/errored counters for distinguishing "the check ran cleanly
-    # and found nothing" (NOT_FOUND) from "the check itself failed" (source
-    # status INCOMPLETE) — see s11_classifier.py. A stage records these even
-    # though it swallows individual provider/fetch exceptions internally
-    # (asyncio.gather(..., return_exceptions=True)) so the pipeline keeps
-    # degrading gracefully rather than aborting on one bad provider.
-    # Per provider-call outcome accounting (S04). `search_attempted` counts
-    # calls that were actually issued or served from cache; unconfigured
-    # providers are `search_skipped` and never count as attempts.
+    # Per provider-call outcome accounting (S04), which is what separates
+    # "the search ran cleanly and found nothing" (NOT_FOUND) from "the search
+    # itself failed" (INCOMPLETE). `search_attempted` counts calls actually
+    # issued or served from cache; unconfigured providers are `search_skipped`.
     search_attempted: int = 0
     search_errors: int = 0
     search_success: int = 0
@@ -85,44 +78,16 @@ class PipelineContext:
     extraction_errors: int = 0
 
     extracted_articles: list[RankedArticleSchema] = field(default_factory=list)
-
     failed_extraction_urls: list[str] = field(default_factory=list)
-
     ranked_articles: list[RankedArticleSchema] = field(default_factory=list)
-
     top_article: RankedArticleSchema | None = None
-
-    scores: VerificationScoresSchema = field(default_factory=VerificationScoresSchema)
-    claim_entities: list[str] = field(default_factory=list)
-    claim_keywords: list[str] = field(default_factory=list)
-    claim_numerals: list[str] = field(default_factory=list)
-    article_entities: list[str] = field(default_factory=list)
-    article_numerals: list[str] = field(default_factory=list)
-
-    claim_entity_types: list[tuple[str, str]] = field(default_factory=list)
-    article_entity_types: list[tuple[str, str]] = field(default_factory=list)
-
-    nli_scores: NLIScoresSchema | None = None
-    nli_premise: str | None = None
-
-    # Typed entity mentions (S08) kept for the sentence-level checks in S10.
-    claim_mentions: list[EntityMention] = field(default_factory=list)
-    evidence_mentions: list[EntityMention] = field(default_factory=list)
-    ner_available: bool = False
 
     # Everything persisted in verification_results.analysis_details.
     analysis: AnalysisDetails = field(default_factory=AnalysisDetails)
-    # Body comparison diagnostics (HEADLINE_WITH_BODY only).
-    body_min_chunk_similarity: float | None = None
-    body_complete: bool = True
-
-    manipulation_flags: ManipulationFlagsSchema = field(
-        default_factory=ManipulationFlagsSchema
-    )
-    detected_manipulations: list[ManipulationType] = field(default_factory=list)
 
     source_status: SourceStatus | None = None
     content_status: ContentStatus | None = None
+    headline_check_status: HeadlineCheckStatus | None = None
     date_status: DateStatus | None = None
     confidence: float = 0.0
     reasoning: str = ""
@@ -132,16 +97,12 @@ class PipelineContext:
 
     pipeline_start_time: datetime = field(default_factory=datetime.utcnow)
     stage_timings: dict[str, int] = field(default_factory=dict)
-
     stage_errors: dict[str, str] = field(default_factory=dict)
-
-    pending_log_entries: list[Any] = field(default_factory=list)
-
     fatal_error: str | None = None
 
     @property
     def has_body(self) -> bool:
-        return bool(self.normalized_body and len(self.normalized_body.strip()) > 10)
+        return bool(self.normalized_body and self.normalized_body.strip())
 
     @property
     def has_evidence(self) -> bool:
@@ -158,14 +119,8 @@ class PipelineContext:
         return False
 
     @property
-    def search_was_incomplete(self) -> bool:
-        """True when no evidence was found AND that absence is attributable
-        to a failed/inadequate search or failed retrieval rather than an
-        adequate search that simply came up empty. S11 reports source_status
-        INCOMPLETE (never the confident-negative NOT_FOUND) in that case."""
-        if self.has_evidence:
-            return False
-        return self.retrieval_failed or not bool(self.search_adequate)
+    def source_confirmed(self) -> bool:
+        return self.source_status == SourceStatus.CONFIRMED and self.top_article is not None
 
     @property
     def has_fatal_error(self) -> bool:
@@ -185,13 +140,6 @@ class PipelineContext:
 
     def record_stage_timing(self, stage_id: PipelineStageID, duration_ms: int) -> None:
         self.stage_timings[stage_id.value] = duration_ms
-
-    def update_scores(self, **kwargs: float | None) -> None:
-        current = self.scores.model_dump()
-        for key, val in kwargs.items():
-            if val is not None:
-                current[key] = val
-        self.scores = VerificationScoresSchema(**current)
 
 
 @runtime_checkable
@@ -215,13 +163,11 @@ def build_context(
 ) -> PipelineContext:
     """Build the pipeline's starting state for one verification run.
 
-    `claim_scope` controls what the pipeline is allowed to treat as "the
-    claim" (see `ClaimScope`). When not given explicitly it is inferred from
-    whether `news_body` was supplied — the right default for a SOURCE_BASED
-    text claim. Photo-card callers must always pass
-    `claim_scope=ClaimScope.HEADLINE_ONLY` explicitly and must not pass
-    `news_body` — the business rule is that a photo card is verified against
-    its headline alone, never a body or caption.
+    `claim_scope` controls what the pipeline treats as "the claim" (see
+    `ClaimScope`). When not given explicitly it is inferred from whether
+    `news_body` was supplied - the right default for a SOURCE_BASED text
+    claim. Photo-card callers must pass `claim_scope=ClaimScope.HEADLINE_ONLY`
+    and no `news_body`: a photo card is verified on its headline alone.
     """
     resolved_scope = claim_scope or (
         ClaimScope.HEADLINE_WITH_BODY

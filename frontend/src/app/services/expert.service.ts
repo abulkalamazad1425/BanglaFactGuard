@@ -19,8 +19,8 @@ export class ExpertService {
   private readonly api = inject(ApiService);
 
   /** GET /api/v1/expert/queue */
-  getQueue(limit = 20, offset = 0): Observable<ExpertQueueItem[]> {
-    return this.api.get<ExpertQueueItem[]>(API_ENDPOINTS.EXPERT_QUEUE, { limit, offset });
+  getQueue(limit = 20, offset = 0, q = ''): Observable<ExpertQueueItem[]> {
+    return this.api.get<ExpertQueueItem[]>(API_ENDPOINTS.EXPERT_QUEUE, { limit, offset, q });
   }
 
   /** GET /api/v1/expert/queue/{submission_id} */
@@ -45,8 +45,8 @@ export class ExpertService {
   }
 
   /** GET /api/v1/expert/history */
-  getHistory(limit = 50, offset = 0): Observable<ExpertHistoryItem[]> {
-    return this.api.get<ExpertHistoryItem[]>(API_ENDPOINTS.EXPERT_HISTORY, { limit, offset });
+  getHistory(limit = 50, offset = 0, q = ''): Observable<ExpertHistoryItem[]> {
+    return this.api.get<ExpertHistoryItem[]>(API_ENDPOINTS.EXPERT_HISTORY, { limit, offset, q });
   }
 
   /** GET /api/v1/expert/stats */

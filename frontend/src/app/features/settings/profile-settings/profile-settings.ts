@@ -19,6 +19,7 @@ export class ProfileSettingsComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly fb = inject(FormBuilder);
 
+  readonly profileError = signal(false);
   readonly savingProfile = signal(false);
   readonly changingPw = signal(false);
 
@@ -42,6 +43,7 @@ export class ProfileSettingsComponent implements OnInit {
   });
 
   ngOnInit(): void {
+    this.profileError.set(false);
     const user = this.auth.user();
     if (user) {
       this.profileForm.patchValue({ full_name: user.full_name || '' });
@@ -61,7 +63,7 @@ export class ProfileSettingsComponent implements OnInit {
           is_email_verified: p.is_email_verified,
         });
       },
-      error: () => { },
+      error: () => { this.profileError.set(true); },
     });
 
     // Requirement 2.2: experts view but never edit profile information.
@@ -74,10 +76,10 @@ export class ProfileSettingsComponent implements OnInit {
     if (this.isExpertOnly()) { return; }
     this.savingProfile.set(true);
     const req: UpdateProfileRequest = {
-      full_name: this.profileForm.value.full_name || undefined,
-      bio: this.profileForm.value.bio || undefined,
-      avatar_url: this.profileForm.value.avatar_url || undefined,
-      phone: this.profileForm.value.phone || undefined,
+      full_name: this.profileForm.value.full_name ?? '',
+      bio: this.profileForm.value.bio ?? '',
+      avatar_url: this.profileForm.value.avatar_url ?? '',
+      phone: this.profileForm.value.phone ?? '',
     };
     this.auth.updateProfile(req).subscribe({
       next: () => { this.savingProfile.set(false); this.toast.success('Profile updated.'); },

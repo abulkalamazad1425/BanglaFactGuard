@@ -67,10 +67,11 @@ def _get_service(
 async def get_queue(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    q: str = Query(default="", max_length=200),
     current_user: User = Depends(_EXPERT_OR_ADMIN),
     svc: ExpertReviewService = Depends(_get_service),
 ) -> list[ExpertQueueItemResponse]:
-    return await svc.get_queue(current_user.id, limit=limit, offset=offset)
+    return await svc.get_queue(current_user.id, limit=limit, offset=offset, q=q)
 
 
 @router.get(
@@ -139,10 +140,11 @@ async def edit_vote(
 async def get_history(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    q: str = Query(default="", max_length=200),
     current_user: User = Depends(_EXPERT_OR_ADMIN),
     svc: ExpertReviewService = Depends(_get_service),
 ) -> list[ExpertHistoryItemResponse]:
-    return await svc.get_history(current_user.id, limit=limit, offset=offset)
+    return await svc.get_history(current_user.id, limit=limit, offset=offset, q=q)
 
 
 @router.get(
@@ -166,16 +168,14 @@ async def get_credibility(
     current_user: User = Depends(_EXPERT_OR_ADMIN),
     session: AsyncSession = Depends(get_async_session),
 ) -> CredibilityScoreResponse:
-    from app.core.config import get_settings
-
     repo = ExpertProfileRepository(session)
     profile = await repo.get_or_create(
         current_user.id,
-        initial_score=get_settings().auth.initial_expert_credibility,
     )
+    config = await VotingConfigRepository(session).get_or_create()
     return CredibilityScoreResponse(
         user_id=str(profile.user_id),
-        score=profile.credibility_score,
+        score=(profile.correct_votes / profile.total_votes if profile.total_votes and profile.total_votes >= config.activation_threshold_votes else None),
         total_votes=profile.total_votes,
         correct_votes=profile.correct_votes,
         updated_at=profile.updated_at,

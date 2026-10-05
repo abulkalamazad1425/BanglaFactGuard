@@ -57,6 +57,13 @@ class EmailService:
             )
             raise EmailDeliveryError() from exc
 
+    async def send_result_email(self, *, to_email: str, submission_id: str, headline: str, verdict: str) -> None:
+        if not self._settings.is_configured:
+            raise EmailDeliveryError()
+        link = f"{self._settings.website_url.rstrip('/')}/verify/{submission_id}"
+        body = f"Expert review is complete.\n\nFinal verdict: {verdict}\nClaim: {headline}\n\nView the evidence: {link}\n\nBanglaFactGuard"
+        await asyncio.to_thread(self._send_sync, to_email, "Your BanglaFactGuard final result is ready", body)
+
     def _send_sync(self, to_email: str, subject: str, body: str) -> None:
         settings = self._settings
         msg = MIMEText(body)
@@ -76,4 +83,4 @@ class EmailService:
             if smtp_user:
                 server.login(smtp_user, smtp_password)
             server.sendmail(settings.from_address, [to_email], msg.as_string())
-        logger.info("otp_email_sent", to=to_email)
+        logger.info("transactional_email_sent")

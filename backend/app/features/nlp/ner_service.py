@@ -1,18 +1,14 @@
 """
 app/features/nlp/ner_service.py
 =================================
-Bangla named-entity recognition (PER/LOC/ORG) for Stages 8 and 10.
+Bangla named-entity recognition (PER/LOC/ORG) for similarity and statement-level content checking.
 
 ## Model and what is (not) known about it
 
-`settings.ml.ner_model_name`, default `neuropark/sahajBERT-NER`, an ALBERT
-model pretrained on Bangla and fine-tuned for token classification. A *base*
-pretrained checkpoint is not evidence of a functioning NER model — the
-previous default (`csebuetnlp/banglabert`, an ELECTRA pretraining checkpoint)
-loaded without error, got a randomly initialised head and silently produced
-no PER/LOC/ORG at all. This service therefore AUDITS the model at load time
-and exposes the result; it never reports "no entities" when the model is
-simply not working:
+`settings.ml.ner_model_name` defaults to `arafatfahim/BanglaTag`, a
+BanglaBERT/ELECTRA checkpoint fine-tuned for token classification. The base
+`csebuetnlp/banglabert` pretraining checkpoint has no trained NER head.
+The service audits the selected checkpoint before using its entity output:
 
 1. **Label audit** — the checkpoint's `id2label` must contain PER, LOC and ORG
    (BIO prefixes stripped). Generic `LABEL_n` names mean the head cannot be
@@ -71,6 +67,8 @@ _NER_POOL = ThreadPoolExecutor(
 def _base_type(label: str) -> str | None:
     """B-PER / I-PER / PER -> PER; anything else (O, LABEL_3) -> None."""
     base = label.split("-", 1)[-1].upper()
+    # BanglaTag distinguishes institutions and political organizations.
+    base = {"INST": "ORG", "POL": "ORG"}.get(base, base)
     return base if base in _KEPT_TYPES else None
 
 
@@ -194,13 +192,3 @@ class NERService:
         result = await self._tag_chunks(chunks)
         result.truncated = truncated
         return result
-
-    # ── legacy helpers (kept for callers outside S08/S10) ────────────────
-
-    async def extract_entities(self, text: str) -> list[str]:
-        res = await self.extract_mentions(text)
-        return [m.text for m in res.mentions]
-
-    async def extract_entities_with_types(self, text: str) -> list[tuple[str, str]]:
-        res = await self.extract_mentions(text)
-        return [(m.text, m.type) for m in res.mentions]

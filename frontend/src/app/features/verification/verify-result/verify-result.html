@@ -1,18 +1,18 @@
 <div class="verification-shell"><div class="flow-container">
   <div class="report-toolbar"><a routerLink="/dashboard" class="btn btn-ghost">← Fact Explorer</a>@if (lookup()) {<div class="actions"><a [routerLink]="inputRoute()" class="btn btn-secondary">Start another check</a><button type="button" class="btn btn-secondary" (click)="copyUrl()">{{ copied ? 'Link copied' : 'Copy report link' }}</button></div>}</div>
   @if (copyFailed) {<p class="error-copy" role="status">The link could not be copied. Copy the address from your browser to share this report.</p>}
-  <header class="flow-heading"><div><span class="eyebrow">{{ methodLabel() }} / VERIFICATION RECORD</span><h1>{{ stillRunning() ? 'Your check is in progress.' : failed() ? 'This check could not finish.' : 'Verification result' }}</h1><p>Read the decision alongside the original claim, available evidence and the limits of this check.</p></div></header>@if (lookup()?.headline) {<section class="surface"><span class="eyebrow">SUBMITTED CLAIM</span><h2 class="claim-preview">{{ lookup()!.headline }}</h2></section>}
+  <header class="flow-heading"><div><span class="eyebrow">{{ methodLabel() }} / VERIFICATION RECORD</span><h1>{{ stillRunning() ? 'Your check is in progress.' : failed() ? 'This check could not finish.' : 'Verification result' }}</h1><p>Preliminary findings and expert-reviewed results.</p></div></header>@if (lookup()?.headline) {<section class="surface"><span class="eyebrow">SUBMITTED CLAIM</span><h2 class="claim-preview">{{ lookup()!.headline }}</h2></section>}
   @if (loading()) {<section class="surface state-card" role="status"><div class="spinner"></div><h2>Loading verification details</h2><p>Retrieving the saved claim and its current findings.</p></section>}
   @else if (loadError()) {<section class="surface state-card" role="alert"><span class="eyebrow">PLEASE TRY AGAIN</span><h2>Result temporarily unavailable</h2><p>We could not load this result. Your submission may still be processing. This is not a verdict on the news.</p><button type="button" class="btn btn-primary" (click)="retry()">Try again</button></section>}
   @else {
-    @if (stillRunning()) {<section class="surface state-card" role="status"><span class="eyebrow">SUBMISSION RECEIVED</span><div class="spinner"></div><h2>Verification in progress</h2><p>{{ phaseText() }}. This page updates automatically as the check progresses.</p><div class="note"><strong>You can leave this page.</strong><p>The check continues in the background. Keep this result link or find it in <a routerLink="/history">My Submissions</a> if you are signed in.</p></div><p>No verdict has been reached yet. Findings will appear when this check is complete.</p></section>}
+    @if (stillRunning()) {<section class="surface state-card" role="status"><span class="eyebrow">SUBMISSION RECEIVED</span><div class="spinner"></div><h2>Verification in progress</h2><p>{{ phaseText() }}. This page updates automatically as the check progresses.</p><div class="note"><strong>You can leave this page.</strong><p>Verification may take a few minutes. You can continue browsing. Find preliminary and final results in Fact Explorer or, if signed in, My Submissions. Keep this link or open <a routerLink="/history">My Submissions</a> if you are signed in.</p></div></section>}
     @if (failed()) {<section class="surface state-card" role="alert"><span class="eyebrow">CHECK INCOMPLETE</span><h2>Verification could not be completed</h2><p>{{ verificationFailure(failureReason()) }}</p><div class="note">No verdict was reached about this news.</div><a [routerLink]="inputRoute()" class="btn btn-primary">{{ kind() === 'PHOTO_CARD' ? 'Try another image' : 'Try another check' }}</a></section>}
     @if (sourceResult(); as r) {<app-verification-report [r]="r" />}
     @if (photocardResult()?.verification; as v) {<app-verification-report [r]="v" />}
     @if (multimodalResult(); as m) {
       <section class="surface"><span class="eyebrow">{{ m.expert_overall_verdict ? 'EXPERT REVIEW COMPLETE' : 'AWAITING EXPERT REVIEW' }}</span><h2 class="assessment-value">{{ m.expert_overall_verdict ? overallVerdictLabel(m.expert_overall_verdict) : predictionLabel(m.prediction) }}</h2>
-      <p class="assessment-explanation">{{ m.expert_overall_verdict ? 'This is the decision finalized through expert review.' : 'This is a preliminary assessment of the article text and image. It can be wrong and is not a final verdict.' }}</p>
-      <div class="note"><strong>What this check covers</strong><p>This method assesses the supplied article text and image. It does not establish whether a particular outlet published the story, and does not provide a source-report comparison.</p></div>
+      <p class="assessment-explanation">{{ m.expert_overall_verdict ? 'Final expert verdict.' : 'Preliminary result · expert review pending.' }}</p>
+      <div class="note"><strong>What this check covers</strong><p>AI assessment of text and image; no source comparison.</p></div>
       @if (m.expert_overall_verdict) {<details><summary>View the earlier automated assessment</summary><p class="assessment-explanation">Preliminary assessment: <strong>{{ predictionLabel(m.prediction) }}</strong>. @if (multimodalWasOverridden(m)) {Expert review reached a different decision.}</p></details>}
       @if (m.is_cached) {<p class="field-hint">A previous assessment of this content was reused.</p>}
       <p class="field-hint">Assessment recorded {{ m.created_at | date:'medium' }}</p>
@@ -20,14 +20,21 @@
       <section class="surface claim-section"><div class="section-heading"><span class="eyebrow">ORIGINAL SUBMISSION</span><h2>The article and image that were checked</h2></div><div class="claim-layout" [class.no-image]="!m.image_url || imageFailed">@if (m.image_url && !imageFailed) {<img [src]="m.image_url" class="media-image" alt="Submitted article image" (error)="imageFailed = true">}<div><h3 class="claim-preview">{{ m.headline || 'No headline recorded' }}</h3>@if (imageFailed) {<p class="field-hint">The submitted image is temporarily unavailable.</p>}@if (m.body_text) {<details><summary>Read the submitted article text</summary><p class="long-text">{{ m.body_text }}</p></details>}</div></div></section>
     }
     @if (photocardResult(); as p) {
-      <section class="surface claim-section"><div class="section-heading"><span class="eyebrow">ORIGINAL SUBMISSION</span><h2>The photocard and the headline read from it</h2><p>The check uses the headline only. Image text may contain reading errors; compare it with the card.</p></div>
+      <section class="surface claim-section"><div class="section-heading"><span class="eyebrow">ORIGINAL SUBMISSION</span><h2>The photocard and what was read from it</h2><p>Only the headline is verified. Text read from an image can contain errors; compare it with the card.</p></div>
       <div class="claim-layout" [class.no-image]="!p.image_url || imageFailed">@if (p.image_url && !imageFailed) {<img [src]="p.image_url" class="media-image" alt="Submitted photo card" (error)="imageFailed = true">}<div>
-      @if (p.headline) {<h3 class="claim-preview">{{ p.headline }}</h3>} @else if (p.status === 'FAILED') {<p class="preview-placeholder">No headline could be read from this card.</p>} @else {<p class="preview-placeholder">Reading the headline from the card…</p>}
+      @if (p.headline) {<span class="field-hint">Headline read from the card</span><h3 class="claim-preview" lang="bn">{{ p.headline }}</h3>} @else if (p.status === 'FAILED') {<p class="preview-placeholder">No headline could be read from this card.</p>} @else {<p class="preview-placeholder">Reading the headline from the card…</p>}
       @if (imageFailed) {<p class="field-hint">The submitted image is temporarily unavailable.</p>}
-      <dl class="meta-grid"><div><dt>Claimed outlet</dt><dd>{{ p.claimed_source_text || 'Not recorded' }}</dd></div><div><dt>Claimed publication date</dt><dd>{{ p.published_date ? (p.published_date | date:'d MMM y') : 'Not provided' }}</dd></div><div><dt>Comparison scope</dt><dd>Headline only</dd></div><div><dt>Submitted</dt><dd>{{ p.created_at | date:'d MMM y' }}</dd></div></dl>
-      @if (p.source_date_conflict) {<div class="note warning"><strong>The card and submitted source differ.</strong><p>The detected outlet differs from the claimed source. Verification uses the supplied source.</p></div>}
-      @if (p.detected_source_text) {<dl class="meta-grid"><div><dt>Outlet read from the card</dt><dd>{{ p.detected_source_text }}</dd></div></dl>}
-      @if (p.ocr_raw_text) {<details><summary>View all text read from the image</summary><p class="long-text">{{ p.ocr_raw_text }}</p></details>}
+      @if (p.extracted_date_text || p.extracted_source_text) {
+        <dl class="meta-grid" aria-label="Read from the card (for reference only)">
+          @if (p.extracted_source_text) {<div><dt>Outlet shown on the card</dt><dd lang="bn">{{ p.extracted_source_text }}</dd></div>}
+          @if (p.extracted_date_text) {<div><dt>Date shown on the card</dt><dd lang="bn">{{ p.extracted_date_text }}</dd></div>}
+        </dl>
+        <p class="field-hint">Shown for reference only. The check uses the outlet and date you selected.</p>
+      }
+      <dl class="meta-grid"><div><dt>Selected outlet</dt><dd>{{ p.claimed_source_text || 'Not recorded' }}</dd></div><div><dt>Claimed publication date</dt><dd>{{ p.published_date ? (p.published_date | date:'d MMM y') : 'Not provided' }}</dd></div><div><dt>Comparison scope</dt><dd>Headline only</dd></div><div><dt>Submitted</dt><dd>{{ p.created_at | date:'d MMM y' }}</dd></div></dl>
+      @if (p.extraction_method) {<p class="field-hint">{{ extractionSummary(p) }}</p>}
+      @if (p.extraction_failures?.length) {<details><summary>Extraction details</summary><ul class="long-text">@for (f of p.extraction_failures; track $index) {<li>{{ f }}</li>}</ul></details>}
+      @if (p.ocr_raw_text) {<details><summary>View all text recognised in the image</summary><p class="long-text" lang="bn">{{ p.ocr_raw_text }}</p></details>}
       </div></div></section>
     }
     @if (kind() === 'SOURCE_BASED' && lookup(); as l) {

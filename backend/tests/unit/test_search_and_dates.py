@@ -14,9 +14,9 @@ from app.features.search.internal_site_client import InternalSiteSearchError
 from app.features.verification.pipeline.stages.s04_source_search import SourceSearchStage
 from app.features.verification.pipeline.stages.s05_evidence_retrieval import EvidenceRetrievalStage
 from app.features.verification.pipeline.stages.s06_article_extractor import ArticleExtractorStage
-from app.features.verification.pipeline.stages.s11_classifier import ClassifierStage
+from app.features.verification.pipeline.stages.s08_source_correspondence import SourceCorrespondenceStage
 from app.shared.utils.dates import parse_publication
-from pipeline_helpers import make_context
+from pipeline_helpers import FakeEmbedder, make_context
 
 URL = "https://www.prothomalo.com/bangladesh/district/abc12345def"
 
@@ -37,108 +37,123 @@ def _cache():
     return cache
 
 
-def _stage(newsdata, cse, pgn, ddg, internal):
-    return SourceSearchStage(newsdata, cse, pgn, ddg, internal, _cache())
+def _stage(pgn, internal):
+    return SourceSearchStage(pgn, internal, _cache())
 
 
 def _ctx(published=None):
     ctx = make_context("সরকার নতুন সেতু উদ্বোধন করেছে", published_date=published)
     ctx.search_queries = [
-        ("সরকার নতুন সেতু", "keywords"),
-        ("সরকার নতুন সেতু উদ্বোধন করেছে", "headline"),
-        ("site:prothomalo.com সরকার সেতু", "site_restricted"),
+        ("site:prothomalo.com সরকার নতুন সেতু", "keywords"),
+        ("site:prothomalo.com সরকার নতুন সেতু উদ্বোধন করেছে", "headline"),
     ]
-    ctx.source_config = {"internal_search_url": "https://x/search?q={query}", "article_url_patterns": []}
+    ctx.source_config = {"internal_search_url": "https://www.prothomalo.com/search?q={query}", "article_url_patterns": []}
     ctx.search_attempted = ctx.search_success = ctx.search_success_empty = 0
     ctx.search_adequate = None
     return ctx
 
 
-# ── 12/13: failure accounting → Incomplete vs Not Found ──────────────────
-
-
 async def test_all_providers_failing_is_incomplete_not_not_found():
-    boom = RuntimeError("provider down")
-    stage = _stage(_client(exc=boom), _client(exc=boom), _client(exc=boom), _client(exc=boom), _client(exc=InternalSiteSearchError("down")))
-    ctx = await stage.execute(_ctx())
-
-    assert ctx.search_attempted > 0
-    assert ctx.search_errors == ctx.search_attempted  # every call counted as failed
-    assert ctx.search_success == ctx.search_success_empty == 0
+    ctx = await _stage(_client(exc=RuntimeError("down")), _client(exc=InternalSiteSearchError("down"))).execute(_ctx())
+    assert ctx.search_attempted == ctx.search_errors == 4
     assert ctx.search_adequate is False
-    assert ctx.candidate_urls == []
-
-    ctx = await ClassifierStage().execute(ctx)
-    assert ctx.source_status == SourceStatus.INCOMPLETE
-    assert ctx.content_status is None and ctx.date_status is None
-    assert "could not be completed" in ctx.reasoning
+    assert (await SourceCorrespondenceStage(FakeEmbedder()).execute(ctx)).source_status == SourceStatus.INCOMPLETE
 
 
-async def test_internal_site_failure_is_not_a_successful_empty_search():
-    # previously the client swallowed the error and returned [] -> counted as success
-    ok_empty = _client([])
-    stage = _stage(ok_empty, ok_empty, ok_empty, ok_empty, _client(exc=InternalSiteSearchError("down")))
-    ctx = await stage.execute(_ctx())
-    assert ctx.search_provider_outcomes["internal_site"].get("FAILED", 0) >= 1
-    assert ctx.search_errors >= 1
+async def test_internal_site_failure_is_not_successful_empty_search():
+    ctx = await _stage(_client([]), _client(exc=InternalSiteSearchError("down"))).execute(_ctx())
+    assert ctx.search_provider_outcomes["internal_site"]["FAILED"] == 2
+    assert ctx.search_errors == 2
 
 
-async def test_adequate_successful_empty_search_is_not_found():
-    empty = _client([])
-    stage = _stage(empty, empty, empty, empty, empty)
-    ctx = await stage.execute(_ctx())
-    assert ctx.search_errors == 0 and ctx.search_success_empty == ctx.search_attempted > 0
+async def test_adequate_empty_search_is_not_found():
+    ctx = await _stage(_client([]), _client([])).execute(_ctx())
+    assert ctx.search_attempted == ctx.search_success_empty == 4
     assert ctx.search_adequate is True
-    ctx = await ClassifierStage().execute(ctx)
-    assert ctx.source_status == SourceStatus.NOT_FOUND
-    assert ctx.content_status is None and ctx.date_status is None
-    assert ctx.confidence > 0  # negative-check strength = completed share of calls
+    assert (await SourceCorrespondenceStage(FakeEmbedder()).execute(ctx)).source_status == SourceStatus.NOT_FOUND
 
 
-async def test_mostly_failed_search_is_inadequate_even_if_one_call_returned_empty():
-    boom = RuntimeError("x")
-    stage = _stage(_client([]), _client(exc=boom), _client(exc=boom), _client(exc=boom), _client(exc=boom))
-    ctx = await stage.execute(_ctx())
-    assert ctx.search_success_empty >= 1 and ctx.search_errors > ctx.search_success_empty
-    assert ctx.search_adequate is False
-    assert (await ClassifierStage().execute(ctx)).source_status == SourceStatus.INCOMPLETE
-
-
-async def test_unconfigured_providers_are_skipped_not_attempted():
-    nc = RuntimeError("API key is not configured")
-    ok = _client([])
+async def test_unconfigured_internal_search_is_skipped():
     ctx = _ctx()
-    ctx.source_config = {}  # internal search not configured for this outlet
-    stage = _stage(_client(exc=nc), _client(exc=nc), ok, ok, ok)
-    ctx = await stage.execute(ctx)
-    assert ctx.search_skipped > 0
-    assert ctx.search_errors == 0
-    assert ctx.search_attempted == ctx.search_success_empty
+    ctx.source_config = {}
+    internal = _client([])
+    ctx = await _stage(_client([]), internal).execute(ctx)
+    internal.search_entries.assert_not_called()
+    assert ctx.search_skipped == 2
+    assert ctx.search_attempted == ctx.search_success_empty == 2
+    assert ctx.search_adequate is True
 
 
-# ── date-free retrieval ─────────────────────────────────────────────────
+@pytest.mark.parametrize("domain", ["prothomalo.com", "bd-pratidin.com", "ittefaq.com.bd", "jugantor.com", "bangla.thedailystar.net"])
+async def test_internal_search_and_google_both_run_for_every_source(domain):
+    ctx = _ctx()
+    ctx.normalized_source = domain
+    ctx.source_config = {"internal_search_url": f"https://www.{domain}/search?q={{query}}", "article_url_patterns": []}
+    internal, pgn = _client([]), _client([])
+    await _stage(pgn, internal).execute(ctx)
+    assert internal.search_entries.await_count == 2
+    assert pgn.search_entries.await_count == 2
 
 
-async def test_claimed_date_is_only_applied_to_date_bound_queries():
-    nd, cse, pgn, ddg, internal = (_client([]) for _ in range(5))
-    ctx = _ctx(published=date(2026, 6, 7))
-    ctx.search_queries = [("সরকার সেতু", "keywords"), ("সরকার সেতু ৭ জুন ২০২৬", "date_bound")]
-    await _stage(nd, cse, pgn, ddg, internal).execute(ctx)
-    seen = {}
-    for client in (nd, cse, pgn, ddg):
-        for call in client.search_entries.call_args_list:
-            seen.setdefault(call.args[0], set()).add(call.kwargs["published_date"])
-    dated = {q for q, d in seen.items() if date(2026, 6, 7) in d}
-    undated = {q for q, d in seen.items() if d == {None}}
-    assert dated and all("২০২৬" in q for q in dated)  # only the date-bound query carries a date
-    assert undated and not (undated & dated)
+async def test_date_variants_and_all_keywords_reach_only_retained_providers():
+    pgn, internal = _client([]), _client([])
+    ctx = _ctx(date(2026, 10, 4))
+    keywords = "one two three four five six seven eight"
+    ctx.search_queries = [(f"site:prothomalo.com {keywords}", "keywords"),
+                          (f"site:prothomalo.com {keywords} 04 October 2026", "date_bound")]
+    ctx = await _stage(pgn, internal).execute(ctx)
+    assert set(ctx.search_provider_outcomes) == {"internal_site", "py_google_news"}
+    for client in (pgn, internal):
+        calls = client.search_entries.call_args_list
+        assert len(calls) == 2
+        assert keywords in calls[0].args[0]
+        assert calls[0].kwargs["published_date"] is None
+        assert calls[1].kwargs["published_date"] == date(2026, 10, 4)
+        assert all(c.kwargs["domain"] == "prothomalo.com" for c in calls)
+    assert all(c.args[0].startswith("site:prothomalo.com ") for c in pgn.search_entries.call_args_list)
+
+
+async def test_missing_source_never_dispatches_search():
+    ctx = _ctx()
+    ctx.normalized_source = None
+    pgn, internal = _client(), _client()
+    ctx = await _stage(pgn, internal).execute(ctx)
+    pgn.search_entries.assert_not_called()
+    internal.search_entries.assert_not_called()
+    assert ctx.stage_errors
 
 
 async def test_off_domain_candidates_are_dropped():
-    nd = _client([("https://evil.example/news/a-long-article-1234", "x"), (URL, "ok")])
-    empty = _client([])
-    ctx = await _stage(nd, empty, empty, empty, empty).execute(_ctx())
+    pgn = _client([("https://evil.example/news/a-long-article-1234", "x"), (URL, "ok")])
+    ctx = await _stage(pgn, _client([])).execute(_ctx())
     assert [c.url for c in ctx.candidate_urls] == [URL]
+
+
+async def test_internal_client_preserves_full_query():
+    from app.features.search.internal_site_client import InternalSiteSearchClient
+    captured = []
+    def handler(request):
+        captured.append(request.url.params["q"])
+        return httpx.Response(200, text="<html></html>")
+    query = "one two three four five six seven eight R&D #report"
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+        await InternalSiteSearchClient(http).search_entries(query, domain="prothomalo.com",
+            source_config={"internal_search_url": "https://prothomalo.com/search?q={query}"})
+    assert captured == [query]
+
+
+async def test_internal_client_searches_any_configured_source():
+    from app.features.search.internal_site_client import InternalSiteSearchClient
+    requested = []
+    def handler(request):
+        requested.append(str(request.url))
+        return httpx.Response(200, text="<html></html>")
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+        await InternalSiteSearchClient(http).search_entries(
+            "যুগান্তর কিছু খবর", domain="jugantor.com",
+            source_config={"internal_search_url": "https://www.jugantor.com/search?q={query}"},
+        )
+    assert requested and requested[0].startswith("https://www.jugantor.com/search")
 
 
 # ── redirect validation (S05) ───────────────────────────────────────────
@@ -250,7 +265,7 @@ def test_selector_based_extraction_still_finds_the_publication_date():
     assert a.extraction_method.value == "source_specific"
 
 
-# ── 14/15 at the classifier: date independent of content ────────────────
+# ── date verification is independent of the headline verdict ────────────
 
 
 async def test_missing_article_date_is_incomplete_and_independent_of_content():

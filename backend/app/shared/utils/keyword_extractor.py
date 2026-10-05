@@ -177,42 +177,6 @@ def extract_keywords_yake(
         return _fallback_frequency_keywords(text, top_n=num_keywords)
 
 
-def extract_keywords_with_scores(
-    text: str,
-    *,
-    language: str = "bn",
-    max_ngram_size: int = 2,
-    dedup_threshold: float = 0.9,
-    num_keywords: int = 10,
-) -> list[tuple[str, float]]:
-    if not text or len(text.strip()) < 10:
-        return []
-
-    try:
-        extractor = _get_yake_extractor(
-            language, max_ngram_size, dedup_threshold, num_keywords
-        )
-        raw = extractor.extract_keywords(text)
-
-        weighted = [(kw, 1.0 / (1.0 + score)) for kw, score in raw]
-
-        weighted.sort(key=lambda x: x[1], reverse=True)
-        return weighted
-    except Exception:
-
-        fallback_kws = _fallback_frequency_keywords(text, top_n=num_keywords)
-        return [(kw, 1.0) for kw in fallback_kws]
-
-
-def extract_keywords_simple(
-    text: str,
-    *,
-    top_n: int = 10,
-    min_word_length: int = 2,
-) -> list[str]:
-    return _fallback_frequency_keywords(text, top_n=top_n, min_len=min_word_length)
-
-
 def extract_headline_keywords(
     headline: str,
     *,
@@ -221,18 +185,6 @@ def extract_headline_keywords(
     return extract_keywords_yake(
         headline,
         max_ngram_size=1,
-        num_keywords=top_n,
-    )
-
-
-def extract_body_keywords(
-    body: str,
-    *,
-    top_n: int = 8,
-) -> list[str]:
-    return extract_keywords_yake(
-        body,
-        max_ngram_size=2,
         num_keywords=top_n,
     )
 
@@ -252,44 +204,6 @@ def compute_keyword_overlap(
     intersection = len(set_a & set_b)
     union = len(set_a | set_b)
     return intersection / union
-
-
-def compute_weighted_keyword_overlap(
-    keywords_a: list[tuple[str, float]],
-    keywords_b: list[tuple[str, float]],
-) -> float:
-    if not keywords_a and not keywords_b:
-        return 0.0
-
-    weights_a: dict[str, float] = {}
-    for kw, w in keywords_a:
-        key = kw.strip().lower()
-        if key:
-            weights_a[key] = max(weights_a.get(key, 0.0), w)
-
-    weights_b: dict[str, float] = {}
-    for kw, w in keywords_b:
-        key = kw.strip().lower()
-        if key:
-            weights_b[key] = max(weights_b.get(key, 0.0), w)
-
-    if not weights_a or not weights_b:
-        return 0.0
-
-    all_keywords = set(weights_a.keys()) | set(weights_b.keys())
-    matched_weight = 0.0
-    total_weight = 0.0
-
-    for kw in all_keywords:
-        w = max(weights_a.get(kw, 0.0), weights_b.get(kw, 0.0))
-        total_weight += w
-        if kw in weights_a and kw in weights_b:
-            matched_weight += w
-
-    if total_weight == 0.0:
-        return 0.0
-
-    return matched_weight / total_weight
 
 
 _TOKENIZE_RE = re.compile(r"[\s\.,।॥!?\"'()\[\]{}<>:;]+")

@@ -1,12 +1,12 @@
 <div class="explorer-page">
   <div class="container explorer-container">
     <header class="explorer-header">
-      <div><p class="eyebrow">THE VERIFICATION ARCHIVE</p><h1>Fact Explorer</h1><p class="intro">Explore the claims checked by BanglaFactGuard.<br class="desktop-break"> Read the findings, follow the evidence, and see what is still under review.</p></div>
+      <div><p class="eyebrow">THE VERIFICATION ARCHIVE</p><h1>Fact Explorer</h1><p class="intro">Browse preliminary findings and final expert verdicts.</p></div>
       <a routerLink="/verify" class="btn btn-secondary">Verify a new claim <span aria-hidden="true">↗</span></a>
     </header>
 
     <section class="archive-summary" aria-label="All-time archive summary">
-      <div class="summary-intro"><span class="eyebrow">OUR WORK, AT A GLANCE</span><p>All-time archive activity</p><small>Includes preliminary and final results. Repeat submissions identified by the system are excluded.</small></div>
+      <div class="summary-intro"><span class="eyebrow">OUR WORK, AT A GLANCE</span><p>All-time archive activity</p><small>Preliminary and final results.</small></div>
       <div class="summary-stat"><strong>{{ summary() ? (summary()!.total | number) : '—' }}</strong><span>Checks in the archive</span></div>
       <div class="summary-stat"><strong>{{ summary() ? (summary()!.finalized | number) : '—' }}</strong><span>Final decisions</span></div>
       <div class="summary-stat"><strong>{{ summary() ? (summary()!.review | number) : '—' }}</strong><span>Under expert review</span></div>
@@ -18,7 +18,7 @@
         <button type="button" [class.selected]="reviewState() === 'finalized'" [attr.aria-pressed]="reviewState() === 'finalized'" (click)="selectState('finalized')">Final decisions</button>
         <button type="button" [class.selected]="reviewState() === 'review'" [attr.aria-pressed]="reviewState() === 'review'" (click)="selectState('review')">Under review</button>
       </div>
-      <p class="stage-description">{{ reviewState() === 'finalized' ? 'These decisions have completed expert review. Open a report to read the evidence and context.' : 'These findings are preliminary. They do not represent a final decision by BanglaFactGuard.' }}</p>
+      <p class="stage-description">{{ reviewState() === 'finalized' ? 'Final expert verdicts. Open a result to view its evidence.' : 'Preliminary findings · expert review pending.' }}</p>
 
       <form [formGroup]="filterForm" (ngSubmit)="search()" class="search-panel">
         <div class="primary-filters">
@@ -26,7 +26,7 @@
           @if (reviewState() === 'finalized') {
             <label for="archive-verdict"><span>Decision</span><select id="archive-verdict" formControlName="overall_verdict" class="form-control"><option value="">All decisions</option><option value="REAL">Real</option><option value="FAKE">Fake</option><option value="MISLEADING">Misleading</option><option value="ALTERED">Altered</option></select></label>
           }
-          <label for="archive-method"><span>Content type</span><select id="archive-method" formControlName="method" class="form-control"><option value="">All types</option><option value="SOURCE_BASED">News text</option><option value="PHOTO_CARD">Photocard</option><option value="MULTIMODAL">Text and image</option></select></label>
+          <label for="archive-method"><span>Content type</span><select id="archive-method" formControlName="method" class="form-control"><option value="">All types</option><option value="SOURCE_BASED">Text &amp; source</option><option value="PHOTO_CARD">Photo card</option><option value="MULTIMODAL">Text &amp; image</option></select></label>
           <button type="submit" class="btn btn-primary">Search</button>
         </div>
         <div class="filter-actions"><button type="button" class="filter-toggle" [attr.aria-expanded]="advanced()" aria-controls="archive-advanced" (click)="advanced.set(!advanced())">{{ advanced() ? '− Fewer filters' : '+ More filters' }}</button><button type="button" class="filter-toggle" (click)="resetFilters()">Clear filters</button></div>
@@ -63,7 +63,7 @@
                 <div class="report-content">
                   <div class="report-topline"><span class="content-type">{{ methodLabel(item.submission_type) }}</span>@if (item.is_finalized) {<app-verdict-badge [overallVerdict]="item.overall_verdict" />} @else {<span class="review-label">Under expert review</span>}</div>
                   <h3><a [routerLink]="['/verify', item.submission_id]">{{ item.headline || 'A submitted claim awaiting a readable headline' }}</a></h3>
-                  <p class="finding">{{ finding(item) }}</p>
+                  <div class="finding">@if (!item.is_finalized) {<app-verdict-badge [label]="item.prediction" [sourceStatus]="item.source_status" [contentStatus]="item.content_status" [dateStatus]="item.date_status" />}</div>
                   <div class="report-meta">@if (item.claimed_source_text) {<span>Claimed outlet: {{ item.claimed_source_text }}</span>}<span>Submitted {{ item.created_at | date:'d MMM y' }}</span></div>
                   <a class="report-link" [routerLink]="['/verify', item.submission_id]">Read full report <span aria-hidden="true">↗</span><span class="sr-only">: {{ item.headline || 'Submitted claim' }}</span></a>
                 </div>
@@ -75,6 +75,6 @@
       </div>
     </section>
 
-    <aside class="reading-guide" aria-labelledby="guide-heading"><div><p class="eyebrow">READ THE EVIDENCE</p><h2 id="guide-heading">A finding needs context.</h2></div><div><p>A source match confirms that a related report was found. It does not, by itself, establish that every statement is true.</p><p>A missing source, a date mismatch or an unfinished check is not a fake-news verdict. Open the full report for the evidence and limitations.</p></div></aside>
+    <aside class="reading-guide" aria-label="Understanding results"><p>A missing source or date mismatch alone does not make a claim fake. Open the result for evidence.</p></aside>
   </div>
 </div>

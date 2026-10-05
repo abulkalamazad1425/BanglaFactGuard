@@ -83,10 +83,10 @@ async def test_reused_result_never_carries_overall_verdict_either():
 
 
 def test_persistence_stage_does_not_import_legacy_consensus_projection():
-    import app.features.verification.pipeline.stages.s12_persistence as s12
+    import app.features.verification.pipeline.stages.s13_result_persistence as s13
     import app.features.verification.verdict_compat as compat
 
-    assert "derive_expert_verdict" not in vars(s12)
+    assert "derive_expert_verdict" not in vars(s13)
     assert not hasattr(compat, "derive_expert_verdict")
 
 
@@ -168,16 +168,17 @@ async def test_structured_overall_vote_snapshot_has_no_ai_implied_value():
 
 
 @pytest.mark.asyncio
-async def test_historical_photocard_row_never_exposes_a_body_metric():
+async def test_historical_photocard_row_never_exposes_an_old_content_verdict():
     sub = Submission(
         id=uuid.uuid4(), submission_type=SubmissionType.PHOTO_CARD, headline="হেডলাইন",
         claimed_source_text="প্রথম আলো", content_hash="h",
     )
-    # a row written by the old code: body_similarity stored, no scope/version
+    # a row written by the old code: content verdict, no headline status/scope/version
     result = VerificationResult(
         id=uuid.uuid4(), submission_id=sub.id, source_status=SourceStatus.CONFIRMED,
         content_status=ContentStatus.ALTERED, confidence=0.5, reasoning="",
-        body_similarity=0.12, body_keyword_coverage=0.1, created_at=datetime.now(timezone.utc),
+        analysis_details={"metrics": {}, "passages": [], "body_similarity_scores": {"available": True}},
+        created_at=datetime.now(timezone.utc),
     )
     response = await load_verification_response(
         sub,
@@ -185,6 +186,7 @@ async def test_historical_photocard_row_never_exposes_a_body_metric():
         article_repo=MagicMock(get_for_submission=AsyncMock(return_value=[])),
     )
     assert response.claim_scope.value == "HEADLINE_ONLY"
-    assert response.scores.body_similarity is None and response.scores.body_keyword_coverage is None
-    assert response.manipulation_flags.check_states == {}  # legacy: "not evaluated", not "passed"
+    assert response.legacy_result is True
+    assert response.content_status is None and response.ai_content_status is None
+    assert response.analysis.body_similarity is None and response.analysis.headline_alteration is None
     assert response.pipeline_version is None
