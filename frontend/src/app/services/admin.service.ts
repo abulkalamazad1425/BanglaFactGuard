@@ -4,6 +4,7 @@ import { ApiService } from './api.service';
 import { API_ENDPOINTS } from '../core/constants/api-endpoints.constant';
 import {
   ExpertResponse,
+  AdminDashboard,
   AdminStats,
   CreateExpertRequest,
   UpdateExpertRequest,
@@ -62,6 +63,11 @@ export class AdminService {
   /** GET /api/v1/admin/stats */
   getStats(): Observable<AdminStats> {
     return this.api.get<AdminStats>(API_ENDPOINTS.ADMIN_STATS);
+  }
+
+  /** GET /api/v1/admin/dashboard */
+  getDashboard(): Observable<AdminDashboard> {
+    return this.api.get<AdminDashboard>(API_ENDPOINTS.ADMIN_DASHBOARD);
   }
 
   /** GET /api/v1/admin/credibility-tiers */

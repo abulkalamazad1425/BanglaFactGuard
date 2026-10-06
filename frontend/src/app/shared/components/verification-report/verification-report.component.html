@@ -1,42 +1,71 @@
-<ng-template #findings><section class="report-summary" aria-label="Verification findings">
+@if (!reviewer) {
+  <section class="decision-panel" [class.decided]="r.is_finalized && r.overall_verdict" aria-labelledby="final-decision-heading">
+    <span class="eyebrow">FINAL DECISION</span>
+    @if (r.is_finalized && r.overall_verdict) {
+      <div class="decision-row">
+        <h2 id="final-decision-heading">Final decision</h2>
+        <app-verdict-badge class="decision-badge" [overallVerdict]="r.overall_verdict" />
+      </div>
+      <p>
+        @if (r.decided_by_admin) {
+          Expert reviewers could not agree, so an <strong>administrator made this final decision</strong>.
+        } @else {
+          Decided by the expert reviewers’ votes.
+        }
+        The preliminary AI findings below are kept for reference; they are not the final decision.
+      </p>
+      <app-voting-details [submissionId]="r.submission_id" />
+    } @else {
+      <h2 id="final-decision-heading">Under review</h2>
+      <p>Expert review pending. No final decision has been made yet; the findings below are preliminary and automated.</p>
+    }
+  </section>
+}
+
+<ng-template #findings><section class="report-summary" aria-labelledby="preliminary-heading">
   <div class="summary-heading">
-    <div><span class="eyebrow">{{ reviewer ? 'RECORDED FINDINGS / SUPPORTING YOUR REVIEW' : 'VERIFICATION FINDINGS' }}</span>
-      @if (r.is_finalized && r.overall_verdict) {<h2>Final result</h2><app-verdict-badge [overallVerdict]="r.overall_verdict" />}
-      @else {<h2>Preliminary result</h2><p>Expert review pending.</p>}
+    <div><span class="eyebrow">{{ reviewer ? 'RECORDED FINDINGS / SUPPORTING YOUR REVIEW' : 'PRELIMINARY AI VERIFICATION' }}</span>
+      <h2 id="preliminary-heading">Preliminary result</h2>
+      <p>Automated checks against the claimed news outlet. These findings are not the final decision.</p>
     </div>
     <div class="scope-context"><span>Comparison scope</span><strong [title]="scopeHelp">{{ scopeLabel }}</strong>@if (r.cached) {<small>Previous result reused</small>}</div>
   </div>
-  <div class="findings-grid">
-    <section><span class="finding-number">01 / SOURCE</span><h3>{{ sourceTitle }}</h3>
-      @if (r.source_status === 'CONFIRMED') {<p>A corresponding report was found in your selected news source.</p>}
-      @else if (r.source_status === 'NOT_FOUND') {<p>No corresponding report was found by the search. This does not establish that the news is false.</p>}
-      @else {<p>No conclusion can be drawn about whether the outlet published this report. Try a new check later.</p>}
-      @if (r.normalized_source) {<span class="finding-detail">{{ r.normalized_source }}</span>}
+  <div class="findings-grid" [class.single]="!articleFound">
+    <section [ngClass]="articleFound ? 'tone-matched' : 'tone-none'">
+      <span class="finding-number">01 / {{ SOURCE_QUESTION.toUpperCase() }}</span>
+      <h3><span class="finding-label">{{ SOURCE_QUESTION }}:</span> {{ sourceLabel }}</h3>
+      <p>{{ sourceExplanation }}</p>
+      @if (r.source_status === 'NOT_FOUND') {<p class="finding-detail strong">{{ NOT_FOUND_IN_CLAIMED_SOURCE }}. Headline, date and body comparisons need a relevant article, so they are not shown.</p>}
+      @if (r.normalized_source) {<span class="finding-detail">Claimed outlet: {{ r.normalized_source }}</span>}
     </section>
-    <section [ngClass]="'tone-' + headline.tone"><span class="finding-number">02 / HEADLINE ALTERATION</span><h3>{{ headline.title }}</h3><p>{{ headline.summary }}</p>
-      @if (headlineDetail?.exact_match) {<span class="finding-detail">Exact match with the source title</span>}
-    </section>
-    <section><span class="finding-number">03 / DATE</span><h3>{{ r.date_status === 'MATCHED' ? 'Date matched' : r.date_status === 'MISMATCHED' ? 'Date mismatch' : r.date_status === 'INCOMPLETE' ? 'Date check incomplete' : 'Not compared' }}</h3><p>{{ r.date_status === 'MATCHED' ? 'The claimed publication date agrees with the source date.' : r.date_status === 'MISMATCHED' ? 'The claimed publication date differs from the source. This alone does not mean the news is false.' : r.date_status === 'INCOMPLETE' ? 'The source report’s own publication date could not be determined.' : 'No claimed date, or no source report to compare with.' }}</p></section>
+    @if (articleFound) {
+      <section [ngClass]="'tone-' + headline.tone"><span class="finding-number">02 / HEADLINE ALTERATION</span>
+        <h3><span class="finding-label">Headline:</span> {{ headline.title }}</h3><p>{{ headline.summary }}</p>
+      </section>
+      @if (showDate) {
+        <section [ngClass]="r.date_status === 'MATCHED' ? 'tone-matched' : r.date_status === 'MISMATCHED' ? 'tone-altered' : 'tone-none'"><span class="finding-number">03 / DATE</span>
+          <h3><span class="finding-label">Date:</span> {{ dateLabel }}</h3><p>{{ dateExplanation }}</p>
+        </section>
+      }
+    }
   </div>
   @if (r.analysis?.search; as search) {@if (search.failed || search.skipped) {<div class="report-note">Some searches were unavailable, so the evidence may be incomplete.</div>}}
   @if (r.legacy_result) {<div class="report-note">This result was recorded by an earlier version of the checker. Its old content finding is not shown as a Headline Alteration verdict.</div>}
-  @if (r.was_overridden) {<div class="report-note"><strong>Experts changed the automated finding after review.</strong><p>The findings above reflect the expert-reviewed outcome. The sections below keep the original automated evidence.</p><details><summary>See the earlier findings</summary><app-verdict-badge [sourceStatus]="r.ai_source_status" [contentStatus]="r.ai_content_status" [dateStatus]="r.ai_date_status" /></details></div>}
 </section></ng-template>
-@if (!reviewer) {<ng-container [ngTemplateOutlet]="findings" />}
+<ng-container [ngTemplateOutlet]="findings" />
 
 <section class="evidence-section report-section">
-  <div class="section-heading"><span class="eyebrow">SOURCE EVIDENCE</span><h2>{{ r.source_status === 'CONFIRMED' ? 'Read the corresponding report' : 'What the source search returned' }}</h2><p>{{ r.source_status === 'CONFIRMED' ? 'Open the original publication and compare its wording with the submitted claim.' : 'A retrieved candidate is not a confirmed match. Do not treat it as proof of this claim.' }}</p></div>
+  <div class="section-heading"><span class="eyebrow">SOURCE EVIDENCE</span><h2>{{ articleFound ? 'Read the relevant article' : 'What the source search returned' }}</h2><p>{{ articleFound ? 'Open the original publication and compare its wording with the submitted claim.' : 'A retrieved candidate is not a relevant article from the claimed source. Do not treat it as proof of this claim.' }}</p></div>
   @if (r.matched_articles.length) {
     @for (art of r.matched_articles.slice(0, 1); track art.url) {
-      <article class="article-card"><span class="source-domain">{{ host(art.url) }}</span><h3><a [href]="art.url" target="_blank" rel="noopener noreferrer" class="article-title">{{ art.title || 'View source article' }} <span aria-hidden="true">↗</span></a></h3><div class="article-meta">@if (art.author) {<span>{{ art.author }}</span>}@if (art.published_date) {<span>Published {{ art.published_date }}</span>}</div>
+      <article class="article-card"><span class="source-domain">{{ host(art.url) }}</span><h3><a [href]="art.url" target="_blank" rel="noopener noreferrer" class="article-title">{{ art.title || 'View source article' }} <span aria-hidden="true">↗</span><span class="sr-only"> (opens in a new tab)</span></a></h3><div class="article-meta">@if (art.author) {<span>{{ art.author }}</span>}@if (art.published_date) {<span>Published {{ art.published_date }}</span>}</div>
       @if (art.body) {<details [open]="reviewer"><summary>Read the retrieved article text</summary><p class="article-body">{{ art.body }}</p></details>} @else {<p class="section-sub">Article text was not available. Open the source link to inspect the publication.</p>}
       <a [href]="art.url" target="_blank" rel="noopener noreferrer" class="source-link">Open original source <span aria-hidden="true">↗</span><span class="sr-only"> (opens in a new tab)</span></a></article>
     }
   } @else {<div class="evidence-empty"><strong>No source article is available in this saved result.</strong><p>This limits what you can independently compare. It is not evidence that the news is false.</p></div>}
 </section>
 
-@if (reviewer) {<ng-container [ngTemplateOutlet]="findings" />}
-
+@if (articleFound) {
 <section class="report-section" aria-labelledby="headline-alteration-heading">
   <div class="section-heading"><span class="eyebrow">HEADLINE ALTERATION</span><h2 id="headline-alteration-heading">Claim headline vs. source title</h2><p>Only the source article's title is compared with the claim headline — never the article body. The same rule applies to photo cards and typed claims.</p></div>
   <div class="headline-compare">
@@ -46,8 +75,7 @@
     @if (headlineDetail?.source_url) {<div><span>Source URL</span><a [href]="headlineDetail!.source_url" target="_blank" rel="noopener noreferrer">{{ headlineDetail!.source_url }}<span class="sr-only"> (opens in a new tab)</span></a></div>}
   </div>
   <div class="headline-verdict" [ngClass]="'tone-' + headline.tone" role="status">
-    <strong>{{ headline.title }}</strong>
-    @if (headlineDetail?.exact_match) {<span class="pill">Exact match</span>}
+    <strong>Headline: {{ headline.title }}</strong>
     @if (headlineDetail?.reason) {<p>{{ readableExplanation(headlineDetail!.reason) }}</p>} @else {<p>{{ headline.summary }}</p>}
   </div>
   @if (headlineDetail?.differences?.length) {
@@ -69,8 +97,9 @@
       <p class="section-sub">Model outputs support the decision rules; they are not probabilities that the claim is true.</p>
     </details>
   }
-  <p class="section-sub">What do "matched" and "altered" mean? <a routerLink="/faq" fragment="headline-alteration">Read the FAQ</a>.</p>
+  <p class="section-sub">What do Exact Matched, Meaning Preserved and Altered mean? <a routerLink="/faq" fragment="headline-alteration">Read the FAQ</a>.</p>
 </section>
+}
 
 @if (bodyApplicable) {
   <section class="report-section" aria-labelledby="body-similarity-heading">
@@ -98,7 +127,7 @@
   </section>
 }
 
-@if (r.analysis?.date; as d) {
+@if (showDate && r.analysis?.date; as d) {
   <section class="report-section"><div class="section-heading"><span class="eyebrow">DATE</span><h2>Publication date comparison</h2></div>
     <div class="date-pair"><div><span>Claimed date</span><strong>{{ d.claimed_date ? (d.claimed_date | date:'d MMM y') : 'Not provided' }}</strong></div><div><span>Source publication date</span><strong>{{ d.article_date ? (d.article_date | date:'d MMM y') : 'Unavailable' }}</strong></div></div>
     <p class="section-sub">Calendar dates are compared in Asia/Dhaka. @if (d.tz_assumed) { The source timezone was assumed. } A date mismatch alone is not a false-news verdict.</p>
@@ -107,7 +136,7 @@
 
 @if (reviewer && correspondenceRows.length) {
   <section class="report-section"><details class="measurements"><summary>Source correspondence measurements</summary>
-    <p class="section-sub">Used to decide whether the outlet carried this report — not the headline verdict and not a probability of truth.</p>
+    <p class="section-sub">Used to decide whether a relevant article was found in the claimed outlet — not the headline verdict and not a probability of truth.</p>
     <dl class="semantic-grid">@for (row of correspondenceRows; track row.key) {<div><dt>{{ row.label }}</dt><dd>{{ row.display }}</dd>@if (row.note) {<small>{{ readableExplanation(row.note) }}</small>}</div>}</dl>
   </details></section>
 }

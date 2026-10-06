@@ -141,6 +141,17 @@ class ExpertReview(UUIDMixin, TimestampMixin, ReprMixin, Base):
     status: Mapped[str] = mapped_column(
         String(50), nullable=False, default="pending", index=True
     )
+    is_admin_decision: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        comment=(
+            "True for the administrator's decision on an ESCALATED claim. That "
+            "overall vote IS the final verdict; earlier expert votes cannot "
+            "override it."
+        ),
+    )
 
     submission: Mapped["Submission"] = relationship(
         "Submission",
@@ -165,15 +176,24 @@ class ExpertReview(UUIDMixin, TimestampMixin, ReprMixin, Base):
 class VotingConfig(UUIDMixin, TimestampMixin, ReprMixin, Base):
     """Admin-configurable voting parameters — a single-row table (the oldest
     row is always the one in effect) so none of these are fixed settings in
-    code. Finalization requires ALL of:
+    code.
+
+    Only the reviewers' OVERALL vote (Real/Fake/Misleading/Altered) decides a
+    claim. It finalizes when ALL of these hold for the weighted overall tally:
         leader's weighted score   >= verified_threshold        (T)
         number of votes cast      >= min_expert_votes           (M)
         leader's score - runner-up's score >= lead_margin
-    checked independently for every applicable dimension (Overall always;
-    Source/Content/Date additionally for SOURCE_BASED/PHOTO_CARD, with
-    Content/Date skipped once Source's own leader is NOT_FOUND). A claim
-    that exhausts max_review_votes or max_review_hours without clearing all
-    of the above escalates to admin review instead of finalizing.
+        the leader is unique (an exact tie never finalizes)
+    The supplementary source/headline/date assessments are recorded for
+    reference only and never affect finalization or escalation.
+
+    Escalation: a claim still undecided ESCALATES to admin review as soon as
+    ANY configured limit is exceeded — votes cast >= max_review_votes, OR
+    hours since submission >= max_review_hours. A NULL limit is "not
+    configured" and is never treated as exceeded; with both NULL a claim stays
+    in expert review until it reaches consensus. The time limit is enforced
+    by a background sweep (`escalation.py`), so it does not depend on a new
+    vote or a page visit.
     """
 
     __tablename__ = "voting_config"
@@ -215,11 +235,6 @@ class VotingConfig(UUIDMixin, TimestampMixin, ReprMixin, Base):
         Integer,
         nullable=True,
         comment="Escalate to admin after this many hours without reaching consensus (NULL = no cap)",
-    )
-    max_tier_weight: Mapped[float | None] = mapped_column(
-        Float,
-        nullable=True,
-        comment="Upper bound on any credibility_weight_tiers.weight value (NULL = no cap)",
     )
 
     __table_args__ = (

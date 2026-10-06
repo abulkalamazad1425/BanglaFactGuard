@@ -1,10 +1,32 @@
 .mgmt-page { background: var(--bg-base); min-height: 100%; }
-.page-header { margin-bottom: 32px; }
-.header-content { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px; h1 { margin-bottom: 8px; } p { color: var(--text-secondary); } }
-.table-card { padding: 0; overflow: hidden; }
-.action-btns { display: flex; gap: 8px; flex-wrap: wrap; }
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 24px; }
-.modal-card { max-width: 420px; width: 100%; h3 { font-size: 1.1rem; } }
-.form-group { margin-bottom: 20px; }
+.page-body { padding-top: 40px; padding-bottom: 72px; }
+.page-header { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 16px; margin-bottom: 24px;
+  h1 { font-size: clamp(28px, 4vw, 38px); margin: 4px 0 6px; } .lede { margin: 0; } }
+.eyebrow { font-size: 11px; font-weight: 750; letter-spacing: .12em; color: var(--primary); margin: 0; }
+.header-links { display: flex; flex-wrap: wrap; gap: 10px; }
+.table-card { padding: 0; }
+/* The table scrolls inside its card instead of overflowing or squeezing:
+   fixed column widths keep alignment identical in Active and Inactive rows. */
+.table-scroll { overflow-x: auto; border-radius: inherit; &:focus-visible { outline: 3px solid var(--primary); outline-offset: -3px; } }
+.experts-table { table-layout: fixed; min-width: 1150px; }
+/* Pixel widths sized to the content: the Actions column always fits its three
+   buttons (Activate and Deactivate share one width), so toggling a row's
+   status can never widen a column or overflow the table. */
+.col-name { width: 150px; } .col-email { width: 210px; } .col-expertise { width: 130px; } .col-cred { width: 120px; }
+.col-votes { width: 70px; } .col-status { width: 120px; } .col-actions { width: 350px; }
+.experts-table td { vertical-align: middle; }
+.cell-name { font-weight: 600; overflow-wrap: anywhere; }
+.cell-wrap { overflow-wrap: anywhere; color: var(--text-secondary); font-size: 14px; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.status-badge { min-width: 92px; justify-content: center; }
+.inactive-row td { background: var(--bg-base); }
+.inactive-row .cell-name { color: var(--text-secondary); }
+.action-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.action-btns .btn { white-space: nowrap; }
+.toggle-btn { min-width: 104px; justify-content: center; }
+.empty-cell { text-align: center; padding: 40px; color: var(--text-muted); }
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.modal-card { max-width: 440px; width: 100%; h2 { font-size: 1.15rem; margin-bottom: 18px; } }
+.form-group { margin-bottom: 18px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 12px; }
 .loading-overlay { display: flex; justify-content: center; padding: 80px; }

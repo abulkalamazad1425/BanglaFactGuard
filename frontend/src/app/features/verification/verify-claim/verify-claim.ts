@@ -1,6 +1,12 @@
 import { requestError } from '../../../shared/utils/presentation';
 import { Component, OnDestroy, OnInit, inject } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { AbstractControl, FormBuilder, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
+
+/** Like minLength, but whitespace never counts (the API strips it). */
+export function trimmedMinLength(min: number) {
+  return (c: AbstractControl): ValidationErrors | null =>
+    (String(c.value ?? '').trim().length >= min ? null : { trimmedMinLength: { min } });
+}
 import { Router, RouterLink } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { ToastService } from '../../../shared/services/toast.service';
@@ -52,8 +58,10 @@ export class VerifyClaimComponent implements OnInit, OnDestroy {
   private pollTimer: ReturnType<typeof setInterval> | null = null;
 
   form = this.fb.group({
-    headline: ['', [Validators.required, Validators.minLength(10)]],
-    claimed_source_text: ['', [Validators.required]],
+    // Same rules as the API (VerificationRequest): headline >= 5 non-blank
+    // characters, claimed outlet required; article text and date optional.
+    headline: ['', [Validators.required, trimmedMinLength(5), Validators.maxLength(2000)]],
+    claimed_source_text: ['', [Validators.required, trimmedMinLength(1)]],
     body_text: [''],
     published_date: [''],
     force_refresh: [false],
@@ -85,6 +93,7 @@ export class VerifyClaimComponent implements OnInit, OnDestroy {
   onSubmit(): void {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
+      document.getElementById(this.form.get('headline')?.invalid ? 'verify-claim-headline' : 'verify-claim-claimed_source_text')?.focus();
       return;
     }
 

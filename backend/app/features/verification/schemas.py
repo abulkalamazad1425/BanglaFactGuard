@@ -10,6 +10,7 @@ from app.core.constants import (
     ClaimScope,
     ContentStatus,
     DateStatus,
+    HeadlineAlterationStatus,
     HeadlineCheckStatus,
     MetricState,
     OverallVerdict,
@@ -251,12 +252,15 @@ class VerificationResponse(BaseModel):
         default=False,
         description="True once expert review has finalized overall_verdict.",
     )
+    decided_by_admin: bool = Field(
+        default=False,
+        description="True when an administrator made the final decision on an escalated claim.",
+    )
     was_overridden: bool = Field(
         default=False,
         description=(
-            "True if expert review's finalized source/content/date status "
-            "differs from the AI's original structured call on any dimension. "
-            "Not applicable to overall_verdict, which the AI never sets."
+            "Deprecated, always false: reviewers' supplementary assessments no "
+            "longer replace the preliminary findings, which are always the AI's own."
         ),
     )
     ai_source_status: SourceStatus | None = Field(
@@ -268,9 +272,9 @@ class VerificationResponse(BaseModel):
     source_status: SourceStatus = Field(
         ...,
         description=(
-            "The displayed Source verdict — expert-finalized if available, "
-            "otherwise the AI's call (see ai_source_status for the AI's "
-            "original, which this may now differ from)."
+            "Was a relevant article found in the claimed source? CONFIRMED is "
+            "shown as Found, NOT_FOUND as Not Found (\"Not found in claimed "
+            "source\"). The AI's preliminary finding."
         ),
     )
     content_status: ContentStatus | None = Field(
@@ -281,9 +285,20 @@ class VerificationResponse(BaseModel):
             "reached - see headline_check_status for why."
         ),
     )
+    headline_status: HeadlineAlterationStatus | None = Field(
+        default=None,
+        description=(
+            "Display status of the Headline Alteration verdict: EXACT_MATCHED | "
+            "MEANING_PRESERVED (both are content_status MATCHED) | ALTERED."
+        ),
+    )
     headline_check_status: HeadlineCheckStatus | None = Field(
         default=None,
         description="Processing/availability status of the Headline Alteration check (separate from the verdict).",
+    )
+    claimed_published_date: date | None = Field(
+        default=None,
+        description="The publication date the submitter claimed. Date comparison is shown only when this is set.",
     )
     date_status: DateStatus | None = Field(
         default=None,

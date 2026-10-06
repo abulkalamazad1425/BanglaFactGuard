@@ -44,7 +44,7 @@ async def test_archive_counts_and_review_filters_share_scope():
 
 
 @pytest.mark.asyncio
-async def test_archive_dates_include_end_day_and_filters_use_reviewed_findings():
+async def test_archive_dates_include_end_day_and_filters_use_preliminary_findings():
     engine, factory = await make_session_factory()
     try:
         async with engine.begin() as conn:
@@ -56,9 +56,11 @@ async def test_archive_dates_include_end_day_and_filters_use_reviewed_findings()
             later.created_at = datetime(2026, 10, 3, 0, 0, tzinfo=timezone.utc)
             await session.flush()
             repo = SubmissionRepository(session)
-            rows, total = await repo.search(date_from=date(2026, 10, 2), date_to=date(2026, 10, 2), content_status=ContentStatus.ALTERED)
+            # Finding filters match the AI's preliminary call; a legacy
+            # supplementary final_content_status is not a finding.
+            rows, total = await repo.search(date_from=date(2026, 10, 2), date_to=date(2026, 10, 2), content_status=ContentStatus.MATCHED)
             assert total == 1 and rows[0].id == sub.id
-            _, total = await repo.search(date_to=date(2026, 10, 2), content_status=ContentStatus.MATCHED)
+            _, total = await repo.search(date_to=date(2026, 10, 2), content_status=ContentStatus.ALTERED)
             assert total == 0
             _, total = await repo.search(date_to=date(2026, 10, 2), review_state='review')
             assert total == 0

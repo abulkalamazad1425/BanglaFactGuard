@@ -112,6 +112,12 @@ class Submission(UUIDMixin, TimestampMixin, ReprMixin, Base):
         comment="Short, user-presentable reason when status is FAILED (e.g. no readable headline in the image).",
     )
 
+    escalated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="When expert review escalated this claim to admin review (NULL otherwise).",
+    )
+
     claimed_source: Mapped["VerifiedSource | None"] = relationship(
         "VerifiedSource",
         primaryjoin="Submission.claimed_source_id == VerifiedSource.id",

@@ -8,19 +8,26 @@ import { CommonModule } from '@angular/common';
 import { ExpertService } from '../../../services/expert.service';
 import { ToastService } from '../../../shared/services/toast.service';
 import { ExpertQueueItem } from '../../../models/expert.model';
-import { VerificationResponse, MatchedArticle } from '../../../models/verification.model';
+import { VerificationResponse } from '../../../models/verification.model';
 import { VerificationReportComponent } from '../../../shared/components/verification-report/verification-report.component';
 import { VerificationService } from '../../../services/verification.service';
 import { AuthService } from '../../../services/auth.service';
 import { SourceStatus, ContentStatus, DateStatus, OverallVerdict } from '../../../models/verification.model';
 
-const OVERALL_VERDICTS: { value: OverallVerdict; label: string; icon: string; cls: string }[] = [
-  { value: 'REAL', label: 'Real', icon: '✓', cls: 'option-true' },
-  { value: 'FAKE', label: 'Fake', icon: '✗', cls: 'option-false' },
-  { value: 'MISLEADING', label: 'Misleading', icon: '◑', cls: 'option-partial' },
-  { value: 'ALTERED', label: 'Altered', icon: '✎', cls: 'option-partial' },
+const OVERALL_VERDICTS: { value: OverallVerdict; label: string; icon: string }[] = [
+  { value: 'REAL', label: 'Real', icon: '✓' },
+  { value: 'FAKE', label: 'Fake', icon: '✗' },
+  { value: 'MISLEADING', label: 'Misleading', icon: '◑' },
+  { value: 'ALTERED', label: 'Altered', icon: '✎' },
 ];
 
+/**
+ * One claim's review workspace. Experts vote on open claims. An admin opens
+ * the same page from the admin review queue: on an ESCALATED claim the
+ * admin's overall vote is the final decision; every other claim is view-only.
+ * Only the overall vote ("Cast your vote based on your findings") decides a
+ * claim — the supplementary findings are optional and recorded for reference.
+ */
 @Component({
   selector: 'app-expert-review-detail',
   standalone: true,
@@ -36,6 +43,7 @@ const OVERALL_VERDICTS: { value: OverallVerdict; label: string; icon: string; cl
 export class ExpertReviewDetailComponent implements OnInit {
   readonly predictionLabel = predictionLabel;
   readonly loadError = signal(false);
+  readonly forbidden = signal(false);
   readonly evidenceError = signal(false);
   readonly voteError = signal('');
   readonly photocardDetails = signal<PhotoCardResultResponse | null>(null);
@@ -62,74 +70,35 @@ export class ExpertReviewDetailComponent implements OnInit {
   readonly selectedDate = signal<DateStatus | null>(null);
   formSubmitted = false;
 
-  /** Source/Content/Date only apply to SOURCE_BASED/PHOTO_CARD claims — every
-   *  type votes on Overall, but multimodal has no structured sub-dimensions. */
+  readonly queueLink = computed(() => this.isAdmin() ? '/admin/review-queue' : '/expert/queue');
+  /** Source/headline/date findings only apply to SOURCE_BASED/PHOTO_CARD claims. */
   readonly isStructuredType = computed(() => this.claim()?.submission_type !== 'MULTIMODAL');
   readonly needsContentAndDate = computed(() => this.selectedSource() === 'CONFIRMED');
-
-  // Requirement: at most one top article is ever surfaced on this page, with its full body.
-  readonly topArticle = computed<MatchedArticle | null>(() => {
-    const articles = this.aiResult()?.matched_articles;
-    return articles && articles.length > 0 ? articles[0] : null;
-  });
+  readonly isAdminDecision = computed(() => this.isAdmin() && this.claim()?.decision_mode === 'ADMIN_FINAL');
+  readonly canVote = computed(() => !!this.claim()?.can_vote);
 
   form = this.fb.group({
     justification: ['', [Validators.required, Validators.minLength(50)]],
   });
 
-  get justInvalid() { return this.form.get('justification')?.invalid && this.form.get('justification')?.touched; }
+  get justInvalid() { return !!(this.form.get('justification')?.invalid && (this.form.get('justification')?.touched || this.formSubmitted)); }
   get charCount() { return (this.form.value.justification || '').length; }
 
   selectOverall(val: OverallVerdict): void { this.selectedOverall.set(val); }
 
-  selectSource(val: SourceStatus): void {
+  selectSource(val: SourceStatus | null): void {
     this.selectedSource.set(val);
-    if (val === 'NOT_FOUND') {
-      // Content/Date are moot once the source itself isn't confirmed.
+    if (val !== 'CONFIRMED') {
       this.selectedContent.set(null);
       this.selectedDate.set(null);
     }
   }
 
-  selectContent(val: ContentStatus): void { this.selectedContent.set(val); }
-  selectDate(val: DateStatus): void { this.selectedDate.set(val); }
+  selectContent(val: ContentStatus | null): void { this.selectedContent.set(val); }
+  selectDate(val: DateStatus | null): void { this.selectedDate.set(val); }
 
-  /** True once the vote is complete enough to submit. Overall is always
-   *  required; Source (and, if Confirmed, Content/Date) are only required
-   *  for SOURCE_BASED/PHOTO_CARD claims. */
-  readonly voteComplete = computed(() => {
-    if (!this.selectedOverall()) return false;
-    if (!this.isStructuredType()) return true;
-
-    const source = this.selectedSource();
-    if (!source) return false;
-    if (source === 'NOT_FOUND') return true;
-    return !!this.selectedContent() && !!this.selectedDate();
-  });
-
-  /** A non-blocking heads-up when Overall and the structured sub-verdicts
-   *  seem to pull in different directions — the expert's own editorial call
-   *  on Overall always wins, this is just a sanity nudge. */
-  readonly inconsistencyWarning = computed<string | null>(() => {
-    const overall = this.selectedOverall();
-    if (!overall || !this.isStructuredType()) return null;
-    const source = this.selectedSource();
-    const content = this.selectedContent();
-
-    if (overall === 'REAL' && source === 'NOT_FOUND') {
-      return 'You selected Real, but the claimed source was not found. Explain the independent evidence supporting your overall decision. A missing report alone does not prove the claim false.';
-    }
-    if (overall === 'REAL' && content === 'ALTERED') {
-      return 'Overall is "Real" but Headline Alteration is "Altered" — consider whether Misleading or Altered fits the Overall verdict better.';
-    }
-    if (overall === 'FAKE' && source === 'CONFIRMED' && content === 'MATCHED') {
-      return 'Overall is "Fake" even though Source is confirmed and the headline matches — double-check this is intended.';
-    }
-    if (overall === 'ALTERED' && content === 'MATCHED') {
-      return 'Overall is "Altered" but Headline Alteration is "Matched" — consider whether Real fits better if nothing was actually changed.';
-    }
-    return null;
-  });
+  /** Only the overall vote (plus the justification) is required. */
+  readonly voteComplete = computed(() => !!this.selectedOverall());
 
   ngOnInit(): void {
     this.loadReview();
@@ -138,6 +107,7 @@ export class ExpertReviewDetailComponent implements OnInit {
   loadReview(): void {
     this.loading.set(true);
     this.loadError.set(false);
+    this.forbidden.set(false);
     this.evidenceError.set(false);
     const claimId = this.route.snapshot.paramMap.get('id');
     if (!claimId) { this.loading.set(false); this.loadError.set(true); return; }
@@ -156,21 +126,25 @@ export class ExpertReviewDetailComponent implements OnInit {
           return;
         }
 
-        // Also fetch the full AI prediction details (includes full article bodies)
         this.verificationSvc.getResult(claimId).subscribe({
           next: res => { this.aiResult.set(res); this.loading.set(false); },
           error: () => { this.loading.set(false); this.evidenceError.set(true); }
         });
       },
-      error: () => { this.loading.set(false); this.loadError.set(true); },
+      error: err => {
+        this.loading.set(false);
+        if (err?.status === 403) this.forbidden.set(true); else this.loadError.set(true);
+      },
     });
   }
 
   onSubmit(): void {
-    if (this.isAdmin()) { return; } // administrators may view but never vote
+    if (!this.canVote()) return;
     this.formSubmitted = true;
     if (this.form.invalid || !this.voteComplete()) {
       this.form.markAllAsTouched();
+      const target = !this.voteComplete() ? 'overall-REAL' : 'expert-review-detail-justification';
+      document.getElementById(target)?.focus();
       return;
     }
     const claimId = this.route.snapshot.paramMap.get('id');
@@ -178,23 +152,20 @@ export class ExpertReviewDetailComponent implements OnInit {
     this.voting.set(true);
     this.voteError.set('');
 
+    const structured = this.isStructuredType();
     this.expertSvc.submitVote(claimId, {
       overall_verdict: this.selectedOverall()!,
-      source_status: this.isStructuredType() ? this.selectedSource() : null,
-      content_status: this.isStructuredType() ? this.selectedContent() : null,
-      date_status: this.isStructuredType() ? this.selectedDate() : null,
+      source_status: structured ? this.selectedSource() : null,
+      content_status: structured && this.needsContentAndDate() ? this.selectedContent() : null,
+      date_status: structured && this.needsContentAndDate() ? this.selectedDate() : null,
       justification: this.form.value.justification as string,
     }).subscribe({
-      next: () => { this.submitted.set(true); this.voting.set(false); this.toast.success('Vote submitted successfully!'); },
-      error: err => { this.voting.set(false); this.voteError.set(requestError(err, 'Your assessment could not be submitted. Please try again.')); this.toast.error(this.voteError()); },
+      next: () => {
+        this.submitted.set(true);
+        this.voting.set(false);
+        this.toast.success(this.isAdminDecision() ? 'Final decision recorded.' : 'Vote submitted.');
+      },
+      error: err => { this.voting.set(false); this.voteError.set(requestError(err, 'Your vote could not be submitted. Please try again.')); },
     });
-  }
-
-  getHost(url: string): string {
-    try {
-      return new URL(url).hostname.replace('www.', '');
-    } catch {
-      return '';
-    }
   }
 }

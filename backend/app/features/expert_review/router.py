@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -68,10 +69,16 @@ async def get_queue(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     q: str = Query(default="", max_length=200),
+    state: Literal["all", "escalated", "review"] = Query(
+        default="all",
+        description="Admin queue only: all | escalated (awaiting an admin decision) | review (open, view-only).",
+    ),
     current_user: User = Depends(_EXPERT_OR_ADMIN),
     svc: ExpertReviewService = Depends(_get_service),
 ) -> list[ExpertQueueItemResponse]:
-    return await svc.get_queue(current_user.id, limit=limit, offset=offset, q=q)
+    return await svc.get_queue(
+        current_user.id, limit=limit, offset=offset, q=q, viewer_role=current_user.role, state=state
+    )
 
 
 @router.get(
@@ -84,19 +91,27 @@ async def get_queue_item(
     current_user: User = Depends(_EXPERT_OR_ADMIN),
     svc: ExpertReviewService = Depends(_get_service),
 ) -> ExpertQueueItemResponse:
-    return await svc.get_queue_item(submission_id)
+    # Escalated claims are refused to experts here (403), not just hidden.
+    return await svc.get_queue_item(
+        submission_id, viewer_id=current_user.id, viewer_role=current_user.role
+    )
 
 
 @router.post(
     "/queue/{submission_id}/vote",
     response_model=ExpertReviewResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Submit expert vote on a claim",
+    summary="Submit a vote on a claim (experts: open claims; admins: escalated claims only)",
+    description=(
+        "Experts vote on claims in expert review. An administrator may vote only "
+        "on an ESCALATED claim, and that overall vote becomes the final decision; "
+        "on every other claim admins are view-only (403)."
+    ),
 )
 async def submit_vote(
     submission_id: uuid.UUID,
     body: ExpertVoteRequest,
-    current_user: User = Depends(_EXPERT_ONLY),
+    current_user: User = Depends(_EXPERT_OR_ADMIN),
     svc: ExpertReviewService = Depends(_get_service),
 ) -> ExpertReviewResponse:
     return await svc.submit_vote(
@@ -107,6 +122,7 @@ async def submit_vote(
         content_status=body.content_status,
         date_status=body.date_status,
         justification=body.justification,
+        voter_role=current_user.role,
     )
 
 

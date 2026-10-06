@@ -22,8 +22,9 @@ export interface FaqTopic {
 export class FaqComponent {
   readonly topics: FaqTopic[] = [
     { id: 'headline-alteration', question: 'What is Headline Alteration?' },
-    { id: 'matched-altered', question: 'What do “matched” and “altered” mean?' },
-    { id: 'source-not-found', question: 'What does “Source not found” mean?' },
+    { id: 'matched-altered', question: 'What do Exact Matched, Meaning Preserved and Altered mean?' },
+    { id: 'source-not-found', question: 'What do “Found” and “Not found in claimed source” mean?' },
+    { id: 'final-decision', question: 'Who makes the final decision?' },
     { id: 'body-scores', question: 'What are the body similarity scores?' },
     { id: 'score-range', question: 'How should I read a score?' },
     { id: 'not-a-verdict', question: 'Why are body scores not a verdict?' },

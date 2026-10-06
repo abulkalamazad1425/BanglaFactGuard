@@ -35,11 +35,12 @@ import { NotificationService } from '../../../services/notification.service';
           <a routerLink="/multimodal" routerLinkActive="active" class="nav-link">Text &amp; image</a>
           <a routerLink="/photo-card" routerLinkActive="active" class="nav-link">Photo card</a>
           <a routerLink="/dashboard" routerLinkActive="active" class="nav-link">Fact Explorer</a>
-          @if (isExpert()) {
+          @if (isExpert() && !isAdmin()) {
             <a routerLink="/expert/queue" routerLinkActive="active" class="nav-link nav-link--expert">Expert Queue</a>
           }
           @if (isAdmin()) {
-            <a routerLink="/admin" routerLinkActive="active" class="nav-link nav-link--admin">Admin</a>
+            <a routerLink="/admin/review-queue" routerLinkActive="active" class="nav-link nav-link--admin">Review queue</a>
+            <a routerLink="/admin" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}" class="nav-link nav-link--admin">Admin</a>
           }
         </div>
 
@@ -107,10 +108,11 @@ import { NotificationService } from '../../../services/notification.service';
           @if (isLoggedIn()) {
             <a routerLink="/history" class="mobile-link" (click)="closeMobileMenu()">My Submissions</a>
             <a routerLink="/notifications" class="mobile-link" (click)="closeMobileMenu()">Notifications</a>
-            @if (isExpert()) {
+            @if (isExpert() && !isAdmin()) {
               <a routerLink="/expert/queue" class="mobile-link" (click)="closeMobileMenu()">Expert Queue</a>
             }
             @if (isAdmin()) {
+              <a routerLink="/admin/review-queue" class="mobile-link" (click)="closeMobileMenu()">Review queue</a>
               <a routerLink="/admin" class="mobile-link" (click)="closeMobileMenu()">Admin Panel</a>
             }
             <button class="mobile-link mobile-link--danger" (click)="logout()">Logout</button>

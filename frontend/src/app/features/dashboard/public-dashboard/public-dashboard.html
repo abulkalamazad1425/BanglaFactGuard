@@ -1,7 +1,7 @@
 <div class="explorer-page">
   <div class="container explorer-container">
     <header class="explorer-header">
-      <div><p class="eyebrow">THE VERIFICATION ARCHIVE</p><h1>Fact Explorer</h1><p class="intro">Browse preliminary findings and final expert verdicts.</p></div>
+      <div><p class="eyebrow">THE VERIFICATION ARCHIVE</p><h1>Fact Explorer</h1><p class="intro">Browse final decisions and claims still under review.</p></div>
       <a routerLink="/verify" class="btn btn-secondary">Verify a new claim <span aria-hidden="true">↗</span></a>
     </header>
 
@@ -9,7 +9,7 @@
       <div class="summary-intro"><span class="eyebrow">OUR WORK, AT A GLANCE</span><p>All-time archive activity</p><small>Preliminary and final results.</small></div>
       <div class="summary-stat"><strong>{{ summary() ? (summary()!.total | number) : '—' }}</strong><span>Checks in the archive</span></div>
       <div class="summary-stat"><strong>{{ summary() ? (summary()!.finalized | number) : '—' }}</strong><span>Final decisions</span></div>
-      <div class="summary-stat"><strong>{{ summary() ? (summary()!.review | number) : '—' }}</strong><span>Under expert review</span></div>
+      <div class="summary-stat"><strong>{{ summary() ? (summary()!.review | number) : '—' }}</strong><span>Under review</span></div>
     </section>
 
     <section class="archive-browser" aria-labelledby="browse-heading">
@@ -18,7 +18,7 @@
         <button type="button" [class.selected]="reviewState() === 'finalized'" [attr.aria-pressed]="reviewState() === 'finalized'" (click)="selectState('finalized')">Final decisions</button>
         <button type="button" [class.selected]="reviewState() === 'review'" [attr.aria-pressed]="reviewState() === 'review'" (click)="selectState('review')">Under review</button>
       </div>
-      <p class="stage-description">{{ reviewState() === 'finalized' ? 'Final expert verdicts. Open a result to view its evidence.' : 'Preliminary findings · expert review pending.' }}</p>
+      <p class="stage-description">{{ reviewState() === 'finalized' ? 'Final decisions by expert reviewers (or by an administrator when reviewers could not agree). Open a result for the evidence and the reviewers’ reasoning.' : 'No final decision yet. Cards show preliminary AI findings only.' }}</p>
 
       <form [formGroup]="filterForm" (ngSubmit)="search()" class="search-panel">
         <div class="primary-filters">
@@ -61,9 +61,13 @@
               <article class="report-card">
                 @if (item.image_url && !failedImages().has(item.submission_id)) {<div class="report-image"><img [src]="item.image_url" alt="Image submitted with this claim" loading="lazy" (error)="imageFailed(item.submission_id)"></div>}
                 <div class="report-content">
-                  <div class="report-topline"><span class="content-type">{{ methodLabel(item.submission_type) }}</span>@if (item.is_finalized) {<app-verdict-badge [overallVerdict]="item.overall_verdict" />} @else {<span class="review-label">Under expert review</span>}</div>
+                  <div class="report-topline"><span class="content-type">{{ methodLabel(item.submission_type) }}</span>@if (item.is_finalized && item.overall_verdict) {<span class="decision-label">Final decision:</span><app-verdict-badge [overallVerdict]="item.overall_verdict" />} @else {<span class="review-label">Under review</span>}</div>
                   <h3><a [routerLink]="['/verify', item.submission_id]">{{ item.headline || 'A submitted claim awaiting a readable headline' }}</a></h3>
-                  <div class="finding">@if (!item.is_finalized) {<app-verdict-badge [label]="item.prediction" [sourceStatus]="item.source_status" [contentStatus]="item.content_status" [dateStatus]="item.date_status" />}</div>
+                  @if (chips(item); as findings) {@if (findings.length) {
+                    <div class="finding" [attr.aria-label]="'Preliminary AI findings for this claim'"><span class="finding-caption">Preliminary AI findings</span>
+                      @for (chip of findings; track chip.label) {<span class="chip" [ngClass]="'chip-' + chip.tone"><span class="chip-label">{{ chip.label }}:</span> {{ chip.value }}</span>}
+                    </div>
+                  }}
                   <div class="report-meta">@if (item.claimed_source_text) {<span>Claimed outlet: {{ item.claimed_source_text }}</span>}<span>Submitted {{ item.created_at | date:'d MMM y' }}</span></div>
                   <a class="report-link" [routerLink]="['/verify', item.submission_id]">Read full report <span aria-hidden="true">↗</span><span class="sr-only">: {{ item.headline || 'Submitted claim' }}</span></a>
                 </div>

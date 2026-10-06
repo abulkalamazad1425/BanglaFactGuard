@@ -5,34 +5,88 @@ export const terminal = status => ['FINALIZED', 'FAILED'].includes(status);
 export const ready = status => ['EXPERT_REVIEW', 'FINALIZED', 'ESCALATED'].includes(status);
 // Applied to fresh responses and cached Activity entries from older builds.
 export const withoutDateWarnings = warnings => (warnings || []).filter(w => !/\b(?:dates?|years?|months?|source|outlet|publisher)\b|তারিখ/i.test(w));
+
+// Same words as the website (frontend/src/app/shared/utils/status-labels.ts)
+// and backend (app/shared/status_labels.py). Stored API values never change.
+export const NOT_FOUND_IN_CLAIMED_SOURCE = 'Not found in claimed source';
+export const HEADLINE_LABELS = { EXACT_MATCHED: 'Exact Matched', MEANING_PRESERVED: 'Meaning Preserved', ALTERED: 'Altered' };
+export const DATE_LABELS = { MATCHED: 'Matched', MISMATCHED: 'Mismatched', INCOMPLETE: 'Could not be determined' };
+export const OVERALL_LABELS = { REAL: 'Real', FAKE: 'Fake', MISLEADING: 'Misleading', ALTERED: 'Altered' };
+export const aiDecisionLabel = prediction => !prediction ? null : String(prediction).toUpperCase() === 'FAKE' ? 'Likely Fake' : 'Likely Real';
+
+/** First five whitespace-separated words, with "..." only when there are more. */
+export function headlinePreview(headline, words = 5) {
+  const tokens = String(headline || '').normalize('NFC').split(/\s+/u).filter(Boolean);
+  return tokens.slice(0, words).join(' ') + (tokens.length > words ? '...' : '');
+}
+
+function headlineStatus(result) {
+  if (result.headline_status) return result.headline_status;
+  if (result.content_status === 'ALTERED') return 'ALTERED';
+  if (result.content_status === 'MATCHED') {
+    const d = result.analysis?.headline_alteration;
+    return d?.exact_match || d?.basis === 'exact' ? 'EXACT_MATCHED' : 'MEANING_PRESERVED';
+  }
+  return null;
+}
+
+/**
+ * Activity summary. Preliminary view rules: never a "found" source status;
+ * a missing article shows only "Not found in claimed source" (no headline or
+ * date); the headline status is Exact Matched / Meaning Preserved / Altered;
+ * the date comparison only when a date was claimed. The text & image model's
+ * call is "AI decision: Likely Fake/Real". A final decision is the reviewers'
+ * (or an admin's) overall verdict and is never mixed with the AI call.
+ * Individual reviewer votes are never shown here.
+ */
 export function summarize(type, data, lookup = {}) {
   const result = type === 'PHOTO_CARD' ? data.verification : type === 'SOURCE_BASED' ? data.result : data;
   const status = data.status || lookup.status || 'EXPERT_REVIEW';
   const final = result?.overall_verdict || result?.expert_overall_verdict;
   const lines = [];
-  const names = { CONFIRMED: 'Confirmed', NOT_FOUND: 'Not found', INCOMPLETE: 'Check incomplete', MATCHED: 'Matched', ALTERED: 'Altered', MISMATCHED: 'Date mismatch' };
   if (result && type !== 'MULTIMODAL') {
-    lines.push(`Source: ${names[result.source_status] || 'Not assessed'}`);
-    // Headline Alteration has only two verdicts; a confirmed source without one says so.
-    if (result.content_status) lines.push(`Headline Alteration: ${names[result.content_status] || result.content_status}`);
-    else if (result.source_status === 'CONFIRMED') lines.push('Headline Alteration: No verdict');
-    if (result.date_status) lines.push(`Date: ${names[result.date_status] || result.date_status}`);
+    if (result.source_status === 'NOT_FOUND') lines.push(NOT_FOUND_IN_CLAIMED_SOURCE);
+    else if (result.source_status === 'INCOMPLETE') lines.push('Source check incomplete');
+    else if (result.source_status === 'CONFIRMED') {
+      const hs = headlineStatus(result);
+      lines.push(`Headline: ${hs ? HEADLINE_LABELS[hs] : 'No verdict'}`);
+      const claimedDate = result.claimed_published_date || data.published_date || lookup.published_date;
+      if (claimedDate && result.date_status) lines.push(`Date: ${DATE_LABELS[result.date_status] || result.date_status}`);
+    }
   }
-  if (result?.prediction && type === 'MULTIMODAL') lines.push(`AI prediction: ${result.prediction === 'FAKE' ? 'Likely fake' : 'Likely real'}`);
-  if (final) lines.unshift(`Final verdict: ${final.charAt(0) + final.slice(1).toLowerCase()}`);
+  if (result?.prediction && type === 'MULTIMODAL') lines.push(`AI decision: ${aiDecisionLabel(result.prediction)}`);
+  if (final) lines.unshift(`Final decision: ${OVERALL_LABELS[final] || final}`);
   return { status, stage: status === 'FAILED' ? 'failed' : final && status === 'FINALIZED' ? `final:${final}` : result && ready(status) ? 'preliminary' : null,
     phase: data.phase || lookup.processing_phase, lines, headline: data.headline || lookup.headline,
     error: data.error || data.failure_reason || lookup.failure_reason,
     warnings: type === 'PHOTO_CARD' ? withoutDateWarnings(data.extraction_warnings) : data.extraction_warnings || [], final: Boolean(final),
-    review: status === 'ESCALATED' ? 'Additional review required' : final ? 'Expert review complete' : 'Expert review pending' };
+    review: final ? 'Final decision made by reviewers' : 'Under review — preliminary AI result' };
 }
+
+/** A validation error that names the field it belongs to, so the panel can show it there. */
+export class FieldError extends Error {
+  constructor(field, message) { super(message); this.field = field; }
+}
+
+// Required fields (same as the website and the API):
+//   Text & source (SOURCE_BASED): headline (5+ characters), claimed news outlet
+//   Photo card   (PHOTO_CARD):    photocard image, claimed news outlet
+//   Text & image (MULTIMODAL):    headline, article text (10+ characters), image
+export const REQUIRED = {
+  SOURCE_BASED: ['headline', 'claimed_source_text'],
+  PHOTO_CARD: ['image', 'claimed_source_text'],
+  MULTIMODAL: ['headline', 'body_text', 'image'],
+};
+
 export function validateDraft(d, image) {
-  if (d.type !== 'PHOTO_CARD' && d.headline.trim().length < (d.type === 'SOURCE_BASED' ? 5 : 1)) throw Error('Enter a valid headline. Source checks need at least 5 characters.');
-  if (d.headline.length > 2000 || d.body_text.length > 50000) throw Error('Headline limit is 2,000 characters; body limit is 50,000.');
-  if (d.type !== 'MULTIMODAL' && !d.claimed_source_text.trim()) throw Error('Enter the claimed news source.');
-  if (d.type === 'MULTIMODAL' && d.body_text.trim().length < 10) throw Error('Multimodal analysis needs at least 10 characters of body text.');
-  if (d.type !== 'SOURCE_BASED' && !image) throw Error('Upload an image or select a screenshot area.');
-  if (d.type !== 'SOURCE_BASED' && image && (!image.size || image.size > 10 * 1024 * 1024 || !['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(image.type))) throw Error('Image must be a PNG, JPEG, WebP or GIF up to 10 MB.');
+  if (d.type !== 'PHOTO_CARD' && d.headline.trim().length < (d.type === 'SOURCE_BASED' ? 5 : 1))
+    throw new FieldError('headline', d.type === 'SOURCE_BASED' ? 'Enter the headline (at least 5 characters).' : 'Enter the headline.');
+  if (d.headline.length > 2000) throw new FieldError('headline', 'Headline limit is 2,000 characters.');
+  if (d.body_text.length > 50000) throw new FieldError('body_text', 'Article text limit is 50,000 characters.');
+  if (d.type === 'MULTIMODAL' && d.body_text.trim().length < 10) throw new FieldError('body_text', 'Enter the article text (at least 10 characters).');
+  if (d.type !== 'SOURCE_BASED' && !image) throw new FieldError('image', d.type === 'PHOTO_CARD' ? 'Add the photocard image: upload it or select a screenshot area.' : 'Add the image: upload it or select a screenshot area.');
+  if (d.type !== 'SOURCE_BASED' && image && (!image.size || image.size > 10 * 1024 * 1024 || !['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(image.type))) throw new FieldError('image', 'Image must be a PNG, JPEG, WebP or GIF up to 10 MB.');
+  if (d.type !== 'MULTIMODAL' && !d.claimed_source_text.trim()) throw new FieldError('claimed_source_text', 'Enter the claimed news outlet.');
 }
 export function cropRect(rect, view, bitmap) {
   const x = Math.max(0, Math.min(rect.x, view.width));
@@ -42,9 +96,16 @@ export function cropRect(rect, view, bitmap) {
     height: Math.max(1, Math.round(Math.min(rect.height, view.height - y) * bitmap.height / view.height)) };
 }
 
+/** Normalises lines cached by older builds to the current wording. Returns
+ *  null for a line that must no longer be shown (a "found" source status). */
 export function resultLine(line) {
-  return line.replace(/AI prediction: (?:NON_FAKE|REAL)(?: \(preliminary\))?/, 'AI prediction: Likely real')
-    .replace(/AI prediction: FAKE(?: \(preliminary\))?/, 'AI prediction: Likely fake')
-    .replace(/Expert verdict: (\w+)/, (_, v) => `Final verdict: ${v[0]+v.slice(1).toLowerCase()}`)
-    .replace('Source: Found in claimed source', 'Source: Confirmed').replace('Source: Not found in claimed source', 'Source: Not found');
+  if (/^Source: (?:Confirmed|Found in claimed source|CONFIRMED)$/.test(line)) return null;
+  return line.replace(/AI prediction: (?:NON_FAKE|REAL|Likely real)(?: \(preliminary\))?/, 'AI decision: Likely Real')
+    .replace(/AI prediction: (?:FAKE|Likely fake)(?: \(preliminary\))?/, 'AI decision: Likely Fake')
+    .replace(/(?:Expert|Final) verdict: (\w+)/, (_, v) => `Final decision: ${v[0].toUpperCase() + v.slice(1).toLowerCase()}`)
+    .replace(/^Source: (?:Not found in claimed source|Not found|NOT_FOUND)$/, NOT_FOUND_IN_CLAIMED_SOURCE)
+    .replace(/^Source: Check incomplete$/, 'Source check incomplete')
+    .replace(/^Headline Alteration: Matched$/, 'Headline: Meaning Preserved')
+    .replace(/^Headline Alteration: /, 'Headline: ')
+    .replace('Date: Date mismatch', 'Date: Mismatched');
 }

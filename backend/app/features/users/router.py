@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.constants import (
     ContentStatus,
     DateStatus,
+    HeadlineAlterationStatus,
     OverallVerdict,
     SourceStatus,
     SubmissionStatus,
@@ -19,6 +20,7 @@ from app.features.auth.models import User
 from app.features.auth.security import get_current_user
 from app.features.submissions.models import OcrExtraction, Submission
 from app.features.verification.presenter import effective_expert_row, effective_status, is_headline_result
+from app.features.verification.headline_status import headline_status_for_result
 from app.features.verification.repository import ResultRepository
 from app.features.verification.models import VerificationResult
 from app.shared.dependencies import get_async_session
@@ -39,7 +41,9 @@ class SubmissionSummary(BaseModel):
     failure_reason: str | None = None
     source_status: SourceStatus | None
     content_status: ContentStatus | None
+    headline_status: HeadlineAlterationStatus | None = None
     date_status: DateStatus | None = None
+    published_date: date | None = None
     # Expert-finalized only; None while the claim is still under review.
     overall_verdict: OverallVerdict | None = None
     prediction: str | None = None
@@ -139,22 +143,12 @@ async def get_my_submissions(
                 status=effective_status(submission, original_status).value,
                 phase=submission.processing_phase,
                 failure_reason=submission.failure_reason,
-                source_status=(
-                    ((expert.final_source_status if is_finalized else None) or result.source_status)
-                    if result
-                    else None
-                ),
-                content_status=(
-                    (expert.final_content_status if is_finalized else
-                     result.content_status if is_headline_result(result) else None)
-                    if result
-                    else None
-                ),
-                date_status=(
-                    (expert.final_date_status if is_finalized else result.date_status)
-                    if result
-                    else None
-                ),
+                # Preliminary findings are always the AI's own calls.
+                source_status=result.source_status if result else None,
+                content_status=(result.content_status if result and is_headline_result(result) else None),
+                headline_status=headline_status_for_result(result, claim_headline=submission.headline),
+                date_status=result.date_status if result else None,
+                published_date=submission.published_date,
                 overall_verdict=mm.expert_overall_verdict if mm else expert.overall_verdict if is_finalized else None,
                 prediction=mm.prediction if mm else None,
                 is_finalized=is_finalized,

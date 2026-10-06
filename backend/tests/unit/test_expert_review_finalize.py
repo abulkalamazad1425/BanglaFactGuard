@@ -44,7 +44,6 @@ def _config(
     N: int = 10,
     max_review_votes: int | None = None,
     max_review_hours: int | None = None,
-    max_tier_weight: float | None = None,
 ) -> VotingConfig:
     return VotingConfig(
         min_expert_votes=M,
@@ -53,7 +52,6 @@ def _config(
         lead_margin=margin,
         max_review_votes=max_review_votes,
         max_review_hours=max_review_hours,
-        max_tier_weight=max_tier_weight,
     )
 
 
@@ -68,6 +66,11 @@ def _make_service():
     voting_config_repo = AsyncMock()
     review_repo.session = MagicMock()
     review_repo.session.refresh = AsyncMock()
+    # Admin lookup for escalation notifications: no admins in these unit tests.
+    admin_rows = MagicMock()
+    admin_rows.scalars.return_value.all.return_value = []
+    review_repo.session.execute = AsyncMock(return_value=admin_rows)
+    submission_repo.escalate_if_open.return_value = True
     voting_config_repo.get_or_create.return_value = _config()
     svc = ExpertReviewService(
         review_repo=review_repo,
@@ -171,7 +174,7 @@ def test_tally_sums_weight_per_verdict_ignoring_ai():
 def test_evaluate_fails_when_threshold_not_met():
     config = _config(T=5.0, M=3, margin=1.0)
     weights = {OverallVerdict.FAKE: 4.0, OverallVerdict.MISLEADING: 1.0}
-    passes, leader = _evaluate(weights, voters=3, config=config, tie_break=None)
+    passes, leader = _evaluate(weights, voters=3, config=config)
     assert passes is False
     assert leader == OverallVerdict.FAKE  # still reports the front-runner
 
@@ -180,31 +183,33 @@ def test_evaluate_fails_when_min_voters_not_met_even_if_threshold_met():
     """One very high-weight expert alone can't finalize — M stops that."""
     config = _config(T=5.0, M=3, margin=1.0)
     weights = {OverallVerdict.FAKE: 6.0}
-    passes, _ = _evaluate(weights, voters=1, config=config, tie_break=None)
+    passes, _ = _evaluate(weights, voters=1, config=config)
     assert passes is False
 
 
 def test_evaluate_fails_when_margin_not_met():
     config = _config(T=5.0, M=2, margin=2.0)
     weights = {OverallVerdict.FAKE: 5.0, OverallVerdict.REAL: 4.0}  # margin only 1.0
-    passes, _ = _evaluate(weights, voters=2, config=config, tie_break=None)
+    passes, _ = _evaluate(weights, voters=2, config=config)
     assert passes is False
 
 
 def test_evaluate_passes_when_all_three_conditions_met():
     config = _config(T=5.0, M=3, margin=1.0)
     weights = {OverallVerdict.FAKE: 5.5, OverallVerdict.MISLEADING: 1.0}
-    passes, leader = _evaluate(weights, voters=4, config=config, tie_break=None)
+    passes, leader = _evaluate(weights, voters=4, config=config)
     assert passes is True
     assert leader == OverallVerdict.FAKE
 
 
-def test_evaluate_tie_does_not_pass_margin_and_prefers_tie_break_as_leader():
-    config = _config(T=1.0, M=1, margin=0.5)
-    weights = {OverallVerdict.FAKE: 2.0, OverallVerdict.REAL: 2.0}
-    passes, leader = _evaluate(weights, voters=2, config=config, tie_break=OverallVerdict.REAL)
-    assert passes is False  # margin is 0, fails the 0.5 requirement
-    assert leader == OverallVerdict.REAL
+def test_evaluate_tie_never_passes_and_has_no_leader():
+    """No AI or ordering tie-break: a tie never finalizes, even with margin 0."""
+    for margin in (0.5, 0.0):
+        config = _config(T=1.0, M=1, margin=margin)
+        weights = {OverallVerdict.FAKE: 2.0, OverallVerdict.REAL: 2.0}
+        passes, leader = _evaluate(weights, voters=2, config=config)
+        assert passes is False
+        assert leader is None
 
 
 # ─── Worked example from the spec (T=5, M=3, N=10) ─────────────────────
@@ -270,45 +275,66 @@ async def test_resolve_weight_uses_tier_at_and_above_activation_threshold():
 
 
 @pytest.mark.asyncio
-async def test_resolve_weight_respects_max_tier_weight_cap():
+async def test_resolve_weight_has_no_tier_weight_cap():
+    """The Max Tier Weight Cap was removed: a tier's weight applies as-is."""
     ctx = _make_service()
-    config = _config(N=10, max_tier_weight=1.5)
+    config = _config(N=10)
+    assert not hasattr(config, "max_tier_weight")
     profile = SimpleNamespace(total_votes=50, correct_votes=50)
     fake_tier = SimpleNamespace(id=uuid.uuid4(), weight=3.0)
     ctx["tiers"].resolve_tier_for_accuracy.return_value = fake_tier
     weight, _ = await ctx["svc"]._resolve_weight(profile, config)
-    assert weight == 1.5
+    assert weight == 3.0
 
 
-# ─── Source=NOT_FOUND makes Content/Date N/A ───────────────────────────
+# ─── Only the overall vote decides ─────────────────────────────────────
 
 
 @pytest.mark.asyncio
-async def test_not_found_source_skips_content_and_date_entirely():
+async def test_supplementary_findings_never_block_or_shape_finalization():
+    """Experts agree on the overall vote but disagree on every supplementary
+    finding: the claim still finalizes on the overall vote alone."""
     ctx = _make_service()
     submission = _submission(SubmissionType.SOURCE_BASED)
-    config = _config(T=2.0, M=2, margin=0.5)
-    ctx["voting_config"].get_or_create.return_value = config
-    result = _result(SourceStatus.CONFIRMED, ContentStatus.MATCHED, DateStatus.MATCHED, confidence=0.9)
-    ctx["results"].get_by_submission_id.return_value = result
-
-    reviews = [
+    ctx["voting_config"].get_or_create.return_value = _config(T=2.0, M=2, margin=0.5)
+    ctx["results"].get_by_submission_id.return_value = _result(
+        SourceStatus.CONFIRMED, ContentStatus.MATCHED, DateStatus.MATCHED
+    )
+    ctx["reviews"].get_for_submission.return_value = [
         _review(OverallVerdict.FAKE, 1.5, source=SourceStatus.NOT_FOUND),
-        _review(OverallVerdict.FAKE, 1.0, source=SourceStatus.NOT_FOUND),
+        _review(OverallVerdict.FAKE, 1.0, source=SourceStatus.CONFIRMED,
+                content=ContentStatus.ALTERED, date_=DateStatus.MISMATCHED),
     ]
-    ctx["reviews"].get_for_submission.return_value = reviews
 
     await ctx["svc"]._finalize_or_escalate(submission)
 
     ctx["results"].update.assert_awaited_once()
     _, kwargs = ctx["results"].update.call_args
-    assert kwargs["final_source_status"] == SourceStatus.NOT_FOUND
-    assert kwargs["final_content_status"] is None
-    assert kwargs["final_date_status"] is None
     assert kwargs["overall_verdict"] == OverallVerdict.FAKE
+    ctx["submissions"].mark_finalized.assert_awaited_once()
 
 
-# ─── AI snapshot stays immutable; only final_* / overall_verdict move ──
+@pytest.mark.asyncio
+async def test_unanimous_supplementary_findings_cannot_finalize_a_split_overall_vote():
+    ctx = _make_service()
+    submission = _submission(SubmissionType.SOURCE_BASED)
+    ctx["voting_config"].get_or_create.return_value = _config(T=1.0, M=2, margin=0.5)
+    ctx["results"].get_by_submission_id.return_value = _result(
+        SourceStatus.CONFIRMED, ContentStatus.MATCHED, DateStatus.MATCHED
+    )
+    same = dict(source=SourceStatus.CONFIRMED, content=ContentStatus.MATCHED, date_=DateStatus.MATCHED)
+    ctx["reviews"].get_for_submission.return_value = [
+        _review(OverallVerdict.FAKE, 1.0, **same),
+        _review(OverallVerdict.REAL, 1.0, **same),
+    ]
+
+    await ctx["svc"]._finalize_or_escalate(submission)
+
+    ctx["results"].update.assert_not_awaited()
+    ctx["submissions"].mark_finalized.assert_not_awaited()
+
+
+# ─── AI snapshot stays immutable; only overall_verdict moves ───────────
 
 
 @pytest.mark.asyncio
@@ -334,13 +360,10 @@ async def test_finalize_never_touches_the_ai_snapshot_fields():
     await ctx["svc"]._finalize_or_escalate(submission)
 
     _, kwargs = ctx["results"].update.call_args
-    # Only final_* and overall_verdict/finalized_at are in the update call —
-    # source_status/content_status/date_status (the AI's own columns) are
-    # never passed to update() at all.
-    assert "source_status" not in kwargs
-    assert "content_status" not in kwargs
-    assert "date_status" not in kwargs
-    assert kwargs["final_content_status"] == ContentStatus.ALTERED
+    # Only the overall verdict and its timestamp are written: neither the AI's
+    # own columns nor any supplementary assessment is promoted.
+    assert set(kwargs) == {"overall_verdict", "finalized_at"}
+    assert kwargs["overall_verdict"] == OverallVerdict.ALTERED
 
 
 # ─── Ties / deadlock -> escalation after the configured window ────────
@@ -365,9 +388,8 @@ async def test_tie_stays_open_until_max_review_votes_then_escalates():
     await ctx["svc"]._finalize_or_escalate(submission)
 
     ctx["multimodal"].update.assert_not_awaited()
-    ctx["submissions"].set_status.assert_awaited_once()
-    args, _ = ctx["submissions"].set_status.call_args
-    assert args[1] == SubmissionStatus.ESCALATED
+    ctx["submissions"].escalate_if_open.assert_awaited_once_with(submission.id)
+    assert submission.status == SubmissionStatus.ESCALATED
 
 
 @pytest.mark.asyncio
@@ -384,7 +406,7 @@ async def test_no_escalation_before_window_exhausted():
 
     await ctx["svc"]._finalize_or_escalate(submission)
 
-    ctx["submissions"].set_status.assert_not_awaited()
+    ctx["submissions"].escalate_if_open.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -402,7 +424,7 @@ async def test_escalates_after_max_review_hours_even_with_few_votes():
 
     await ctx["svc"]._finalize_or_escalate(submission)
 
-    ctx["submissions"].set_status.assert_awaited_once()
+    ctx["submissions"].escalate_if_open.assert_awaited_once()
 
 
 # ─── submit_vote guard clauses ──────────────────────────────────────────

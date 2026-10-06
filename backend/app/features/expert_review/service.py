@@ -44,7 +44,9 @@ from app.features.submissions.models import OcrExtraction, Submission
 from app.features.submissions.repository import SubmissionRepository
 from app.features.verification.models import VerificationResult
 from app.features.verification.repository import ResultRepository
+from app.features.verification.headline_status import headline_status_for_result
 from app.features.verification.verdict_compat import format_verdict_display
+from app.shared.status_labels import ai_decision_label
 
 logger = structlog.get_logger(__name__)
 _NEUTRAL_WEIGHT = 1.0
@@ -55,10 +57,8 @@ _T = TypeVar("_T")
 
 
 def _tally(reviews: list[ExpertReview], get_vote: Callable[[ExpertReview], _T | None]) -> dict[_T, float]:
-    """Weighted vote counts for one dimension — experts only. The AI's own
-    call is never added here: per the finalization spec, T/M/margin are
-    evaluated against expert consensus alone, with the AI's call used only
-    as a tie-break preference (see _evaluate)."""
+    """Weighted vote counts — experts only. Neither the AI's call nor any
+    supplementary (source/headline/date) assessment is ever added."""
     weights: dict[_T, float] = {}
     for review in reviews:
         vote = get_vote(review)
@@ -68,25 +68,43 @@ def _tally(reviews: list[ExpertReview], get_vote: Callable[[ExpertReview], _T | 
 
 
 def _evaluate(
-    weights: dict[_T, float], voters: int, config: VotingConfig, tie_break: _T | None
+    weights: dict[_T, float], voters: int, config: VotingConfig
 ) -> tuple[bool, _T | None]:
-    """Does this dimension clear ALL of: leader >= T, voters >= M,
-    leader - runner_up >= margin? Returns (passes, leader) — leader is the
-    current front-runner even when passes is False, so callers can still
-    show "leading toward X" while a claim is under review."""
+    """Does the overall tally clear ALL of: a unique leader, leader >= T,
+    voters >= M, leader - runner_up >= margin? Returns (passes, leader).
+    `leader` is None while the top weight is tied — there is no AI or
+    ordering tie-break, so a tie never finalizes (even with margin 0)."""
     if not weights:
-        return False, tie_break
+        return False, None
     sorted_weights = sorted(weights.values(), reverse=True)
     leader_weight = sorted_weights[0]
     runner_up_weight = sorted_weights[1] if len(sorted_weights) > 1 else 0.0
     leaders = [k for k, w in weights.items() if w == leader_weight]
-    leader = tie_break if (tie_break is not None and tie_break in leaders) else leaders[0]
+    leader = leaders[0] if len(leaders) == 1 else None
     passes = (
-        leader_weight >= config.verified_threshold
+        leader is not None
+        and leader_weight >= config.verified_threshold
         and voters >= config.min_expert_votes
         and (leader_weight - runner_up_weight) >= config.lead_margin
     )
     return passes, leader
+
+
+def _aware(value: datetime) -> datetime:
+    return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+
+
+def review_limits_exceeded(
+    config: VotingConfig, *, votes: int, submitted_at: datetime, now: datetime | None = None
+) -> bool:
+    """OR semantics: any configured limit exceeded escalates. A NULL limit is
+    not configured and never counts as exceeded."""
+    now = now or datetime.now(timezone.utc)
+    if config.max_review_votes is not None and votes >= config.max_review_votes:
+        return True
+    if config.max_review_hours is not None and now - _aware(submitted_at) >= timedelta(hours=config.max_review_hours):
+        return True
+    return False
 
 
 class ExpertReviewService:
@@ -163,12 +181,45 @@ class ExpertReviewService:
         return headline, analysis.body_similarity
 
     async def _build_queue_item(
-        self, submission: Submission, *, full_body: bool
+        self,
+        submission: Submission,
+        *,
+        full_body: bool,
+        viewer_id: uuid.UUID | None = None,
+        viewer_role: str | None = None,
     ) -> ExpertQueueItemResponse:
         vote_count = await self._reviews.count_votes_for_submission(submission.id)
         body_text = submission.body_text
         if not full_body and body_text and len(body_text) > 400:
             body_text = body_text[:400] + "…"
+
+        has_voted = False
+        if viewer_id is not None:
+            has_voted = await self._reviews.get_by_submission_and_reviewer(submission.id, viewer_id) is not None
+        is_admin = viewer_role == "admin"
+        if is_admin:
+            can_vote = submission.status == SubmissionStatus.ESCALATED and not has_voted
+        else:
+            can_vote = (
+                submission.status == SubmissionStatus.EXPERT_REVIEW
+                and not has_voted
+                and submission.submitter_id != viewer_id
+            )
+        common = dict(
+            submission_id=str(submission.id),
+            submission_type=submission.submission_type,
+            status=submission.status,
+            escalated_at=submission.escalated_at,
+            headline=submission.headline,
+            body_text=body_text,
+            claimed_source_text=submission.claimed_source_text,
+            published_date=submission.published_date,
+            submitted_at=submission.created_at,
+            vote_count=vote_count,
+            has_voted=has_voted,
+            can_vote=can_vote,
+            decision_mode="ADMIN_FINAL" if is_admin and submission.status == SubmissionStatus.ESCALATED else "EXPERT_VOTE",
+        )
 
         if submission.submission_type in _STRUCTURED_TYPES:
             result = await self._results.get_by_submission_id(submission.id)
@@ -180,12 +231,8 @@ class ExpertReviewService:
             )
             headline_alteration, body_similarity = self._headline_alteration_and_body(result)
             return ExpertQueueItemResponse(
-                submission_id=str(submission.id),
-                submission_type=submission.submission_type,
-                headline=submission.headline,
-                body_text=body_text,
-                claimed_source_text=submission.claimed_source_text,
-                ai_label=_ai_label_structured(result),
+                **common,
+                ai_label=_ai_label_structured(result, submission),
                 # No AI-implied Overall is shown to the expert for source-based/
                 # photo-card claims — the automated system only ever produces
                 # source/content/date status; Overall is a separate, unprompted
@@ -193,14 +240,13 @@ class ExpertReviewService:
                 ai_overall_verdict=None,
                 source_status=result.source_status if result else None,
                 content_status=result.content_status if result and is_headline_result(result) else None,
+                headline_status=headline_status_for_result(result, claim_headline=submission.headline),
                 headline_check_status=(
                     HeadlineCheckStatus(result.headline_check_status)
                     if result and result.headline_check_status else None
                 ),
                 date_status=result.date_status if result else None,
                 ai_confidence=result.confidence if result else None,
-                submitted_at=submission.created_at,
-                vote_count=vote_count,
                 top_article=top_article,
                 image_url=image_url,
                 headline_alteration=headline_alteration,
@@ -212,22 +258,27 @@ class ExpertReviewService:
         if mm and self._storage:
             image_url = await self._storage.get_presigned_url(mm.image_object_key)
         return ExpertQueueItemResponse(
-            submission_id=str(submission.id),
-            submission_type=submission.submission_type,
-            headline=submission.headline,
-            body_text=body_text,
-            claimed_source_text=submission.claimed_source_text,
+            **common,
             ai_label=_ai_label_multimodal(mm),
             ai_overall_verdict=derive_ai_overall_verdict_multimodal(mm.prediction) if mm else None,
             ai_confidence=(mm.confidence_fake if mm.prediction == MultimodalPredictionLabel.FAKE else mm.confidence_real) if mm else None,
-            submitted_at=submission.created_at,
-            vote_count=vote_count,
             image_url=image_url,
         )
 
-    async def get_queue_item(self, submission_id: uuid.UUID) -> ExpertQueueItemResponse:
+    async def get_queue_item(
+        self,
+        submission_id: uuid.UUID,
+        *,
+        viewer_id: uuid.UUID | None = None,
+        viewer_role: str | None = None,
+    ) -> ExpertQueueItemResponse:
         submission = await self._submissions.get_by_id(submission_id)
-        return await self._build_queue_item(submission, full_body=True)
+        if submission.status == SubmissionStatus.ESCALATED and viewer_role != "admin":
+            # Escalated claims belong to the admin queue only.
+            raise PermissionDeniedError("This claim has been escalated to an administrator for a final decision.")
+        return await self._build_queue_item(
+            submission, full_body=True, viewer_id=viewer_id, viewer_role=viewer_role
+        )
 
     async def get_queue(
         self,
@@ -236,20 +287,92 @@ class ExpertReviewService:
         limit: int = 20,
         offset: int = 0,
         q: str = "",
+        viewer_role: str = "expert",
+        state: str = "all",
     ) -> list[ExpertQueueItemResponse]:
-        from sqlalchemy import select, or_
-        voted = select(ExpertReview.submission_id).where(ExpertReview.reviewer_id == expert_id)
-        stmt = select(Submission).where(
-            Submission.status == SubmissionStatus.EXPERT_REVIEW,
-            Submission.duplicate_of_submission_id.is_(None),
-            Submission.id.not_in(voted),
-            or_(Submission.submitter_id.is_(None), Submission.submitter_id != expert_id),
-        )
+        """Experts see open (EXPERT_REVIEW) claims they have not voted on and
+        did not submit — never escalated ones. Admins see the admin expert
+        queue: escalated claims (theirs to decide, listed first) plus open
+        claims they can only view. `state` (admin only): all | escalated | review."""
+        from sqlalchemy import case, or_, select
+
+        if viewer_role == "admin":
+            statuses = {
+                "escalated": (SubmissionStatus.ESCALATED,),
+                "review": (SubmissionStatus.EXPERT_REVIEW,),
+            }.get(state, (SubmissionStatus.ESCALATED, SubmissionStatus.EXPERT_REVIEW))
+            stmt = select(Submission).where(
+                Submission.status.in_(statuses),
+                Submission.duplicate_of_submission_id.is_(None),
+            )
+            order = (
+                case((Submission.status == SubmissionStatus.ESCALATED, 0), else_=1),
+                Submission.escalated_at.asc(),
+                Submission.created_at.asc(),
+                Submission.id.asc(),
+            )
+        else:
+            voted = select(ExpertReview.submission_id).where(ExpertReview.reviewer_id == expert_id)
+            stmt = select(Submission).where(
+                Submission.status == SubmissionStatus.EXPERT_REVIEW,
+                Submission.duplicate_of_submission_id.is_(None),
+                Submission.id.not_in(voted),
+                or_(Submission.submitter_id.is_(None), Submission.submitter_id != expert_id),
+            )
+            order = (Submission.created_at.desc(), Submission.id.desc())
         if q.strip():
             term = q.strip().replace("%", r"\%").replace("_", r"\_")
             stmt = stmt.where(or_(*[c.ilike(f"%{term}%", escape="\\") for c in (Submission.headline, Submission.body_text, Submission.claimed_source_text)]))
-        rows = (await self._session.execute(stmt.order_by(Submission.created_at.desc(), Submission.id.desc()).offset(offset).limit(limit))).scalars().all()
-        return [await self._build_queue_item(row, full_body=False) for row in rows]
+        rows = (await self._session.execute(stmt.order_by(*order).offset(offset).limit(limit))).scalars().all()
+        return [
+            await self._build_queue_item(row, full_body=False, viewer_id=expert_id, viewer_role=viewer_role)
+            for row in rows
+        ]
+
+    async def _ai_snapshot(
+        self, submission: Submission
+    ) -> tuple[OverallVerdict | None, SourceStatus | None, ContentStatus | None, DateStatus | None]:
+        """The AI's own call at vote time, frozen onto the vote row."""
+        if submission.submission_type in _STRUCTURED_TYPES:
+            result = await self._results.get_by_submission_id(submission.id)
+            if result is None or result.source_status is None:
+                raise DomainValidationError(
+                    message="The AI result for this claim is not available yet."
+                )
+            # No AI-implied Overall exists for this type — the automated
+            # system only produces source/content/date status.
+            return (
+                None,
+                result.source_status,
+                result.content_status if is_headline_result(result) else None,
+                result.date_status,
+            )
+        mm = await self._multimodal.get_by_submission_id(submission.id)
+        if mm is None:
+            raise DomainValidationError(
+                message="The AI prediction for this claim is not available yet."
+            )
+        return derive_ai_overall_verdict_multimodal(mm.prediction), None, None, None
+
+    @staticmethod
+    def _check_supplementary(
+        submission: Submission,
+        source_status: SourceStatus | None,
+        content_status: ContentStatus | None,
+        date_status: DateStatus | None,
+    ) -> None:
+        """Supplementary findings are optional and never decide anything —
+        they only have to be internally consistent."""
+        if submission.submission_type not in _STRUCTURED_TYPES:
+            if source_status is not None or content_status is not None or date_status is not None:
+                raise DomainValidationError(
+                    message="source_status/content_status/date_status do not apply to multimodal claims."
+                )
+            return
+        if source_status != SourceStatus.CONFIRMED and (content_status is not None or date_status is not None):
+            raise DomainValidationError(
+                message="Headline and date findings only apply when the relevant article was found in the claimed source."
+            )
 
     async def submit_vote(
         self,
@@ -260,12 +383,23 @@ class ExpertReviewService:
         content_status: ContentStatus | None,
         date_status: DateStatus | None,
         justification: str,
+        *,
+        voter_role: str = "expert",
     ) -> ExpertReviewResponse:
         # Row-locks the submission for the rest of this transaction — a
-        # concurrent vote on the same claim blocks here until this one
-        # commits, so two simultaneous finalizing votes can't race.
+        # concurrent vote, admin decision or escalation sweep on the same
+        # claim blocks here until this one commits, so they can't race.
         submission = await self._submissions.get_by_id_locked(submission_id)
 
+        if voter_role == "admin":
+            return await self._admin_decision(
+                submission, expert_id, overall_verdict, source_status, content_status, date_status, justification
+            )
+
+        if submission.status == SubmissionStatus.ESCALATED:
+            raise PermissionDeniedError(
+                "This claim has been escalated. Only an administrator can decide it now."
+            )
         if submission.status != SubmissionStatus.EXPERT_REVIEW:
             raise DomainValidationError(
                 message="This claim is not open for voting (already finalized, escalated, or still processing)."
@@ -285,42 +419,8 @@ class ExpertReviewService:
                 details={"review_id": str(existing.id)},
             )
 
-        is_structured = submission.submission_type in _STRUCTURED_TYPES
-
-        ai_source: SourceStatus | None
-        ai_content: ContentStatus | None
-        ai_date: DateStatus | None
-
-        if is_structured:
-            if source_status is None:
-                raise DomainValidationError(
-                    message="source_status is required for this claim type."
-                )
-            result = await self._results.get_by_submission_id(submission_id)
-            if result is None or result.source_status is None:
-                raise DomainValidationError(
-                    message="The AI result for this claim is not available yet."
-                )
-            ai_source, ai_content, ai_date = (
-                result.source_status,
-                result.content_status if is_headline_result(result) else None,
-                result.date_status,
-            )
-            # No AI-implied Overall exists for this type — the automated
-            # system only produces source/content/date status.
-            ai_overall: OverallVerdict | None = None
-        else:
-            if source_status is not None:
-                raise DomainValidationError(
-                    message="source_status/content_status/date_status do not apply to multimodal claims."
-                )
-            mm = await self._multimodal.get_by_submission_id(submission_id)
-            if mm is None:
-                raise DomainValidationError(
-                    message="The AI prediction for this claim is not available yet."
-                )
-            ai_source = ai_content = ai_date = None
-            ai_overall = derive_ai_overall_verdict_multimodal(mm.prediction)
+        self._check_supplementary(submission, source_status, content_status, date_status)
+        ai_overall, ai_source, ai_content, ai_date = await self._ai_snapshot(submission)
 
         config = await self._voting_config.get_or_create()
         profile = await self._profiles.get_or_create(
@@ -343,6 +443,7 @@ class ExpertReviewService:
             credibility_weight=weight,
             applied_weight_tier_id=tier.id if tier else None,
             status="pending",
+            is_admin_decision=False,
         )
         review = await self._reviews.create(review)
 
@@ -352,11 +453,62 @@ class ExpertReviewService:
             submission_id=str(submission_id),
             expert_id=str(expert_id),
             overall_verdict=overall_verdict.value,
-            source_status=source_status.value if source_status else None,
             weight_applied=weight,
         )
 
         await self._finalize_or_escalate(submission)
+        return _review_to_response(review)
+
+    async def _admin_decision(
+        self,
+        submission: Submission,
+        admin_id: uuid.UUID,
+        overall_verdict: OverallVerdict,
+        source_status: SourceStatus | None,
+        content_status: ContentStatus | None,
+        date_status: DateStatus | None,
+        justification: str,
+    ) -> ExpertReviewResponse:
+        """An administrator's overall vote on an ESCALATED claim IS the final
+        decision; earlier expert votes cannot override it. Every other claim is
+        view-only for admins. Caller holds the submission row lock, so a second
+        admin decision or a concurrent sweep sees FINALIZED and is refused."""
+        if submission.status != SubmissionStatus.ESCALATED:
+            raise PermissionDeniedError(
+                "Administrators can only decide escalated claims. Other claims are view-only."
+            )
+        self._check_supplementary(submission, source_status, content_status, date_status)
+        ai_overall, ai_source, ai_content, ai_date = await self._ai_snapshot(submission)
+
+        review = await self._reviews.create(
+            ExpertReview(
+                submission_id=submission.id,
+                reviewer_id=admin_id,
+                ai_overall_verdict=ai_overall,
+                ai_source_status=ai_source,
+                ai_content_status=ai_content,
+                ai_date_status=ai_date,
+                vote_overall_verdict=overall_verdict,
+                vote_source_status=source_status,
+                vote_content_status=content_status,
+                vote_date_status=date_status,
+                justification=justification,
+                credibility_weight=_NEUTRAL_WEIGHT,
+                applied_weight_tier_id=None,
+                status="finalized",
+                is_admin_decision=True,
+            )
+        )
+        expert_reviews = [
+            r for r in await self._reviews.get_for_submission(submission.id) if not r.is_admin_decision
+        ]
+        await self._apply_final_decision(submission, overall_verdict, expert_reviews)
+        logger.info(
+            "submission_finalized_by_admin",
+            submission_id=str(submission.id),
+            admin_id=str(admin_id),
+            final_overall_verdict=overall_verdict.value,
+        )
         return _review_to_response(review)
 
     async def _resolve_weight(self, profile, config: VotingConfig):
@@ -373,10 +525,7 @@ class ExpertReviewService:
         tier = await self._tiers.resolve_tier_for_accuracy(accuracy_pct)
         if tier is None:
             return _NEUTRAL_WEIGHT, None
-        weight = tier.weight
-        if config.max_tier_weight is not None:
-            weight = min(weight, config.max_tier_weight)
-        return weight, tier
+        return tier.weight, tier
 
     async def edit_vote(
         self,
@@ -393,36 +542,27 @@ class ExpertReviewService:
         if review.reviewer_id != expert_id:
             raise PermissionDeniedError("You can only edit your own reviews.")
 
-        if review.status == "finalized":
-            raise DomainValidationError(
-                message="This claim has been finalized. Votes can no longer be edited."
-            )
-
         # Row-lock the submission too — an edit can itself tip finalization,
         # same as a fresh vote, so it needs the same concurrency guard.
         submission = await self._submissions.get_by_id_locked(review.submission_id)
+
+        if review.status == "finalized" or review.is_admin_decision or submission.status != SubmissionStatus.EXPERT_REVIEW:
+            raise DomainValidationError(
+                message="Votes can only be edited while the claim is in expert review (not after finalization or escalation)."
+            )
 
         updates: dict = {}
         if overall_verdict is not None:
             updates["vote_overall_verdict"] = overall_verdict
 
-        # source_status is only meaningful for SOURCE_BASED/PHOTO_CARD reviews
-        # (review.vote_source_status is None for multimodal reviews, and stays
-        # None — there's nothing to edit on that axis for them).
         if review.vote_source_status is not None or source_status is not None:
             new_source = source_status if source_status is not None else review.vote_source_status
             new_content = content_status if content_status is not None else review.vote_content_status
             new_date = date_status if date_status is not None else review.vote_date_status
-
-            if new_source == SourceStatus.CONFIRMED:
-                if new_content is None or new_date is None:
-                    raise DomainValidationError(
-                        message="content_status and date_status are required when source_status is CONFIRMED"
-                    )
-            else:
+            if new_source != SourceStatus.CONFIRMED:
                 new_content = None
                 new_date = None
-
+            self._check_supplementary(submission, new_source, new_content, new_date)
             updates["vote_source_status"] = new_source
             updates["vote_content_status"] = new_content
             updates["vote_date_status"] = new_date
@@ -432,8 +572,7 @@ class ExpertReviewService:
 
         if updates:
             review = await self._reviews.update(review, **updates)
-            if submission.status == SubmissionStatus.EXPERT_REVIEW:
-                await self._finalize_or_escalate(submission)
+            await self._finalize_or_escalate(submission)
 
         return _review_to_response(review)
 
@@ -454,18 +593,11 @@ class ExpertReviewService:
             is_finalized = r.status == "finalized"
 
             final_overall: OverallVerdict | None = None
-            final_source: SourceStatus | None = None
-            final_content: ContentStatus | None = None
-            final_date: DateStatus | None = None
-
             if is_finalized and submission is not None:
                 if submission.submission_type in _STRUCTURED_TYPES:
                     result = await self._results.get_by_submission_id(r.submission_id)
                     if result is not None:
                         final_overall = result.overall_verdict
-                        final_source = result.final_source_status
-                        final_content = result.final_content_status
-                        final_date = result.final_date_status
                 else:
                     mm = await self._multimodal.get_by_submission_id(r.submission_id)
                     if mm is not None:
@@ -482,6 +614,7 @@ class ExpertReviewService:
                     submission_type=(
                         submission.submission_type if submission else SubmissionType.SOURCE_BASED
                     ),
+                    submission_status=submission.status if submission else None,
                     headline=submission.headline if submission else None,
                     claimed_source_text=submission.claimed_source_text if submission else None,
                     vote_overall_verdict=r.vote_overall_verdict,
@@ -493,10 +626,8 @@ class ExpertReviewService:
                     ai_content_status=r.ai_content_status,
                     ai_date_status=r.ai_date_status,
                     final_overall_verdict=final_overall,
-                    final_source_status=final_source,
-                    final_content_status=final_content,
-                    final_date_status=final_date,
                     matched=matched,
+                    is_admin_decision=bool(r.is_admin_decision),
                     voted_at=r.created_at,
                 )
             )
@@ -525,111 +656,87 @@ class ExpertReviewService:
             activation_threshold=config.activation_threshold_votes,
         )
 
-    async def _finalize_or_escalate(self, submission: Submission) -> None:
-        """Called after every vote cast/edit while the submission is still
-        EXPERT_REVIEW. Checks every applicable dimension's T/M/margin
-        condition; finalizes only if ALL of them pass simultaneously.
-        Otherwise, escalates if the configured review window/vote cap has
-        been exhausted. Caller must already hold the submission's row lock."""
-        reviews = await self._reviews.get_for_submission(submission.id)
-        if not reviews:
-            return
-
+    async def _finalize_or_escalate(self, submission: Submission, *, now: datetime | None = None) -> bool:
+        """Re-evaluates an EXPERT_REVIEW claim after a vote, an edit or a
+        sweep. Only the reviewers' OVERALL votes count — the supplementary
+        source/headline/date assessments never affect the outcome. Finalizes
+        when the overall tally passes; otherwise escalates when any configured
+        review limit is exceeded. Returns True when the status changed.
+        Caller must already hold the submission's row lock."""
+        if submission.status != SubmissionStatus.EXPERT_REVIEW:
+            return False
+        reviews = [
+            r for r in await self._reviews.get_for_submission(submission.id) if not r.is_admin_decision
+        ]
         config = await self._voting_config.get_or_create()
-        is_structured = submission.submission_type in _STRUCTURED_TYPES
         voters = len(reviews)
 
-        if is_structured:
+        if submission.submission_type in _STRUCTURED_TYPES:
             result = await self._results.get_by_submission_id(submission.id)
             if result is None or result.source_status is None:
-                return
-
-            overall_weights = _tally(reviews, lambda r: r.vote_overall_verdict)
-            # No AI tie-break for Overall — it is exclusively an expert
-            # decision with no automated default to lean on (a true tie
-            # simply fails the margin requirement and stays open).
-            overall_ok, overall_leader = _evaluate(overall_weights, voters, config, None)
-
-            source_weights = _tally(reviews, lambda r: r.vote_source_status)
-            source_ok, source_leader = _evaluate(source_weights, voters, config, result.source_status)
-
-            content_ok, date_ok = True, True
-            content_leader: ContentStatus | None = None
-            date_leader: DateStatus | None = None
-            if source_leader == SourceStatus.CONFIRMED:
-                content_weights = _tally(reviews, lambda r: r.vote_content_status)
-                content_ok, content_leader = _evaluate(
-                    content_weights, voters, config, result.content_status
-                )
-                date_weights = _tally(reviews, lambda r: r.vote_date_status)
-                date_ok, date_leader = _evaluate(date_weights, voters, config, result.date_status)
-            # else: source leader is NOT_FOUND (or None) -> Content/Date are
-            # N/A, auto-pass, and stay unset on the finalized result.
-
-            if overall_ok and source_ok and content_ok and date_ok and overall_leader and source_leader:
-                await self._results.update(
-                    result,
-                    final_source_status=source_leader,
-                    final_content_status=content_leader,
-                    final_date_status=date_leader,
-                    overall_verdict=overall_leader,
-                    finalized_at=datetime.now(timezone.utc),
-                )
-                await self._submissions.mark_finalized(submission.id)
-                for review in reviews:
-                    await self._reviews.update(review, status="finalized")
-                await self._update_expert_profiles(reviews, overall_leader)
-                logger.info(
-                    "submission_finalized",
-                    submission_id=str(submission.id),
-                    final_overall_verdict=overall_leader.value,
-                    vote_count=voters,
-                )
-                return
+                return False
         else:
             mm = await self._multimodal.get_by_submission_id(submission.id)
             if mm is None:
-                return
-            ai_overall = derive_ai_overall_verdict_multimodal(mm.prediction)
-            overall_weights = _tally(reviews, lambda r: r.vote_overall_verdict)
-            overall_ok, overall_leader = _evaluate(overall_weights, voters, config, ai_overall)
+                return False
 
-            if overall_ok and overall_leader:
-                await self._multimodal.update(
-                    mm,
-                    expert_overall_verdict=overall_leader,
-                    finalized_at=datetime.now(timezone.utc),
-                )
-                await self._submissions.mark_finalized(submission.id)
-                for review in reviews:
-                    await self._reviews.update(review, status="finalized")
-                await self._update_expert_profiles(reviews, overall_leader)
-                logger.info(
-                    "submission_finalized",
-                    submission_id=str(submission.id),
-                    final_overall_verdict=overall_leader.value,
-                    vote_count=voters,
-                )
-                return
+        overall_ok, overall_leader = _evaluate(
+            _tally(reviews, lambda r: r.vote_overall_verdict), voters, config
+        )
+        if overall_ok and overall_leader is not None:
+            await self._apply_final_decision(submission, overall_leader, reviews)
+            logger.info(
+                "submission_finalized",
+                submission_id=str(submission.id),
+                final_overall_verdict=overall_leader.value,
+                vote_count=voters,
+            )
+            return True
 
-        await self._maybe_escalate(submission, voters, config)
+        return await self._maybe_escalate(submission, voters, config, now=now)
+
+    async def _apply_final_decision(
+        self,
+        submission: Submission,
+        final_overall: OverallVerdict,
+        expert_reviews: list[ExpertReview],
+    ) -> None:
+        """Writes the final overall verdict. The AI's own columns and the
+        legacy final_source/content/date columns are left untouched — the
+        supplementary assessments are never promoted into a finding."""
+        now = datetime.now(timezone.utc)
+        if submission.submission_type in _STRUCTURED_TYPES:
+            result = await self._results.get_by_submission_id(submission.id)
+            await self._results.update(result, overall_verdict=final_overall, finalized_at=now)
+        else:
+            mm = await self._multimodal.get_by_submission_id(submission.id)
+            await self._multimodal.update(mm, expert_overall_verdict=final_overall, finalized_at=now)
+        await self._submissions.mark_finalized(submission.id)
+        submission.status = SubmissionStatus.FINALIZED
+        for review in expert_reviews:
+            await self._reviews.update(review, status="finalized")
+        await self._update_expert_profiles(expert_reviews, final_overall)
 
     async def _maybe_escalate(
-        self, submission: Submission, voters: int, config: VotingConfig
-    ) -> None:
-        should_escalate = False
-        if config.max_review_votes is not None and voters >= config.max_review_votes:
-            should_escalate = True
-        if config.max_review_hours is not None:
-            age = datetime.now(timezone.utc) - submission.created_at
-            if age >= timedelta(hours=config.max_review_hours):
-                should_escalate = True
-
-        if not should_escalate:
-            return
-
-        await self._submissions.set_status(submission.id, SubmissionStatus.ESCALATED)
+        self,
+        submission: Submission,
+        voters: int,
+        config: VotingConfig,
+        *,
+        now: datetime | None = None,
+    ) -> bool:
+        if not review_limits_exceeded(config, votes=voters, submitted_at=submission.created_at, now=now):
+            return False
+        # Conditional transition: only the transaction that actually moves the
+        # claim out of EXPERT_REVIEW notifies, so admins are told exactly once.
+        if not await self._submissions.escalate_if_open(submission.id):
+            return False
+        submission.status = SubmissionStatus.ESCALATED
         logger.info("submission_escalated", submission_id=str(submission.id), vote_count=voters)
+        from app.features.expert_review.escalation import notify_admins_of_escalation
+
+        await notify_admins_of_escalation(self._session, submission)
+        return True
 
     async def _update_expert_profiles(
         self,
@@ -638,10 +745,11 @@ class ExpertReviewService:
     ) -> None:
         """Correctness is judged on the Overall verdict uniformly across all
         submission types — the one dimension every expert votes on, and the
-        headline judgment call the platform ultimately publishes."""
+        headline judgment call the platform ultimately publishes. An admin's
+        own decision row is never scored."""
         config = await self._voting_config.get_or_create()
         for review in sorted(reviews, key=lambda r: str(r.reviewer_id)):
-            if review.reviewer_id is None:
+            if review.reviewer_id is None or review.is_admin_decision:
                 continue
             is_correct = review.vote_overall_verdict == final_overall
             profile = await self._profiles.get_or_create(review.reviewer_id)
@@ -658,12 +766,12 @@ class ExpertReviewService:
             )
 
 
-def _ai_label_structured(result: VerificationResult | None) -> str | None:
+def _ai_label_structured(result: VerificationResult | None, submission: Submission | None = None) -> str | None:
     if result is None:
         return None
     return format_verdict_display(
         result.source_status,
-        result.content_status if is_headline_result(result) else None,
+        headline_status_for_result(result, claim_headline=submission.headline if submission else None),
         result.date_status,
     )
 
@@ -671,7 +779,7 @@ def _ai_label_structured(result: VerificationResult | None) -> str | None:
 def _ai_label_multimodal(mm: MultimodalAnalysis | None) -> str | None:
     if mm is None:
         return None
-    return "Likely fake" if mm.prediction == MultimodalPredictionLabel.FAKE else "Likely real"
+    return ai_decision_label(mm.prediction)
 
 
 def _review_to_response(r: ExpertReview) -> ExpertReviewResponse:
@@ -690,6 +798,7 @@ def _review_to_response(r: ExpertReview) -> ExpertReviewResponse:
         justification=r.justification,
         credibility_weight=r.credibility_weight,
         status=r.status,
+        is_admin_decision=bool(r.is_admin_decision),
         created_at=r.created_at,
         updated_at=r.updated_at,
     )

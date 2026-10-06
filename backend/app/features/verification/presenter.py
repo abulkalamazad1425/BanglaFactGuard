@@ -21,6 +21,7 @@ from app.features.articles.schemas import RankedArticleSchema
 from app.features.submissions.models import Submission
 from app.features.submissions.repository import RetrievedArticleRepository
 from app.features.verification.models import VerificationResult
+from app.features.verification.headline_status import headline_status_for_result
 from app.features.verification.repository import ResultRepository
 from app.features.verification.schemas import AnalysisDetails, VerificationResponse
 
@@ -98,6 +99,19 @@ def parse_analysis(raw: dict | None) -> AnalysisDetails | None:
         return None
 
 
+async def _decided_by_admin(result_repo: ResultRepository, submission_id) -> bool:
+    from sqlalchemy import select
+
+    from app.features.expert_review.models import ExpertReview
+
+    row = await result_repo.session.execute(
+        select(ExpertReview.id)
+        .where(ExpertReview.submission_id == submission_id, ExpertReview.is_admin_decision.is_(True))
+        .limit(1)
+    )
+    return row.scalar_one_or_none() is not None
+
+
 def _headline_status(result: VerificationResult) -> HeadlineCheckStatus | None:
     try:
         return HeadlineCheckStatus(result.headline_check_status) if result.headline_check_status else None
@@ -120,16 +134,12 @@ async def load_verification_response(
     is_finalized = expert.overall_verdict is not None
     current = is_headline_result(result)
 
+    # The preliminary findings are always the AI's own immutable calls. The
+    # final decision is the reviewers' overall verdict alone; supplementary
+    # reviewer assessments never replace a finding.
     ai_source = result.source_status or SourceStatus.INCOMPLETE
     ai_headline = result.content_status if current else None
-    displayed_source = (expert.final_source_status if is_finalized else None) or ai_source
-    displayed_content = expert.final_content_status if is_finalized else ai_headline
-    displayed_date = expert.final_date_status if is_finalized else result.date_status
-    was_overridden = is_finalized and (
-        (expert.final_source_status is not None and expert.final_source_status != ai_source)
-        or (expert.final_content_status is not None and expert.final_content_status != ai_headline)
-        or (expert.final_date_status is not None and expert.final_date_status != result.date_status)
-    )
+    decided_by_admin = is_finalized and await _decided_by_admin(result_repo, expert.submission_id)
 
     origin_id = result.reused_from_submission_id or submission.id
     articles = await article_repo.get_for_submission(
@@ -148,14 +158,17 @@ async def load_verification_response(
         overall_verdict=expert.overall_verdict if is_finalized else None,
         is_finalized=is_finalized,
         review_pending=not is_finalized,
-        was_overridden=was_overridden,
+        decided_by_admin=decided_by_admin,
+        was_overridden=False,
         ai_source_status=ai_source,
         ai_content_status=ai_headline,
         ai_date_status=result.date_status,
-        source_status=displayed_source,
-        content_status=displayed_content,
+        source_status=ai_source,
+        content_status=ai_headline,
+        headline_status=headline_status_for_result(result, claim_headline=submission.headline),
         headline_check_status=_headline_status(result),
-        date_status=displayed_date,
+        date_status=result.date_status,
+        claimed_published_date=submission.published_date,
         confidence=result.confidence or 0.0,
         reasoning=result.reasoning or "",
         matched_articles=[

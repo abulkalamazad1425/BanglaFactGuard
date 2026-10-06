@@ -46,7 +46,7 @@ export class MultimodalComponent {
 
   private _setFile(file: File): void {
     if (this.loading) return;
-    if (!'image/jpeg,image/png,image/webp'.split(',').includes(file.type) || file.size > 10 * 1024 * 1024 || file.size === 0) {
+    if (!'image/jpeg,image/png,image/webp,image/gif'.split(',').includes(file.type) || file.size > 10 * 1024 * 1024 || file.size === 0) {
       this.errorMsg = 'Choose a supported, non-empty image under 10 MB.';
       this.selectedFile = null; this.previewUrl = null;
       return;

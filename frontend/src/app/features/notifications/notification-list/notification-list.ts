@@ -38,6 +38,20 @@ export class NotificationListComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** These notifications carry the claim headline's first words — shown as written. */
+  isHeadlinePreview(n: NotificationItem): boolean {
+    return ['VERIFICATION_COMPLETE', 'EXPERT_REVIEW_COMPLETE', 'CLAIM_ESCALATED'].includes(n.notification_type);
+  }
+
+  typeLabel(type: string): string {
+    return ({
+      VERIFICATION_COMPLETE: 'Preliminary result',
+      EXPERT_REVIEW_COMPLETE: 'Final decision',
+      CLAIM_ESCALATED: 'Escalated claim',
+      VERIFICATION_FAILED: 'Check incomplete',
+    } as Record<string, string>)[type] ?? 'Update';
+  }
+
   markRead(n: NotificationItem): void {
     if (n.is_read) return;
     this.notifSvc.markRead(n.id).subscribe({

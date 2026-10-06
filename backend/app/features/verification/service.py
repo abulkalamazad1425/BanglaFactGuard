@@ -174,6 +174,7 @@ class VerificationService:
                     user_id=target.submitter_id,
                     notification_type="VERIFICATION_COMPLETE",
                     link_url=f"/verify/{target.id}",
+                    headline=target.headline,
                     title="Automated check complete (previous result reused)",
                     body=(
                         f'Your claim "{(target.headline or "")[:80]}" matches one already '
@@ -229,6 +230,7 @@ class VerificationService:
                         user_id=own.submitter_id,
                         notification_type="VERIFICATION_COMPLETE",
                         link_url=f"/verify/{own.id}",
+                        headline=own.headline,
                         title="Automated check complete (previous result reused)",
                         body=(
                             f'Your claim "{request.headline[:80]}" matches one already checked; '

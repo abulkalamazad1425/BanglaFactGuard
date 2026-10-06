@@ -15,8 +15,18 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.features.notifications.models import Notification
+from app.shared.utils.headline_preview import headline_preview
 
 logger = structlog.get_logger(__name__)
+
+
+def preliminary_notification_text(headline: str | None) -> tuple[str, str]:
+    return "Preliminary result ready", headline_preview(headline) or "Your submitted claim"
+
+
+def final_notification_text(headline: str | None, verdict_label: str | None) -> tuple[str, str]:
+    title = f"Final decision: {verdict_label}" if verdict_label else "Final decision ready"
+    return title, headline_preview(headline) or "Your submitted claim"
 
 
 async def notify_once(
@@ -27,12 +37,16 @@ async def notify_once(
     link_url: str,
     title: str,
     body: str,
+    headline: str | None = None,
 ) -> bool:
     """Insert the notification unless an identical one exists. Returns True
-    when a new row was written. Never raises."""
+    when a new row was written. Never raises.
+
+    Every preliminary-result notification (text, photo card, multimodal,
+    reused) uses one wording: the claim headline's first five words, with
+    "..." only when the headline is longer. `headline` is the claim headline."""
     if notification_type == "VERIFICATION_COMPLETE":
-        title = "Preliminary result ready"
-        body = "Your automatic check is complete. View your result."
+        title, body = preliminary_notification_text(headline)
     try:
         existing = (
             await session.execute(

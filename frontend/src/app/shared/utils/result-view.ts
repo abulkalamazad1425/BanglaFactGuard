@@ -4,8 +4,9 @@
 // and its evidence can never disagree.
 //
 // Rules enforced here (and unit-tested in result-view.spec.ts):
-//  * Headline Alteration has exactly two verdicts (matched / altered). When
-//    none was reached, the reason is shown — never a guessed verdict.
+//  * Headline Alteration is shown as Exact Matched / Meaning Preserved /
+//    Altered (both "matched" statuses are a stored MATCHED verdict). When no
+//    verdict was reached, the reason is shown — never a guessed verdict.
 //  * A legacy result's old content verdict is never shown as a headline verdict.
 //  * Body similarity scores are measurements only, shown apart from the
 //    headline verdict. An unavailable score is "Unavailable" with its reason,
@@ -17,9 +18,11 @@ import {
   BodySimilarityMetric,
   BodySimilarityReport,
   ClaimScope,
+  HeadlineAlterationStatus,
   HeadlineCheckStatus,
   VerificationResponse,
 } from '../../models/verification.model';
+import { HEADLINE_EXPLANATIONS, HEADLINE_LABELS } from './status-labels';
 
 export function hasBody(scope: ClaimScope | null | undefined): boolean {
   return scope === 'HEADLINE_WITH_BODY';
@@ -43,7 +46,7 @@ export const HEADLINE_STATUS_TEXT: Record<HeadlineCheckStatus, { title: string; 
   COMPLETED: { title: 'Compared', summary: '' },
   SOURCE_NOT_FOUND: {
     title: 'Not compared',
-    summary: 'No corresponding report was found in the selected outlet, so there is no title to compare with.',
+    summary: 'No relevant article was found in the claimed outlet, so there is no title to compare with.',
   },
   SOURCE_CHECK_INCOMPLETE: {
     title: 'Not compared',
@@ -63,14 +66,24 @@ export const HEADLINE_STATUS_TEXT: Record<HeadlineCheckStatus, { title: string; 
   },
 };
 
-/** The headline finding for the summary card. The AI verdict is replaced by
- *  the expert's when finalized (`content_status` already carries that). */
-export function headlineView(r: VerificationResponse): HeadlineView {
+/** Display status for a result, also for a response from an older API that
+ *  only carries the MATCHED/ALTERED verdict (exactness then comes from the
+ *  stored detail; without it a match is Meaning Preserved, never Exact). */
+export function headlineStatusOf(r: VerificationResponse): HeadlineAlterationStatus | null {
+  if (r.headline_status) return r.headline_status;
+  if (r.content_status === 'ALTERED') return 'ALTERED';
   if (r.content_status === 'MATCHED') {
-    return { tone: 'matched', title: 'Headline matched', summary: 'The claim headline has the same meaning as the source title.' };
+    const detail = r.analysis?.headline_alteration;
+    return detail?.exact_match || detail?.basis === 'exact' ? 'EXACT_MATCHED' : 'MEANING_PRESERVED';
   }
-  if (r.content_status === 'ALTERED') {
-    return { tone: 'altered', title: 'Headline altered', summary: 'The claim headline differs meaningfully from the source title. See the evidence below.' };
+  return null;
+}
+
+/** The AI's preliminary headline finding (claim headline vs source title). */
+export function headlineView(r: VerificationResponse): HeadlineView {
+  const status = headlineStatusOf(r);
+  if (status) {
+    return { tone: status === 'ALTERED' ? 'altered' : 'matched', title: HEADLINE_LABELS[status], summary: HEADLINE_EXPLANATIONS[status] };
   }
   if (r.legacy_result) {
     return {
@@ -79,10 +92,10 @@ export function headlineView(r: VerificationResponse): HeadlineView {
       summary: 'This result was recorded by an earlier version of the checker; it has no Headline Alteration verdict.',
     };
   }
-  const status: HeadlineCheckStatus =
+  const check: HeadlineCheckStatus =
     r.headline_check_status ??
     (r.source_status === 'NOT_FOUND' ? 'SOURCE_NOT_FOUND' : 'SOURCE_CHECK_INCOMPLETE');
-  return { tone: 'none', ...HEADLINE_STATUS_TEXT[status] };
+  return { tone: 'none', ...HEADLINE_STATUS_TEXT[check] };
 }
 
 export const DIFFERENCE_LABELS: Record<string, string> = {

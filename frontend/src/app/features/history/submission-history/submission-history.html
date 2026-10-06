@@ -1,5 +1,5 @@
 <div class="history-page"><div class="container history-container">
-  <header class="page-header"><div><h1>My Submissions</h1><p>Your preliminary findings and expert-reviewed results.</p></div><a routerLink="/verify" class="btn btn-primary">Submit a claim</a></header>
+  <header class="page-header"><div><h1>My Submissions</h1><p>Your preliminary AI results and final decisions.</p></div><a routerLink="/verify" class="btn btn-primary">Submit a claim</a></header>
   <div class="history-summary"><span><strong>{{ stats()?.total ?? '—' }}</strong> submissions</span><a routerLink="/notifications">Your notifications →</a></div>
   <p class="text-muted">You can continue browsing while checks run. Final results will also be emailed to your account.</p>
   @if (loadError()) {<div class="service-notice" role="alert"><p>Could not load your submissions.</p><button class="btn btn-secondary" (click)="load()">Try again</button></div>}
@@ -15,8 +15,9 @@
         @if (isRunning(s)) {<span class="badge badge-pending">{{ phaseText(s) }}</span>}
         @else if (isFailed(s)) {<span class="badge badge-incomplete">Check incomplete</span>}
         @else if (hasResult(s)) {
-          <span class="outcome-stage">{{ s.is_finalized ? 'Final result' : 'Preliminary result · expert review pending' }}</span>
-          <app-verdict-badge [label]="s.prediction" [overallVerdict]="s.is_finalized ? s.overall_verdict : null" [sourceStatus]="s.source_status" [contentStatus]="s.content_status" [dateStatus]="s.date_status" />
+          <span class="outcome-stage">{{ s.is_finalized ? 'Final decision' : 'Preliminary AI result · under review' }}</span>
+          @if (s.is_finalized && s.overall_verdict) {<app-verdict-badge [overallVerdict]="s.overall_verdict" />}
+          @else {<app-verdict-badge [label]="s.prediction" [sourceStatus]="s.source_status" [headlineStatus]="s.headline_status" [contentStatus]="s.content_status" [dateStatus]="s.date_status" [hideDate]="!s.published_date" />}
         } @else {<span class="badge badge-pending">Expert review pending</span>}
       </div>
       <a [routerLink]="['/verify',s.submission_id]" class="btn btn-secondary btn-sm">{{ isRunning(s) ? 'View progress' : 'View details' }} →</a>

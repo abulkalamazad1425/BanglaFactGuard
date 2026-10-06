@@ -20,11 +20,7 @@
 
     <div class="card voting-config-card">
       <h3>Voting Configuration</h3>
-      <p class="card-subtitle">
-        Finalization requires every applicable dimension to clear ALL three conditions at once:
-        the leading verdict's weighted score reaches T, at least M votes have been cast, and the
-        leader beats the runner-up by the configured margin. No fixed limits — you decide all of it.
-      </p>
+  
       <form [formGroup]="votingConfigForm" class="voting-config-grid" (ngSubmit)="saveVotingConfig()">
         <div class="form-group">
           <label for="credibility-tiers-min_expert_votes" class="form-label">Min voters (M)</label>
@@ -47,19 +43,14 @@
           <span class="field-hint">Lifetime votes before an expert's tier weight applies (weight 1.0 until then)</span>
         </div>
         <div class="form-group">
-          <label for="credibility-tiers-max_tier_weight" class="form-label">Max tier weight cap</label>
-          <input id="credibility-tiers-max_tier_weight" type="number" step="0.1" min="0.01" formControlName="max_tier_weight" class="form-control" placeholder="No cap" />
-          <span class="field-hint">Upper bound on any credibility tier's weight</span>
-        </div>
-        <div class="form-group">
           <label for="credibility-tiers-max_review_votes" class="form-label">Max review votes</label>
-          <input id="credibility-tiers-max_review_votes" type="number" min="1" formControlName="max_review_votes" class="form-control" placeholder="No cap" />
-          <span class="field-hint">Escalate to admin after this many votes without consensus</span>
+          <input id="credibility-tiers-max_review_votes" type="number" min="1" formControlName="max_review_votes" class="form-control" placeholder="Not configured" />
+          <span class="field-hint">Escalate once this many votes are cast without a final decision</span>
         </div>
         <div class="form-group">
           <label for="credibility-tiers-max_review_hours" class="form-label">Max review hours</label>
-          <input id="credibility-tiers-max_review_hours" type="number" min="1" formControlName="max_review_hours" class="form-control" placeholder="No cap" />
-          <span class="field-hint">Escalate to admin after this long without consensus</span>
+          <input id="credibility-tiers-max_review_hours" type="number" min="1" formControlName="max_review_hours" class="form-control" placeholder="Not configured" />
+          <span class="field-hint">Escalate once this many hours pass since submission without a final decision (checked every minute)</span>
         </div>
         <div class="form-group voting-config-save">
           <button type="submit" class="btn btn-primary btn-sm" [disabled]="votingConfigSaving()">

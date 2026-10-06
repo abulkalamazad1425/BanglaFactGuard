@@ -22,24 +22,31 @@ erased) but is no longer written.
 
 from __future__ import annotations
 
-from app.core.constants import ContentStatus, DateStatus, SourceStatus
+from app.core.constants import DateStatus, HeadlineAlterationStatus, SourceStatus
+from app.shared.status_labels import (
+    DATE_LABELS,
+    HEADLINE_LABELS,
+    NOT_FOUND_IN_CLAIMED_SOURCE,
+    SOURCE_LABELS,
+    SOURCE_QUESTION,
+)
 
 
 def format_verdict_display(
     source_status: SourceStatus | None,
-    content_status: ContentStatus | None,
+    headline_status: HeadlineAlterationStatus | None,
     date_status: DateStatus | None = None,
 ) -> str | None:
     """Human-readable one-line summary for the expert queue's "AI said" column."""
     if source_status is None:
         return None
     if source_status == SourceStatus.NOT_FOUND:
-        return "Source: NOT FOUND"
+        return NOT_FOUND_IN_CLAIMED_SOURCE
     if source_status == SourceStatus.INCOMPLETE:
-        return "Source: CHECK INCOMPLETE"
+        return f"{SOURCE_QUESTION}: {SOURCE_LABELS[source_status]}"
 
-    parts = [f"Source: {source_status.value}"]
-    parts.append(f"Headline: {content_status.value}" if content_status is not None else "Headline: NO VERDICT")
+    parts = [f"{SOURCE_QUESTION}: {SOURCE_LABELS[source_status]}"]
+    parts.append(f"Headline: {HEADLINE_LABELS[headline_status]}" if headline_status is not None else "Headline: No verdict")
     if date_status is not None:
-        parts.append(f"Date: {date_status.value}")
+        parts.append(f"Date: {DATE_LABELS[date_status]}")
     return " · ".join(parts)

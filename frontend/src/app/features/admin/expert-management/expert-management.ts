@@ -19,6 +19,8 @@ export class ExpertManagementComponent implements OnInit {
   private readonly fb = inject(FormBuilder);
 
   readonly loading = signal(true);
+  readonly loadError = signal(false);
+  readonly busyId = signal<string | null>(null);
   readonly experts = signal<ExpertResponse[]>([]);
   readonly resetTarget = signal<ExpertResponse | null>(null);
   readonly resetting = signal(false);
@@ -33,26 +35,36 @@ export class ExpertManagementComponent implements OnInit {
     expertise_area: [''],
   });
 
-  credColor = (s: number) => s >= 0.7 ? 'var(--success)' : s >= 0.4 ? 'var(--warning)' : 'var(--error)';
+  ngOnInit(): void { this.load(); }
 
-  ngOnInit(): void {
+  load(): void {
+    this.loading.set(true);
+    this.loadError.set(false);
     this.adminSvc.listExperts().subscribe({
       next: e => { this.experts.set(e); this.loading.set(false); },
-      error: () => this.loading.set(false),
+      error: () => { this.loading.set(false); this.loadError.set(true); },
     });
   }
 
+  /** Merge the server's answer into the existing row so a partial response
+   *  can never blank a cell or reshape the table. */
+  private applyUpdate(id: string, updated: Partial<ExpertResponse> | null | undefined, fallback: Partial<ExpertResponse>): void {
+    this.experts.update(list => list.map(e => e.id === id ? { ...e, ...fallback, ...(updated ?? {}) } : e));
+  }
+
   deactivate(exp: ExpertResponse): void {
+    this.busyId.set(exp.id);
     this.adminSvc.deactivateExpert(exp.id).subscribe({
-      next: (updated: any) => { this.experts.update(list => list.map(e => e.id === exp.id ? updated : e)); this.toast.success('Expert deactivated.'); },
-      error: () => this.toast.error('Failed to deactivate expert.'),
+      next: updated => { this.applyUpdate(exp.id, updated, { is_active: false }); this.busyId.set(null); this.toast.success('Expert deactivated.'); },
+      error: () => { this.busyId.set(null); this.toast.error('Failed to deactivate expert.'); },
     });
   }
 
   activate(exp: ExpertResponse): void {
+    this.busyId.set(exp.id);
     this.adminSvc.activateExpert(exp.id).subscribe({
-      next: (updated: any) => { this.experts.update(list => list.map(e => e.id === exp.id ? updated : e)); this.toast.success('Expert activated.'); },
-      error: () => this.toast.error('Failed to activate expert.'),
+      next: updated => { this.applyUpdate(exp.id, updated, { is_active: true }); this.busyId.set(null); this.toast.success('Expert activated.'); },
+      error: () => { this.busyId.set(null); this.toast.error('Failed to activate expert.'); },
     });
   }
 
@@ -75,7 +87,7 @@ export class ExpertManagementComponent implements OnInit {
     };
     this.adminSvc.updateExpert(this.editTarget()!.id, body).subscribe({
       next: (updated) => {
-        this.experts.update(list => list.map(e => e.id === updated.id ? updated : e));
+        this.applyUpdate(updated.id, updated, {});
         this.editing.set(false);
         this.editTarget.set(null);
         this.toast.success('Expert account updated.');

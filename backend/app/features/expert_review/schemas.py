@@ -1,28 +1,30 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, Field, model_validator
 
 from app.core.constants import (
     ContentStatus,
     DateStatus,
+    HeadlineAlterationStatus,
     HeadlineCheckStatus,
     OverallVerdict,
     SourceStatus,
+    SubmissionStatus,
     SubmissionType,
 )
 from app.features.verification.schemas import BodySimilarityReport, HeadlineAlterationDetail
 
 
 class ExpertVoteRequest(BaseModel):
-    """An expert's vote. overall_verdict is required for every submission
-    type. source_status (plus, conditionally, content_status/date_status)
-    additionally applies to SOURCE_BASED/PHOTO_CARD claims only — whether
-    it's required or must be omitted depends on the submission's type, which
-    this schema doesn't know, so that cross-check happens in the service
-    layer; the validator below only enforces internal consistency (content/
-    date present exactly when source_status is CONFIRMED)."""
+    """A reviewer's vote. `overall_verdict` ("Cast your vote based on your
+    findings": Real / Fake / Misleading / Altered) is mandatory for every
+    submission type and is the ONLY input to the final decision, consensus
+    and escalation. source/content/date are optional supplementary findings
+    for SOURCE_BASED/PHOTO_CARD claims, recorded for reference only; the
+    validator just keeps them internally consistent (headline/date findings
+    only when the relevant article was found)."""
 
     overall_verdict: OverallVerdict
     source_status: SourceStatus | None = None
@@ -32,21 +34,17 @@ class ExpertVoteRequest(BaseModel):
         ...,
         min_length=50,
         max_length=5000,
-        description="Expert's written justification for the verdict (min 50 characters)",
+        description="Reviewer's written justification for the vote (min 50 characters). Shown publicly after the final decision.",
     )
 
     @model_validator(mode="after")
     def _check_conditional_fields(self) -> "ExpertVoteRequest":
-        if self.source_status == SourceStatus.CONFIRMED:
-            if self.content_status is None or self.date_status is None:
-                raise ValueError(
-                    "content_status and date_status are required when source_status is CONFIRMED"
-                )
-        elif self.source_status == SourceStatus.NOT_FOUND:
-            if self.content_status is not None or self.date_status is not None:
-                raise ValueError(
-                    "content_status and date_status must be omitted when source_status is NOT_FOUND"
-                )
+        if self.source_status != SourceStatus.CONFIRMED and (
+            self.content_status is not None or self.date_status is not None
+        ):
+            raise ValueError(
+                "content_status and date_status only apply when source_status is CONFIRMED"
+            )
         return self
 
 
@@ -76,6 +74,7 @@ class ExpertReviewResponse(BaseModel):
     justification: str | None
     credibility_weight: float
     status: str
+    is_admin_decision: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -93,6 +92,23 @@ class ExpertTopArticle(BaseModel):
 class ExpertQueueItemResponse(BaseModel):
     submission_id: str
     submission_type: SubmissionType
+    status: SubmissionStatus | None = None
+    escalated_at: datetime | None = None
+    published_date: date | None = Field(
+        default=None, description="The publication date the submitter claimed, if any."
+    )
+    has_voted: bool = False
+    can_vote: bool = Field(
+        default=False,
+        description=(
+            "Whether the requesting reviewer may vote now: experts on open claims "
+            "they did not submit or vote on; admins only on ESCALATED claims."
+        ),
+    )
+    decision_mode: str = Field(
+        default="EXPERT_VOTE",
+        description="EXPERT_VOTE, or ADMIN_FINAL when an admin's vote will be the final decision.",
+    )
     headline: str | None
     body_text: str | None = None
     claimed_source_text: str | None
@@ -103,6 +119,7 @@ class ExpertQueueItemResponse(BaseModel):
     ai_overall_verdict: OverallVerdict | None = None
     source_status: SourceStatus | None = None
     content_status: ContentStatus | None = None
+    headline_status: HeadlineAlterationStatus | None = None
     date_status: DateStatus | None = None
     ai_confidence: float | None
     submitted_at: datetime
@@ -129,6 +146,7 @@ class ExpertHistoryItemResponse(BaseModel):
     review_id: str
     submission_id: str
     submission_type: SubmissionType
+    submission_status: SubmissionStatus | None = None
     headline: str | None
     claimed_source_text: str | None
     vote_overall_verdict: OverallVerdict
@@ -140,10 +158,13 @@ class ExpertHistoryItemResponse(BaseModel):
     ai_content_status: ContentStatus | None
     ai_date_status: DateStatus | None
     final_overall_verdict: OverallVerdict | None
-    final_source_status: SourceStatus | None
-    final_content_status: ContentStatus | None
-    final_date_status: DateStatus | None
+    # Deprecated: the final decision is the overall verdict only. Kept for
+    # response compatibility; always null.
+    final_source_status: SourceStatus | None = None
+    final_content_status: ContentStatus | None = None
+    final_date_status: DateStatus | None = None
     matched: bool | None
+    is_admin_decision: bool = False
     voted_at: datetime
 
 

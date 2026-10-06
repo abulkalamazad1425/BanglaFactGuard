@@ -1,7 +1,7 @@
 import { resultLine } from './shared.js';
 import { h, render, Fragment } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { DEFAULTS, EMPTY_DRAFT, ownerOf, terminal, cropRect, validateDraft } from './shared.js';
+import { DEFAULTS, EMPTY_DRAFT, ownerOf, terminal, cropRect, validateDraft, FieldError } from './shared.js';
 import { imageStore } from './db.js';
 import './style.css';
 
@@ -52,7 +52,7 @@ function CropPreview({ image, setImage, owner, disabled }) {
 function App() {
   const [state,setState]=useState({settings:DEFAULTS,items:[]}), [tab,setTab]=useState(location.hash === '#activity' ? 'activity':'verify');
   const [draft,setDraft]=useState(EMPTY_DRAFT), [image,setImage]=useState(null), [loaded,setLoaded]=useState(false);
-  const [busy,setBusy]=useState(false), [error,setError]=useState(''), [notice,setNotice]=useState('');
+  const [busy,setBusy]=useState(false), [error,setError]=useState(''), [notice,setNotice]=useState(''), [fieldError,setFieldError]=useState(null);
   const [selection,setSelection]=useState(null), [sources,setSources]=useState([]);
   const [addresses,setAddresses]=useState(DEFAULTS), [credentials,setCredentials]=useState({email:'',password:''});
   const owner=ownerOf({user:state.user}), enabled=state.settings.enabled, locked=busy || state.busy || !enabled;
@@ -82,6 +82,7 @@ function App() {
   },[owner,state.settings.api]);
   useEffect(()=>{if(enabled)call('sources').then(s=>setSources(s.items || [])).catch(()=>{});},[enabled,state.settings.api]);
   const change=(field,value)=>{
+    if(fieldError?.field===field || field==='type')setFieldError(null);
     const next={...draftRef.current,[field]:value};draftRef.current=next;setDraft(next);
     void chrome.storage.local.set({[`draft:${ownerRef.current}`]:next}).catch(e=>setError(e.message));
   };
@@ -98,8 +99,16 @@ function App() {
     const bitmap=await createImageBitmap(file);bitmap.close();
     const value={original:file,current:file,name:file.name,originalName:file.name};await imageStore(owner,value);setImage(value);
   });
-  const submit=e=>{e.preventDefault();void run(async()=>{
-    validateDraft(draft,image?.current);await call('submit',{draft,owner});
+  const submit=e=>{e.preventDefault();
+    try { validateDraft(draft,image?.current); setFieldError(null); }
+    catch(err) {
+      if(!(err instanceof FieldError)) { setError(err.message); return; }
+      setFieldError({field:err.field,message:err.message});
+      setTimeout(()=>document.getElementById(`field-${err.field}`)?.focus(),0);
+      return;
+    }
+    void run(async()=>{
+    await call('submit',{draft,owner});
     setDraft({...EMPTY_DRAFT,type:draft.type});setImage(null);setTab('activity');
     setNotice('Claim received. Verification may take a few minutes. You can continue browsing; results will appear in Activity.');await refresh();
   });};
@@ -112,7 +121,10 @@ function App() {
     }
     await call('settings',{settings:{api:addresses.api,website:addresses.website}});await refresh();setNotice('Connection settings saved.');
   });};
-  const textField=(field,label,required,minLength)=> <label class="field">{label}<span class="row field-tools"><small>{required?'Required':'Optional'} · {draft[field].length.toLocaleString()} characters</small><button type="button" class="link-button" disabled={locked} onClick={()=>importSelection(field)}>Use selected text</button></span><textarea rows={field==='headline'?3:5} value={draft[field]} onInput={e=>change(field,e.currentTarget.value)} required={required} minLength={minLength} maxLength={field==='headline'?2000:50000} placeholder={`Type, paste, or select ${field==='headline'?'a headline':'body text'} on the page`} /></label>;
+  const Req=()=> <><span class="req" aria-hidden="true">*</span><span class="sr-only"> (required)</span></>;
+  const FieldErr=({field})=> fieldError?.field===field ? <p class="field-error" id={`error-${field}`} role="alert">{fieldError.message}</p> : null;
+  const invalid=field=>fieldError?.field===field;
+  const textField=(field,label,required,minLength)=> <div class="field"><label for={`field-${field}`}>{label}{required?<Req/>:<span class="optional"> optional</span>}</label><span class="row field-tools"><small>{draft[field].length.toLocaleString()} characters{minLength?` · at least ${minLength}`:''}</small><button type="button" class="link-button" disabled={locked} onClick={()=>importSelection(field)}>Use selected text</button></span><textarea id={`field-${field}`} rows={field==='headline'?3:5} value={draft[field]} onInput={e=>change(field,e.currentTarget.value)} required={required} minLength={minLength} maxLength={field==='headline'?2000:50000} aria-invalid={invalid(field)} aria-describedby={invalid(field)?`error-${field}`:undefined} placeholder={`Type, paste, or select ${field==='headline'?'a headline':'article text'} on the page`} /><FieldErr field={field}/></div>;
   return <main><header><div class="brand"><span class="shield">✓</span><div><strong>BanglaFactGuard</strong><small>Quick Verify</small></div></div><label class="toggle"><input type="checkbox" checked={enabled} disabled={busy || state.busy} onChange={e=>{const value=e.currentTarget.checked;void run(async()=>{await call('settings',{settings:{enabled:value}});await refresh();});}}/><span>{enabled?'ON':'OFF'}</span></label></header>
     <div class="identity">{state.user ? <span>{state.user.full_name || state.user.email} <b class="pill">{state.user.role}</b></span>:<span>Browsing as a guest <button class="link-button" onClick={()=>setTab('account')}>Sign in</button></span>}</div>
     <nav aria-label="Extension navigation">{[['verify','Verify'],['activity',`Activity${state.items.some(x=>x.unread)?' •':''}`],['account','Account']].map(([key,label])=><button class={tab===key?'active':''} onClick={()=>setTab(key)}>{label}</button>)}</nav>
@@ -122,15 +134,16 @@ function App() {
       {selection && <div class="banner"><strong>Selected {selection.field==='headline'?'headline':'body text'}</strong><p class="selection-text">{selection.text}</p><div class="row"><button disabled={locked} onClick={()=>applySelection(false)}>Replace field</button><button disabled={locked} onClick={()=>applySelection(true)}>Append to field</button><button onClick={()=>{setSelection(null);void chrome.storage.local.remove('selection');}}>Dismiss</button></div>{draft.type==='PHOTO_CARD'&&<small>Switch to Text & source or Text & image to use this text.</small>}</div>}
       <form onSubmit={submit}><fieldset disabled={locked || !loaded}><div class="modes">{[['SOURCE_BASED','Text & source'],['PHOTO_CARD','Photo card'],['MULTIMODAL','Text & image']].map(([key,label])=><button type="button" class={draft.type===key?'chosen':''} onClick={()=>change('type',key)}>{label}</button>)}</div>
         <p class="hint">{draft.type==='SOURCE_BASED'?'Check whether a claimed publisher carried this story.':draft.type==='PHOTO_CARD'?'Upload a news card or select a screenshot area to verify its claim.':'Analyze article body text and an image together. AI results are preliminary.'}</p>
-        {draft.type!=='PHOTO_CARD' && <>{textField('headline','Headline',true,draft.type==='SOURCE_BASED'?5:1)}{textField('body_text','Body text',draft.type==='MULTIMODAL',draft.type==='MULTIMODAL'?10:undefined)}</>}
-        {draft.type!=='SOURCE_BASED' && <div class="field">Claim image<div class="upload-actions"><label class="upload-button">Upload image<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={upload}/></label><button type="button" onClick={()=>run(async()=>{setNotice('Drag a rectangle on the page. Press Esc to cancel.');const result=await call('capture');if(result.captured){setImage(await imageStore(owner));setNotice('Selected area captured. Review or crop below.');}else setNotice('Screenshot cancelled.');})}>Select screenshot area</button></div><small>PNG, JPEG, WebP or GIF · maximum 10 MB</small><small>On a new website, click the pinned BanglaFactGuard toolbar icon once before capturing.</small><CropPreview image={image} setImage={setImage} owner={owner} disabled={locked}/></div>}
-        {draft.type!=='MULTIMODAL' && <><label class="field">Claimed news source<input value={draft.claimed_source_text} onInput={e=>change('claimed_source_text',e.currentTarget.value)} list="sources" required maxLength={255} placeholder="Publisher name or domain"/><datalist id="sources">{sources.map(s=><option value={s.canonical_name}>{s.display_name}</option>)}</datalist><small>The publisher named in the claim, not necessarily this website.</small></label><label class="field">Claimed publication date <small>Optional</small><input type="date" value={draft.published_date} onInput={e=>change('published_date',e.currentTarget.value)}/></label></>}
+        <p class="hint">Fields marked <span class="req" aria-hidden="true">*</span><span class="sr-only">with an asterisk</span> are required.</p>
+        {draft.type!=='PHOTO_CARD' && <>{textField('headline','Headline',true,draft.type==='SOURCE_BASED'?5:undefined)}{textField('body_text','Article text',draft.type==='MULTIMODAL',draft.type==='MULTIMODAL'?10:undefined)}</>}
+        {draft.type!=='SOURCE_BASED' && <div class={`field${invalid('image')?' invalid':''}`} role="group" aria-labelledby="image-label" aria-describedby={invalid('image')?'error-image':undefined}><span id="image-label">{draft.type==='PHOTO_CARD'?'Photocard image':'Image'}<Req/></span><div class="upload-actions"><label class="upload-button">Upload image<input id="field-image" type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={upload}/></label><button type="button" onClick={()=>run(async()=>{setNotice('Drag a rectangle on the page. Press Esc to cancel.');const result=await call('capture');if(result.captured){setImage(await imageStore(owner));setNotice('Selected area captured. Review or crop below.');}else setNotice('Screenshot cancelled.');})}>Select screenshot area</button></div><small>PNG, JPEG, WebP or GIF · maximum 10 MB</small><small>On a new website, click the pinned BanglaFactGuard toolbar icon once before capturing.</small><CropPreview image={image} setImage={setImage} owner={owner} disabled={locked}/><FieldErr field="image"/></div>}
+        {draft.type!=='MULTIMODAL' && <><div class="field"><label for="field-claimed_source_text">Claimed news outlet<Req/></label><input id="field-claimed_source_text" value={draft.claimed_source_text} onInput={e=>change('claimed_source_text',e.currentTarget.value)} list="sources" required maxLength={255} aria-invalid={invalid('claimed_source_text')} aria-describedby={invalid('claimed_source_text')?'error-claimed_source_text':'source-help'} placeholder="Publisher name or domain"/><datalist id="sources">{sources.map(s=><option value={s.canonical_name}>{s.display_name}</option>)}</datalist><small id="source-help">The publisher named in the claim, not necessarily this website.</small><FieldErr field="claimed_source_text"/></div><div class="field"><label for="field-published_date">Claimed publication date<span class="optional"> optional</span></label><input id="field-published_date" type="date" value={draft.published_date} onInput={e=>change('published_date',e.currentTarget.value)} aria-describedby="date-help"/><small id="date-help">Add it to see whether the dates match.</small></div></>}
         <button class="primary submit" type="submit">{busy||state.busy?'Please wait…':'Submit for verification'}</button><p class="hint">After submission, you can continue browsing. Find your results in Activity.</p>
       </fieldset></form></section>}
     {tab==='activity' && <section><div class="row between"><h1>Your activity</h1><button disabled={locked} onClick={()=>run(async()=>{await call('poll',{force:true});await refresh();})}>Refresh</button></div><p class="intro">Submissions made with this extension, for this account.</p>
       {!state.items.length && <div class="empty"><span>◎</span><h2>No claims yet</h2><p>Your pending checks and results will appear here.</p><button onClick={()=>setTab('verify')}>Verify a claim</button></div>}
-      {state.items.map(item=><article class={`result ${item.unread?'unread':''}`} key={item.id}><div class="row between"><span class="eyebrow">{item.type.replaceAll('_',' ')}</span>{item.unread&&<span class="pill">New</span>}</div><h2>{item.headline}</h2><p class="status">{{PENDING:'Queued',PROCESSING:'Checking your claim',EXPERT_REVIEW:'Preliminary result ready',FINALIZED:'Final result ready',ESCALATED:'Additional review required',FAILED:'Verification could not finish'}[item.status]}</p>
-        {item.summary?.lines?.map(line=><p class={"result-line " + (/verdict|prediction/i.test(line) ? "verdict-emphasis" : "finding-emphasis")}>{resultLine(line)}</p>)}{item.summary?.stage&&item.status!=='FAILED'&&<p class="review">{item.summary.review}</p>}
+      {state.items.map(item=><article class={`result ${item.unread?'unread':''}`} key={item.id}><div class="row between"><span class="eyebrow">{item.type.replaceAll('_',' ')}</span>{item.unread&&<span class="pill">New</span>}</div><h2>{item.headline}</h2><p class="status">{{PENDING:'Queued',PROCESSING:'Checking your claim',EXPERT_REVIEW:'Preliminary result ready',FINALIZED:'Final decision ready',ESCALATED:'Preliminary result ready · under review',FAILED:'Verification could not finish'}[item.status]}</p>
+        {item.summary?.lines?.map(resultLine).filter(Boolean).map(line=><p class={"result-line " + (/^Final decision/.test(line) ? "verdict-emphasis" : "finding-emphasis")}>{line}</p>)}{item.summary?.stage&&item.status!=='FAILED'&&<p class="review">{item.summary.review}</p>}
         {item.summary?.warnings?.map(w=><p class="warning">{w}</p>)}{item.summary?.error&&<p class="warning">{item.summary.error}</p>}{item.error&&<p class="warning">{item.error}</p>}{item.notificationError&&<p class="warning">{item.notificationError}</p>}
         {!terminal(item.status)&&!item.summary?.stage&&<p class="hint">{item.summary?.phase || 'Waiting for the server'}{Date.now()-item.created>120000?' · Taking a little longer than usual.':''}</p>}
         <small>{new Date(item.created).toLocaleString()}</small><div class="row actions"><button onClick={()=>run(()=>call('details',{id:item.id}))}>View details ↗</button>{item.unread&&<button onClick={()=>run(async()=>{await call('read',{id:item.id});await refresh();})}>Mark read</button>}</div></article>)}

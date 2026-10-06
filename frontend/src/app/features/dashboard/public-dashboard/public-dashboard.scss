@@ -57,3 +57,13 @@
   .pagination { gap: 10px; justify-content: space-between; .btn { padding: 10px; font-size: 12px; } span { font-size: 11px; } }
   .reading-guide { grid-template-columns: 1fr; gap: 16px; }
 }
+
+/* Final decision vs preliminary findings on cards: label + text, never colour alone. */
+.decision-label { font-size: 12px; font-weight: 700; color: var(--text-primary); }
+.finding { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 4px 0 12px; }
+.finding-caption { flex-basis: 100%; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
+.chip { display: inline-flex; gap: 4px; align-items: center; padding: 4px 10px; border-radius: 6px; font-size: 13px; font-weight: 650; border: 1px solid var(--border-strong); background: var(--bg-surface); color: var(--text-primary); }
+.chip-label { font-weight: 500; color: var(--text-secondary); }
+.chip-positive { border-color: var(--success); }
+.chip-caution { border-color: var(--warning); background: var(--warning-bg); }
+.review-label { border: 1px dashed var(--border-strong); }

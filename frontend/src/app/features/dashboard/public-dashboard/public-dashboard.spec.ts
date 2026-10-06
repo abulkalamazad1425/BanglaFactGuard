@@ -36,7 +36,9 @@ describe('Fact Explorer archive', () => {
     const harness = await RouterTestingHarness.create('/dashboard?review=review');
     expect(harness.routeNativeElement!.textContent).toContain('does not make a claim fake');
     expect(harness.routeNativeElement!.querySelector('.badge-false')).toBeNull();
-    expect(harness.routeNativeElement!.textContent).toContain('Under expert review');
+    expect(harness.routeNativeElement!.textContent).toContain('Under review');
+    expect(harness.routeNativeElement!.textContent).not.toMatch(/Found|Confirmed/);
+    expect(harness.routeNativeElement!.textContent).toContain('Not found in claimed source');
   });
 
   it('restores search and page from a shared URL', async () => {

@@ -1,5 +1,5 @@
 <div class="history-page"><div class="container history-container">
-  <header class="page-header"><div><h1>My Review History</h1><p>Your votes alongside the final expert verdict.</p></div><a class="btn btn-primary" routerLink="/expert/queue">Review claims</a></header>
+  <header class="page-header"><div><h1>My Review History</h1><p>Your overall votes alongside each claim’s final decision.</p></div><a class="btn btn-primary" routerLink="/expert/queue">Review claims</a></header>
   <form class="search-toolbar" (submit)="$event.preventDefault(); search(searchInput.value)"><label for="history-search">Search reviews</label><div class="search-row"><input #searchInput id="history-search" class="form-control" type="search" maxlength="200" placeholder="Headline or source"><button class="btn btn-primary" [disabled]="loading()">Search</button></div></form>
   @if (loadError()) {<div role="alert" class="service-notice"><p>Could not load your reviews.</p><button class="btn btn-secondary" (click)="load()">Try again</button></div>}
   @if (loading()) {<div class="loading-overlay" role="status" aria-label="Loading reviews"><div class="spinner"></div></div>}
@@ -8,9 +8,9 @@
     <article class="card submission-card">
       <div class="submission-meta"><span>{{ h.submission_type === 'MULTIMODAL' ? 'Text & image' : h.submission_type === 'PHOTO_CARD' ? 'Photo card' : 'Text & source' }}</span><time>{{ h.voted_at | date:'MMM d, y' }}</time></div>
       <h2><a [routerLink]="['/verify',h.submission_id]">{{ h.headline || 'View submitted claim' }}</a></h2>
-      <div class="review-outcomes"><div><h3>Your vote</h3><app-verdict-badge [overallVerdict]="h.vote_overall_verdict" /></div><div><h3>Final result</h3>@if (h.final_overall_verdict) {<app-verdict-badge [overallVerdict]="h.final_overall_verdict" />} @else {<span class="badge badge-pending">Expert review pending</span>}</div></div>
+      <div class="review-outcomes"><div><h3>Your vote</h3><app-verdict-badge [overallVerdict]="h.vote_overall_verdict" /></div><div><h3>Final decision</h3>@if (h.final_overall_verdict) {<app-verdict-badge [overallVerdict]="h.final_overall_verdict" />} @else if (h.submission_status === 'ESCALATED') {<span class="badge badge-partial">Escalated — awaiting admin decision</span>} @else {<span class="badge badge-pending">Under review</span>}</div></div>
       @if (h.matched !== null) {<p class="text-muted">{{ h.matched ? 'Your vote matches the final verdict.' : 'The final verdict differs from your vote.' }}</p>}
-      <details><summary>Preliminary findings and your checks</summary><div class="review-outcomes"><div><h3>Preliminary</h3><app-verdict-badge [preliminary]="true" [overallVerdict]="h.ai_overall_verdict" [sourceStatus]="h.ai_source_status" [contentStatus]="h.ai_content_status" [dateStatus]="h.ai_date_status" /></div><div><h3>Your checks</h3><app-verdict-badge [sourceStatus]="h.vote_source_status" [contentStatus]="h.vote_content_status" [dateStatus]="h.vote_date_status" /></div></div></details>
+      <details><summary>Preliminary AI findings and your supplementary findings</summary><div class="review-outcomes"><div><h3>Preliminary AI</h3><app-verdict-badge [preliminary]="true" [overallVerdict]="h.ai_overall_verdict" [sourceStatus]="h.ai_source_status" [contentStatus]="h.ai_content_status" [dateStatus]="h.ai_date_status" /></div><div><h3>Your supplementary findings</h3><p class="text-muted">{{ supplementary(h) }}</p></div></div></details>
       <a class="btn btn-secondary btn-sm" [routerLink]="['/verify',h.submission_id]">View evidence →</a>
     </article>
   }</div>

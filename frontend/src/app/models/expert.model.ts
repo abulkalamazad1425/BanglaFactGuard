@@ -7,9 +7,11 @@ import {
   ContentStatus,
   DateStatus,
   HeadlineAlterationDetail,
+  HeadlineAlterationStatus,
   HeadlineCheckStatus,
   OverallVerdict,
   SourceStatus,
+  SubmissionStatus,
   SubmissionType,
 } from './verification.model';
 
@@ -25,6 +27,13 @@ export interface ExpertTopArticle {
 export interface ExpertQueueItem {
   submission_id: string;
   submission_type: SubmissionType;
+  status?: SubmissionStatus | null;
+  escalated_at?: string | null;
+  published_date?: string | null;
+  /** Whether the requesting reviewer may vote now (admins: escalated claims only). */
+  can_vote?: boolean;
+  /** ADMIN_FINAL when an admin's vote will be the final decision. */
+  decision_mode?: 'EXPERT_VOTE' | 'ADMIN_FINAL';
   headline: string;
   body_text?: string | null;
   claimed_source_text: string;
@@ -33,6 +42,7 @@ export interface ExpertQueueItem {
   ai_overall_verdict?: OverallVerdict | null;
   source_status?: SourceStatus | null;
   content_status?: ContentStatus | null;
+  headline_status?: HeadlineAlterationStatus | null;
   date_status?: DateStatus | null;
   ai_confidence?: number | null;
   submitted_at: string;
@@ -79,6 +89,7 @@ export interface ExpertReviewResponse {
   justification?: string | null;
   credibility_weight: number;
   status: string;
+  is_admin_decision?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -103,6 +114,8 @@ export interface ExpertHistoryItem {
   final_content_status?: ContentStatus | null;
   final_date_status?: DateStatus | null;
   matched?: boolean | null;
+  submission_status?: SubmissionStatus | null;
+  is_admin_decision?: boolean;
   voted_at: string;
 }
 

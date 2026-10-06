@@ -12,6 +12,8 @@ import {
 } from '../../../models/verification.model';
 import { PhotoCardResultResponse } from '../../../models/photocard.model';
 import { VerificationReportComponent } from '../../../shared/components/verification-report/verification-report.component';
+import { VerdictBadgeComponent } from '../../../shared/components/verdict-badge/verdict-badge.component';
+import { VotingDetailsComponent } from '../../../shared/components/voting-details/voting-details.component';
 
 /**
  * Universal submission result page — the one destination every "view this
@@ -30,7 +32,7 @@ import { VerificationReportComponent } from '../../../shared/components/verifica
 @Component({
   selector: 'app-verify-result',
   standalone: true,
-  imports: [CommonModule, RouterLink, VerificationReportComponent],
+  imports: [CommonModule, RouterLink, VerificationReportComponent, VerdictBadgeComponent, VotingDetailsComponent],
   templateUrl: './verify-result.html',
   styleUrls: ['./verify-result.scss']
 })

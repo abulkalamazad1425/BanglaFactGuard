@@ -28,7 +28,7 @@ describe('Text and image redesigned flow', () => {
   });
   it('gives a finalized expert decision priority over the initial prediction', () => {
     const fixture = TestBed.createComponent(MultimodalComponent); fixture.componentInstance.result = RESULT; fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('.assessment-value').textContent.trim()).toBe('Real');
+    expect(fixture.nativeElement.querySelector('.assessment-value').textContent.trim()).toBe('Final decision: Real');
     expect(fixture.nativeElement.textContent).toContain('EXPERT REVIEW COMPLETE');
     expect(fixture.nativeElement.querySelector('a[href="/verify/m1"]')).not.toBeNull();
   });

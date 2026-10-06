@@ -7,13 +7,22 @@
   @else {
     @if (stillRunning()) {<section class="surface state-card" role="status"><span class="eyebrow">SUBMISSION RECEIVED</span><div class="spinner"></div><h2>Verification in progress</h2><p>{{ phaseText() }}. This page updates automatically as the check progresses.</p><div class="note"><strong>You can leave this page.</strong><p>Verification may take a few minutes. You can continue browsing. Find preliminary and final results in Fact Explorer or, if signed in, My Submissions. Keep this link or open <a routerLink="/history">My Submissions</a> if you are signed in.</p></div></section>}
     @if (failed()) {<section class="surface state-card" role="alert"><span class="eyebrow">CHECK INCOMPLETE</span><h2>Verification could not be completed</h2><p>{{ verificationFailure(failureReason()) }}</p><div class="note">No verdict was reached about this news.</div><a [routerLink]="inputRoute()" class="btn btn-primary">{{ kind() === 'PHOTO_CARD' ? 'Try another image' : 'Try another check' }}</a></section>}
-    @if (sourceResult(); as r) {<app-verification-report [r]="r" />}
-    @if (photocardResult()?.verification; as v) {<app-verification-report [r]="v" />}
+    @if (sourceResult(); as r) {<app-verification-report [r]="r" [claimedDate]="lookup()?.published_date" />}
+    @if (photocardResult()?.verification; as v) {<app-verification-report [r]="v" [claimedDate]="photocardResult()?.published_date" />}
     @if (multimodalResult(); as m) {
-      <section class="surface"><span class="eyebrow">{{ m.expert_overall_verdict ? 'EXPERT REVIEW COMPLETE' : 'AWAITING EXPERT REVIEW' }}</span><h2 class="assessment-value">{{ m.expert_overall_verdict ? overallVerdictLabel(m.expert_overall_verdict) : predictionLabel(m.prediction) }}</h2>
-      <p class="assessment-explanation">{{ m.expert_overall_verdict ? 'Final expert verdict.' : 'Preliminary result · expert review pending.' }}</p>
+      <section class="surface decision-panel" [class.decided]="!!m.expert_overall_verdict" aria-labelledby="mm-final-heading"><span class="eyebrow">FINAL DECISION</span>
+        @if (m.expert_overall_verdict) {
+          <div class="decision-row"><h2 id="mm-final-heading">Final decision</h2><app-verdict-badge class="decision-badge" [overallVerdict]="m.expert_overall_verdict" /></div>
+          <p class="assessment-explanation">Decided through expert review. The AI result below is preliminary and kept for reference.</p>
+          <app-voting-details [submissionId]="m.submission_id" />
+        } @else {
+          <h2 id="mm-final-heading">Under review</h2>
+          <p class="assessment-explanation">Expert review pending. No final decision has been made yet.</p>
+        }
+      </section>
+      <section class="surface"><span class="eyebrow">PRELIMINARY AI RESULT</span><h2 class="assessment-value"><span class="finding-label">AI decision:</span> {{ predictionLabel(m.prediction) }}</h2>
+      <p class="assessment-explanation">An automated assessment of the text and image together. It is not the final decision.</p>
       <div class="note"><strong>What this check covers</strong><p>AI assessment of text and image; no source comparison.</p></div>
-      @if (m.expert_overall_verdict) {<details><summary>View the earlier automated assessment</summary><p class="assessment-explanation">Preliminary assessment: <strong>{{ predictionLabel(m.prediction) }}</strong>. @if (multimodalWasOverridden(m)) {Expert review reached a different decision.}</p></details>}
       @if (m.is_cached) {<p class="field-hint">A previous assessment of this content was reused.</p>}
       <p class="field-hint">Assessment recorded {{ m.created_at | date:'medium' }}</p>
       <a routerLink="/verify" class="btn btn-secondary">Check against a news outlet ↗</a></section>

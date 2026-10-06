@@ -29,9 +29,8 @@ export class CredibilityTiersComponent implements OnInit {
     activation_threshold_votes: [10, [Validators.required, Validators.min(0)]],
     verified_threshold: [5.0, [Validators.required, Validators.min(0.01)]],
     lead_margin: [1.0, [Validators.required, Validators.min(0)]],
-    max_review_votes: [null as number | null],
-    max_review_hours: [null as number | null],
-    max_tier_weight: [null as number | null],
+    max_review_votes: [null as number | null, [Validators.min(1)]],
+    max_review_hours: [null as number | null, [Validators.min(1)]],
   });
 
   drawerOpen = signal(false);

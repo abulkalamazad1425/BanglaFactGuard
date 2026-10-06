@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.features.admin.schemas import (
+    AdminDashboardResponse,
     AdminStatsResponse,
     CreateExpertRequest,
     CredibilityWeightTierRequest,
@@ -145,6 +146,18 @@ async def get_platform_stats(
     svc: AdminService = Depends(_get_service),
 ) -> AdminStatsResponse:
     return await svc.get_platform_stats()
+
+
+@router.get(
+    "/dashboard",
+    response_model=AdminDashboardResponse,
+    summary="Admin home: pending actions, escalations and recent activity",
+)
+async def get_dashboard(
+    _: User = Depends(_ADMIN_ONLY),
+    svc: AdminService = Depends(_get_service),
+) -> AdminDashboardResponse:
+    return await svc.get_dashboard()
 
 
 @router.get(

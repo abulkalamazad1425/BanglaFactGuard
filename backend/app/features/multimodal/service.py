@@ -183,6 +183,7 @@ class MultimodalPredictionService:
                 self._db, user_id=submission.submitter_id,
                 title="Analysis ready", body="Your preliminary multimodal result is ready.",
                 notification_type="VERIFICATION_COMPLETE", link_url=f"/verify/{submission.id}",
+                headline=submission.headline,
             )
 
     async def _create_submission(

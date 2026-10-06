@@ -1,4 +1,4 @@
-import { DEFAULTS, ownerOf, ready, terminal, summarize, cropRect, validateDraft, withoutDateWarnings } from './shared.js';
+import { DEFAULTS, ownerOf, ready, terminal, summarize, cropRect, validateDraft, withoutDateWarnings, headlinePreview } from './shared.js';
 import { imageStore } from './db.js';
 import { selectArea } from './capture.js';
 
@@ -75,7 +75,7 @@ async function deliver(item) {
   item.unread = true;
   if (cfg.notifications && await chrome.notifications.getPermissionLevel() === 'granted') {
     try {
-      await chrome.notifications.create(`bfg:${item.id}`, { type: 'basic', iconUrl: chrome.runtime.getURL('icon.png'), title: item.summary.stage === 'failed' ? 'Verification could not finish' : item.summary.final ? 'Expert verdict ready' : 'Your preliminary result is ready', message: 'Open BanglaFactGuard to see your result.', priority: 1 });
+      await chrome.notifications.create(`bfg:${item.id}`, { type: 'basic', iconUrl: chrome.runtime.getURL('icon.png'), title: item.summary.stage === 'failed' ? 'Verification could not finish' : item.summary.final ? 'Final decision ready' : 'Preliminary result ready', message: headlinePreview(item.summary.headline || item.headline) || 'Your submitted claim', priority: 1 });
     } catch {
       // A desktop-notification failure must not hide a saved result or its badge.
       item.notificationError = 'Desktop alert unavailable. Your result is saved in Activity.';

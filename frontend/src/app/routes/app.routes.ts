@@ -71,6 +71,9 @@ export const APP_ROUTES: Routes = [
           { path: 'experts/new', loadComponent: () => import('../features/admin/create-expert/create-expert').then(m => m.CreateExpertComponent) },
           { path: 'sources',     loadComponent: () => import('../features/admin/source-management/source-management.component').then(m => m.SourceManagementComponent) },
           { path: 'credibility-tiers', loadComponent: () => import('../features/admin/credibility-tiers/credibility-tiers').then(m => m.CredibilityTiersComponent) },
+          // Admin expert queue: escalated claims to decide, other claims view-only.
+          { path: 'review-queue', loadComponent: () => import('../features/expert/expert-queue/expert-queue').then(m => m.ExpertQueueComponent) },
+          { path: 'review-queue/:id', loadComponent: () => import('../features/expert/expert-review-detail/expert-review-detail').then(m => m.ExpertReviewDetailComponent) },
         ],
       },
 

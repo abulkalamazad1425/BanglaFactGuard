@@ -481,3 +481,65 @@ input[type=checkbox] { accent-color: var(--primary); }
 
 .search-toolbar { margin:24px 0; label { display:block; font-weight:600; margin-bottom:8px; } .search-row { display:flex; gap:10px; } input { min-width:0; } }
 .assessment-value { display:inline-block; font-size:clamp(1.6rem,4vw,2.2rem); font-weight:800; padding:12px 20px; border-left:5px solid var(--primary); background:var(--bg-surface-2); border-radius:8px; }
+
+// ============================================================
+// Application UI layer — controls must read as controls.
+// Buttons are solid or outlined, inputs are white with a visible
+// border, links in content are underlined, required fields carry a
+// visible "*" plus screen-reader text, errors carry an icon + text,
+// and every status uses words, not colour alone.
+// ============================================================
+:root {
+  --border-strong: #8ea79a;
+  --input-bg: #ffffff;
+  --focus-ring: 0 0 0 3px rgba(31,127,78,0.35);
+}
+
+// Buttons: one solid primary, outlined secondary, quiet ghost — never look like text.
+.btn { border: 1px solid transparent; line-height: 1.25; justify-content: center; text-decoration: none !important; }
+.btn-primary { background: var(--primary); border-color: var(--primary-dark); color: #fff; box-shadow: 0 1px 2px rgba(12,20,16,.18);
+  &:hover { background: var(--primary-dark); color: #fff; transform: none; box-shadow: 0 2px 6px rgba(12,20,16,.22); } }
+.btn-secondary { background: var(--bg-surface); border-color: var(--border-strong); color: var(--primary-dark);
+  &:hover { background: var(--bg-surface-2); border-color: var(--primary); color: var(--primary-dark); } }
+.btn-ghost { background: transparent; border-color: var(--border-strong); color: var(--text-primary);
+  &:hover { background: var(--bg-surface); border-color: var(--primary); } }
+.btn-danger { background: var(--bg-surface); border-color: var(--error); color: #b91c1c;
+  &:hover { background: #b91c1c; border-color: #b91c1c; color: #fff; } }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn:disabled, .btn[aria-disabled='true'] { opacity: .55; cursor: not-allowed; box-shadow: none; }
+.btn-spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: -3px; }
+
+// Inputs: white field, visible border, clear focus and error states.
+.form-control, .verification-shell .form-control, .verification-shell input[type='text'], .verification-shell textarea, .verification-shell select {
+  background: var(--input-bg); border: 1px solid var(--border-strong); color: var(--text-primary);
+  &:hover { border-color: var(--primary); }
+  &:focus, &:focus-visible { background: var(--input-bg); border-color: var(--primary); box-shadow: var(--focus-ring); outline: none; }
+  &:disabled { background: var(--bg-surface-2); color: var(--text-muted); cursor: not-allowed; }
+  &.is-invalid, &[aria-invalid='true'] { border: 2px solid var(--error); }
+}
+.is-invalid.dropzone, .is-invalid.file-upload { border-color: var(--error) !important; border-style: solid !important; }
+.form-label, .verification-shell .form-group > label { color: var(--text-primary); font-weight: 650; }
+.req-mark { color: #b91c1c; font-weight: 800; margin-left: 2px; }
+.optional { color: var(--text-muted); font-weight: 400; font-size: 12px; margin-left: 4px; }
+.field-hint { display: block; color: var(--text-muted); font-size: 12px; line-height: 1.6; margin-top: 6px; }
+.form-error, .verification-shell .form-error { display: flex; align-items: flex-start; gap: 6px; color: #b91c1c; font-size: 13px; font-weight: 600; margin-top: 6px;
+  &::before { content: '⚠'; font-weight: 700; } }
+
+// Links inside reading content are underlined so they never look like static text.
+.verification-shell p a:not(.btn), .verification-shell dd a:not(.btn), .verification-shell .section-sub a, .note a:not(.btn), .card p a:not(.btn), .empty a:not(.btn) {
+  text-decoration: underline; text-underline-offset: 3px; }
+
+// Tables: visible row separators and header.
+.data-table th { color: var(--text-secondary); border-bottom: 1px solid var(--border-strong); }
+.data-table td { border-bottom: 1px solid var(--border); }
+.data-table tr:hover td { background: var(--bg-surface-2); }
+
+// Badges: always bordered text chips.
+.badge { border: 1px solid currentColor; }
+.badge-pending { color: #1d4ed8; }
+.badge-incomplete { border-style: dashed; }
+
+// Surfaces: cards get a visible edge so content groups are distinct.
+.card, .verification-shell .surface { border-color: var(--border); }
+
+@media (forced-colors: active) { .btn, .badge, .form-control { border: 1px solid CanvasText; } }

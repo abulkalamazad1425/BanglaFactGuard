@@ -43,6 +43,7 @@ export const API_ENDPOINTS = {
   // Admin
   ADMIN_EXPERTS: '/admin/experts',
   ADMIN_STATS: '/admin/stats',
+  ADMIN_DASHBOARD: '/admin/dashboard',
   ADMIN_CREDIBILITY_TIERS: '/admin/credibility-tiers',
   ADMIN_VOTING_CONFIG: '/admin/voting-config',
 

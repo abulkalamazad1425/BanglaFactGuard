@@ -180,6 +180,7 @@ class ResultPersistenceStage:
             user_id=submission.submitter_id,
             notification_type="VERIFICATION_COMPLETE",
             link_url=f"/verify/{submission.id}",
+            headline=context.raw_headline or submission.headline,
             title=f"Automated check complete: {notification_summary(context)}",
             body=(
                 f'Your claim "{preview}" has a preliminary automated result '

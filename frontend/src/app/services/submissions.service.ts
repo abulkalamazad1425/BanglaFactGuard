@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
 import { API_ENDPOINTS } from '../core/constants/api-endpoints.constant';
-import { SubmissionLookup } from '../models/verification.model';
+import { PublicVotingDetails, SubmissionLookup } from '../models/verification.model';
 
 /**
  * Type-agnostic submission lookup.
@@ -20,5 +20,10 @@ export class SubmissionsService {
   /** GET /api/v1/submissions/{id} */
   getLookup(submissionId: string): Observable<SubmissionLookup> {
     return this.api.get<SubmissionLookup>(`${API_ENDPOINTS.SUBMISSIONS}/${submissionId}`);
+  }
+
+  /** GET /api/v1/submissions/{id}/voting-details — public, 404 until the final decision. */
+  getVotingDetails(submissionId: string): Observable<PublicVotingDetails> {
+    return this.api.get<PublicVotingDetails>(`${API_ENDPOINTS.SUBMISSIONS}/${submissionId}/voting-details`);
   }
 }

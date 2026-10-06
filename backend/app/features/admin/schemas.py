@@ -41,29 +41,11 @@ class ExpertResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class VerdictBreakdown(BaseModel):
-    """Counts across the 3 independent verdict dimensions.
-
-    Not a single TRUE/FALSE/PARTIALLY_TRUE/NOT_FOUND tally — source, content
-    and date are checked independently, so each gets its own pair of counts.
-    content_* and date_* only count submissions where that dimension was
-    actually evaluated (source CONFIRMED, and — for date — both a claimed and
-    an actual publication date known).
-    """
-
-    source_confirmed_count: int
-    source_not_found_count: int
-    content_matched_count: int
-    content_altered_count: int
-    date_matched_count: int
-    date_mismatched_count: int
-
-
 class AdminStatsResponse(BaseModel):
     total_submissions: int
     submissions_last_30_days: int
-    verdict_breakdown: VerdictBreakdown
-    pending_expert_reviews: int
+    pending_expert_reviews: int = Field(description="Claims currently open for expert voting.")
+    escalated_claims: int = Field(default=0, description="Claims awaiting an admin decision.")
     total_experts: int
     active_experts: int
     avg_verification_time_seconds: float | None
@@ -118,15 +100,19 @@ class VotingConfigUpdateRequest(BaseModel):
     max_review_votes: int | None = Field(
         default=None,
         ge=1,
-        description="Escalate after this many votes without consensus (omit for no cap)",
+        description=(
+            "Escalate to admin once this many votes are cast without a final "
+            "decision (null = not configured). Either limit being exceeded escalates."
+        ),
     )
     max_review_hours: int | None = Field(
         default=None,
         ge=1,
-        description="Escalate after this many hours without consensus (omit for no cap)",
-    )
-    max_tier_weight: float | None = Field(
-        default=None, gt=0, description="Upper bound on any credibility tier's weight"
+        description=(
+            "Escalate to admin once this many hours have passed since submission "
+            "without a final decision (null = not configured). Enforced by a "
+            "background sweep, independent of new votes or page visits."
+        ),
     )
 
 
@@ -140,7 +126,58 @@ class VotingConfigResponse(BaseModel):
     lead_margin: float
     max_review_votes: int | None
     max_review_hours: int | None
-    max_tier_weight: float | None
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+
+class DashboardClaim(BaseModel):
+    submission_id: str
+    headline: str | None
+    submission_type: str
+    status: str
+    vote_count: int = 0
+    submitted_at: datetime
+    escalated_at: datetime | None = None
+    final_verdict: str | None = None
+    decided_by_admin: bool = False
+    finalized_at: datetime | None = None
+
+
+class DashboardExpert(BaseModel):
+    id: str
+    full_name: str | None
+    is_active: bool
+    total_votes: int
+    last_vote_at: datetime | None = None
+
+
+class DashboardActivity(BaseModel):
+    kind: str = Field(description="VOTE | ADMIN_DECISION")
+    actor: str
+    submission_id: str
+    headline: str | None
+    overall_vote: str
+    at: datetime
+
+
+class AdminDashboardResponse(BaseModel):
+    """Everything the admin home page needs in one call: what needs action
+    (escalated claims, open reviews), what changed recently and who is active."""
+
+    escalated_count: int
+    pending_review_count: int
+    processing_count: int
+    failed_last_7_days: int
+    submissions_last_7_days: int
+    finalized_last_7_days: int
+    total_submissions: int
+    active_experts: int
+    inactive_experts: int
+    escalated_claims: list[DashboardClaim]
+    oldest_pending_reviews: list[DashboardClaim]
+    recent_submissions: list[DashboardClaim]
+    recent_decisions: list[DashboardClaim]
+    experts: list[DashboardExpert]
+    recent_activity: list[DashboardActivity]

@@ -1,119 +1,122 @@
 <div class="mgmt-page">
-  <div class="container" style="padding-top:48px; padding-bottom:80px;">
-    <div class="page-header animate-in">
-      <div class="header-content">
-        <div>
-          <h1>Expert Management</h1>
-          <p>Manage expert reviewer accounts</p>
-        </div>
-        <a routerLink="/admin/experts/new" class="btn btn-primary">+ Create Expert</a>
+  <div class="container page-body">
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">ADMINISTRATION</p>
+        <h1>Expert management</h1>
+        <p class="lede">Create, edit, activate or deactivate expert reviewer accounts.</p>
       </div>
-    </div>
+      <div class="header-links">
+        <a routerLink="/admin" class="btn btn-ghost">← Admin dashboard</a>
+        <a routerLink="/admin/experts/new" class="btn btn-primary">+ Create expert</a>
+      </div>
+    </header>
 
-    @if (loading()) { <div class="loading-overlay"><div class="spinner"></div></div> }
-
-    @if (!loading()) {
-      <div class="table-card card animate-in">
-        <table class="data-table">
-          <thead><tr>
-            <th>Name</th>
-            <th>Email</th>
-            <th>Expertise</th>
-            <th>Credibility</th>
-            <th>Votes</th>
-            <th>Status</th>
-            <th>Actions</th>
-          </tr></thead>
-          <tbody>
-            @for (exp of experts(); track exp.id) {
-              <tr>
-                <td class="font-semibold">{{ exp.full_name || '—' }}</td>
-                <td class="text-muted text-sm">{{ exp.email }}</td>
-                <td class="text-muted text-sm">{{ exp.expertise_area || '—' }}</td>
-                <td>
-                  @if (exp.credibility_score !== null) {
-                    <span [style.color]="credColor(exp.credibility_score!)">
-                      {{ (exp.credibility_score! * 100).toFixed(1) }}%
+    @if (loading()) { <div class="loading-overlay" role="status"><div class="spinner"></div><span class="sr-only">Loading experts</span></div> }
+    @else if (loadError()) {
+      <div class="service-notice" role="alert"><p>The expert list could not be loaded.</p><button type="button" class="btn btn-secondary" (click)="load()">Try again</button></div>
+    } @else {
+      <div class="table-card card">
+        <div class="table-scroll" role="region" aria-label="Expert accounts" tabindex="0">
+          <table class="data-table experts-table">
+            <colgroup>
+              <col class="col-name"><col class="col-email"><col class="col-expertise"><col class="col-cred"><col class="col-votes"><col class="col-status"><col class="col-actions">
+            </colgroup>
+            <thead><tr>
+              <th scope="col">Name</th>
+              <th scope="col">Email</th>
+              <th scope="col">Expertise</th>
+              <th scope="col">Credibility</th>
+              <th scope="col" class="num">Votes</th>
+              <th scope="col">Status</th>
+              <th scope="col">Actions</th>
+            </tr></thead>
+            <tbody>
+              @for (exp of experts(); track exp.id) {
+                <tr [class.inactive-row]="!exp.is_active">
+                  <td class="cell-name">{{ exp.full_name || '—' }}</td>
+                  <td class="cell-wrap">{{ exp.email }}</td>
+                  <td class="cell-wrap">{{ exp.expertise_area || '—' }}</td>
+                  <td>
+                    @if (exp.credibility_score !== null && exp.credibility_score !== undefined) {
+                      <span>{{ (exp.credibility_score * 100).toFixed(1) }}%</span>
+                    } @else { <span class="text-muted">Not yet calculated</span> }
+                  </td>
+                  <td class="num">{{ exp.total_votes ?? 0 }}</td>
+                  <td>
+                    <span class="badge status-badge" [class.badge-true]="exp.is_active" [class.badge-not-found]="!exp.is_active">
+                      <span aria-hidden="true">{{ exp.is_active ? '●' : '○' }}</span> {{ exp.is_active ? 'Active' : 'Inactive' }}
                     </span>
-                  } @else { <span class="text-muted">Not yet calculated</span> }
-                </td>
-                <td>{{ exp.total_votes }}</td>
-                <td>
-                  <span class="badge" [class]="exp.is_active ? 'badge-true' : 'badge-false'">
-                    {{ exp.is_active ? 'Active' : 'Inactive' }}
-                  </span>
-                </td>
-                <td>
-                  <div class="action-btns">
-                    <button class="btn btn-ghost btn-sm" (click)="openEdit(exp)">Edit</button>
-                    @if (exp.is_active) {
-                      <button class="btn btn-danger btn-sm" (click)="deactivate(exp)">Deactivate</button>
-                    } @else {
-                      <button class="btn btn-secondary btn-sm" (click)="activate(exp)">Activate</button>
-                    }
-                    <button class="btn btn-ghost btn-sm" (click)="resetPwd(exp)">Reset Pwd</button>
-                  </div>
-                </td>
-              </tr>
-            }
-            @empty {
-              <tr><td colspan="7" class="text-center text-muted" style="padding:40px;">No experts found.</td></tr>
-            }
-          </tbody>
-        </table>
+                  </td>
+                  <td>
+                    <div class="action-btns">
+                      <button type="button" class="btn btn-secondary btn-sm" (click)="openEdit(exp)" [attr.aria-label]="'Edit ' + (exp.full_name || exp.email)">Edit</button>
+                      @if (exp.is_active) {
+                        <button type="button" class="btn btn-danger btn-sm toggle-btn" [disabled]="busyId() === exp.id" (click)="deactivate(exp)" [attr.aria-label]="'Deactivate ' + (exp.full_name || exp.email)">{{ busyId() === exp.id ? 'Saving…' : 'Deactivate' }}</button>
+                      } @else {
+                        <button type="button" class="btn btn-secondary btn-sm toggle-btn" [disabled]="busyId() === exp.id" (click)="activate(exp)" [attr.aria-label]="'Activate ' + (exp.full_name || exp.email)">{{ busyId() === exp.id ? 'Saving…' : 'Activate' }}</button>
+                      }
+                      <button type="button" class="btn btn-ghost btn-sm" (click)="resetPwd(exp)" [attr.aria-label]="'Reset password for ' + (exp.full_name || exp.email)">Reset password</button>
+                    </div>
+                  </td>
+                </tr>
+              }
+              @empty {
+                <tr><td colspan="7" class="empty-cell">No experts yet. <a routerLink="/admin/experts/new">Create the first expert account</a>.</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
       </div>
+    }
 
-      <!-- Edit expert dialog -->
-      @if (editTarget()) {
-        <div class="modal-overlay" (click)="editTarget.set(null)">
-          <div class="modal-card card" (click)="$event.stopPropagation()">
-            <h3>Edit {{ editTarget()!.full_name }}</h3>
-            <form [formGroup]="editForm" (ngSubmit)="confirmEdit()" style="margin-top:20px;">
-              <div class="form-group">
-                <label for="expert-management-full_name" class="form-label">Full Name</label>
-                <input id="expert-management-full_name" type="text" formControlName="full_name" class="form-control"
-                       [class.is-invalid]="editForm.get('full_name')?.invalid && editForm.get('full_name')?.touched" />
-              </div>
-              <div class="form-group">
-                <label for="expert-management-email" class="form-label">Email</label>
-                <input id="expert-management-email" type="email" formControlName="email" class="form-control"
-                       [class.is-invalid]="editForm.get('email')?.invalid && editForm.get('email')?.touched" />
-              </div>
-              <div class="form-group">
-                <label for="expert-management-expertise_area" class="form-label">Expertise Area</label>
-                <input id="expert-management-expertise_area" type="text" formControlName="expertise_area" class="form-control" placeholder="e.g., Political Journalism" />
-              </div>
-              <div class="modal-actions">
-                <button type="button" class="btn btn-ghost" (click)="editTarget.set(null)">Cancel</button>
-                <button type="submit" class="btn btn-primary" [disabled]="editForm.invalid || editing()">
-                  {{ editing() ? 'Saving...' : 'Save Changes' }}
-                </button>
-              </div>
-            </form>
-          </div>
+    @if (editTarget()) {
+      <div class="modal-overlay" (click)="editTarget.set(null)">
+        <div class="modal-card card" role="dialog" aria-modal="true" aria-labelledby="edit-expert-title" (click)="$event.stopPropagation()">
+          <h2 id="edit-expert-title">Edit {{ editTarget()!.full_name || editTarget()!.email }}</h2>
+          <form [formGroup]="editForm" (ngSubmit)="confirmEdit()" novalidate>
+            <div class="form-group">
+              <label for="expert-management-full_name" class="form-label">Full name <span class="req-mark" aria-hidden="true">*</span><span class="sr-only">(required)</span></label>
+              <input id="expert-management-full_name" type="text" formControlName="full_name" class="form-control"
+                     [class.is-invalid]="editForm.get('full_name')?.invalid && editForm.get('full_name')?.touched" aria-describedby="edit-name-error" />
+              @if (editForm.get('full_name')?.invalid && editForm.get('full_name')?.touched) {<span id="edit-name-error" class="form-error">Enter the expert’s name.</span>}
+            </div>
+            <div class="form-group">
+              <label for="expert-management-email" class="form-label">Email <span class="req-mark" aria-hidden="true">*</span><span class="sr-only">(required)</span></label>
+              <input id="expert-management-email" type="email" formControlName="email" class="form-control"
+                     [class.is-invalid]="editForm.get('email')?.invalid && editForm.get('email')?.touched" aria-describedby="edit-email-error" />
+              @if (editForm.get('email')?.invalid && editForm.get('email')?.touched) {<span id="edit-email-error" class="form-error">Enter a valid email address.</span>}
+            </div>
+            <div class="form-group">
+              <label for="expert-management-expertise_area" class="form-label">Expertise area <span class="optional">optional</span></label>
+              <input id="expert-management-expertise_area" type="text" formControlName="expertise_area" class="form-control" placeholder="e.g. Political journalism" />
+            </div>
+            <div class="modal-actions">
+              <button type="button" class="btn btn-ghost" (click)="editTarget.set(null)">Cancel</button>
+              <button type="submit" class="btn btn-primary" [disabled]="editing()">{{ editing() ? 'Saving…' : 'Save changes' }}</button>
+            </div>
+          </form>
         </div>
-      }
+      </div>
+    }
 
-      <!-- Reset password dialog -->
-      @if (resetTarget()) {
-        <div class="modal-overlay" (click)="resetTarget.set(null)">
-          <div class="modal-card card" (click)="$event.stopPropagation()">
-            <h3>Reset Password for {{ resetTarget()!.full_name }}</h3>
-            <form [formGroup]="pwForm" (ngSubmit)="confirmReset()" style="margin-top:20px;">
-              <div class="form-group">
-                <label for="expert-management-password" class="form-label">New Password</label>
-                <input id="expert-management-password" type="password" formControlName="password" class="form-control" placeholder="Min 8 chars, 1 uppercase, 1 digit" />
-              </div>
-              <div class="modal-actions">
-                <button type="button" class="btn btn-ghost" (click)="resetTarget.set(null)">Cancel</button>
-                <button type="submit" class="btn btn-primary" [disabled]="pwForm.invalid || resetting()">
-                  {{ resetting() ? 'Resetting...' : 'Reset Password' }}
-                </button>
-              </div>
-            </form>
-          </div>
+    @if (resetTarget()) {
+      <div class="modal-overlay" (click)="resetTarget.set(null)">
+        <div class="modal-card card" role="dialog" aria-modal="true" aria-labelledby="reset-title" (click)="$event.stopPropagation()">
+          <h2 id="reset-title">Reset password for {{ resetTarget()!.full_name || resetTarget()!.email }}</h2>
+          <form [formGroup]="pwForm" (ngSubmit)="confirmReset()" novalidate>
+            <div class="form-group">
+              <label for="expert-management-password" class="form-label">New password <span class="req-mark" aria-hidden="true">*</span><span class="sr-only">(required)</span></label>
+              <input id="expert-management-password" type="password" formControlName="password" class="form-control" autocomplete="new-password" aria-describedby="reset-hint" />
+              <span id="reset-hint" class="field-hint">At least 8 characters, with an uppercase letter and a digit.</span>
+            </div>
+            <div class="modal-actions">
+              <button type="button" class="btn btn-ghost" (click)="resetTarget.set(null)">Cancel</button>
+              <button type="submit" class="btn btn-primary" [disabled]="pwForm.invalid || resetting()">{{ resetting() ? 'Resetting…' : 'Reset password' }}</button>
+            </div>
+          </form>
         </div>
-      }
+      </div>
     }
   </div>
 </div>

@@ -29,14 +29,14 @@
             <div class="notif-indicator" [class.visible]="!n.is_read"></div>
             <div class="notif-body">
               <div class="notif-title">{{ readableExplanation(n.title) }}</div>
-              <div class="notif-message">{{ readableExplanation(n.body) }}</div>
+              <div class="notif-message" lang="bn">{{ isHeadlinePreview(n) ? n.body : readableExplanation(n.body) }}</div>
               <button class="btn btn-ghost btn-sm" (click)="markRead(n)">Mark as read</button><div class="notif-meta">
-                <span class="badge badge-primary text-xs">{{ n.notification_type === 'VERIFICATION_COMPLETE' ? 'Preliminary result' : n.notification_type === 'EXPERT_REVIEW_COMPLETE' ? 'Final result' : 'Update' }}</span>
+                <span class="badge badge-primary text-xs">{{ typeLabel(n.notification_type) }}</span>
                 <span class="text-muted text-xs">{{ n.created_at | date:'MMM d, y, HH:mm' }}</span>
               </div>
             </div>
             @if (n.link_url) {
-              <a [routerLink]="n.link_url" class="btn btn-ghost btn-sm">View →</a>
+              <a [routerLink]="n.link_url" class="btn btn-secondary btn-sm" (click)="markRead(n)">{{ n.notification_type === 'CLAIM_ESCALATED' ? 'Review & decide' : 'View result' }} <span aria-hidden="true">→</span></a>
             }
           </div>
         }

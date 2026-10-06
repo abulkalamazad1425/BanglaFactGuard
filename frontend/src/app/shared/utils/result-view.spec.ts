@@ -26,9 +26,13 @@ function response(overrides: Partial<VerificationResponse> = {}): VerificationRe
 
 describe('result-view', () => {
   describe('headlineView', () => {
-    it('shows only the two headline verdicts', () => {
-      expect(headlineView(response()).title).toBe('Headline matched');
-      expect(headlineView(response({ content_status: 'ALTERED' })).title).toBe('Headline altered');
+    it('splits a match into Exact Matched / Meaning Preserved and keeps Altered', () => {
+      expect(headlineView(response({ headline_status: 'EXACT_MATCHED' })).title).toBe('Exact Matched');
+      expect(headlineView(response({ headline_status: 'MEANING_PRESERVED' })).title).toBe('Meaning Preserved');
+      expect(headlineView(response({ content_status: 'ALTERED', headline_status: 'ALTERED' })).title).toBe('Altered');
+      // An older response without headline_status: no evidence of exactness -> Meaning Preserved.
+      expect(headlineView(response()).title).toBe('Meaning Preserved');
+      expect(headlineView(response({ content_status: 'ALTERED' })).tone).toBe('altered');
     });
 
     it('explains a missing verdict instead of guessing one', () => {
@@ -41,7 +45,7 @@ describe('result-view', () => {
     it('keeps source-not-found and a failed search apart', () => {
       const notFound = headlineView(response({ source_status: 'NOT_FOUND', content_status: null, headline_check_status: 'SOURCE_NOT_FOUND' }));
       const failed = headlineView(response({ source_status: 'INCOMPLETE', content_status: null, headline_check_status: 'SOURCE_CHECK_INCOMPLETE' }));
-      expect(notFound.summary).toContain('No corresponding report');
+      expect(notFound.summary).toContain('No relevant article');
       expect(failed.summary).toContain('could not be completed');
       expect(notFound.summary).not.toEqual(failed.summary);
     });

@@ -1,5 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { VerificationReportComponent } from './verification-report.component';
 import { HeadlineAlterationDetail, VerificationResponse } from '../../../models/verification.model';
 
@@ -47,21 +49,40 @@ function render(r: VerificationResponse, reviewer = false): HTMLElement {
 }
 
 describe('VerificationReportComponent', () => {
-  beforeEach(() => TestBed.configureTestingModule({ imports: [VerificationReportComponent], providers: [provideRouter([])] }));
+  beforeEach(() => TestBed.configureTestingModule({ imports: [VerificationReportComponent], providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()] }));
 
   it('before finalization shows review-pending and NO overall truth badge', () => {
     const el = render(base());
     expect(el.textContent).toContain('Expert review pending.');
-    expect(el.textContent).not.toContain('Final result');
+    expect(el.textContent).toContain('Under review');
+    expect(el.querySelector('app-voting-details')).toBeNull();
     const badgeTexts = Array.from(el.querySelectorAll('.badge')).map((b) => (b.textContent ?? '').replace(/[^A-Za-z]/g, ''));
     expect(badgeTexts.some((t) => ['Fake', 'Real', 'Misleading', 'Altered'].includes(t))).toBeFalse();
   });
 
-  it('after finalization shows the expert verdict, and the automated result stays inspectable', () => {
-    const el = render(base({ is_finalized: true, review_pending: false, overall_verdict: 'MISLEADING', was_overridden: true, content_status: 'ALTERED' }));
-    expect(el.textContent).toContain('Final result');
-    expect(el.textContent).toContain('Misleading');
-    expect(el.textContent).toContain('Experts changed the automated finding');
+  it('after finalization shows the final decision apart from the preliminary findings, with Voting Details', () => {
+    const el = render(base({ is_finalized: true, review_pending: false, overall_verdict: 'MISLEADING', headline_status: 'EXACT_MATCHED' }));
+    const decision = el.querySelector('.decision-panel')!.textContent!;
+    expect(decision).toContain('Final decision');
+    expect(decision).toContain('Misleading');
+    expect(decision).toContain('Decided by the expert reviewers');
+    expect(el.querySelector('app-voting-details button')?.textContent).toContain('Voting Details');
+    expect(el.querySelector('.report-summary')!.textContent).toContain('Headline: Exact Matched');
+  });
+
+  it('marks an administrator final decision', () => {
+    const el = render(base({ is_finalized: true, review_pending: false, overall_verdict: 'FAKE', decided_by_admin: true }));
+    expect(el.querySelector('.decision-panel')!.textContent).toContain('administrator made this final decision');
+  });
+
+  it('labels the source finding "Relevant article from claimed source" with Found / Not Found', () => {
+    expect(render(base()).querySelector('.findings-grid')!.textContent).toContain('Relevant article from claimed source: Found');
+    expect(render(base()).textContent).not.toContain('01 / SOURCE');
+  });
+
+  it('shows the date comparison only when a date was claimed', () => {
+    expect(render(base({ date_status: 'MISMATCHED' })).textContent).not.toContain('Date: Mismatched');
+    expect(render(base({ date_status: 'MISMATCHED', claimed_published_date: '2026-01-02' })).textContent).toContain('Date: Mismatched');
   });
 
   it('labels the finding "Headline Alteration", never "Content Alteration"', () => {
@@ -76,7 +97,7 @@ describe('VerificationReportComponent', () => {
     expect(compare).toContain('নতুন সেতুর উদ্বোধন');
     expect(compare).toContain('prothomalo.com');
     expect(el.querySelector('.headline-compare a')?.getAttribute('href')).toBe('https://prothomalo.com/a/b');
-    expect(el.querySelector('.headline-verdict')?.textContent).toContain('Exact match');
+    expect(el.querySelector('.headline-verdict')?.textContent).toContain('Exact Matched');
     expect(el.textContent).toContain('exactly matches the source title');
   });
 
@@ -105,16 +126,23 @@ describe('VerificationReportComponent', () => {
       analysis: { headline_alteration: { ...MATCHED_DETAIL, status: 'MODEL_UNAVAILABLE', verdict: null, exact_match: false, reason: 'The semantic model was unavailable, so no verdict was reached.' } },
     }));
     expect(el.querySelector('.headline-verdict')?.textContent).toContain('No verdict');
-    expect(el.textContent).not.toContain('Headline matched');
-    expect(el.textContent).not.toContain('Headline altered');
+    const verdicts = el.querySelector('.findings-grid')!.textContent! + el.querySelector('.headline-verdict')!.textContent!;
+    expect(verdicts).not.toMatch(/Exact Matched|Meaning Preserved|Headline: Altered/);
   });
 
-  it('"Source not found" is never preceded by a question mark', () => {
-    const el = render(base({ source_status: 'NOT_FOUND', content_status: null, headline_check_status: 'SOURCE_NOT_FOUND', analysis: null }));
+  it('a missing article says "Not found in claimed source" and hides headline, date and body findings', () => {
+    const el = render(base({
+      source_status: 'NOT_FOUND', content_status: null, headline_check_status: 'SOURCE_NOT_FOUND',
+      date_status: 'MATCHED', claimed_published_date: '2026-01-02', claim_scope: 'HEADLINE_WITH_BODY', analysis: null,
+    }));
     const text = el.textContent!;
-    expect(text).toContain('Source not found');
-    expect(text).not.toMatch(/\?\s*Source not found/i);
-    expect(text).toContain('does not establish that the news is false');
+    expect(text).toContain('Relevant article from claimed source: Not Found');
+    expect(text).toContain('Not found in claimed source');
+    expect(text).not.toMatch(/\?\s*Not found/i);
+    expect(text).toContain('does not prove the news is false');
+    expect(text).not.toContain('HEADLINE ALTERATION');
+    expect(text).not.toContain('BODY SIMILARITY');
+    expect(text).not.toContain('Date:');
   });
 
   it('headline-only claims show no body similarity section', () => {
@@ -173,7 +201,7 @@ describe('VerificationReportComponent', () => {
   it('legacy results never show an old content verdict as a headline verdict', () => {
     const el = render(base({ content_status: null, ai_content_status: null, headline_check_status: null, legacy_result: true, analysis: null }));
     expect(el.textContent).toContain('earlier version of the checker');
-    expect(el.textContent).not.toContain('Headline matched');
+    expect(el.querySelector('.findings-grid')!.textContent).not.toMatch(/Exact Matched|Meaning Preserved/);
   });
 
   it('reviewers can inspect correspondence measurements; the public view does not show them', () => {

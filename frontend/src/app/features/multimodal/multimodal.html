@@ -1,26 +1,28 @@
-<div class="verification-shell"><div class="flow-container"><header class="flow-heading"><div><span class="eyebrow">CHECK TEXT & IMAGE</span><h1>Read the story alongside its image.</h1><p>Add the Bengali article and its accompanying image for a preliminary assessment. This method does not confirm publication by a particular news outlet.</p></div><a routerLink="/dashboard" class="btn btn-ghost">Explore fact checks ↗</a></header><nav class="method-nav" aria-label="Verification method"><a routerLink="/verify">Text &amp; source</a><a routerLink="/photo-card">Photo card</a><a routerLink="/multimodal" aria-current="page">Text &amp; image</a></nav>@if (!result && !accepted) {<div class="flow-grid"><section class="surface"><div class="section-heading"><span class="eyebrow">01 / ARTICLE &amp; IMAGE</span><h2>Add the news you received</h2><p>Headline, article text and image are all required.</p></div><form (ngSubmit)="onSubmit()"><fieldset [disabled]="loading">
+<div class="verification-shell"><div class="flow-container"><header class="flow-heading"><div><span class="eyebrow">CHECK TEXT & IMAGE</span><h1>Read the story alongside its image.</h1><p>Add the Bengali article and its accompanying image for a preliminary assessment. This method does not confirm publication by a particular news outlet.</p></div><a routerLink="/dashboard" class="btn btn-ghost">Explore fact checks ↗</a></header><nav class="method-nav" aria-label="Verification method"><a routerLink="/verify">Text &amp; source</a><a routerLink="/photo-card">Photo card</a><a routerLink="/multimodal" aria-current="page">Text &amp; image</a></nav>@if (!result && !accepted) {<div class="flow-grid"><section class="surface"><div class="section-heading"><h2>Add the news you received</h2></div><form (ngSubmit)="onSubmit()"><fieldset [disabled]="loading">
           <div class="form-group">
-            <label for="mm-headline">Headline</label>
-            <input type="text" id="mm-headline" [(ngModel)]="headline" name="headline"
-                   placeholder="খবরের শিরোনাম লিখুন…" required />
+            <label for="mm-headline">Headline <span class="req-mark" aria-hidden="true">*</span><span class="sr-only">(required)</span></label>
+            <input type="text" id="mm-headline" [(ngModel)]="headline" name="headline" maxlength="2000"
+                   placeholder="খবরের শিরোনাম লিখুন…" required [class.is-invalid]="submitted && !headline.trim()"
+                   [attr.aria-invalid]="submitted && !headline.trim()" aria-describedby="mm-headline-error" />
             @if (submitted && !headline.trim()) {
-              <span class="form-error">Headline is required</span>
+              <span id="mm-headline-error" class="form-error" role="alert">Enter the headline.</span>
             }
           </div>
 
           <div class="form-group">
-            <label for="mm-body">Bengali article text</label>
-            <textarea id="mm-body" [(ngModel)]="bodyText" name="body_text"
+            <label for="mm-body">Article text <span class="req-mark" aria-hidden="true">*</span><span class="sr-only">(required)</span></label>
+            <textarea id="mm-body" [(ngModel)]="bodyText" name="body_text" maxlength="50000"
                       placeholder="খবরের সম্পূর্ণ লেখা এখানে দিন…"
-                      required minlength="10"></textarea>
+                      required minlength="10" [class.is-invalid]="submitted && bodyText.trim().length < 10"
+                      [attr.aria-invalid]="submitted && bodyText.trim().length < 10" aria-describedby="mm-body-error"></textarea>
             @if (submitted && bodyText.trim().length < 10) {
-              <span class="form-error">Body text must be at least 10 characters</span>
+              <span id="mm-body-error" class="form-error" role="alert">Enter the article text (at least 10 characters).</span>
             }
           </div>
 
           <div class="form-group">
-            <label for="image">Article image</label>
-            <div class="file-upload" id="dropZone"
+            <label for="image">Image <span class="req-mark" aria-hidden="true">*</span><span class="sr-only">(required)</span></label>
+            <div class="file-upload" id="dropZone" [class.is-invalid]="submitted && !selectedFile" aria-describedby="mm-image-error"
                  role="button" tabindex="0" aria-label="Upload an image" (keydown.enter)="fileInput.click()" (keydown.space)="$event.preventDefault(); fileInput.click()" (click)="fileInput.click()"
                  (dragover)="$event.preventDefault()"
                  (drop)="onDrop($event)">
@@ -30,13 +32,13 @@
               } @else {
                 <div class="file-icon">📸</div>
                 <span class="file-label">Click to upload or drag & drop</span>
-                <span class="file-hint">JPEG, PNG or WebP · up to 10 MB</span>
+                <span class="file-hint">JPEG, PNG, WebP or GIF · up to 10 MB</span>
               }
-              <input #fileInput aria-label="Choose an image" type="file" id="image" accept="image/jpeg,image/png,image/webp"
+              <input #fileInput aria-label="Choose an image" type="file" id="image" accept="image/jpeg,image/png,image/webp,image/gif"
                      class="sr-only" (change)="onFileChange($event)" />
             </div>
             @if (submitted && !selectedFile) {
-              <span class="form-error">Image is required</span>
+              <span id="mm-image-error" class="form-error" role="alert">Choose the image that came with the article.</span>
             }
           </div>
 
@@ -54,5 +56,5 @@
           }
         </fieldset></form></section><aside class="side-stack">@if (loading) {<section class="surface status-panel" role="status"><span class="eyebrow">ASSESSMENT IN PROGRESS</span><div class="spinner"></div><h2>Checking the text and image</h2><p>Uploading your claim. You can leave after submission is accepted.</p></section>} @else {<section class="surface"><span class="eyebrow">YOUR ARTICLE / PREVIEW</span><h2 class="claim-preview">{{ headline || 'Your headline will appear here' }}</h2>@if (previewUrl) {<img [src]="previewUrl" class="preview-image" alt="Selected article preview">}@if (bodyText) {<details><summary>Preview article text</summary><p class="preview-body">{{ bodyText }}</p></details>}<div class="note">The assessment considers the article text and image. The headline is retained as context for readers.</div></section>}<section class="context-panel"><h2>How to read this assessment</h2><p>The first finding is preliminary and can be wrong. Expert review is needed for a final decision.</p><p>For a comparison with a named news outlet and source links, use <a routerLink="/verify">news text verification</a>.</p></section></aside></div>}
 @if (accepted) {<section class="surface state-card" role="status"><span class="eyebrow">CLAIM RECEIVED</span><h2>Verification in progress</h2><p>Verification may take a few minutes. You can continue browsing. Find preliminary and final results in Fact Explorer or, if signed in, My Submissions.</p><div class="actions"><a class="btn btn-primary" [routerLink]="['/verify',accepted.submission_id]">View progress</a><a class="btn btn-secondary" routerLink="/history">My Submissions</a><button class="btn btn-ghost" (click)="accepted = null">Submit another claim</button></div></section>}
-@if (result && !loading) {<section class="flow-result"><div class="report-toolbar"><div><span class="eyebrow">ASSESSMENT READY</span><h2>Verification result</h2></div><button type="button" class="btn btn-secondary" (click)="result = null">Edit and check again</button></div><section class="surface"><span class="eyebrow">{{ result.expert_overall_verdict ? 'EXPERT REVIEW COMPLETE' : 'PRELIMINARY ASSESSMENT' }}</span><h2 class="assessment-value">{{ result.expert_overall_verdict ? overallVerdictLabel(result.expert_overall_verdict) : predictionLabel(result.prediction) }}</h2><p class="assessment-explanation">{{ result.expert_overall_verdict ? 'Expert review has finalized this claim. Open the saved result for its review status and the original submission.' : 'This is not a final verdict. The automated assessment can be wrong; expert review is still needed.' }}</p>@if (result.is_cached) {<p class="field-hint">A previous assessment of this content was reused.</p>}<div class="note">This assessment does not establish whether a particular news outlet published the article. No source comparison is provided by this method.</div><a [routerLink]="['/verify',result.submission_id]" class="btn btn-primary">Open full report ↗</a></section><section class="surface claim-section"><span class="eyebrow">SUBMITTED ARTICLE</span><h2 class="claim-preview">{{ headline }}</h2>@if (previewUrl) {<img [src]="previewUrl" class="preview-image" alt="Submitted article image">}<details><summary>Read submitted article text</summary><p class="long-text">{{ bodyText }}</p></details><p class="field-hint">Checked {{ formatDate(result.created_at) }}</p></section></section>}
+@if (result && !loading) {<section class="flow-result"><div class="report-toolbar"><div><span class="eyebrow">ASSESSMENT READY</span><h2>Verification result</h2></div><button type="button" class="btn btn-secondary" (click)="result = null">Edit and check again</button></div><section class="surface"><span class="eyebrow">{{ result.expert_overall_verdict ? 'EXPERT REVIEW COMPLETE' : 'PRELIMINARY AI RESULT' }}</span><h2 class="assessment-value">{{ result.expert_overall_verdict ? 'Final decision: ' + overallVerdictLabel(result.expert_overall_verdict) : 'AI decision: ' + predictionLabel(result.prediction) }}</h2><p class="assessment-explanation">{{ result.expert_overall_verdict ? 'Expert review has finalized this claim. Open the saved result for its review status and the original submission.' : 'This is not a final verdict. The automated assessment can be wrong; expert review is still needed.' }}</p>@if (result.is_cached) {<p class="field-hint">A previous assessment of this content was reused.</p>}<div class="note">This assessment does not establish whether a particular news outlet published the article. No source comparison is provided by this method.</div><a [routerLink]="['/verify',result.submission_id]" class="btn btn-primary">Open full report ↗</a></section><section class="surface claim-section"><span class="eyebrow">SUBMITTED ARTICLE</span><h2 class="claim-preview">{{ headline }}</h2>@if (previewUrl) {<img [src]="previewUrl" class="preview-image" alt="Submitted article image">}<details><summary>Read submitted article text</summary><p class="long-text">{{ bodyText }}</p></details><p class="field-hint">Checked {{ formatDate(result.created_at) }}</p></section></section>}
 </div></div>

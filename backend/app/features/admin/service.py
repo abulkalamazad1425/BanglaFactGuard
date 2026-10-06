@@ -7,7 +7,7 @@ import structlog
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.constants import ContentStatus, DateStatus, SourceStatus, SubmissionStatus
+from app.core.constants import SubmissionStatus
 from app.core.exceptions import (
     DomainValidationError,
     DuplicateRecordError,
@@ -15,6 +15,7 @@ from app.core.exceptions import (
     WeakPasswordError,
 )
 from app.features.admin.schemas import (
+    AdminDashboardResponse,
     AdminStatsResponse,
     CreateExpertRequest,
     CredibilityWeightTierRequest,
@@ -23,7 +24,6 @@ from app.features.admin.schemas import (
     ExpertResponse,
     ResetExpertPasswordRequest,
     UpdateExpertRequest,
-    VerdictBreakdown,
     VotingConfigResponse,
     VotingConfigUpdateRequest,
 )
@@ -176,95 +176,39 @@ class AdminService:
     async def get_platform_stats(self) -> AdminStatsResponse:
         thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
 
-        total_stmt = select(func.count()).select_from(Submission)
-        total = (await self._session.execute(total_stmt)).scalar_one()
+        async def count(*conditions) -> int:
+            stmt = select(func.count()).select_from(Submission).where(*conditions)
+            return (await self._session.execute(stmt)).scalar_one()
 
-        recent_stmt = (
-            select(func.count())
-            .select_from(Submission)
-            .where(Submission.created_at >= thirty_days_ago)
-        )
-        recent = (await self._session.execute(recent_stmt)).scalar_one()
-
-        def _count_source(status: SourceStatus):
-            return (
-                select(func.count())
-                .select_from(VerificationResult)
-                .where(VerificationResult.source_status == status)
+        original = Submission.duplicate_of_submission_id.is_(None)
+        active_experts = (
+            await self._session.execute(
+                select(func.count()).select_from(User).where(User.role == "expert", User.is_active.is_(True))
             )
-
-        def _count_content(status: ContentStatus):
-            return (
-                select(func.count())
-                .select_from(VerificationResult)
-                .where(VerificationResult.content_status == status)
+        ).scalar_one()
+        avg_ms = (
+            await self._session.execute(
+                select(func.avg(VerificationResult.avg_verification_time_ms)).where(
+                    VerificationResult.avg_verification_time_ms.is_not(None)
+                )
             )
-
-        def _count_date(status: DateStatus):
-            return (
-                select(func.count())
-                .select_from(VerificationResult)
-                .where(VerificationResult.date_status == status)
-            )
-
-        source_confirmed_c = (
-            await self._session.execute(_count_source(SourceStatus.CONFIRMED))
         ).scalar_one()
-        source_not_found_c = (
-            await self._session.execute(_count_source(SourceStatus.NOT_FOUND))
-        ).scalar_one()
-        content_matched_c = (
-            await self._session.execute(_count_content(ContentStatus.MATCHED))
-        ).scalar_one()
-        content_altered_c = (
-            await self._session.execute(_count_content(ContentStatus.ALTERED))
-        ).scalar_one()
-        date_matched_c = (
-            await self._session.execute(_count_date(DateStatus.MATCHED))
-        ).scalar_one()
-        date_mismatched_c = (
-            await self._session.execute(_count_date(DateStatus.MISMATCHED))
-        ).scalar_one()
-
-        total_experts = await self._users.count_by_role("expert")
-        active_experts_stmt = (
-            select(func.count())
-            .select_from(User)
-            .where(User.role == "expert", User.is_active.is_(True))
-        )
-        active_experts = (await self._session.execute(active_experts_stmt)).scalar_one()
-
-        from app.features.expert_review.models import ExpertReview
-
-        pending_stmt = (
-            select(func.count())
-            .select_from(ExpertReview)
-            .where(ExpertReview.status == "pending")
-        )
-        pending = (await self._session.execute(pending_stmt)).scalar_one()
-
-        avg_ms_stmt = select(func.avg(VerificationResult.avg_verification_time_ms)).where(
-            VerificationResult.avg_verification_time_ms.is_not(None)
-        )
-        avg_ms = (await self._session.execute(avg_ms_stmt)).scalar_one()
-        avg_seconds = round(avg_ms / 1000, 2) if avg_ms is not None else None
 
         return AdminStatsResponse(
-            total_submissions=total,
-            submissions_last_30_days=recent,
-            verdict_breakdown=VerdictBreakdown(
-                source_confirmed_count=source_confirmed_c,
-                source_not_found_count=source_not_found_c,
-                content_matched_count=content_matched_c,
-                content_altered_count=content_altered_c,
-                date_matched_count=date_matched_c,
-                date_mismatched_count=date_mismatched_c,
-            ),
-            pending_expert_reviews=pending,
-            total_experts=total_experts,
+            total_submissions=await count(),
+            submissions_last_30_days=await count(Submission.created_at >= thirty_days_ago),
+            # Claims open for expert voting (previously a count of vote rows).
+            pending_expert_reviews=await count(Submission.status == SubmissionStatus.EXPERT_REVIEW, original),
+            escalated_claims=await count(Submission.status == SubmissionStatus.ESCALATED, original),
+            total_experts=await self._users.count_by_role("expert"),
             active_experts=active_experts,
-            avg_verification_time_seconds=avg_seconds,
+            avg_verification_time_seconds=round(avg_ms / 1000, 2) if avg_ms is not None else None,
         )
+
+    async def get_dashboard(self) -> AdminDashboardResponse:
+        from app.features.admin.dashboard import build_admin_dashboard
+
+        return await build_admin_dashboard(self._session)
 
     async def list_credibility_tiers(self) -> list[CredibilityWeightTierResponse]:
         stmt = select(CredibilityWeightTier).order_by(
@@ -285,15 +229,6 @@ class AdminService:
         if max_pct <= min_pct:
             raise DomainValidationError(
                 message="max_accuracy_pct must be greater than min_accuracy_pct."
-            )
-
-        voting_config = await VotingConfigRepository(self._session).get_or_create()
-        if voting_config.max_tier_weight is not None and weight > voting_config.max_tier_weight:
-            raise DomainValidationError(
-                message=(
-                    f"Weight {weight} exceeds the configured maximum of "
-                    f"{voting_config.max_tier_weight}."
-                )
             )
 
         if not is_active:
@@ -387,27 +322,6 @@ class AdminService:
     async def update_voting_config(
         self, req: VotingConfigUpdateRequest, admin_id: uuid.UUID | None = None
     ) -> VotingConfigResponse:
-        if req.max_tier_weight is not None:
-            existing_tiers = (
-                (
-                    await self._session.execute(
-                        select(CredibilityWeightTier).where(
-                            CredibilityWeightTier.weight > req.max_tier_weight
-                        )
-                    )
-                )
-                .scalars()
-                .all()
-            )
-            if existing_tiers:
-                labels = ", ".join(t.label for t in existing_tiers)
-                raise DomainValidationError(
-                    message=(
-                        f"max_tier_weight {req.max_tier_weight} is below the weight "
-                        f"of existing tier(s): {labels}. Lower those tiers' weights first."
-                    )
-                )
-
         repo = VotingConfigRepository(self._session)
         row = await repo.get_or_create()
         updates = req.model_dump(exclude_unset=True)
@@ -434,7 +348,6 @@ def _voting_config_to_response(row: VotingConfig) -> VotingConfigResponse:
         lead_margin=row.lead_margin,
         max_review_votes=row.max_review_votes,
         max_review_hours=row.max_review_hours,
-        max_tier_weight=row.max_tier_weight,
         updated_at=row.updated_at,
     )
 

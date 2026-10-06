@@ -39,6 +39,27 @@ class ContentStatus(str, Enum):
     ALTERED = "ALTERED"
 
 
+class HeadlineAlterationStatus(str, Enum):
+    """Display-level Headline Alteration status, derived from the stored
+    verdict (`ContentStatus`) without re-running any comparison.
+
+    EXACT_MATCHED      verdict MATCHED and the claim headline equals the
+                       source title under `exact_match_key` (NFC, zero-width
+                       characters removed, whitespace collapsed, one
+                       trailing ।.!? removed — nothing else).
+    MEANING_PRESERVED  verdict MATCHED by any other basis (identical word
+                       sequence modulo punctuation, or established semantic
+                       equivalence). Semantic similarity is never an exact
+                       match. Also used for an old MATCHED row whose
+                       exactness cannot be proven from stored text.
+    ALTERED            verdict ALTERED — unchanged existing determination.
+    """
+
+    EXACT_MATCHED = "EXACT_MATCHED"
+    MEANING_PRESERVED = "MEANING_PRESERVED"
+    ALTERED = "ALTERED"
+
+
 class HeadlineCheckStatus(str, Enum):
     """Processing/availability status of the Headline Alteration check —
     separate from the verdict itself (`ContentStatus`).

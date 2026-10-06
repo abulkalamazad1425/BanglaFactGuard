@@ -1,4 +1,4 @@
-<div class="verification-shell"><div class="flow-container"><header class="flow-heading"><div><span class="eyebrow">CHECK A PHOTOCARD</span><h1>Look beyond the image.</h1><p>Upload a Bengali news photocard or screenshot and select the outlet it claims to come from. We will read its headline and look for the source report.</p></div><a routerLink="/dashboard" class="btn btn-ghost">Explore fact checks ↗</a></header><nav class="method-nav" aria-label="Verification method"><a routerLink="/verify">Text &amp; source</a><a routerLink="/photo-card" aria-current="page">Photo card</a><a routerLink="/multimodal">Text &amp; image</a></nav>@if (step === 'upload') {<div class="flow-grid"><section class="surface"><div class="section-heading"><span class="eyebrow">01 / IMAGE &amp; CONTEXT</span><h2>Add the photocard</h2><p>Keep the full headline visible. Fields marked * are required.</p></div><fieldset [disabled]="verifying"><div class="dropzone"
+<div class="verification-shell"><div class="flow-container"><header class="flow-heading"><div><span class="eyebrow">CHECK A PHOTOCARD</span><h1>Look beyond the image.</h1><p>Upload a Bengali news photocard or screenshot and select the outlet it claims to come from. We will read its headline and look for the source report.</p></div><a routerLink="/dashboard" class="btn btn-ghost">Explore fact checks ↗</a></header><nav class="method-nav" aria-label="Verification method"><a routerLink="/verify">Text &amp; source</a><a routerLink="/photo-card" aria-current="page">Photo card</a><a routerLink="/multimodal">Text &amp; image</a></nav>@if (step === 'upload') {<div class="flow-grid"><section class="surface"><div class="section-heading"><h2>Add the photocard</h2></div><fieldset [disabled]="verifying"><p class="form-label" id="photocard-image-label">Photocard image <span class="req-mark" aria-hidden="true">*</span><span class="sr-only">(required)</span></p><div class="dropzone" aria-labelledby="photocard-image-label" aria-describedby="photocard-image-error" [class.is-invalid]="submitted && !selectedFile"
              [class.active]="dragActive"
              [class.has-file]="!!previewUrl"
              role="button" tabindex="0" aria-label="Upload an image" (keydown.enter)="fileInput.click()" (keydown.space)="$event.preventDefault(); fileInput.click()" (click)="fileInput.click()"
@@ -21,11 +21,14 @@
         @if (selectedFile) {
           <p class="file-name">Selected: <strong>{{ selectedFile.name }}</strong></p>
         }
+        @if (submitted && !selectedFile) {
+          <span id="photocard-image-error" class="form-error" role="alert">Choose the photocard image.</span>
+        }
 
         <div class="form-group">
-          <label for="photocard-claimed_source" class="form-label">Claimed news outlet <span class="required">*</span></label>
+          <label for="photocard-claimed_source" class="form-label">Claimed news outlet <span class="req-mark" aria-hidden="true">*</span><span class="sr-only">(required)</span></label>
           <select id="photocard-claimed_source" class="form-control" [(ngModel)]="claimedSource" name="claimed_source"
-                  [class.is-invalid]="submitted && !claimedSource">
+                  [class.is-invalid]="submitted && !claimedSource" [attr.aria-invalid]="submitted && !claimedSource" aria-describedby="photocard-source-hint photocard-source-error" required>
             <option value="" disabled>
               {{ sourcesLoading ? 'Loading verified sources…' : 'Select the news source this card claims to be from' }}
             </option>
@@ -36,14 +39,14 @@
             }
           </select>
           @if (!sourcesLoading && (sourcesError || !sources.length)) {<div class="service-notice" role="status"><p>{{ sourcesError ? 'News sources could not be loaded. Please try again.' : 'No news sources are available for checking right now.' }}</p><button type="button" class="btn btn-secondary" (click)="loadSources()">Try again</button></div>}
-          <span class="source-hint">Choose the outlet named on the card. We will compare the headline with that outlet.</span>
+          <span id="photocard-source-hint" class="source-hint">Choose the outlet named on the card. We will compare the headline with that outlet.</span>
           @if (submitted && !claimedSource) {
-            <span class="form-error">Please select the claimed source</span>
+            <span id="photocard-source-error" class="form-error" role="alert">Select the news outlet named on the card.</span>
           }
         </div>
 
         <div class="form-group">
-          <label for="photocard-published_date" class="form-label">Claimed publication date <span class="optional">(optional)</span></label>
+          <label for="photocard-published_date" class="form-label">Claimed publication date </label>
           <input id="photocard-published_date" type="date" class="form-control" [(ngModel)]="publishedDate" name="published_date" />
         </div>
 
@@ -57,7 +60,7 @@
         }
 
         <button type="button" class="btn btn-primary btn-full btn-lg mt-4"
-                [disabled]="!canVerify || verifying" (click)="verify()">
+                [disabled]="verifying" [attr.aria-busy]="verifying" (click)="verify()">
           @if (verifying) {
             <span class="btn-spinner"></span> Uploading…
           } @else {

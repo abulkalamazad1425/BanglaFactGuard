@@ -21,16 +21,18 @@ export function verificationFailure(reason?: string | null): string {
   return 'Verification could not be completed. Please try again. This is not a verdict about whether the news is true or false.';
 }
 
+/** The text & image model's preliminary call — never an expert verdict. */
 export function predictionLabel(value?: string | null): string {
-  if (value === 'FAKE' || value === 'Likely fake') return 'Likely fake';
-  if (value === 'REAL' || value === 'NON_FAKE' || value === 'Likely real') return 'Likely real';
+  const v = (value ?? '').toUpperCase();
+  if (v === 'FAKE' || v === 'LIKELY FAKE') return 'Likely Fake';
+  if (v === 'REAL' || v === 'NON_FAKE' || v === 'LIKELY REAL') return 'Likely Real';
   return 'Result unavailable';
 }
 
 /** Preserve evidence prose, replacing diagnostic sentences with a limitation. */
 export function readableExplanation(value?: string | null): string {
   if (!value) return '';
-  const terms: Record<string, string> = { SOURCE_BASED: 'source check', PHOTO_CARD: 'photocard', MULTIMODAL: 'text and image', EXPERT_REVIEW: 'awaiting expert review', FINALIZED: 'review complete', NOT_FOUND: 'source not found', INCOMPLETE: 'check incomplete', CONFIRMED: 'source confirmed', MATCHED: 'matched', MISMATCHED: 'date mismatch', REAL: 'real', FAKE: 'fake', ALTERED: 'altered', MISLEADING: 'misleading' };
+  const terms: Record<string, string> = { SOURCE_BASED: 'source check', PHOTO_CARD: 'photocard', MULTIMODAL: 'text and image', EXPERT_REVIEW: 'awaiting expert review', FINALIZED: 'review complete', NOT_FOUND: 'not found in claimed source', INCOMPLETE: 'check incomplete', CONFIRMED: 'relevant article found in claimed source', MATCHED: 'matched', MISMATCHED: 'mismatched', REAL: 'real', FAKE: 'fake', ALTERED: 'altered', MISLEADING: 'misleading' };
   value = value.replace(/\b[A-Z][A-Z_]+\b/g, word => terms[word] ?? word);
   return value.split(/(?<=[.!?])\s+|\n/).map(sentence =>
     /gemini|existing_fallback|labse|deberta|banglabert|efficientnet|traceback|exception|\b(?:NLI|OCR|HTTP|API)\b|\b[A-Z]+_[A-Z_]+\b|embedding|token count|model.version|pipeline|extractor/i.test(sentence)

@@ -18,6 +18,7 @@ from app.db.engine import AsyncSessionLocal
 from app.features.auth.models import User
 from app.features.multimodal.models import MultimodalAnalysis
 from app.features.notifications.models import Notification, ResultDelivery
+from app.features.notifications.service import final_notification_text, preliminary_notification_text
 from app.features.submissions.models import Submission
 from app.features.verification.models import VerificationResult
 from app.shared.email_service import EmailService
@@ -45,8 +46,8 @@ async def reconcile(session, *, limit: int = 100) -> int:
         for submission, final_verdict in (await session.execute(stmt)).all():
             final = stage == 'final'
             label = str(getattr(final_verdict, 'value', final_verdict)).capitalize() if final else None
-            title = 'Final result ready' if final else 'Preliminary result ready'
-            body = f'Final verdict: {label}. View your result.' if final else 'Your automatic check is complete. View your result.'
+            title, body = (final_notification_text(submission.headline, label) if final
+                           else preliminary_notification_text(submission.headline))
             link = f'/verify/{submission.id}'
             kind = 'EXPERT_REVIEW_COMPLETE' if final else 'VERIFICATION_COMPLETE'
             # Existing pipeline notifications use this same identity. A failed

@@ -9,6 +9,7 @@ import { SourceService } from '../../../services/source.service';
 import { ExplorerItem, ExplorerSearchParams, ExplorerSearchResponse } from '../../../models/admin.model';
 import { SourceResponse } from '../../../models/source.model';
 import { VerdictBadgeComponent } from '../../../shared/components/verdict-badge/verdict-badge.component';
+import { FindingChip, aiDecisionLabel, preliminaryChips } from '../../../shared/utils/status-labels';
 
 const EMPTY = { keyword: '', overall_verdict: '', method: '', source_id: '', date_from: '', date_to: '' };
 type FilterKey = keyof typeof EMPTY;
@@ -122,6 +123,16 @@ export class PublicDashboardComponent implements OnInit {
       date_from: `Submitted from: ${values.date_from}`, date_to: `Submitted through: ${values.date_to}`
     };
     this.activeFilters.set((Object.keys(values) as FilterKey[]).filter(key => !!values[key]).map(key => ({ key, label: labels[key] })));
+  }
+  /** Preliminary AI findings for a card: headline status, the date only when
+   *  one was claimed, "Not found in claimed source" instead of any found
+   *  status, or the AI decision for text & image checks. */
+  chips(item: ExplorerItem): FindingChip[] {
+    if (item.submission_type === 'MULTIMODAL') {
+      const label = aiDecisionLabel(item.prediction);
+      return label ? [{ label: 'AI decision', value: label, tone: 'neutral' }] : [];
+    }
+    return preliminaryChips({ source_status: item.source_status, headline_status: item.headline_status, date_status: item.date_status, claimed_date: item.published_date });
   }
   imageFailed(id: string): void { this.failedImages.update(ids => new Set([...ids, id])); }
   methodLabel(method: string): string { return ({ SOURCE_BASED: 'Text & source', PHOTO_CARD: 'Photo card', MULTIMODAL: 'Text & image' } as Record<string, string>)[method] || 'News check'; }

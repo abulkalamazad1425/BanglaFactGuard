@@ -151,6 +151,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.result_delivery_worker = ResultDeliveryWorker()
     app.state.result_delivery_worker.start()
 
+    # Time-based escalation must not wait for a new vote or a page visit.
+    from app.features.expert_review.escalation import EscalationWorker
+    app.state.escalation_worker = EscalationWorker()
+    app.state.escalation_worker.start()
+
     log.info("bangla_fact_guard_ready")
 
     yield
@@ -159,6 +164,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     if app.state.job_worker is not None:
         await app.state.job_worker.stop()
     await app.state.result_delivery_worker.stop()
+    await app.state.escalation_worker.stop()
     await app.state.http_client.aclose()
     await redis_client.aclose()
     log.info("bangla_fact_guard_shutdown_complete")

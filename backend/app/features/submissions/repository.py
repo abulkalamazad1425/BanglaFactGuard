@@ -25,6 +25,9 @@ from app.shared.base_repository import BaseRepository
 
 _VERIFIED_STATUSES = (SubmissionStatus.EXPERT_REVIEW, SubmissionStatus.FINALIZED)
 _IN_FLIGHT_STATUSES = (SubmissionStatus.PENDING, SubmissionStatus.PROCESSING)
+# Fact Explorer also lists ESCALATED claims: they stay "Under review" until an
+# admin decides. (Reuse candidates keep using _VERIFIED_STATUSES unchanged.)
+_EXPLORER_STATUSES = (*_VERIFIED_STATUSES, SubmissionStatus.ESCALATED)
 
 
 class SubmissionRepository(BaseRepository[Submission]):
@@ -143,6 +146,20 @@ class SubmissionRepository(BaseRepository[Submission]):
     async def mark_finalized(self, submission_id: uuid.UUID) -> None:
         await self.set_status(submission_id, SubmissionStatus.FINALIZED)
 
+    async def escalate_if_open(self, submission_id: uuid.UUID) -> bool:
+        """EXPERT_REVIEW -> ESCALATED, only if the claim is still open. Returns
+        True only for the one transaction that performs the transition, so a
+        racing vote, edit or sweep can never escalate (or notify) twice."""
+        from sqlalchemy import update
+
+        res = await self.session.execute(
+            update(Submission)
+            .where(Submission.id == submission_id, Submission.status == SubmissionStatus.EXPERT_REVIEW)
+            .values(status=SubmissionStatus.ESCALATED, escalated_at=datetime.now(timezone.utc))
+        )
+        await self.session.flush()
+        return bool(res.rowcount)
+
     async def mark_failed(
         self, submission_id: uuid.UUID, reason: str | None = None
     ) -> bool:
@@ -250,7 +267,7 @@ class SubmissionRepository(BaseRepository[Submission]):
         from app.features.verification.models import VerificationResult
 
         conditions = [
-            Submission.status.in_(_VERIFIED_STATUSES),
+            Submission.status.in_(_EXPLORER_STATUSES),
             Submission.duplicate_of_submission_id.is_(None),
         ]
 
@@ -299,11 +316,11 @@ class SubmissionRepository(BaseRepository[Submission]):
             )
             joined_result = True
             if source_status is not None:
-                conditions.append(func.coalesce(VerificationResult.final_source_status, VerificationResult.source_status) == source_status)
+                conditions.append(VerificationResult.source_status == source_status)
             if content_status is not None:
-                conditions.append(case((VerificationResult.overall_verdict.is_not(None), VerificationResult.final_content_status), else_=VerificationResult.content_status) == content_status)
+                conditions.append(VerificationResult.content_status == content_status)
             if date_status is not None:
-                conditions.append(case((VerificationResult.overall_verdict.is_not(None), VerificationResult.final_date_status), else_=VerificationResult.date_status) == date_status)
+                conditions.append(VerificationResult.date_status == date_status)
 
         if overall_verdict is not None:
             if not joined_result:
@@ -343,7 +360,7 @@ class SubmissionRepository(BaseRepository[Submission]):
             .select_from(Submission)
             .outerjoin(VerificationResult, VerificationResult.submission_id == Submission.id)
             .outerjoin(MultimodalAnalysis, MultimodalAnalysis.submission_id == Submission.id)
-            .where(Submission.status.in_(_VERIFIED_STATUSES), Submission.duplicate_of_submission_id.is_(None))
+            .where(Submission.status.in_(_EXPLORER_STATUSES), Submission.duplicate_of_submission_id.is_(None))
         )
         total, finalized = (await self.session.execute(stmt)).one()
         return {'total': total, 'finalized': finalized, 'review': total - finalized}

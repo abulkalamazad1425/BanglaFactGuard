@@ -15,9 +15,9 @@ describe('Public presentation mappings', () => {
   });
 
   it('does not turn an unknown or absent prediction into a real-news verdict', () => {
-    expect(predictionLabel('FAKE')).toBe('Likely fake');
-    expect(predictionLabel('NON_FAKE')).toBe('Likely real');
-    expect(predictionLabel('REAL')).toBe('Likely real');
+    expect(predictionLabel('FAKE')).toBe('Likely Fake');
+    expect(predictionLabel('NON_FAKE')).toBe('Likely Real');
+    expect(predictionLabel('REAL')).toBe('Likely Real');
     expect(predictionLabel(null)).toBe('Result unavailable');
     expect(predictionLabel('FAILED')).toBe('Result unavailable');
   });

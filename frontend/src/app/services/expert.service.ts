@@ -19,8 +19,8 @@ export class ExpertService {
   private readonly api = inject(ApiService);
 
   /** GET /api/v1/expert/queue */
-  getQueue(limit = 20, offset = 0, q = ''): Observable<ExpertQueueItem[]> {
-    return this.api.get<ExpertQueueItem[]>(API_ENDPOINTS.EXPERT_QUEUE, { limit, offset, q });
+  getQueue(limit = 20, offset = 0, q = '', state: 'all' | 'escalated' | 'review' = 'all'): Observable<ExpertQueueItem[]> {
+    return this.api.get<ExpertQueueItem[]>(API_ENDPOINTS.EXPERT_QUEUE, { limit, offset, q, state });
   }
 
   /** GET /api/v1/expert/queue/{submission_id} */

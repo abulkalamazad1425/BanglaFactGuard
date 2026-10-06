@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import smtplib
+from email.header import Header
 from email.mime.text import MIMEText
 
 import structlog
@@ -60,14 +61,21 @@ class EmailService:
     async def send_result_email(self, *, to_email: str, submission_id: str, headline: str, verdict: str) -> None:
         if not self._settings.is_configured:
             raise EmailDeliveryError()
+        from app.shared.utils.headline_preview import headline_preview
+
         link = f"{self._settings.website_url.rstrip('/')}/verify/{submission_id}"
-        body = f"Expert review is complete.\n\nFinal verdict: {verdict}\nClaim: {headline}\n\nView the evidence: {link}\n\nBanglaFactGuard"
-        await asyncio.to_thread(self._send_sync, to_email, "Your BanglaFactGuard final result is ready", body)
+        preview = headline_preview(headline) or "Your submitted claim"
+        body = (
+            "The final decision on your claim is available.\n\n"
+            f"Claim: {preview}\nFinal decision: {verdict}\n\n"
+            f"See the decision, the reviewers' reasoning and the evidence: {link}\n\nBanglaFactGuard"
+        )
+        await asyncio.to_thread(self._send_sync, to_email, f"Final decision ready: {preview}", body)
 
     def _send_sync(self, to_email: str, subject: str, body: str) -> None:
         settings = self._settings
         msg = MIMEText(body)
-        msg["Subject"] = subject
+        msg["Subject"] = Header(subject, "utf-8")
         msg["From"] = f"{settings.from_name} <{settings.from_address}>"
         msg["To"] = to_email
 

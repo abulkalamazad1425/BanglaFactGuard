@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.constants import (
     ContentStatus,
     DateStatus,
+    HeadlineAlterationStatus,
     MultimodalPredictionLabel,
     OverallVerdict,
     SourceStatus,
@@ -24,6 +25,7 @@ from app.features.photocard.storage_service import PhotoCardStorageService
 from app.features.submissions.models import OcrExtraction, Submission
 from app.features.submissions.repository import SubmissionRepository
 from app.features.verification.models import VerificationResult
+from app.features.verification.headline_status import headline_status_for_result
 from app.features.verification.presenter import is_headline_result
 from app.shared.dependencies import get_async_session
 
@@ -73,8 +75,12 @@ class ExplorerItem(BaseModel):
         default=False,
         description="True once expert review has finalized overall_verdict.",
     )
+    # Preliminary AI findings (never the final verdict). Cards show the
+    # headline status, the date comparison only when a date was claimed, and
+    # the source finding only when no relevant article was found.
     source_status: SourceStatus | None = None
     content_status: ContentStatus | None = None
+    headline_status: HeadlineAlterationStatus | None = None
     date_status: DateStatus | None = None
     confidence: float | None
     image_url: str | None = Field(
@@ -212,7 +218,9 @@ async def get_top_sources(
     response_model=ExplorerSearchResponse,
     summary="Search and browse verified claims (Fact Explorer)",
     description=(
-        "Browse and filter verified (in expert review or finalized) submissions "
+        "Browse and filter verified submissions (in expert review, escalated to "
+        "an admin, or finalized; review_state=review lists every claim without "
+        "a final decision, including escalated ones) "
         "by keyword, verdict, verification method, publication date range and "
         "news source. Each result links to the full report at "
         "GET /verify/{submission_id}."
@@ -330,20 +338,10 @@ async def search_explorer(
                 claimed_source_text=submission.claimed_source_text,
                 overall_verdict=overall,
                 is_finalized=is_finalized,
-                source_status=(
-                    (result.final_source_status or result.source_status) if result else None
-                ),
-                content_status=(
-                    (result.final_content_status if is_finalized else
-                     result.content_status if is_headline_result(result) else None)
-                    if result
-                    else None
-                ),
-                date_status=(
-                    (result.final_date_status if is_finalized else result.date_status)
-                    if result
-                    else None
-                ),
+                source_status=result.source_status if result else None,
+                content_status=(result.content_status if result and is_headline_result(result) else None),
+                headline_status=headline_status_for_result(result, claim_headline=submission.headline),
+                date_status=result.date_status if result else None,
                 confidence=result.confidence if result else None,
                 image_url=image_url,
                 published_date=submission.published_date,

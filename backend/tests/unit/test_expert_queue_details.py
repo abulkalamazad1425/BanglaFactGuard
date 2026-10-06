@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
-from app.core.constants import ClaimScope, ContentStatus, HeadlineCheckStatus
+from app.core.constants import ClaimScope, ContentStatus, HeadlineAlterationStatus, HeadlineCheckStatus
 from app.features.expert_review.models import ExpertReview
 from app.features.expert_review.repository import ExpertReviewRepository
 from app.features.expert_review.service import ExpertReviewService
@@ -50,7 +50,8 @@ async def test_expert_queue_item_shows_headline_detail_and_body_scores_after_rel
 
     assert item.content_status == ContentStatus.ALTERED
     assert item.headline_check_status == HeadlineCheckStatus.COMPLETED
-    assert item.ai_label == "Source: CONFIRMED · Headline: ALTERED"
+    assert item.headline_status == HeadlineAlterationStatus.ALTERED
+    assert item.ai_label == "Relevant article from claimed source: Found · Headline: Altered"
     ha = item.headline_alteration
     assert ha.claim_headline == HEADLINE and ha.source_title == TITLE
     assert ha.source_url == "https://prothomalo.com/article/1" and ha.source_publisher == "prothomalo.com"

@@ -273,6 +273,7 @@ class PhotoCardService:
                         user_id=submission.submitter_id,
                         notification_type="VERIFICATION_COMPLETE",
                         link_url=f"/verify/{submission.id}",
+                        headline=submission.headline,
                         title="Automated check complete (previous result reused)",
                         body=(
                             f'Your photo card "{(submission.headline or "")[:80]}" matches a claim '

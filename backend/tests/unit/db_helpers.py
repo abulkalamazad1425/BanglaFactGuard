@@ -32,6 +32,7 @@ from app.core.constants import VERIFICATION_PIPELINE_VERSION  # noqa: E402
 TABLES = [
     "users", "verified_sources", "submissions", "ocr_extractions", "retrieved_articles",
     "verification_results", "verification_jobs", "notifications", "source_evidence_queries",
+    "credibility_weight_tiers", "expert_reviews",
 ]
 
 

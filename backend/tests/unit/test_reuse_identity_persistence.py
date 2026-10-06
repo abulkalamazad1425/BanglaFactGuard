@@ -415,9 +415,11 @@ async def test_expert_finalization_keeps_automated_snapshot_inspectable(db):
         await s.commit()
         r = await _service(s).get_result(sub.id)
     assert r.overall_verdict == OverallVerdict.MISLEADING and r.is_finalized and not r.review_pending
-    assert r.content_status == ContentStatus.ALTERED  # expert-finalized, displayed
+    # The final decision is the overall verdict only; a legacy supplementary
+    # final_content_status never replaces the preliminary AI finding.
+    assert r.content_status == ContentStatus.MATCHED
     assert r.ai_content_status == ContentStatus.MATCHED  # automated snapshot preserved
-    assert r.was_overridden is True
+    assert r.was_overridden is False and r.decided_by_admin is False
 
 
 async def test_reverification_never_overwrites_a_reviewed_submission(db):

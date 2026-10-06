@@ -15,6 +15,10 @@ export type SourceStatus = 'CONFIRMED' | 'NOT_FOUND' | 'INCOMPLETE';
  *  and `headline_check_status` says why. */
 export type ContentStatus = 'MATCHED' | 'ALTERED';
 export type DateStatus = 'MATCHED' | 'MISMATCHED' | 'INCOMPLETE';
+/** Display status of the Headline Alteration verdict. EXACT_MATCHED and
+ *  MEANING_PRESERVED are both a stored MATCHED verdict (exact title match vs
+ *  any other basis); ALTERED is unchanged. */
+export type HeadlineAlterationStatus = 'EXACT_MATCHED' | 'MEANING_PRESERVED' | 'ALTERED';
 /** Processing status of the headline check — separate from the verdict. */
 export type HeadlineCheckStatus =
   | 'COMPLETED'
@@ -206,7 +210,9 @@ export interface VerificationResponse {
   is_finalized?: boolean;
   /** True until finalization: show "review pending", never a truth badge. */
   review_pending?: boolean;
-  /** True if expert review's finalized verdict differs from the AI's original call. */
+  /** True when an administrator made the final decision on an escalated claim. */
+  decided_by_admin?: boolean;
+  /** Deprecated — always false. Preliminary findings are always the AI's own. */
   was_overridden?: boolean;
   /** The AI's own original call — immutable, never changed by expert review. */
   ai_source_status?: SourceStatus | null;
@@ -215,8 +221,12 @@ export interface VerificationResponse {
   source_status: SourceStatus;
   /** Headline Alteration verdict (MATCHED | ALTERED), or null. */
   content_status?: ContentStatus | null;
+  /** Exact Matched / Meaning Preserved / Altered (null when no verdict). */
+  headline_status?: HeadlineAlterationStatus | null;
   headline_check_status?: HeadlineCheckStatus | null;
   date_status?: DateStatus | null;
+  /** The publication date the submitter claimed; date comparison is shown only when set. */
+  claimed_published_date?: string | null;
   /** Source-correspondence strength — not a probability of truth. */
   confidence: number;
   reasoning: string;
@@ -247,7 +257,9 @@ export interface SubmissionSummary {
   failure_reason?: string | null;
   source_status: SourceStatus | null;
   content_status: ContentStatus | null;
+  headline_status?: HeadlineAlterationStatus | null;
   date_status?: DateStatus | null;
+  published_date?: string | null;
   /** Expert-finalized only. */
   overall_verdict?: OverallVerdict | null;
   is_finalized?: boolean;
@@ -323,4 +335,25 @@ export interface SubmissionLookup {
   processing_phase?: ProcessingPhase | null;
   failure_reason?: string | null;
   created_at: string;
+}
+
+// ── Public voting details from GET /submissions/{id}/voting-details ─────
+// Only available after the final decision (404 before). Shows each
+// reviewer's overall vote and justification; an admin's final decision on an
+// escalated claim is marked with is_final_decision.
+export interface PublicVote {
+  reviewer_name: string;
+  reviewer_role: 'Expert' | 'Admin';
+  overall_vote: OverallVerdict;
+  justification?: string | null;
+  voted_at: string;
+  is_final_decision: boolean;
+}
+
+export interface PublicVotingDetails {
+  submission_id: string;
+  final_verdict: OverallVerdict;
+  decided_by: 'EXPERT_CONSENSUS' | 'ADMIN';
+  finalized_at?: string | null;
+  votes: PublicVote[];
 }

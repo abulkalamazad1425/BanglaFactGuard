@@ -2,7 +2,7 @@
 // Admin Models — synced with backend admin/schemas.py
 // ============================================================
 
-import { ContentStatus, DateStatus, OverallVerdict, SourceStatus } from './verification.model';
+import { ContentStatus, DateStatus, HeadlineAlterationStatus, OverallVerdict, SourceStatus } from './verification.model';
 
 // ── Expert account response from GET /admin/experts ──────────────────
 export interface ExpertResponse {
@@ -19,27 +19,66 @@ export interface ExpertResponse {
   created_at: string;
 }
 
-// ── Verdict breakdown sub-object in AdminStats ───────────────────────
-// Source, content and date are independent dimensions — each gets its own
-// pair of counts rather than being collapsed into one 4-way tally.
-export interface VerdictBreakdown {
-  source_confirmed_count: number;
-  source_not_found_count: number;
-  content_matched_count: number;
-  content_altered_count: number;
-  date_matched_count: number;
-  date_mismatched_count: number;
-}
-
 // ── Platform-wide admin stats from GET /admin/stats ─────────────────
 export interface AdminStats {
   total_submissions: number;
   submissions_last_30_days: number;
   total_experts: number;
   active_experts: number;
+  /** Claims currently open for expert voting. */
   pending_expert_reviews: number;
-  verdict_breakdown: VerdictBreakdown;
+  /** Claims awaiting an admin decision. */
+  escalated_claims?: number;
   avg_verification_time_seconds?: number | null;
+}
+
+// ── Admin home from GET /admin/dashboard ─────────────────────────────
+export interface DashboardClaim {
+  submission_id: string;
+  headline: string | null;
+  submission_type: string;
+  status: string;
+  vote_count: number;
+  submitted_at: string;
+  escalated_at?: string | null;
+  final_verdict?: OverallVerdict | null;
+  decided_by_admin: boolean;
+  finalized_at?: string | null;
+}
+
+export interface DashboardExpert {
+  id: string;
+  full_name: string | null;
+  is_active: boolean;
+  total_votes: number;
+  last_vote_at?: string | null;
+}
+
+export interface DashboardActivity {
+  kind: 'VOTE' | 'ADMIN_DECISION';
+  actor: string;
+  submission_id: string;
+  headline: string | null;
+  overall_vote: OverallVerdict;
+  at: string;
+}
+
+export interface AdminDashboard {
+  escalated_count: number;
+  pending_review_count: number;
+  processing_count: number;
+  failed_last_7_days: number;
+  submissions_last_7_days: number;
+  finalized_last_7_days: number;
+  total_submissions: number;
+  active_experts: number;
+  inactive_experts: number;
+  escalated_claims: DashboardClaim[];
+  oldest_pending_reviews: DashboardClaim[];
+  recent_submissions: DashboardClaim[];
+  recent_decisions: DashboardClaim[];
+  experts: DashboardExpert[];
+  recent_activity: DashboardActivity[];
 }
 
 
@@ -105,6 +144,8 @@ export interface ExplorerItem {
   is_finalized: boolean;
   source_status: SourceStatus | null;
   content_status: ContentStatus | null;
+  /** Exact Matched / Meaning Preserved / Altered — the AI's preliminary finding. */
+  headline_status?: HeadlineAlterationStatus | null;
   date_status: DateStatus | null;
   confidence: number | null;
   /** Thumbnail for MULTIMODAL/PHOTO_CARD submissions. */
@@ -177,12 +218,10 @@ export interface VotingConfig {
   verified_threshold: number;
   /** Leader's score must exceed the runner-up's by at least this */
   lead_margin: number;
-  /** Escalate to admin after this many votes without consensus (null = no cap) */
+  /** Escalate to admin once this many votes are cast without a final decision (null = not configured) */
   max_review_votes: number | null;
-  /** Escalate to admin after this many hours without consensus (null = no cap) */
+  /** Escalate to admin once this many hours pass since submission without a final decision (null = not configured) */
   max_review_hours: number | null;
-  /** Upper bound on any credibility tier's weight (null = no cap) */
-  max_tier_weight: number | null;
   updated_at: string;
 }
 
@@ -193,5 +232,4 @@ export interface VotingConfigUpdateRequest {
   lead_margin?: number;
   max_review_votes?: number | null;
   max_review_hours?: number | null;
-  max_tier_weight?: number | null;
 }

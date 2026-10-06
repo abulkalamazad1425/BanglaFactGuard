@@ -43,3 +43,16 @@ details { margin-top: 18px; summary { color: var(--primary); cursor: pointer; fo
 @media (max-width: 600px) { .report-summary, .report-section { padding: 22px; } .summary-heading h2 { font-size: 25px; } .section-heading h2 { font-size: 21px; } .article-card h3 { font-size: 20px; } .date-pair, .headline-compare, .diff-pair, .metric-grid { grid-template-columns: 1fr; } .metric-card { padding: 14px; } }
 
 .findings-grid h3 { font-size:1.25rem; font-weight:800; padding-block:8px; border-bottom:2px solid var(--border); }
+
+/* Final decision vs preliminary findings are visually distinct blocks. */
+.decision-panel { margin-top: 24px; padding: 26px 30px; border-radius: 18px; border: 2px dashed var(--border-strong); background: var(--bg-surface); }
+.decision-panel.decided { border: 2px solid var(--primary); background: var(--bg-surface-2); }
+.decision-panel h2 { font-size: 26px; margin: 0; }
+.decision-panel p { font-size: 14px; color: var(--text-secondary); margin: 10px 0 0; max-width: 760px; }
+.decision-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; }
+.decision-badge ::ng-deep .badge { font-size: 18px; padding: 8px 16px; }
+.finding-label { display: block; font-size: 12px; font-weight: 650; color: var(--text-muted); letter-spacing: 0; text-transform: none; }
+.findings-grid.single { grid-template-columns: minmax(0, 1fr); }
+.finding-detail.strong { font-weight: 700; color: var(--text-primary); }
+.findings-grid .tone-none h3 { color: var(--text-primary); }
+@media (max-width: 600px) { .decision-panel { padding: 20px; } }
