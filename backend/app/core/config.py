@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from functools import lru_cache
 from typing import Literal
 
@@ -420,7 +421,14 @@ class GeminiSettings(BaseSettings):
 
     api_key: str = Field(
         default="",
-        description="Gemini API key for photo-card extraction. Without it photo cards cannot be processed.",
+        description="Gemini API key for photo-card extraction. Without any key photo cards cannot be processed.",
+    )
+    api_keys: list[str] = Field(
+        default_factory=lambda: _numbered_gemini_keys(),
+        description=(
+            "Further keys, rotated when one reaches its limit. Read from GEMINI_API_KEY1, "
+            "GEMINI_API_KEY2, ... (any number, in numeric order)."
+        ),
     )
     model_name: str = Field(
         default="gemini-2.0-flash",
@@ -462,8 +470,31 @@ class GeminiSettings(BaseSettings):
         return self.attempts_per_batch * self.batches
 
     @property
+    def all_api_keys(self) -> list[str]:
+        """GEMINI_API_KEY first, then the numbered keys; blanks, placeholders
+        and duplicates removed. This is the rotation order."""
+        keys: list[str] = []
+        for key in (self.api_key, *self.api_keys):
+            key = (key or "").strip()
+            if key and key != "your-gemini-api-key-here" and key not in keys:
+                keys.append(key)
+        return keys
+
+    @property
     def is_configured(self) -> bool:
-        return bool(self.api_key) and self.api_key != "your-gemini-api-key-here"
+        return bool(self.all_api_keys)
+
+
+_NUMBERED_KEY_RE = re.compile(r"GEMINI_API_KEY_?(\d+)", re.IGNORECASE)
+
+
+def _numbered_gemini_keys() -> list[str]:
+    found = []
+    for name, value in os.environ.items():
+        m = _NUMBERED_KEY_RE.fullmatch(name)
+        if m and value.strip():
+            found.append((int(m.group(1)), value.strip()))
+    return [value for _, value in sorted(found)]
 
 
 class JobSettings(BaseSettings):

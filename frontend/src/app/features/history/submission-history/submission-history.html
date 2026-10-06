@@ -1,7 +1,5 @@
 <div class="history-page"><div class="container history-container">
-  <header class="page-header"><div><h1>My Submissions</h1><p>Your preliminary AI results and final decisions.</p></div><a routerLink="/verify" class="btn btn-primary">Submit a claim</a></header>
-  <div class="history-summary"><span><strong>{{ stats()?.total ?? '—' }}</strong> submissions</span><a routerLink="/notifications">Your notifications →</a></div>
-  <p class="text-muted">You can continue browsing while checks run. Final results will also be emailed to your account.</p>
+  <header class="page-header"><div><h1>My Submissions</h1></div><a routerLink="/verify" class="btn btn-primary">Submit a claim</a></header>
   @if (loadError()) {<div class="service-notice" role="alert"><p>Could not load your submissions.</p><button class="btn btn-secondary" (click)="load()">Try again</button></div>}
   @if (loading()) {<div class="loading-overlay" role="status" aria-label="Loading submissions"><div class="spinner"></div></div>}
   @if (!loading() && !loadError() && !submissions().length) {<div class="empty-state card"><h2>No submissions on this page</h2><p>Submit a claim or return to the previous page.</p></div>}

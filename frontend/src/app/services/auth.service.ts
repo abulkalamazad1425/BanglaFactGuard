@@ -128,8 +128,9 @@ export class AuthService {
       this.scheduleRefresh();
       return tokens;
     };
-    this.refreshRequest = defer(() => typeof navigator !== 'undefined' && navigator.locks
-      ? navigator.locks.request('banglafactguard-refresh', exchange) : exchange()).pipe(
+    this.refreshRequest = defer((): Promise<TokenResponse> => typeof navigator !== 'undefined' && navigator.locks
+      ? navigator.locks.request('banglafactguard-refresh', exchange) as unknown as Promise<TokenResponse>
+      : exchange()).pipe(
       catchError(err => {
         if ((err.status === 401 || err.status === 403) && this.storage.getRefreshToken() === originalToken) this.expireSession();
         return throwError(() => err);
@@ -198,13 +199,11 @@ export class AuthService {
     });
   }
 
-  // ── Internal ─────────────────────────────────────────────────
   private _handleAuthSuccess(user: User): void {
     if (user.access_token) {
       this.storage.setTokens(user.access_token, user.refresh_token ?? '');
       this.scheduleRefresh();
     }
-    // Strip tokens from user object before storing
     const { access_token, refresh_token, token_type, expires_in, ...cleanUser } = user;
     this._user.set(cleanUser as User);
     this.storage.setUser(cleanUser);

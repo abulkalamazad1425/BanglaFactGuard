@@ -1,29 +1,4 @@
-"""Replace expert_reviews_v2's flat (ai_label, expert_label) columns with a
-structured vote mirroring the AI pipeline's own (source_status, content_status,
-date_status) model:
 
-    ai_source_status / ai_content_status / ai_date_status  — snapshot of the
-        AI's call at the moment the expert voted (for accuracy tracking)
-    vote_source_status / vote_content_status / vote_date_status — the
-        expert's own judgment, with content/date meaningful only when
-        vote_source_status is CONFIRMED
-
-This lets experts vote on the same structure the AI produces instead of
-collapsing to a single TRUE/FALSE/PARTIALLY_TRUE/NOT_FOUND category, and lets
-finalization write the consensus straight back onto
-verification_results_v2.source_status/content_status/date_status — no
-separate "consensus label" projection is needed for this flow any more.
-
-Existing rows are backfilled on a best-effort basis: old ai_label/expert_label
-could not represent a date judgment independent of content, so this backfill
-is necessarily lossy (documented inline). This table has no production
-traffic yet in this environment, so the lossy backfill is acceptable.
-
-verification_label_enum and VerificationResultV2.ai_consensus_label are left
-untouched — the AI pipeline still writes ai_consensus_label when it runs
-(app/features/verification/verdict_compat.py), it is simply no longer read or
-written by the expert-review finalize path.
-"""
 
 from __future__ import annotations
 

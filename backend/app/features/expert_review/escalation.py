@@ -1,19 +1,4 @@
-"""Escalation of undecided claims to admin review.
 
-Semantics (see VotingConfig): a claim in EXPERT_REVIEW whose OVERALL votes
-have not produced a final decision escalates as soon as ANY configured limit
-is exceeded — votes cast >= max_review_votes OR hours since submission >=
-max_review_hours. A NULL limit is not configured and never counts as
-exceeded. The review window starts at submission time (`created_at`).
-
-A vote or vote edit re-evaluates its own claim immediately. This module adds
-the background sweep, so a time limit takes effect when it passes — not on
-the next vote or page visit — and a limit lowered by an admin applies to
-claims already in review. Every transition goes through
-`ExpertReviewService._finalize_or_escalate` under the submission row lock and
-the conditional `escalate_if_open` update, so a sweep racing a vote can
-neither escalate twice nor send duplicate notifications.
-"""
 
 from __future__ import annotations
 

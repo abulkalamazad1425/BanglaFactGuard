@@ -55,12 +55,7 @@ class ExpertProfile(UUIDMixin, TimestampMixin, ReprMixin, Base):
 
 
 class CredibilityWeightTier(UUIDMixin, TimestampMixin, ReprMixin, Base):
-    """DatabaseDescription.pdf Table 4.4 — credibility_weight_tiers.
-
-    Note: the PDF's column name `max_accuragy_pct` is a typo in the source
-    document; this implementation uses the corrected spelling `max_accuracy_pct`.
-    """
-
+  
     __tablename__ = "credibility_weight_tiers"
 
     label: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -71,7 +66,6 @@ class CredibilityWeightTier(UUIDMixin, TimestampMixin, ReprMixin, Base):
 
 
 class ExpertReview(UUIDMixin, TimestampMixin, ReprMixin, Base):
-    """Structured expert vote and applied weight for a submission."""
 
     __tablename__ = "expert_reviews"
 

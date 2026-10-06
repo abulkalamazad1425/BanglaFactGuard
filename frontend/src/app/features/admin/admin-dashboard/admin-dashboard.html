@@ -2,12 +2,9 @@
   <div class="container page-body">
     <header class="page-header">
       <div>
-        <p class="eyebrow">ADMINISTRATION</p>
         <h1>Admin dashboard</h1>
-        <p class="lede">What needs your attention, what changed recently, and who is reviewing.</p>
       </div>
       <nav class="header-links" aria-label="Admin sections">
-        <a routerLink="/admin/review-queue" class="btn btn-primary">Review queue</a>
         <a routerLink="/admin/experts" class="btn btn-secondary">Experts</a>
         <a routerLink="/admin/sources" class="btn btn-secondary">Sources</a>
         <a routerLink="/admin/credibility-tiers" class="btn btn-secondary">Voting &amp; tiers</a>
@@ -24,7 +21,6 @@
         <div class="panel-head">
           <div>
             <h2 id="escalated-heading">Escalated claims — your decision needed</h2>
-            <p>Expert reviewers could not reach a decision within the configured limits. Your overall vote on these claims is final.</p>
           </div>
           <span class="count-pill" [attr.aria-label]="d.escalated_count + ' escalated claims'">{{ d.escalated_count }}</span>
         </div>
@@ -41,8 +37,6 @@
             }
           </ul>
           @if (d.escalated_count > d.escalated_claims.length) {<a routerLink="/admin/review-queue" [queryParams]="{ state: 'escalated' }" class="more-link">See all {{ d.escalated_count }} escalated claims →</a>}
-        } @else {
-          <p class="empty">No escalated claims. Nothing is waiting for an admin decision.</p>
         }
       </section>
 

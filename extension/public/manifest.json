@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "BanglaFactGuard — Quick Verify",
+  "name": "BanglaFactGuard — Browser Extension",
   "description": "Submit Bangla text, photo cards and multimodal claims without leaving the page. Get notified when results are ready.",
   "version": "1.0.3",
   "minimum_chrome_version": "120",

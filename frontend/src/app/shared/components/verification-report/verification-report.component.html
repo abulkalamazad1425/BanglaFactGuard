@@ -24,9 +24,8 @@
 
 <ng-template #findings><section class="report-summary" aria-labelledby="preliminary-heading">
   <div class="summary-heading">
-    <div><span class="eyebrow">{{ reviewer ? 'RECORDED FINDINGS / SUPPORTING YOUR REVIEW' : 'PRELIMINARY AI VERIFICATION' }}</span>
+    <div>
       <h2 id="preliminary-heading">Preliminary result</h2>
-      <p>Automated checks against the claimed news outlet. These findings are not the final decision.</p>
     </div>
     <div class="scope-context"><span>Comparison scope</span><strong [title]="scopeHelp">{{ scopeLabel }}</strong>@if (r.cached) {<small>Previous result reused</small>}</div>
   </div>
@@ -55,7 +54,7 @@
 <ng-container [ngTemplateOutlet]="findings" />
 
 <section class="evidence-section report-section">
-  <div class="section-heading"><span class="eyebrow">SOURCE EVIDENCE</span><h2>{{ articleFound ? 'Read the relevant article' : 'What the source search returned' }}</h2><p>{{ articleFound ? 'Open the original publication and compare its wording with the submitted claim.' : 'A retrieved candidate is not a relevant article from the claimed source. Do not treat it as proof of this claim.' }}</p></div>
+  <div class="section-heading"><h2>{{ articleFound ? 'Read the relevant article' : 'What the source search returned' }}</h2><p>{{ articleFound ? 'Open the original publication and compare its wording with the submitted claim.' : 'A retrieved candidate is not a relevant article from the claimed source. Do not treat it as proof of this claim.' }}</p></div>
   @if (r.matched_articles.length) {
     @for (art of r.matched_articles.slice(0, 1); track art.url) {
       <article class="article-card"><span class="source-domain">{{ host(art.url) }}</span><h3><a [href]="art.url" target="_blank" rel="noopener noreferrer" class="article-title">{{ art.title || 'View source article' }} <span aria-hidden="true">↗</span><span class="sr-only"> (opens in a new tab)</span></a></h3><div class="article-meta">@if (art.author) {<span>{{ art.author }}</span>}@if (art.published_date) {<span>Published {{ art.published_date }}</span>}</div>
@@ -72,7 +71,6 @@
     <div><span>Claim headline</span><strong lang="bn">{{ headlineDetail?.claim_headline || '—' }}</strong></div>
     <div><span>Source title</span><strong lang="bn">{{ headlineDetail?.source_title || 'Unavailable' }}</strong></div>
     @if (headlineDetail?.source_publisher || r.normalized_source) {<div><span>Source publisher</span><strong>{{ headlineDetail?.source_publisher || r.normalized_source }}</strong></div>}
-    @if (headlineDetail?.source_url) {<div><span>Source URL</span><a [href]="headlineDetail!.source_url" target="_blank" rel="noopener noreferrer">{{ headlineDetail!.source_url }}<span class="sr-only"> (opens in a new tab)</span></a></div>}
   </div>
   <div class="headline-verdict" [ngClass]="'tone-' + headline.tone" role="status">
     <strong>Headline: {{ headline.title }}</strong>

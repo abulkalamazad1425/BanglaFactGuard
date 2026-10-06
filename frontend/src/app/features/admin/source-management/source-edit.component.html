@@ -113,7 +113,6 @@
               <input type="text" class="form-control" [formControlName]="i" placeholder="e.g. article p">
               <button type="button" class="btn btn-sm btn-outline-danger" (click)="removeArrayItem('body_selectors', i)">✕</button>
             </div>
-            <div *ngIf="bodySelectors.length === 0" class="text-muted text-sm fst-italic">No selectors defined.</div>
           </div>
         </div>
 
@@ -128,7 +127,6 @@
               <input type="text" class="form-control" [formControlName]="i" placeholder="e.g. h1.title">
               <button type="button" class="btn btn-sm btn-outline-danger" (click)="removeArrayItem('title_selectors', i)">✕</button>
             </div>
-            <div *ngIf="titleSelectors.length === 0" class="text-muted text-sm fst-italic">No selectors defined.</div>
           </div>
         </div>
 
@@ -143,7 +141,6 @@
               <input type="text" class="form-control" [formControlName]="i" placeholder="e.g. time[datetime]">
               <button type="button" class="btn btn-sm btn-outline-danger" (click)="removeArrayItem('date_selectors', i)">✕</button>
             </div>
-            <div *ngIf="dateSelectors.length === 0" class="text-muted text-sm fst-italic">No selectors defined.</div>
           </div>
         </div>
       </div>
@@ -161,7 +158,6 @@
             <input type="text" class="form-control" [formControlName]="i" placeholder="e.g. prothomalo\.com/[^/]+/[^/]*/article/[a-zA-Z0-9_-]+">
             <button type="button" class="btn btn-sm btn-outline-danger" (click)="removeArrayItem('article_url_patterns', i)">✕</button>
           </div>
-          <div *ngIf="articleUrlPatterns.length === 0" class="text-muted text-sm fst-italic">No patterns defined.</div>
         </div>
       </div>
 

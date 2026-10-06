@@ -1,24 +1,22 @@
 <div class="explorer-page">
   <div class="container explorer-container">
     <header class="explorer-header">
-      <div><p class="eyebrow">THE VERIFICATION ARCHIVE</p><h1>Fact Explorer</h1><p class="intro">Browse final decisions and claims still under review.</p></div>
-      <a routerLink="/verify" class="btn btn-secondary">Verify a new claim <span aria-hidden="true">↗</span></a>
+      <div><h1>Fact Explorer</h1></div>
     </header>
 
     <section class="archive-summary" aria-label="All-time archive summary">
-      <div class="summary-intro"><span class="eyebrow">OUR WORK, AT A GLANCE</span><p>All-time archive activity</p><small>Preliminary and final results.</small></div>
-      <div class="summary-stat"><strong>{{ summary() ? (summary()!.total | number) : '—' }}</strong><span>Checks in the archive</span></div>
-      <div class="summary-stat"><strong>{{ summary() ? (summary()!.finalized | number) : '—' }}</strong><span>Final decisions</span></div>
-      <div class="summary-stat"><strong>{{ summary() ? (summary()!.review | number) : '—' }}</strong><span>Under review</span></div>
+      <div class="summary-intro"><p>All-time archive activity</p></div>
+      <div class="summary-stat"><strong>{{ summary() ? (summary()!.total | number) : '—' }}</strong><span>Total Claims Submitted</span></div>
+      <div class="summary-stat"><strong>{{ summary() ? (summary()!.finalized | number) : '—' }}</strong><span>Finalized Claims</span></div>
+      <div class="summary-stat"><strong>{{ summary() ? (summary()!.review | number) : '—' }}</strong><span>Claims Under Review</span></div>
     </section>
 
     <section class="archive-browser" aria-labelledby="browse-heading">
-      <div class="browse-heading"><div><p class="eyebrow">FIND A FACT CHECK</p><h2 id="browse-heading">Claims, evidence & decisions</h2></div><span class="sort-note">Newest submissions first</span></div>
+      <!-- <div class="browse-heading"><div><h2 id="browse-heading">Explore Facts </h2></div></div> -->
       <div class="view-switch" aria-label="Review stage">
         <button type="button" [class.selected]="reviewState() === 'finalized'" [attr.aria-pressed]="reviewState() === 'finalized'" (click)="selectState('finalized')">Final decisions</button>
         <button type="button" [class.selected]="reviewState() === 'review'" [attr.aria-pressed]="reviewState() === 'review'" (click)="selectState('review')">Under review</button>
       </div>
-      <p class="stage-description">{{ reviewState() === 'finalized' ? 'Final decisions by expert reviewers (or by an administrator when reviewers could not agree). Open a result for the evidence and the reviewers’ reasoning.' : 'No final decision yet. Cards show preliminary AI findings only.' }}</p>
 
       <form [formGroup]="filterForm" (ngSubmit)="search()" class="search-panel">
         <div class="primary-filters">
@@ -51,7 +49,7 @@
         } @else if (error()) {
           <div class="result-state" role="alert"><h3>We couldn’t load the archive</h3><p>Your filters are saved. Please try again shortly.</p><button type="button" class="btn btn-secondary" (click)="retry()">Try again</button></div>
         } @else if (!validation() && !items().length) {
-          <div class="result-state"><span class="empty-symbol" aria-hidden="true">⌕</span><h3>{{ activeFilters().length ? 'No matching fact checks' : reviewState() === 'finalized' ? 'No final decisions yet' : 'No checks awaiting review' }}</h3><p>{{ activeFilters().length ? 'Try a different keyword or clear the filters to explore more claims.' : reviewState() === 'finalized' ? 'You can explore preliminary findings while expert review is in progress.' : 'Explore completed decisions, or submit a new claim for verification.' }}</p>
+          <div class="result-state"><span class="empty-symbol" aria-hidden="true">⌕</span><h3>{{ activeFilters().length ? 'No matching fact checks' : reviewState() === 'finalized' ? 'No final decisions yet' : 'No checks awaiting review' }}</h3>
           @if (activeFilters().length) {<button type="button" class="btn btn-secondary" (click)="resetFilters()">Clear filters</button>} @else {<button type="button" class="btn btn-secondary" (click)="selectState(reviewState() === 'finalized' ? 'review' : 'finalized')">{{ reviewState() === 'finalized' ? 'Explore checks under review' : 'Explore final decisions' }}</button>}
           </div>
         } @else if (!validation()) {
@@ -78,7 +76,5 @@
         }
       </div>
     </section>
-
-    <aside class="reading-guide" aria-label="Understanding results"><p>A missing source or date mismatch alone does not make a claim fake. Open the result for evidence.</p></aside>
   </div>
 </div>

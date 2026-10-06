@@ -1,5 +1,5 @@
 <div class="settings-page container">
-  <header class="page-header"><h1>Account settings</h1><p>Profile, security and result updates.</p></header>
+  <header class="page-header"><h1>Account settings</h1></header>
   <div class="settings-layout">
     <aside class="card account-summary"><div class="avatar-lg">{{ initial() }}</div><h2>{{ auth.user()?.full_name || 'Your account' }}</h2><p>{{ auth.user()?.email }}</p><span class="badge badge-primary">{{ auth.user()?.role === 'admin' ? 'Administrator' : isExpertOnly() ? 'Expert reviewer' : 'Registered user' }}</span>
       <nav aria-label="Account shortcuts"><a routerLink="/history">My Submissions →</a><a routerLink="/notifications">Notifications →</a>@if (isExpertOnly()) {<a routerLink="/expert/queue">Review queue →</a><a routerLink="/expert/history">My Review History →</a><a routerLink="/expert/stats">Credibility →</a>}@if (auth.isAdmin()) {<a routerLink="/admin">Admin workspace →</a>}</nav>
@@ -19,7 +19,6 @@
         <div class="form-group"><label for="settings-new-password" class="form-label">New password</label><input id="settings-new-password" type="password" class="form-control" formControlName="new_password" autocomplete="new-password" aria-describedby="password-help"><p id="password-help" class="text-muted text-sm">At least 8 characters, including an uppercase letter and a number.</p>@if (pwForm.get('new_password')?.invalid && pwForm.get('new_password')?.touched) {<p class="form-error">Enter a password that meets these requirements.</p>}</div>
         <button class="btn btn-secondary" type="submit" [disabled]="changingPw()">{{ changingPw() ? 'Updating…' : 'Change password' }}</button>
       </form></section>
-      <section class="card settings-card"><h2>Your result updates</h2><p>Preliminary and final results appear in Notifications. Final results are also sent to <strong>{{ auth.user()?.email }}</strong>.</p><p class="text-muted text-sm">Manage Chrome alerts in the extension’s Account tab.</p><a routerLink="/notifications" class="btn btn-secondary">View notifications</a></section>
     </div>
   </div>
 </div>

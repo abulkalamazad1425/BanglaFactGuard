@@ -344,7 +344,8 @@ def extraction_failures(details: dict | None) -> list[str]:
         return []
     out: list[str] = []
     if details.get("skipped_reason"):
-        out.append("Image reading is not available on this server.")
+        out.append("Every image-reading key has reached its limit for now."
+                   if "limit" in details["skipped_reason"] else "Image reading is not available on this server.")
     for attempt in details.get("attempts") or []:
         if attempt.get("outcome") != "success":
             out.append(f"Image reading attempt {attempt.get('attempt')} "

@@ -25,7 +25,7 @@ from app.features.photocard.claim_extraction import (
     STATUS_SUCCEEDED,
     PhotocardClaimExtractor,
 )
-from app.features.photocard.gemini_image_extractor import SourceOption, extract_with_gemini
+from app.features.photocard.gemini_image_extractor import SourceOption, extract_with_gemini, reset_key_pools
 
 IMAGE = b"\x89PNG\r\n\x1a\n" + b"original-card-pixels"
 HEADLINE = "‘ফার্নান্দেজই পর্তুগালের সবচেয়ে বড় প্রতীক’, বললেন রোনালদো — ৩টি গোল!"
@@ -61,8 +61,15 @@ class Gemini:
         return httpx.AsyncClient(transport=httpx.MockTransport(self.handler))
 
 
-SETTINGS = GeminiSettings(api_key="test-key", model_name="gemini-test", retry_base_delay_seconds=0)
+SETTINGS = GeminiSettings(api_key="test-key", api_keys=[], model_name="gemini-test", retry_base_delay_seconds=0)
 CATALOGUE = [SourceOption("prothomalo.com", "প্রথম আলো", "Prothom Alo", ("প্র.আ.", "palo"))]
+
+
+@pytest.fixture(autouse=True)
+def fresh_key_pools():
+    reset_key_pools()  # blocked keys are process-wide; isolate every test
+    yield
+    reset_key_pools()
 
 
 class Sleeps:
@@ -183,7 +190,7 @@ async def test_an_id_outside_the_catalogue_is_a_malformed_response_never_a_sourc
 async def test_nine_failures_make_exactly_nine_requests_with_two_batch_pauses(monkeypatch):
     gemini = Gemini(*[httpx.Response(503, text="busy")] * 12)
     sleeps = Sleeps()
-    settings = GeminiSettings(api_key="k", retry_base_delay_seconds=1.0)
+    settings = GeminiSettings(api_key="k", api_keys=[], retry_base_delay_seconds=1.0)
     result = await extractor(gemini, monkeypatch, settings=settings, sleep=sleeps).extract(IMAGE)
     assert len(gemini.requests) == 9 and result.attempts == 9  # 9 in total, the first one included
     assert result.status == STATUS_API_FAILED and result.failure_message == API_FAILURE_MESSAGE
@@ -220,7 +227,7 @@ async def test_permanent_request_error_stops_at_once(monkeypatch):
 
 async def test_unconfigured_gemini_makes_no_call_and_fails_as_unavailable(monkeypatch):
     gemini = Gemini(gemini_body())
-    result = await extractor(gemini, monkeypatch, settings=GeminiSettings(api_key="")).extract(IMAGE)
+    result = await extractor(gemini, monkeypatch, settings=GeminiSettings(api_key="", api_keys=[])).extract(IMAGE)
     assert gemini.requests == [] and result.status == STATUS_API_FAILED and result.details["skipped_reason"]
 
 
@@ -285,3 +292,77 @@ async def test_per_minute_429_is_still_retried(monkeypatch):
     gemini = Gemini(_quota_429("GenerateRequestsPerMinutePerProjectPerModel-FreeTier"), gemini_body())
     result = await extractor(gemini, monkeypatch).extract(IMAGE)
     assert len(gemini.requests) == 2 and result.status == STATUS_SUCCEEDED
+
+
+# ── several API keys: rotate when one reaches its limit ──────────────────
+
+KEYS = ["key-one", "key-two", "key-three", "key-four", "key-five"]
+MULTI = GeminiSettings(api_key=KEYS[0], api_keys=KEYS[1:], model_name="gemini-test", retry_base_delay_seconds=1.0)
+
+
+def _used(gemini):
+    return [r.headers["x-goog-api-key"] for r in gemini.requests]
+
+
+def test_numbered_keys_are_read_in_order(monkeypatch):
+    from app.core.config import _numbered_gemini_keys
+    for name in ("GEMINI_API_KEY1", "GEMINI_API_KEY2", "GEMINI_API_KEY3", "GEMINI_API_KEY5", "GEMINI_API_KEY10"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("GEMINI_API_KEY10", "ten")
+    monkeypatch.setenv("GEMINI_API_KEY2", "two")
+    monkeypatch.setenv("GEMINI_API_KEY1", "one")
+    keys = GeminiSettings(api_key="main", api_keys=_numbered_gemini_keys()).all_api_keys
+    assert keys[:2] == ["main", "one"] and keys.index("two") < keys.index("ten")
+    assert GeminiSettings(api_key="x", api_keys=["x", " ", "y"]).all_api_keys == ["x", "y"]  # no blanks/duplicates
+
+
+async def test_a_key_out_of_quota_hands_the_next_call_to_the_next_key_at_once(monkeypatch):
+    gemini = Gemini(_quota_429("GenerateRequestsPerDayPerProjectPerModel-FreeTier"), gemini_body())
+    sleeps = Sleeps()
+    result = await extractor(gemini, monkeypatch, settings=MULTI, sleep=sleeps).extract(IMAGE)
+    assert result.status == STATUS_SUCCEEDED and result.attempts == 2
+    assert _used(gemini) == ["key-one", "key-two"] and sleeps.calls == []  # no waiting for the switch
+    assert [a["key"] for a in result.details["attempts"]] == [1, 2]
+    assert not any(k in json.dumps(result.details) for k in KEYS)  # keys are never recorded
+
+
+async def test_per_minute_limit_also_switches_key(monkeypatch):
+    gemini = Gemini(_quota_429("GenerateRequestsPerMinutePerProjectPerModel-FreeTier"), gemini_body())
+    result = await extractor(gemini, monkeypatch, settings=MULTI).extract(IMAGE)
+    assert result.status == STATUS_SUCCEEDED and _used(gemini) == ["key-one", "key-two"]
+
+
+async def test_keys_cycle_and_a_spent_key_stays_skipped_for_later_cards(monkeypatch):
+    daily = lambda: _quota_429("GenerateRequestsPerDayPerProjectPerModel-FreeTier")
+    gemini = Gemini(daily(), daily(), gemini_body())
+    assert (await extractor(gemini, monkeypatch, settings=MULTI).extract(IMAGE)).status == STATUS_SUCCEEDED
+    assert _used(gemini) == ["key-one", "key-two", "key-three"]
+    # the next card starts on the key that worked, never on the spent ones
+    gemini2 = Gemini(gemini_body())
+    await extractor(gemini2, monkeypatch, settings=MULTI).extract(IMAGE)
+    assert _used(gemini2) == ["key-three"]
+
+
+async def test_other_errors_keep_the_9_request_rule_and_the_same_key(monkeypatch):
+    gemini = Gemini(*[httpx.Response(503)] * 12)
+    result = await extractor(gemini, monkeypatch, settings=MULTI).extract(IMAGE)
+    assert len(gemini.requests) == 9 and result.status == STATUS_API_FAILED
+    assert set(_used(gemini)) == {"key-one"}
+
+
+async def test_rotation_never_exceeds_9_requests(monkeypatch):
+    minute = lambda: _quota_429("GenerateRequestsPerMinutePerProjectPerModel-FreeTier")
+    gemini = Gemini(*[minute() for _ in range(20)])
+    result = await extractor(gemini, monkeypatch, settings=MULTI).extract(IMAGE)
+    assert len(gemini.requests) == 9 and result.status == STATUS_API_FAILED
+    assert _used(gemini)[:5] == KEYS  # every key tried in turn
+
+
+async def test_when_every_key_is_out_of_daily_quota_it_stops_and_later_cards_make_no_call(monkeypatch):
+    gemini = Gemini(*[_quota_429("GenerateRequestsPerDayPerProjectPerModel-FreeTier") for _ in range(9)])
+    result = await extractor(gemini, monkeypatch, settings=MULTI).extract(IMAGE)
+    assert _used(gemini) == KEYS and result.status == STATUS_API_FAILED  # 5 calls, not 9
+    assert result.failure_message == API_FAILURE_MESSAGE
+    later = Gemini(gemini_body())
+    result = await extractor(later, monkeypatch, settings=MULTI).extract(IMAGE)
+    assert later.requests == [] and result.status == STATUS_API_FAILED and result.details["skipped_reason"]

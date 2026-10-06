@@ -2,15 +2,11 @@
   <div class="container page-body">
     <header class="page-header">
       <div>
-        <p class="eyebrow">{{ isAdmin() ? 'ADMIN REVIEW QUEUE' : 'EXPERT WORKSPACE' }}</p>
         <h1>{{ isAdmin() ? 'Review queue' : 'Expert review queue' }}</h1>
         @if (isAdmin()) {
-          <p class="lede">Escalated claims need your final decision and are listed first. Claims still in expert review are view-only for administrators.</p>
-        } @else {
-          <p class="lede">Claims awaiting your independent assessment.</p>
-        }
+        } 
       </div>
-      @if (isAdmin()) {<a routerLink="/admin" class="btn btn-ghost">← Admin dashboard</a>}
+     
     </header>
 
     @if (isAdmin()) {
@@ -31,7 +27,6 @@
     @if (!loading() && !loadError() && queue().length === 0) {
       <div class="empty-state card">
         <h2>Nothing here right now</h2>
-        <p>{{ isAdmin() && state() === 'escalated' ? 'No claims are waiting for an admin decision.' : 'No claims match. Try another search or check back later.' }}</p>
       </div>
     }
 

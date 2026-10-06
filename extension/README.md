@@ -1,4 +1,4 @@
-# BanglaFactGuard — Quick Verify
+# BanglaFactGuard — Browser Extension
 
 An English-language Chrome side panel built with **Preact + Vite**, styled to match the existing Angular website. The backend remains FastAPI. Read [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the detailed design and scope.
 
@@ -55,7 +55,7 @@ The installable folder is **`extension/dist`**. This folder contains `manifest.j
 
    `E:\8th Sem\SPL3\Main\BanglaFactGuard\extension\dist`
 
-5. Pin **BanglaFactGuard — Quick Verify** from Chrome's Extensions menu.
+5. Pin **BanglaFactGuard — Browser Extension** from Chrome's Extensions menu.
 6. Open a regular news or social-media webpage, then click the pinned icon. The side panel opens beside your page.
 7. Keep the switch **ON**. Use it as a guest, or open **Account** to sign in.
 8. Submit a small claim. Once accepted, you can close the panel. Watch Activity/the toolbar badge and Chrome desktop notifications for completion.

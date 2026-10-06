@@ -1,12 +1,4 @@
-"""Public "Voting Details" for a claim — available only after its final decision.
 
-Shows, for anyone (signed in or not), each reviewer's OVERALL vote and the
-justification they wrote, and marks an administrator's final decision on an
-escalated claim. Nothing is returned before finalization, so no in-progress
-review can leak. Only what the public needs is exposed: the reviewer's
-display name and role — never email, user id, credibility weight, tier or
-the supplementary source/headline/date assessments.
-"""
 
 from __future__ import annotations
 

@@ -27,13 +27,7 @@ import { VerdictBadgeComponent } from '../verdict-badge/verdict-badge.component'
             <p class="state" role="alert">Voting details could not be loaded. <button type="button" class="link-button" (click)="load()">Try again</button></p>
           }
           @if (!loading() && !error() && details(); as d) {
-            <p class="summary">
-              @if (d.decided_by === 'ADMIN') {
-                Expert reviewers could not agree, so an administrator made the final decision.
-              } @else {
-                The final decision was reached by the expert reviewers’ votes.
-              }
-            </p>
+            
             <ol class="votes">
               @for (v of d.votes; track $index) {
                 <li class="vote" [class.final]="v.is_final_decision">

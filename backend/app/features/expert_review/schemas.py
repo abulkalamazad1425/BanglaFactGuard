@@ -18,13 +18,6 @@ from app.features.verification.schemas import BodySimilarityReport, HeadlineAlte
 
 
 class ExpertVoteRequest(BaseModel):
-    """A reviewer's vote. `overall_verdict` ("Cast your vote based on your
-    findings": Real / Fake / Misleading / Altered) is mandatory for every
-    submission type and is the ONLY input to the final decision, consensus
-    and escalation. source/content/date are optional supplementary findings
-    for SOURCE_BASED/PHOTO_CARD claims, recorded for reference only; the
-    validator just keeps them internally consistent (headline/date findings
-    only when the relevant article was found)."""
 
     overall_verdict: OverallVerdict
     source_status: SourceStatus | None = None
@@ -158,8 +151,6 @@ class ExpertHistoryItemResponse(BaseModel):
     ai_content_status: ContentStatus | None
     ai_date_status: DateStatus | None
     final_overall_verdict: OverallVerdict | None
-    # Deprecated: the final decision is the overall verdict only. Kept for
-    # response compatibility; always null.
     final_source_status: SourceStatus | None = None
     final_content_status: ContentStatus | None = None
     final_date_status: DateStatus | None = None

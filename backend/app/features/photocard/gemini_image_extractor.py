@@ -22,6 +22,12 @@ no fallback.
   retrying cannot succeed. Calls go through the shared httpx client, which
   is configured without transport retries, so no SDK/transport layer adds
   hidden attempts on top of this loop.
+* Several API keys (GEMINI_API_KEY, GEMINI_API_KEY1, ...) are used in a
+  cycle. When a request answers that the key's limit is reached (HTTP 429),
+  that key is set aside until its limit resets and the NEXT request goes out
+  at once with the next available key. This does not add requests: every
+  call still counts towards the same 9. When every key is out of its daily
+  limit the loop stops - waiting cannot help within this card's budget.
 * A successful response is returned as-is even when the headline or source
   is missing: that is a property of the card, not a request failure, and is
   never retried (the caller rejects the card).
@@ -192,11 +198,12 @@ class GeminiAttempt:
     detail: str | None = None
     status_code: int | None = None
     duration_ms: int = 0
+    key: int | None = None  # 1-based position of the API key used (never the key itself)
 
     def to_dict(self) -> dict:
         return {
             "attempt": self.number, "batch": self.batch, "outcome": self.outcome, "detail": self.detail,
-            "status_code": self.status_code, "duration_ms": self.duration_ms,
+            "status_code": self.status_code, "duration_ms": self.duration_ms, "key": self.key,
         }
 
 
@@ -213,9 +220,11 @@ class GeminiExtractionOutcome:
 
 
 class _AttemptFailed(Exception):
-    def __init__(self, outcome: str, detail: str, status_code: int | None = None, *, permanent: bool = False):
+    def __init__(self, outcome: str, detail: str, status_code: int | None = None, *, permanent: bool = False,
+                 limit_seconds: float | None = None):
         super().__init__(detail)
         self.outcome, self.detail, self.status_code, self.permanent = outcome, detail, status_code, permanent
+        self.limit_seconds = limit_seconds  # set when THIS key hit its limit
 
 
 def detect_mime_type(image_bytes: bytes) -> str:
@@ -228,21 +237,85 @@ def detect_mime_type(image_bytes: bytes) -> str:
     return "image/jpeg"
 
 
-def _daily_quota_exhausted(response: httpx.Response) -> bool:
-    """True for a 429 caused by a per-day quota (e.g. the free tier's
-    requests-per-day limit), as opposed to a short per-minute rate limit
-    that a retry a few seconds later can get past."""
+_DEFAULT_MINUTE_BLOCK_S = 60.0
+_DEFAULT_DAILY_BLOCK_S = 3600.0
+# A key blocked for longer than this is not worth waiting for inside one card.
+_MAX_WAIT_FOR_KEY_S = 120.0
+
+
+def _limit_info(response: httpx.Response) -> tuple[bool, float]:
+    """(is a per-day quota, seconds until the key may be used again) for a 429."""
+    daily, delay = False, None
     try:
         details = (response.json().get("error") or {}).get("details") or []
     except ValueError:
-        return False
+        details = []
     for d in details:
         if not isinstance(d, dict):
             continue
         for v in d.get("violations") or []:
             if "perday" in str(v.get("quotaId", "")).lower():
-                return True
-    return False
+                daily = True
+        retry = str(d.get("retryDelay") or "")
+        if retry.endswith("s"):
+            try:
+                delay = float(retry[:-1])
+            except ValueError:
+                pass
+    if delay is None:
+        delay = _DEFAULT_DAILY_BLOCK_S if daily else _DEFAULT_MINUTE_BLOCK_S
+    return daily, delay
+
+
+class GeminiKeyPool:
+    """Process-wide rotation over the configured keys. Shared by every card,
+    so a key that ran out of its limit is skipped by later cards too until
+    its limit resets. Keys themselves are never logged - only their number."""
+
+    def __init__(self, keys: list[str], clock: Callable[[], float] = time.monotonic) -> None:
+        self.keys = list(keys)
+        self._blocked_until = [0.0] * len(self.keys)
+        self._next = 0
+        self._clock = clock
+
+    def acquire(self) -> int | None:
+        """Index of the next usable key (cycling from the last one used), or
+        None when every key is blocked for longer than is worth waiting."""
+        now = self._clock()
+        n = len(self.keys)
+        for step in range(n):
+            i = (self._next + step) % n
+            if self._blocked_until[i] <= now:
+                self._next = i
+                return i
+        soonest = min(range(n), key=lambda i: self._blocked_until[i])
+        if self._blocked_until[soonest] - now <= _MAX_WAIT_FOR_KEY_S:
+            self._next = soonest
+            return soonest  # a short per-minute limit: the normal backoff covers it
+        return None
+
+    def block(self, index: int, seconds: float) -> None:
+        self._blocked_until[index] = max(self._blocked_until[index], self._clock() + seconds)
+        self._next = (index + 1) % len(self.keys)  # the next call uses the next key
+
+    def has_free_key(self) -> bool:
+        now = self._clock()
+        return any(until <= now for until in self._blocked_until)
+
+
+_POOLS: dict[tuple[str, ...], GeminiKeyPool] = {}
+
+
+def key_pool(keys: list[str]) -> GeminiKeyPool:
+    pool = _POOLS.get(tuple(keys))
+    if pool is None:
+        pool = _POOLS[tuple(keys)] = GeminiKeyPool(keys)
+    return pool
+
+
+def reset_key_pools() -> None:
+    """Forget every blocked key (tests, or after a quota upgrade)."""
+    _POOLS.clear()
 
 
 def _response_text(body: dict) -> str:
@@ -292,30 +365,45 @@ async def extract_with_gemini(
     per_batch = max(1, min(3, settings.attempts_per_batch))
     batches = max(1, min(3, settings.batches))
     allowed = {s.canonical_name for s in sources}
+    pool = key_pool(settings.all_api_keys)
 
     number = 0
     for batch in range(1, batches + 1):
         for slot in range(1, per_batch + 1):
+            key_index = pool.acquire()
+            if key_index is None:
+                logger.warning("gemini_all_keys_exhausted", keys=len(pool.keys), attempts=number)
+                if not outcome.attempts:
+                    outcome.skipped_reason = "Every Gemini API key has reached its limit"
+                return outcome
             number += 1
             started = time.perf_counter()
             try:
-                fields = await _attempt(url, payload, http_client=http_client, settings=settings, allowed=allowed)
+                fields = await _attempt(url, payload, http_client=http_client, settings=settings,
+                                        allowed=allowed, api_key=pool.keys[key_index])
             except _AttemptFailed as exc:
                 attempt = GeminiAttempt(number, batch, exc.outcome, exc.detail[:300], exc.status_code,
-                                        int((time.perf_counter() - started) * 1000))
+                                        int((time.perf_counter() - started) * 1000), key=key_index + 1)
                 outcome.attempts.append(attempt)
                 logger.warning("gemini_extraction_attempt_failed", **attempt.to_dict(),
                                max_requests=per_batch * batches)
+                if exc.limit_seconds is not None:
+                    # This key reached its limit: set it aside and make the
+                    # next call at once with the next key, when one is free.
+                    pool.block(key_index, exc.limit_seconds)
+                    if pool.has_free_key():
+                        continue
                 if exc.permanent:
                     return outcome
                 if slot < per_batch:
                     await sleep(settings.retry_base_delay_seconds * (2 ** (slot - 1)))
                 continue
             outcome.attempts.append(
-                GeminiAttempt(number, batch, "success", None, 200, int((time.perf_counter() - started) * 1000))
+                GeminiAttempt(number, batch, "success", None, 200, int((time.perf_counter() - started) * 1000),
+                              key=key_index + 1)
             )
             outcome.fields = fields
-            logger.info("gemini_extraction_succeeded", attempt=number, batch=batch,
+            logger.info("gemini_extraction_succeeded", attempt=number, batch=batch, key=key_index + 1,
                         headline_present=fields.present("headline") is not None,
                         source_identified=fields.identified_source() is not None,
                         date_present=fields.present("date") is not None)
@@ -327,12 +415,13 @@ async def extract_with_gemini(
 
 
 async def _attempt(
-    url: str, payload: dict, *, http_client: httpx.AsyncClient, settings: GeminiSettings, allowed: set[str]
+    url: str, payload: dict, *, http_client: httpx.AsyncClient, settings: GeminiSettings, allowed: set[str],
+    api_key: str,
 ) -> GeminiPhotocardFields:
     try:
         response = await http_client.post(
             url,
-            headers={"x-goog-api-key": settings.api_key},
+            headers={"x-goog-api-key": api_key},
             json=payload,
             timeout=settings.timeout_seconds,
         )
@@ -341,11 +430,14 @@ async def _attempt(
     except httpx.HTTPError as exc:
         raise _AttemptFailed("network_error", f"Gemini request failed: {exc}") from exc
 
-    if response.status_code == 429 and _daily_quota_exhausted(response):
-        # Retrying cannot succeed until the quota resets, and every retry
-        # would spend more of the same daily budget.
+    if response.status_code == 429:
+        # This key reached a limit. A daily limit cannot recover within this
+        # card, so it is final unless another key is free.
+        daily, seconds = _limit_info(response)
         raise _AttemptFailed(
-            "quota_exhausted", f"Gemini daily quota exhausted: {response.text[:200]}", 429, permanent=True,
+            "quota_exhausted" if daily else "http_error",
+            f"Gemini {'daily quota exhausted' if daily else 'rate limit reached'} for this key: {response.text[:160]}",
+            429, permanent=daily, limit_seconds=seconds,
         )
     if response.status_code != 200:
         permanent = response.status_code in _PERMANENT_STATUS_CODES

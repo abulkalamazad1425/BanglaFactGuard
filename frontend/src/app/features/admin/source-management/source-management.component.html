@@ -5,7 +5,6 @@
   <div class="page-header">
     <div class="header-text">
       <h1>Verified Sources</h1>
-      <p>Manage trusted news outlets used by the fact-checking pipeline.</p>
     </div>
     <div class="header-actions">
       <div class="stats-pill">
@@ -120,7 +119,6 @@
         <div class="form-group" [class.has-error]="form.get('canonical_name')?.invalid && form.get('canonical_name')?.touched">
           <label for="source-management.component-canonical_name">Canonical Domain <span class="required">*</span></label>
           <input id="source-management.component-canonical_name" type="text" class="form-input" formControlName="canonical_name" placeholder="e.g. prothomalo.com">
-          <small *ngIf="isEditMode()" class="hint">Domain name cannot be changed after creation.</small>
           <small *ngIf="form.get('canonical_name')?.hasError('pattern') && form.get('canonical_name')?.touched" class="error-msg">Must be a valid domain (e.g. prothomalo.com)</small>
         </div>
 
@@ -168,7 +166,6 @@
             <span class="checkbox-custom"></span>
             <span>
               <strong>JavaScript Rendered</strong>
-              <small>Uses React/Next.js — Playwright will be used for scraping</small>
             </span>
           </label>
         </div>
@@ -184,7 +181,6 @@
         <div class="form-group">
           <label for="source-management.component-internal_search_url">Internal Search URL</label>
           <input id="source-management.component-internal_search_url" type="text" class="form-input" formControlName="internal_search_url" placeholder="https://...search?q={{ '{query}' }}">
-          <small class="hint">Use <code>{{ '{query}' }}</code> as the search placeholder.</small>
         </div>
 
         <div class="form-group">
@@ -197,7 +193,6 @@
             <label>Aliases</label>
             <button type="button" class="add-item-btn" (click)="addArrayItem('aliases')">+ Add</button>
           </div>
-          <small class="hint">Alternative names users might type (e.g. "প্রথম আলো", "prothom alo")</small>
           <div formArrayName="aliases" class="array-list">
             <div *ngFor="let c of aliases.controls; let i = index" class="array-item">
               <input type="text" class="form-input" [formControlName]="i" placeholder="Alias name">
@@ -205,7 +200,6 @@
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
             </div>
-            <div *ngIf="aliases.length === 0" class="empty-array">No aliases added yet.</div>
           </div>
         </div>
       </div>
@@ -216,7 +210,6 @@
           <span class="section-num">3</span>
           Extraction Rules
         </div>
-        <p class="section-desc">CSS selectors for extracting article content. Order from most specific to most generic.</p>
 
         <div class="selectors-grid">
           <!-- Body -->
@@ -232,7 +225,6 @@
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
               </div>
-              <div *ngIf="bodySelectors.length === 0" class="empty-array">No selectors.</div>
             </div>
           </div>
 
@@ -249,7 +241,6 @@
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
               </div>
-              <div *ngIf="titleSelectors.length === 0" class="empty-array">No selectors.</div>
             </div>
           </div>
 
@@ -266,7 +257,6 @@
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
               </div>
-              <div *ngIf="dateSelectors.length === 0" class="empty-array">No selectors.</div>
             </div>
           </div>
         </div>
@@ -277,7 +267,6 @@
             <label>Article URL Patterns (Regex)</label>
             <button type="button" class="add-item-btn" (click)="addArrayItem('article_url_patterns')">+ Add Pattern</button>
           </div>
-          <small class="hint">Regex patterns to identify valid article URLs during search scraping.</small>
           <div formArrayName="article_url_patterns" class="array-list">
             <div *ngFor="let c of articleUrlPatterns.controls; let i = index" class="array-item">
               <input type="text" class="form-input mono" [formControlName]="i" placeholder="prothomalo\.com/.*/article/[a-z0-9-]+">
@@ -285,7 +274,6 @@
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
             </div>
-            <div *ngIf="articleUrlPatterns.length === 0" class="empty-array">No patterns defined.</div>
           </div>
         </div>
       </div>

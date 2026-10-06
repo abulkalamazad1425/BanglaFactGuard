@@ -231,7 +231,7 @@ Then:
 1. Enter `chrome://extensions` in Chrome's address bar.
 2. Enable **Developer mode** and click **Load unpacked**.
 3. Select **`extension/dist`**, not the source directory.
-4. Pin **BanglaFactGuard — Quick Verify**.
+4. Pin **BanglaFactGuard — Browser Extension**.
 5. Open a news/Facebook webpage and click the pinned toolbar icon.
 6. Choose a verification mode and submit as a guest or sign in.
 
