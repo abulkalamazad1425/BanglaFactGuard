@@ -23,9 +23,9 @@ function pendingCard(over: Partial<PhotoCardResultResponse> = {}): PhotoCardResu
     phase: 'EXTRACTING',
     claim_scope: 'HEADLINE_ONLY',
     headline: null,
-    claimed_source_text: 'প্রথম আলো',
+    claimed_source_text: null,
     image_url: 'https://minio/p1.png',
-    extraction_warnings: [],
+    extraction_status: 'PENDING',
     verification: null,
     created_at: '2026-06-07T10:00:00Z',
     ...over,
@@ -75,7 +75,7 @@ describe('VerifyResultComponent (photo card, returning later)', () => {
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
     expect(el.querySelector('img.media-image')?.getAttribute('src')).toBe('https://minio/p1.png');
-    expect(el.textContent).toContain('Reading the headline from the card');
+    expect(el.textContent).toContain('Reading the headline, outlet and date from the card');
     expect(el.textContent).toContain('You can leave this page');
     expect(el.textContent).not.toContain('Expert review pending.'); // not shown as a completed result
     fixture.destroy();
@@ -167,26 +167,46 @@ describe('VerifyResultComponent (photo card extraction preview)', () => {
     return fixture.nativeElement as HTMLElement;
   }
 
-  it('shows the date and outlet read from the card for reference, beside the user-selected values', () => {
+  it('shows the outlet and date read from the card once, as the claimed values', () => {
     const el = render(pendingCard({
       status: 'EXPERT_REVIEW', phase: 'DONE', headline: 'শিরোনাম', verification: VERIFICATION,
-      extraction_method: 'GEMINI_IMAGE', extraction_attempts: 2,
-      extracted_date_text: '০৫ অক্টোবর, ২০২৬', extracted_source_text: 'প্রথম আলো',
+      extraction_status: 'SUCCEEDED', extraction_attempts: 2,
+      claimed_source_text: 'prothomalo.com', claimed_source_name: 'প্রথম আলো', published_date: '2026-10-05',
     }));
-    expect(el.textContent).toContain('Date shown on the card');
-    expect(el.textContent).toContain('০৫ অক্টোবর, ২০২৬');
-    expect(el.textContent).toContain('uses the outlet and date you selected');
-    expect(el.textContent).toContain('succeeded on attempt 2 of 3');
+    const text = el.textContent ?? '';
+    expect(text).toContain('Claimed news outlet');
+    expect(text).toContain('প্রথম আলো');
+    expect(text).toContain('5 Oct 2026');
+    expect(text).toContain('succeeded on attempt 2 of 9');
+    // one representation: no separate "shown on the card" or "selected" values
+    expect(text).not.toContain('Outlet shown on the card');
+    expect(text).not.toContain('Date shown on the card');
+    expect(text).not.toContain('Selected outlet');
+    expect(text).not.toContain('OCR');
   });
 
-  it('hides card date/outlet fields when the card shows none', () => {
+  it('a card without a printed date says so instead of inventing one', () => {
     const el = render(pendingCard({
       status: 'EXPERT_REVIEW', phase: 'DONE', headline: 'শিরোনাম', verification: VERIFICATION,
-      extraction_method: 'OCR_FALLBACK', extraction_attempts: 3, fallback_used: true,
-      extraction_failures: ['Image extraction attempt 1 timed out.'],
+      extraction_status: 'SUCCEEDED', claimed_source_text: 'prothomalo.com', claimed_source_name: 'প্রথম আলো',
+      published_date: null,
     }));
-    expect(el.textContent).not.toContain('Date shown on the card');
-    expect(el.textContent).not.toContain('Outlet shown on the card');
-    expect(el.textContent).toContain('text recognition (OCR)');
+    expect(el.textContent).toContain('Not shown on the card');
+  });
+
+  it('distinguishes an unreadable card from one without a headline or recognised outlet', () => {
+    const apiFailed = render(pendingCard({
+      status: 'FAILED', phase: 'FAILED', extraction_status: 'API_FAILED',
+      failure_reason: 'Sorry for the temporary inconvenience. Information cannot be collected from the photo card right now. Please submit it again after a while.',
+    }));
+    expect(apiFailed.textContent).toContain('Please submit it again after a while');
+    expect(apiFailed.textContent).toContain('The card could not be read.');
+    TestBed.resetTestingModule();
+    const invalid = render(pendingCard({
+      status: 'FAILED', phase: 'FAILED', extraction_status: 'INVALID_CONTENT',
+      failure_reason: 'A valid headline or a recognized news outlet could not be identified on the photo card. Please submit a photo card with a clear headline and the news outlet\'s name or logo.',
+    }));
+    expect(invalid.textContent).toContain('No valid headline or recognised news outlet was found on this card.');
+    expect(invalid.textContent).toContain('clear headline');
   });
 });

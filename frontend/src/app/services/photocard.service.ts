@@ -9,10 +9,11 @@ import {
 } from '../models/photocard.model';
 
 // ── Photo Card Service ────────────────────────────────────────────────
-// Background submission: the card is stored and a durable server-side job is
-// queued, then the API answers 202 straight away. Extraction (Gemini on the
-// original image, EasyOCR fallback) and verification continue on the server
-// whether or not the browser stays open; the result is read by submission id.
+// Background submission of the image only: the card is stored and a durable
+// server-side job is queued, then the API answers 202 straight away. Gemini
+// reads the headline, outlet and date from the original image and the claim
+// is verified on the server whether or not the browser stays open; the result
+// is read by submission id.
 @Injectable({ providedIn: 'root' })
 export class PhotoCardService {
   private readonly api = inject(ApiService);
@@ -20,13 +21,6 @@ export class PhotoCardService {
   private toForm(request: PhotoCardVerifyRequest): FormData {
     const fd = new FormData();
     fd.append('image', request.image);
-    fd.append('claimed_source_text', request.claimed_source_text);
-    if (request.published_date) {
-      fd.append('published_date', request.published_date);
-    }
-    if (request.force_refresh) {
-      fd.append('force_refresh', String(request.force_refresh));
-    }
     return fd;
   }
 

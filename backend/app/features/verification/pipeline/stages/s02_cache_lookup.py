@@ -20,22 +20,23 @@ logger = structlog.get_logger(__name__)
 
 
 class CacheLookupStage:
-    """Looks for an earlier, identical, complete, FRESH verification.
+    """Looks for an earlier, identical, complete verification to reuse.
 
     Identity is `context.content_hash` (headline, body-if-scoped, canonical
     source, claimed date, scope, pipeline version — see
     `hashing.compute_claim_hash`). Redis holds only a *pointer* to the
     submission that produced the last complete result; the database row is
-    authoritative and is re-validated (current pipeline version, no incomplete
-    dimension or missing headline verdict, freshness — shorter for NOT_FOUND)
-    on every hit, so stale or
-    incompatible cached scores can never overlay a stored result. The same
-    freshness rules apply to the database fallback as to Redis.
+    authoritative and is re-validated on every hit: the pointed-to submission
+    and its result must still exist (a deleted submission is never served from
+    a leftover pointer) and the result must be reusable (current pipeline
+    version, no incomplete dimension or missing headline verdict, an original
+    computation rather than a copy). The same rules apply to the database
+    fallback as to Redis. A claim already checked is never re-verified to look
+    for newer evidence.
 
     A hit never repoints `context.submission_id`: the caller's own submission
     (owner, photo-card image, OCR record) stays the target and the service
     layer copies the automated result onto it (`ResultReuseService`).
-    `force_refresh` bypasses both paths.
     """
 
     stage_id = PipelineStageID.S02_CACHE_LOOKUP
@@ -55,9 +56,6 @@ class CacheLookupStage:
         log = logger.bind(stage=self.stage_id.value, content_hash=context.content_hash)
 
         context.cache_hit = False
-        if context.force_refresh:
-            log.info("cache_bypassed_force_refresh")
-            return context
         if not context.content_hash:
             log.warning("content_hash_missing_skipping_cache")
             return context
@@ -92,6 +90,12 @@ class CacheLookupStage:
             log.info("redis_pointer_version_mismatch")
             return False
 
+        submission = await self.submission_repo.get_by_id_or_none(submission_id)
+        if submission is None or submission.id == context.submission_id:
+            log.info("redis_pointer_rejected", reason="submission_missing" if submission is None else "self")
+            if submission is None:
+                await self.cache_service.invalidate_claim(context.content_hash)
+            return False
         result = await self.result_repo.get_by_submission_id(submission_id)
         ok, reason = result_is_reusable(result)
         if not ok:

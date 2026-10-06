@@ -86,7 +86,6 @@ class VerificationService:
             claimed_source=request.claimed_source_text,
             news_body=request.body_text,
             published_date=request.published_date,
-            force_refresh=request.force_refresh,
             submitter_id=submitter_id,
             submission_id=submission_id,
         )
@@ -119,9 +118,7 @@ class VerificationService:
             response = response.model_copy(update={"processing_time_ms": context.elapsed_ms})
         return response
 
-    async def run_for_submission(
-        self, submission_id: uuid.UUID, *, force_refresh: bool = False
-    ) -> VerificationResponse:
+    async def run_for_submission(self, submission_id: uuid.UUID) -> VerificationResponse:
         """Background-job entry point: everything comes from the stored
         submission row, nothing from a request."""
         submission = await self.submission_repo.get_by_id(submission_id)
@@ -130,7 +127,6 @@ class VerificationService:
             body_text=submission.body_text,
             claimed_source_text=submission.claimed_source_text or "",
             published_date=submission.published_date,
-            force_refresh=force_refresh,
         )
         return await self.verify(
             request, submitter_id=submission.submitter_id, submission_id=submission.id
@@ -197,10 +193,13 @@ class VerificationService:
         and its durable job row are committed together before returning, so an
         accepted claim can never be lost or stranded.
 
-        Reuse never shares a submission across owners: if an identical, fresh,
-        complete verification exists the requester gets their OWN submission
-        carrying a copy of its automated result (no job queued). Only the
-        same submitter's identical in-flight claim is handed back.
+        A claim that was already checked is never verified again: if an
+        identical, complete verification still exists in the database the
+        requester gets their OWN submission carrying a copy of its automated
+        result (no job queued, no new evidence search). Reuse never shares a
+        submission across owners; only the same submitter's identical
+        in-flight claim is handed back. A deleted submission/result is gone
+        from the database and therefore never reused.
         """
         canonical = await resolve_claimed_source(request.claimed_source_text, self.source_repo)
         if canonical is None:
@@ -215,42 +214,41 @@ class VerificationService:
             published_date=request.published_date,
         )
 
-        if not request.force_refresh:
-            found = await self.reuse.find_reusable(content_hash)
-            if found is not None:
-                source, source_result = found
-                if source.submitter_id == submitter_id:
-                    logger.info("claim_served_from_existing_verification", submission_id=str(source.id))
-                    return source.id, source.status, True
-                own = await self._create_submission(request, submitter_id, content_hash, SubmissionStatus.PROCESSING)
-                await self.reuse.materialize(source=source, source_result=source_result, target=own)
-                if own.submitter_id:
-                    await notify_once(
-                        self.submission_repo.session,
-                        user_id=own.submitter_id,
-                        notification_type="VERIFICATION_COMPLETE",
-                        link_url=f"/verify/{own.id}",
-                        headline=own.headline,
-                        title="Automated check complete (previous result reused)",
-                        body=(
-                            f'Your claim "{request.headline[:80]}" matches one already checked; '
-                            "its preliminary automated result is shown."
-                        ),
-                    )
-                await self.submission_repo.session.commit()
-                return own.id, SubmissionStatus.EXPERT_REVIEW, True
+        found = await self.reuse.find_reusable(content_hash)
+        if found is not None:
+            source, source_result = found
+            if source.submitter_id == submitter_id:
+                logger.info("claim_served_from_existing_verification", submission_id=str(source.id))
+                return source.id, source.status, True
+            own = await self._create_submission(request, submitter_id, content_hash, SubmissionStatus.PROCESSING)
+            await self.reuse.materialize(source=source, source_result=source_result, target=own)
+            if own.submitter_id:
+                await notify_once(
+                    self.submission_repo.session,
+                    user_id=own.submitter_id,
+                    notification_type="VERIFICATION_COMPLETE",
+                    link_url=f"/verify/{own.id}",
+                    headline=own.headline,
+                    title="Automated check complete (previous result reused)",
+                    body=(
+                        f'Your claim "{request.headline[:80]}" matches one already checked; '
+                        "its preliminary automated result is shown."
+                    ),
+                )
+            await self.submission_repo.session.commit()
+            return own.id, SubmissionStatus.EXPERT_REVIEW, True
 
-            in_flight = await self.submission_repo.get_in_flight_by_content_hash(content_hash)
-            if in_flight is not None and in_flight.submitter_id == submitter_id:
-                logger.info("claim_already_in_flight", submission_id=str(in_flight.id))
-                return in_flight.id, in_flight.status, False
+        in_flight = await self.submission_repo.get_in_flight_by_content_hash(content_hash)
+        if in_flight is not None and in_flight.submitter_id == submitter_id:
+            logger.info("claim_already_in_flight", submission_id=str(in_flight.id))
+            return in_flight.id, in_flight.status, False
 
         submission = await self._create_submission(
             request, submitter_id, content_hash, SubmissionStatus.PENDING
         )
         submission.processing_phase = "QUEUED"
         await VerificationJobRepository(self.submission_repo.session).enqueue(
-            submission.id, "SOURCE_BASED", payload={"force_refresh": bool(request.force_refresh)}
+            submission.id, "SOURCE_BASED"
         )
         # Commit now: the worker looks the rows up by id and the caller starts
         # polling the moment the response lands.

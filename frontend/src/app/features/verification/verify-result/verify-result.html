@@ -29,21 +29,13 @@
       <section class="surface claim-section"><div class="section-heading"><span class="eyebrow">ORIGINAL SUBMISSION</span><h2>The article and image that were checked</h2></div><div class="claim-layout" [class.no-image]="!m.image_url || imageFailed">@if (m.image_url && !imageFailed) {<img [src]="m.image_url" class="media-image" alt="Submitted article image" (error)="imageFailed = true">}<div><h3 class="claim-preview">{{ m.headline || 'No headline recorded' }}</h3>@if (imageFailed) {<p class="field-hint">The submitted image is temporarily unavailable.</p>}@if (m.body_text) {<details><summary>Read the submitted article text</summary><p class="long-text">{{ m.body_text }}</p></details>}</div></div></section>
     }
     @if (photocardResult(); as p) {
-      <section class="surface claim-section"><div class="section-heading"><span class="eyebrow">ORIGINAL SUBMISSION</span><h2>The photocard and what was read from it</h2><p>Only the headline is verified. Text read from an image can contain errors; compare it with the card.</p></div>
+      <section class="surface claim-section"><div class="section-heading"><span class="eyebrow">ORIGINAL SUBMISSION</span><h2>The photocard and what was read from it</h2><p>The headline, outlet and date below were read from the card and are the claim that was checked. Only the headline is compared; text read from an image can contain errors, so compare it with the card.</p></div>
       <div class="claim-layout" [class.no-image]="!p.image_url || imageFailed">@if (p.image_url && !imageFailed) {<img [src]="p.image_url" class="media-image" alt="Submitted photo card" (error)="imageFailed = true">}<div>
-      @if (p.headline) {<span class="field-hint">Headline read from the card</span><h3 class="claim-preview" lang="bn">{{ p.headline }}</h3>} @else if (p.status === 'FAILED') {<p class="preview-placeholder">No headline could be read from this card.</p>} @else {<p class="preview-placeholder">Reading the headline from the card…</p>}
+      @if (p.headline) {<span class="field-hint">Headline read from the card</span><h3 class="claim-preview" lang="bn">{{ p.headline }}</h3>} @else if (p.status === 'FAILED') {<p class="preview-placeholder">{{ p.extraction_status === 'INVALID_CONTENT' ? 'No valid headline or recognised news outlet was found on this card.' : 'The card could not be read.' }}</p>} @else {<p class="preview-placeholder">Reading the headline, outlet and date from the card…</p>}
       @if (imageFailed) {<p class="field-hint">The submitted image is temporarily unavailable.</p>}
-      @if (p.extracted_date_text || p.extracted_source_text) {
-        <dl class="meta-grid" aria-label="Read from the card (for reference only)">
-          @if (p.extracted_source_text) {<div><dt>Outlet shown on the card</dt><dd lang="bn">{{ p.extracted_source_text }}</dd></div>}
-          @if (p.extracted_date_text) {<div><dt>Date shown on the card</dt><dd lang="bn">{{ p.extracted_date_text }}</dd></div>}
-        </dl>
-        <p class="field-hint">Shown for reference only. The check uses the outlet and date you selected.</p>
-      }
-      <dl class="meta-grid"><div><dt>Selected outlet</dt><dd>{{ p.claimed_source_text || 'Not recorded' }}</dd></div><div><dt>Claimed publication date</dt><dd>{{ p.published_date ? (p.published_date | date:'d MMM y') : 'Not provided' }}</dd></div><div><dt>Comparison scope</dt><dd>Headline only</dd></div><div><dt>Submitted</dt><dd>{{ p.created_at | date:'d MMM y' }}</dd></div></dl>
-      @if (p.extraction_method) {<p class="field-hint">{{ extractionSummary(p) }}</p>}
-      @if (p.extraction_failures?.length) {<details><summary>Extraction details</summary><ul class="long-text">@for (f of p.extraction_failures; track $index) {<li>{{ f }}</li>}</ul></details>}
-      @if (p.ocr_raw_text) {<details><summary>View all text recognised in the image</summary><p class="long-text" lang="bn">{{ p.ocr_raw_text }}</p></details>}
+      <dl class="meta-grid"><div><dt>Claimed news outlet</dt><dd lang="bn">{{ p.claimed_source_name || p.claimed_source_text || (p.status === 'FAILED' ? 'Not identified' : 'Not read yet') }}</dd></div><div><dt>Claimed publication date</dt><dd>{{ p.published_date ? (p.published_date | date:'d MMM y') : (p.extraction_status === 'SUCCEEDED' ? 'Not shown on the card' : '—') }}</dd></div><div><dt>Comparison scope</dt><dd>Headline only</dd></div><div><dt>Submitted</dt><dd>{{ p.created_at | date:'d MMM y' }}</dd></div></dl>
+      @if (p.extraction_status === 'SUCCEEDED') {<p class="field-hint">{{ extractionSummary(p) }}</p>}
+      @if (p.extraction_failures?.length) {<details><summary>Reading details</summary><ul class="long-text">@for (f of p.extraction_failures; track $index) {<li>{{ f }}</li>}</ul></details>}
       </div></div></section>
     }
     @if (kind() === 'SOURCE_BASED' && lookup(); as l) {

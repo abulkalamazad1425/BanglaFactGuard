@@ -332,10 +332,7 @@ class SourceSearchStage:
             # Not configured for this outlet: skipped, not a search that ran.
             return _CallResult(provider_enum, SearchCallOutcome.SKIPPED)
 
-        if getattr(context, "force_refresh", False):
-            cached_urls = None
-        else:
-            cached_urls = await self._get_cached_search(provider_name, query_hash)
+        cached_urls = await self._get_cached_search(provider_name, query_hash)
 
         if cached_urls is not None:
             log.debug("s04_cache_hit", provider=provider_name, cached_count=len(cached_urls))

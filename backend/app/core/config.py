@@ -233,100 +233,13 @@ class MultimodalSettings(BaseSettings):
     )
 
 
-class OcrSettings(BaseSettings):
-    """Photo-card OCR configuration.
+class PhotocardSettings(BaseSettings):
+    """Photo-card upload limits. The card is read by Gemini only
+    (see GeminiSettings); there is no OCR engine."""
 
-    Two engines are supported. Neither is imported at module load — the
-    service probes them lazily so the app still boots when only one (or
-    neither) is installed:
-
-      * ``tesseract``  — pytesseract + the ``ben`` traineddata. Best accuracy
-        on printed Bangla photo cards, but needs the Tesseract binary.
-      * ``easyocr``    — pure-pip, reuses the torch install already required
-        by the ML stack. Slower and needs a one-off model download.
-    """
-
-    model_config = SettingsConfigDict(env_prefix="OCR_")
-
-    engine: Literal["auto", "tesseract", "easyocr"] = Field(
-        default="easyocr",
-        description=(
-            "OCR engine for the photo-card FALLBACK path (used only after every "
-            "Gemini image-extraction attempt failed). Default EasyOCR; 'auto' "
-            "prefers Tesseract and falls back to EasyOCR."
-        ),
-    )
-
-    tesseract_cmd: str = Field(
-        default="",
-        description=(
-            "Absolute path to the tesseract binary. Leave empty when it is on "
-            r"PATH. Typical Windows value: C:\Program Files\Tesseract-OCR\tesseract.exe"
-        ),
-    )
-    tesseract_lang: str = Field(
-        default="ben",
-        description="Tesseract language code(s). 'ben' = Bangla traineddata.",
-    )
-    tesseract_psm_modes: list[int] = Field(
-        default=[6, 4, 3],
-        description=(
-            "Page segmentation modes to try. 6 = uniform block (typical photo "
-            "card), 4 = variable-size columns, 3 = fully automatic."
-        ),
-    )
-
-    easyocr_languages: list[str] = Field(
-        default=["bn"],
-        description="EasyOCR language list. 'bn' is the Bangla recogniser.",
-    )
-    easyocr_use_gpu: bool = Field(default=False)
-
-    thread_workers: int = Field(
-        default=2, description="Thread pool workers for blocking OCR calls"
-    )
-    load_on_startup: bool = Field(
-        default=False,
-        description=(
-            "Initialise the OCR engine during app startup. EasyOCR downloads "
-            "~100 MB of weights on first load, so this is off by default and "
-            "the engine is initialised on the first request instead."
-        ),
-    )
+    model_config = SettingsConfigDict(env_prefix="PHOTOCARD_")
 
     max_image_bytes: int = Field(default=10 * 1024 * 1024)
-    upscale_min_width: int = Field(
-        default=1600,
-        description="Small photo cards are upscaled to at least this width before OCR",
-    )
-    max_dimension: int = Field(
-        default=4000, description="Images larger than this are downscaled before OCR"
-    )
-
-    min_line_bangla_ratio: float = Field(
-        default=0.45,
-        description=(
-            "A recognised line is dropped as non-Bangla noise when fewer than "
-            "this fraction of its letters are Bangla. Keeps English watermarks, "
-            "handles and URLs out of the claim."
-        ),
-    )
-    min_line_confidence: float = Field(
-        default=0.30,
-        description="Lines recognised below this confidence are dropped as OCR noise",
-    )
-    source_match_threshold: float = Field(
-        default=0.82,
-        description=(
-            "Minimum fuzzy similarity for an OCR fragment to be accepted as a "
-            "verified-source mention. OCR routinely garbles one or two Bangla "
-            "glyphs, so exact matching alone misses real banners."
-        ),
-    )
-    source_autoselect_threshold: float = Field(
-        default=0.90,
-        description="Detected source is pre-selected for the user above this confidence",
-    )
 
 
 class MinioSettings(BaseSettings):
@@ -493,17 +406,21 @@ class EmailSettings(BaseSettings):
 
 
 class GeminiSettings(BaseSettings):
-    """Gemini is used only for photo-card field extraction (headline, date,
-    source) from the ORIGINAL image. EasyOCR + the deterministic extractor
-    are the fallback. Gemini's date/source are display-only; they are never
-    compared with anything.
+    """Gemini is the ONLY photo-card extractor: it reads the headline, the
+    claimed news outlet (matched against the active verified sources) and the
+    published date from the ORIGINAL image. There is no OCR fallback.
+
+    Attempts are made in batches: ``attempts_per_batch`` requests, then a
+    ``batch_pause_seconds`` pause, up to ``batches`` batches. With the
+    defaults that is at most 3 x 3 = 9 requests in total, the first request
+    included; the first success stops the loop.
     """
 
     model_config = SettingsConfigDict(env_prefix="GEMINI_")
 
     api_key: str = Field(
         default="",
-        description="Gemini API key for photo-card extraction. Empty skips Gemini and uses the OCR fallback.",
+        description="Gemini API key for photo-card extraction. Without it photo cards cannot be processed.",
     )
     model_name: str = Field(
         default="gemini-2.0-flash",
@@ -517,17 +434,32 @@ class GeminiSettings(BaseSettings):
         default=20,
         description="HTTP timeout for ONE Gemini extraction attempt.",
     )
-    max_attempts: int = Field(
+    attempts_per_batch: int = Field(
         default=3,
         ge=1,
         le=3,
-        description="Total Gemini attempts per card, the first request included (never more than 3).",
+        description="Requests per batch (never more than 3).",
+    )
+    batches: int = Field(
+        default=3,
+        ge=1,
+        le=3,
+        description="Batches per card (never more than 3): at most 9 requests in total.",
+    )
+    batch_pause_seconds: float = Field(
+        default=10.0,
+        ge=0.0,
+        description="Pause after a batch in which every attempt failed, before the next batch.",
     )
     retry_base_delay_seconds: float = Field(
         default=1.0,
         ge=0.0,
-        description="Exponential backoff base between attempts (1s, 2s).",
+        description="Exponential backoff base between attempts inside one batch (1s, 2s).",
     )
+
+    @property
+    def max_requests(self) -> int:
+        return self.attempts_per_batch * self.batches
 
     @property
     def is_configured(self) -> bool:
@@ -544,6 +476,14 @@ class JobSettings(BaseSettings):
         default=2,
         ge=1,
         description="Bound on simultaneously running verification jobs (the pipeline has CPU-bound stretches that share the API event loop).",
+    )
+    photocard_max_concurrent: int = Field(
+        default=4,
+        ge=1,
+        description=(
+            "Separate bound for photo-card jobs. They run in their own lane so a card "
+            "waiting out Gemini retries never delays text or text & image jobs."
+        ),
     )
     poll_interval_seconds: float = Field(default=5.0, gt=0)
     stale_after_seconds: float = Field(
@@ -600,7 +540,7 @@ class AppSettings(BaseSettings):
         default_factory=ClassificationThresholds
     )
     multimodal: MultimodalSettings = Field(default_factory=MultimodalSettings)
-    ocr: OcrSettings = Field(default_factory=OcrSettings)
+    photocard: PhotocardSettings = Field(default_factory=PhotocardSettings)
     minio: MinioSettings = Field(default_factory=MinioSettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)
     email: EmailSettings = Field(default_factory=EmailSettings)

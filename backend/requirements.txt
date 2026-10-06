@@ -28,18 +28,6 @@ Pillow>=10.0.0
 yake>=0.4.8
 numpy>=1.26.0
 
-# ── Bangla OCR (photo-card verification) ─────────────────────────────────
-# At least one engine is required for /api/v1/photocard/*; every other
-# feature works without them.
-#   pytesseract also needs the Tesseract binary AND its 'ben' traineddata:
-#     Windows — https://github.com/UB-Mannheim/tesseract/wiki (tick Bengali),
-#               then set OCR_TESSERACT_CMD to tesseract.exe
-#     Debian  — apt install tesseract-ocr tesseract-ocr-ben
-#   easyocr is pure-pip and reuses the torch install above, but is slower and
-#   downloads ~100 MB of weights on first use.
-pytesseract>=0.3.10
-easyocr>=1.7.1
-
 # ── Web scraping / extraction ─────────────────────────────────────────────
 trafilatura>=1.10.0
 beautifulsoup4>=4.12.0

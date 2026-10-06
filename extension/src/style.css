@@ -21,3 +21,4 @@ nav .active{font-weight:800}
 .result-line.verdict-emphasis{font-size:17px}
 .status{display:inline-block;border:1px solid #1f7f4e;border-radius:6px;padding:2px 8px}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+.source-list{margin:14px 0;padding:10px 12px;border:1px solid #c3d4ca;border-radius:10px;background:#fff}.source-list ul{margin:8px 0 0;padding-left:18px;max-height:180px;overflow:auto;font-size:12px;line-height:1.7}

@@ -27,7 +27,7 @@ from app.features.notifications.models import Notification, ResultDelivery
 
 
 from app.features.submissions.models import (
-    OcrExtraction,
+    PhotocardExtraction,
     RetrievedArticle,
     SourceEvidenceQuery,
     Submission,
@@ -48,7 +48,7 @@ __all__ = [
     "VotingConfig",
     "MultimodalAnalysis",
     "Notification",
-    "OcrExtraction",
+    "PhotocardExtraction",
     "RetrievedArticle",
     "SourceEvidenceQuery",
     "Submission",

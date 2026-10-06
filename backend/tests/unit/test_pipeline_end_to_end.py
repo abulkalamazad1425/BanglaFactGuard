@@ -89,12 +89,13 @@ class SimpleEnv:
             store[k] = payload.encode()
 
         c.set_claim_pointer = AsyncMock(side_effect=set_ptr)
-        c.invalidate_claim = AsyncMock()
+        c.invalidate_claim = AsyncMock(side_effect=lambda k: store.pop(k, None))
+        c.store = store
         c.get_search_result = AsyncMock(return_value=None)
         c.set_search_result = AsyncMock()
         return c
 
-    async def run(self, session, *, headline, body=None, published=None, force=False, user=None, cache=None, ner=None):
+    async def run(self, session, *, headline, body=None, published=None, user=None, cache=None, ner=None):
         cache = cache or self.cache()
         http = self.http()
         stages = factory.build_verification_stages(
@@ -110,7 +111,7 @@ class SimpleEnv:
         )
         ctx = build_context(
             headline=headline, claimed_source="প্রথম আলো", news_body=body, published_date=published,
-            force_refresh=force, submitter_id=user,
+            submitter_id=user,
         )
         ctx = await PipelineOrchestrator(stages, SubmissionRepository(session)).run(ctx)
         await http.aclose()
@@ -188,7 +189,7 @@ async def test_all_providers_failing_end_to_end_is_incomplete_not_not_found(env)
         cache.set_claim_pointer.assert_not_awaited()  # and is never cached as settled
 
 
-async def test_second_identical_claim_reuses_the_result_then_force_refresh_does_not(env):
+async def test_second_identical_claim_reuses_the_result_until_the_original_is_deleted(env):
     cache = env.cache()
     async with env.sessions() as s:
         owner = await add_user(s)
@@ -206,9 +207,31 @@ async def test_second_identical_claim_reuses_the_result_then_force_refresh_does_
         third, _ = await env.run(s, headline=TITLE, published=date(2026, 6, 8), user=other.id, cache=cache)
         assert third.cache_hit is False
 
-        # force_refresh => full run even though a reusable result exists
-        forced, _ = await env.run(s, headline=TITLE, published=date(2026, 6, 7), user=owner.id, cache=cache, force=True)
-        assert forced.cache_hit is False and forced.submission_id != first.submission_id
+        # the same claim much later is still answered from the saved result:
+        # there is no age limit and no way to force a new evidence search
+        from datetime import datetime, timedelta, timezone
+
+        res = await ResultRepository(s).get_by_submission_id(first.submission_id)
+        res.created_at = datetime.now(timezone.utc) - timedelta(days=400)
+        await s.commit()
+        again, _ = await env.run(s, headline=TITLE, published=date(2026, 6, 7), user=owner.id, cache=cache)
+        assert again.cache_hit is True and again.reused_from_submission_id == first.submission_id
+        assert again.search_attempted == 0
+
+        # the original is deleted from the database (its result goes with it);
+        # the Redis pointer to it is left behind - it must not be served
+        from sqlalchemy import delete
+
+        from app.features.submissions.models import Submission
+        from app.features.verification.models import VerificationResult
+
+        await s.execute(delete(VerificationResult).where(VerificationResult.submission_id == first.submission_id))
+        await s.execute(delete(Submission).where(Submission.id == first.submission_id))
+        await s.commit()
+        assert cache.store  # stale pointer still there
+        fresh, _ = await env.run(s, headline=TITLE, published=date(2026, 6, 7), user=other.id, cache=cache)
+        assert fresh.cache_hit is False and fresh.persisted
+        assert fresh.reused_from_submission_id is None and fresh.search_attempted > 0
 
 
 async def test_service_verify_returns_the_db_result_and_reuse_gives_each_user_their_own_submission(env):

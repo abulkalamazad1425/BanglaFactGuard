@@ -27,7 +27,7 @@ from app.core.config import get_settings
 PROTECTED = ("verified_sources", "credibility_weight_tiers", "voting_config")
 CLEAR = (
     "expert_reviews", "verification_results", "retrieved_articles",
-    "source_evidence_queries", "ocr_extractions", "multimodal_analysis",
+    "source_evidence_queries", "photocard_extractions", "multimodal_analysis",
     "verification_jobs", "notifications", "submissions", "expert_profiles",
     "refresh_tokens", "password_reset_tokens",
 )

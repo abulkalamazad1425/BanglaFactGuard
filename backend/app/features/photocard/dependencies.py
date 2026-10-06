@@ -8,12 +8,11 @@ from app.features.cache.cache_service import CacheService
 from app.features.nlp.embedding_service import EmbeddingService
 from app.features.nlp.ner_service import NERService
 from app.features.nlp.nli_service import NLIService
-from app.features.photocard.ocr_service import BanglaOcrService
 from app.features.photocard.service import PhotoCardService
 from app.features.photocard.storage_service import PhotoCardStorageService
 from app.features.sources.repository import SourceRepository
 from app.features.submissions.repository import (
-    OcrExtractionRepository,
+    PhotocardExtractionRepository,
     RetrievedArticleRepository,
     SubmissionRepository,
 )
@@ -32,19 +31,6 @@ from app.shared.dependencies import (
 )
 
 
-def get_ocr_service(request: Request) -> BanglaOcrService:
-    """The process-wide OCR engine created during lifespan startup.
-
-    Engine initialisation is lazy, so this returns a usable service even when
-    the engine has not been loaded yet — the first ``recognize`` call loads it.
-    """
-    service = getattr(request.app.state, "photocard_ocr", None)
-    if service is None:
-        service = BanglaOcrService()
-        request.app.state.photocard_ocr = service
-    return service
-
-
 def get_photocard_storage(request: Request) -> PhotoCardStorageService:
     storage = getattr(request.app.state, "photocard_storage", None)
     if storage is None:
@@ -53,17 +39,16 @@ def get_photocard_storage(request: Request) -> PhotoCardStorageService:
     return storage
 
 
-async def get_ocr_repo(
+async def get_extraction_repo(
     session: AsyncSession = Depends(get_async_session),
-) -> OcrExtractionRepository:
-    return OcrExtractionRepository(session)
+) -> PhotocardExtractionRepository:
+    return PhotocardExtractionRepository(session)
 
 
 async def get_photocard_service(
-    ocr_service: BanglaOcrService = Depends(get_ocr_service),
     storage: PhotoCardStorageService = Depends(get_photocard_storage),
     submission_repo: SubmissionRepository = Depends(get_submission_repo),
-    ocr_repo: OcrExtractionRepository = Depends(get_ocr_repo),
+    extraction_repo: PhotocardExtractionRepository = Depends(get_extraction_repo),
     result_repo: ResultRepository = Depends(get_result_repo),
     article_repo: RetrievedArticleRepository = Depends(get_article_repo),
     source_repo: SourceRepository = Depends(get_source_repo),
@@ -74,10 +59,9 @@ async def get_photocard_service(
     http_client: httpx.AsyncClient = Depends(get_http_client),
 ) -> PhotoCardService:
     return PhotoCardService(
-        ocr_service=ocr_service,
         storage=storage,
         submission_repo=submission_repo,
-        ocr_repo=ocr_repo,
+        extraction_repo=extraction_repo,
         result_repo=result_repo,
         article_repo=article_repo,
         source_repo=source_repo,

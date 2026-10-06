@@ -23,7 +23,7 @@ test('English side panel supports independent headline/body selection, persisten
     messages.push(message);
     switch(message.type){
       case 'state': return {data:{settings,user,items:[],notificationPermission:'granted'}};
-      case 'sources': return {data:{items:[{canonical_name:'prothomalo.com',display_name:'Prothom Alo'}]}};
+      case 'sources': return {data:{items:[{canonical_name:'prothomalo.com',display_name:'প্রথম আলো',display_name_en:'Prothom Alo'}]}};
       case 'selection': return {data:selected};
       case 'submit': submitted=message.draft;return {data:{id:'accepted'}};
       case 'login': user={id:'expert-1',email:'expert@example.com',role:'expert'};return {data:true};
@@ -51,8 +51,15 @@ test('English side panel supports independent headline/body selection, persisten
     document.querySelector('form').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));await tick();
     assert.equal(submitted.headline,'Selected headline');assert.equal(submitted.body_text,selected);
     assert.match(document.body.textContent,/Claim received/);
-    button('Verify').click();await tick();button('Photo card').click();await tick();
+    button('Verify').click();await tick();
+    assert.deepEqual(Array.from(document.querySelectorAll('.modes button')).map(b=>b.textContent),['Text & source','Photo card','Text & image']);
+    button('Photo card').click();await tick();
     assert.ok(button('Select screenshot area'));assert.equal(document.querySelectorAll('textarea').length,0);
+    // image only: no outlet or date inputs; the active outlets are listed in a collapsible section
+    assert.equal(document.querySelector('#field-claimed_source_text'),null);assert.equal(document.querySelector('#field-published_date'),null);
+    const list=document.querySelector('details.source-list');
+    assert.ok(list && !list.open);assert.match(list.querySelector('summary').textContent,/Recognised news outlets \(1\)/);
+    assert.match(list.textContent,/প্রথম আলো — Prothom Alo/);
     button('Text & image').click();await tick();assert.equal(document.querySelectorAll('textarea')[1].required,true);
     button('Account').click();await tick();
     assert.ok(!document.body.textContent.includes('Connection settings'));

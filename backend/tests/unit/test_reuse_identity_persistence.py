@@ -1,4 +1,4 @@
-"""Claim identity, result reuse, cache freshness, durable persistence and
+"""Claim identity, result reuse (no age limit, never from a deleted row), durable persistence and
 expert-snapshot preservation (acceptance 15-19, 29-31) against a real
 (SQLite) database."""
 
@@ -10,7 +10,7 @@ from datetime import date, datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 
 from app.core.constants import (
     VERIFICATION_PIPELINE_VERSION,
@@ -125,7 +125,7 @@ async def test_register_claim_commits_submission_and_job_together(db):
         sub = await SubmissionRepository(s2).get_by_id(sid)
         job = await VerificationJobRepository(s2).get_by_submission(sid)
         assert sub.processing_phase == "QUEUED" and sub.status == SubmissionStatus.PENDING
-        assert job.status == "QUEUED" and job.kind == "SOURCE_BASED" and job.payload == {"force_refresh": False}
+        assert job.status == "QUEUED" and job.kind == "SOURCE_BASED" and job.payload == {}
 
 
 async def test_different_date_or_body_do_not_collapse_into_one_submission(db):
@@ -185,41 +185,74 @@ async def test_same_owner_reuse_returns_existing_submission(db):
     assert cached is True and sid == orig.id
 
 
-# ── 17: force_refresh bypasses every reuse path ──────────────────────────
+# ── 3: a checked claim is reused, never re-verified ──────────────────────
 
 
-async def test_force_refresh_bypasses_registration_reuse(db):
+async def test_there_is_no_force_refresh_request_option():
+    assert "force_refresh" not in VerificationRequest.model_fields
+    # an old client still sending the flag gets the normal (reusing) behaviour
+    assert not hasattr(VerificationRequest(headline=HEADLINE, claimed_source_text="প্রথম আলো", force_refresh=True), "force_refresh")
+
+
+async def test_resubmitting_a_checked_claim_reuses_it_however_old_and_queues_nothing(db):
     async with db() as s:
         owner = await add_user(s)
+        other = await add_user(s)
+        orig, res = await add_completed_submission(s, headline=HEADLINE, submitter_id=owner.id)
+        res.created_at = datetime.now(timezone.utc) - timedelta(days=365)
+        await s.commit()
+        sid, status, cached = await _service(s).register_claim(_req(), submitter_id=other.id)
+        jobs = (await s.execute(select(func.count()).select_from(VerificationJob))).scalar_one()
+    assert cached is True and sid != orig.id and status == SubmissionStatus.EXPERT_REVIEW
+    assert jobs == 0  # no new verification, no new evidence search
+
+
+async def test_deleted_original_is_never_reused_and_its_copies_do_not_keep_it_alive(db):
+    async with db() as s:
+        owner = await add_user(s)
+        a, b = await add_user(s), await add_user(s)
         orig, _ = await add_completed_submission(s, headline=HEADLINE, submitter_id=owner.id)
         await s.commit()
-        sid, status, cached = await _service(s).register_claim(_req(force_refresh=True), submitter_id=owner.id)
-        job = await VerificationJobRepository(s).get_by_submission(sid)
-    assert cached is False and sid != orig.id and status == SubmissionStatus.PENDING
-    assert job.payload == {"force_refresh": True}
+        copy_id, _, cached = await _service(s).register_claim(_req(), submitter_id=a.id)
+        assert cached is True
+        # the original is deleted from the database; Postgres SET NULLs the
+        # copy's links to it (emulated here - SQLite does not enforce FKs)
+        await s.execute(delete(VerificationResult).where(VerificationResult.submission_id == orig.id))
+        await s.execute(delete(Submission).where(Submission.id == orig.id))
+        await s.execute(update(Submission).where(Submission.id == copy_id).values(duplicate_of_submission_id=None))
+        await s.execute(update(VerificationResult).where(VerificationResult.submission_id == copy_id).values(reused_from_submission_id=None))
+        await s.commit()
+
+        sid, status, cached = await _service(s).register_claim(_req(), submitter_id=b.id)
+    assert cached is False and status == SubmissionStatus.PENDING  # verified afresh
+    assert sid not in (orig.id, copy_id)
 
 
-async def test_force_refresh_bypasses_s02_redis_and_database(db):
+async def test_s02_redis_pointer_to_a_deleted_submission_is_rejected_and_invalidated(db):
     async with db() as s:
         owner = await add_user(s)
         orig, _ = await add_completed_submission(s, headline=HEADLINE, submitter_id=owner.id)
         await s.commit()
         cache = _cache({"submission_id": str(orig.id), "pipeline_version": VERIFICATION_PIPELINE_VERSION})
         stage = CacheLookupStage(cache, SubmissionRepository(s), ResultRepository(s))
-
         ctx = make_context(HEADLINE)
         ctx.content_hash = orig.content_hash
-        ctx.force_refresh = True
-        assert (await stage.execute(ctx)).cache_hit is False
-        cache.get_claim_result.assert_not_called()
-
-        ctx = make_context(HEADLINE)
-        ctx.content_hash = orig.content_hash
-        out = await stage.execute(ctx)  # not forced -> redis pointer hit
+        out = await stage.execute(ctx)
         assert out.cache_hit and out.reused_from_submission_id == orig.id
 
+        # SQLite keeps the result row (no FK cascade); Postgres would drop it
+        # too. Either way the submission is gone and must not be served.
+        await s.execute(delete(Submission).where(Submission.id == orig.id))
+        await s.commit()
+        cache.invalidate_claim.reset_mock()
+        ctx = make_context(HEADLINE)
+        ctx.content_hash = orig.content_hash
+        out = await stage.execute(ctx)
+    assert out.cache_hit is False and out.reused_from_submission_id is None
+    cache.invalidate_claim.assert_awaited_once()
 
-# ── freshness / completeness / version ───────────────────────────────────
+
+# ── completeness / version / copies ──────────────────────────────────────
 
 
 def _age(res, seconds: float):
@@ -247,21 +280,19 @@ async def test_result_reusability_rules(db):
         _, inc_date = await add_completed_submission(s, headline="পাঁচ", submitter_id=u.id, date_status=DateStatus.INCOMPLETE)
         assert result_is_reusable(inc_date) == (False, "incomplete_check")
 
-        # shorter freshness for NOT_FOUND
+        # no age limit - NOT_FOUND included
         _, nf = await add_completed_submission(s, headline="ছয়", submitter_id=u.id, source_status=SourceStatus.NOT_FOUND)
-        _age(nf, 2 * 3600)  # 2h: past the NOT_FOUND window (1h) but inside the normal one (24h)
-        assert result_is_reusable(nf) == (False, "stale")
-        _age(ok, 2 * 3600)
+        _age(nf, 30 * 86400)
+        assert result_is_reusable(nf)[0]
+        _age(ok, 400 * 86400)
         assert result_is_reusable(ok)[0]
-        _age(ok, 3 * 86400)
-        assert result_is_reusable(ok) == (False, "stale")
 
-        # expert-finalized results are not subject to the automated window
-        ok.overall_verdict = OverallVerdict.REAL
-        assert result_is_reusable(ok) == (True, "finalized")
+        # a copy of another result is never itself a reuse source
+        ok.analysis_details = {"reused_from_submission_id": str(uuid.uuid4())}
+        assert result_is_reusable(ok) == (False, "copied_result")
 
 
-async def test_db_fallback_enforces_freshness_like_redis(db):
+async def test_db_fallback_reuses_an_old_result(db):
     async with db() as s:
         u = await add_user(s)
         sub, res = await add_completed_submission(s, headline=HEADLINE, submitter_id=u.id)
@@ -270,7 +301,8 @@ async def test_db_fallback_enforces_freshness_like_redis(db):
         stage = CacheLookupStage(_cache(), SubmissionRepository(s), ResultRepository(s))
         ctx = make_context(HEADLINE)
         ctx.content_hash = sub.content_hash
-        assert (await stage.execute(ctx)).cache_hit is False
+        out = await stage.execute(ctx)
+    assert out.cache_hit is True and out.reused_from_submission_id == sub.id
 
 
 async def test_stale_redis_pointer_is_rejected_and_invalidated(db):

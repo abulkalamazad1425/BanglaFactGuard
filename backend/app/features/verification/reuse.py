@@ -11,23 +11,25 @@ Expert state is NOT copied: it is read through from the original at display
 time (see presenter), so there is one source of truth for review outcomes and
 a later finalization of the original is reflected on every copy.
 
-Reusable means: produced by the current pipeline version (so a result from
-older logic is never served as a result of the current logic), no incomplete
-dimension (an incomplete check is never a settled answer): the source check
-completed, a confirmed source has a headline verdict, the date check is not
-INCOMPLETE and claim-body scores are not UNAVAILABLE; and fresh — Source
-NOT_FOUND has a shorter freshness window than a found report. Expert-
-finalized results are not subject to the automated freshness window.
+Reusable means: still in the database (a deleted submission takes its result
+with it, so it can never be reused), produced by the current pipeline version
+(so a result from older logic is never served as a result of the current
+logic), an original computation rather than a copy of another result (a copy
+must not keep a deleted original alive), and no incomplete dimension (an
+incomplete check is never a settled answer): the source check completed, a
+confirmed source has a headline verdict, the date check is not INCOMPLETE and
+claim-body scores are not UNAVAILABLE. There is no age limit: a claim that
+was already checked is answered with its saved result and is never re-run to
+look for newer evidence.
 """
 
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 
 import structlog
 
-from app.core.config import get_settings
 from app.core.constants import (
     VERIFICATION_PIPELINE_VERSION,
     BodyComparisonStatus,
@@ -44,11 +46,10 @@ from app.features.verification.repository import ResultRepository
 logger = structlog.get_logger(__name__)
 
 
-def freshness_seconds(result: VerificationResult) -> int:
-    redis = get_settings().redis
-    if result.source_status == SourceStatus.NOT_FOUND:
-        return redis.ttl_not_found_result
-    return redis.ttl_claim_result
+# analysis_details key marking a copied result (see `materialize`). It
+# outlives `reused_from_submission_id`, which is SET NULL when the original
+# submission is deleted.
+REUSED_FROM_KEY = "reused_from_submission_id"
 
 
 def result_is_reusable(
@@ -59,6 +60,8 @@ def result_is_reusable(
         return False, "no_result"
     if result.pipeline_version != VERIFICATION_PIPELINE_VERSION:
         return False, "pipeline_version_mismatch"
+    if result.reused_from_submission_id is not None or (result.analysis_details or {}).get(REUSED_FROM_KEY):
+        return False, "copied_result"
     if result.source_status == SourceStatus.INCOMPLETE or result.date_status == DateStatus.INCOMPLETE:
         return False, "incomplete_check"
     if result.source_status == SourceStatus.CONFIRMED and (
@@ -70,17 +73,7 @@ def result_is_reusable(
         and result.body_comparison_status == BodyComparisonStatus.UNAVAILABLE.value
     ):
         return False, "body_scores_unavailable"
-    if result.overall_verdict is not None:  # expert-finalized: durable
-        return True, "finalized"
-    created = result.created_at
-    if created is None:
-        return False, "no_timestamp"
-    if created.tzinfo is None:
-        created = created.replace(tzinfo=timezone.utc)
-    age = ((now or datetime.now(timezone.utc)) - created).total_seconds()
-    if age > freshness_seconds(result):
-        return False, "stale"
-    return True, "fresh"
+    return True, "reusable"
 
 
 class ResultReuseService:
@@ -132,7 +125,10 @@ class ResultReuseService:
             avg_verification_time_ms=source_result.avg_verification_time_ms,
             claim_scope=source_result.claim_scope,
             pipeline_version=source_result.pipeline_version,
-            analysis_details={k: v for k, v in (source_result.analysis_details or {}).items() if k != "timings"},
+            analysis_details={
+                **{k: v for k, v in (source_result.analysis_details or {}).items() if k != "timings"},
+                REUSED_FROM_KEY: str(source.id),
+            },
             reused_from_submission_id=source.id,
         )
         target.duplicate_of_submission_id = source.id

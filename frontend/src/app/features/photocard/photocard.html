@@ -1,4 +1,4 @@
-<div class="verification-shell"><div class="flow-container"><header class="flow-heading"><div><span class="eyebrow">CHECK A PHOTOCARD</span><h1>Look beyond the image.</h1><p>Upload a Bengali news photocard or screenshot and select the outlet it claims to come from. We will read its headline and look for the source report.</p></div><a routerLink="/dashboard" class="btn btn-ghost">Explore fact checks ↗</a></header><nav class="method-nav" aria-label="Verification method"><a routerLink="/verify">Text &amp; source</a><a routerLink="/photo-card" aria-current="page">Photo card</a><a routerLink="/multimodal">Text &amp; image</a></nav>@if (step === 'upload') {<div class="flow-grid"><section class="surface"><div class="section-heading"><h2>Add the photocard</h2></div><fieldset [disabled]="verifying"><p class="form-label" id="photocard-image-label">Photocard image <span class="req-mark" aria-hidden="true">*</span><span class="sr-only">(required)</span></p><div class="dropzone" aria-labelledby="photocard-image-label" aria-describedby="photocard-image-error" [class.is-invalid]="submitted && !selectedFile"
+<div class="verification-shell"><div class="flow-container"><header class="flow-heading"><div><span class="eyebrow">CHECK A PHOTOCARD</span><h1>Look beyond the image.</h1><p>Upload a Bengali news photocard or screenshot. We read its headline, the news outlet shown on it and its date, then look for the report at that outlet.</p></div><a routerLink="/dashboard" class="btn btn-ghost">Explore fact checks ↗</a></header><nav class="method-nav" aria-label="Verification method"><a routerLink="/verify">Text &amp; source</a><a routerLink="/photo-card" aria-current="page">Photo card</a><a routerLink="/multimodal">Text &amp; image</a></nav>@if (step === 'upload') {<div class="flow-grid"><section class="surface"><div class="section-heading"><h2>Add the photocard</h2></div><fieldset [disabled]="verifying"><p class="form-label" id="photocard-image-label">Photocard image <span class="req-mark" aria-hidden="true">*</span><span class="sr-only">(required)</span></p><div class="dropzone" aria-labelledby="photocard-image-label" aria-describedby="photocard-image-hint photocard-image-error" [class.is-invalid]="submitted && !selectedFile"
              [class.active]="dragActive"
              [class.has-file]="!!previewUrl"
              role="button" tabindex="0" aria-label="Upload an image" (keydown.enter)="fileInput.click()" (keydown.space)="$event.preventDefault(); fileInput.click()" (click)="fileInput.click()"
@@ -24,36 +24,7 @@
         @if (submitted && !selectedFile) {
           <span id="photocard-image-error" class="form-error" role="alert">Choose the photocard image.</span>
         }
-
-        <div class="form-group">
-          <label for="photocard-claimed_source" class="form-label">Claimed news outlet <span class="req-mark" aria-hidden="true">*</span><span class="sr-only">(required)</span></label>
-          <select id="photocard-claimed_source" class="form-control" [(ngModel)]="claimedSource" name="claimed_source"
-                  [class.is-invalid]="submitted && !claimedSource" [attr.aria-invalid]="submitted && !claimedSource" aria-describedby="photocard-source-hint photocard-source-error" required>
-            <option value="" disabled>
-              {{ sourcesLoading ? 'Loading verified sources…' : 'Select the news source this card claims to be from' }}
-            </option>
-            @for (src of sources; track src.canonical_name) {
-              <option [value]="src.canonical_name">
-                {{ src.display_name }}{{ src.display_name_en ? ' — ' + src.display_name_en : '' }}
-              </option>
-            }
-          </select>
-          @if (!sourcesLoading && (sourcesError || !sources.length)) {<div class="service-notice" role="status"><p>{{ sourcesError ? 'News sources could not be loaded. Please try again.' : 'No news sources are available for checking right now.' }}</p><button type="button" class="btn btn-secondary" (click)="loadSources()">Try again</button></div>}
-          <span id="photocard-source-hint" class="source-hint">Choose the outlet named on the card. We will compare the headline with that outlet.</span>
-          @if (submitted && !claimedSource) {
-            <span id="photocard-source-error" class="form-error" role="alert">Select the news outlet named on the card.</span>
-          }
-        </div>
-
-        <div class="form-group">
-          <label for="photocard-published_date" class="form-label">Claimed publication date </label>
-          <input id="photocard-published_date" type="date" class="form-control" [(ngModel)]="publishedDate" name="published_date" />
-        </div>
-
-        <label class="checkbox-label">
-          <input type="checkbox" [(ngModel)]="forceRefresh" name="force_refresh" />
-          <span>Check again for updated evidence</span>
-        </label>
+        <p id="photocard-image-hint" class="field-hint">Only the image is needed. The headline, the news outlet and the publication date are read from the card itself, so the card must clearly show its headline and the outlet's name or logo.</p>
 
         @if (errorMsg) {
           <div class="note warning" role="alert">{{ errorMsg }}</div>
@@ -68,6 +39,6 @@
           }
         </button>
 
-        </fieldset></section><aside class="side-stack"><section class="surface"><span class="eyebrow">YOUR IMAGE / PREVIEW</span>@if (previewUrl) {<img [src]="previewUrl" class="preview-image" alt="Selected photocard preview"><dl class="meta-grid"><div><dt>Claimed outlet</dt><dd>{{ claimedSourceName() || 'Not selected' }}</dd></div><div><dt>Claimed date</dt><dd>{{ publishedDate || 'Not provided' }}</dd></div></dl>} @else {<p class="preview-placeholder">Your selected image will appear here before you submit it.</p>}<div class="note">Only the headline read from this card is compared with your selected outlet. This does not verify every visual element in the image.</div></section><section class="context-panel"><h2>A clearer image helps</h2><ol class="guide-list"><li><strong>Include the full headline</strong><p>A sharp, uncropped image is easier to read.</p></li><li><strong>Select the claimed outlet</strong><p>Choose the outlet named on the card. Do not choose where you found the screenshot.</p></li><li><strong>Review the read text</strong><p>The result shows the headline used for comparison.</p></li></ol></section></aside></div>}
-@if (step === 'accepted' && accepted) {<section class="surface state-card"><span class="eyebrow">UPLOAD COMPLETE</span><div class="state-mark" aria-hidden="true">✓</div><h2>Your photo card was received</h2><p>Verification may take a few minutes. You can continue browsing. Find preliminary and final results in Fact Explorer or, if signed in, My Submissions.</p>@if (previewUrl) {<img [src]="previewUrl" class="preview-image" alt="Submitted photocard">}<dl class="meta-grid"><div><dt>Comparing against</dt><dd>{{ claimedSourceName() }}</dd></div><div><dt>Scope</dt><dd>Headline only</dd></div></dl><div class="note">Keep this result link to return later.</div><div class="actions"><a class="btn btn-primary" [routerLink]="['/verify',accepted.submission_id]">View progress</a><a class="btn btn-secondary" routerLink="/history">My Submissions</a><button class="btn btn-ghost" (click)="reset()">Verify another card</button></div></section>}
+        </fieldset></section><aside class="side-stack"><section class="surface"><span class="eyebrow">YOUR IMAGE / PREVIEW</span>@if (previewUrl) {<img [src]="previewUrl" class="preview-image" alt="Selected photocard preview">} @else {<p class="preview-placeholder">Your selected image will appear here before you submit it.</p>}<div class="note">Only the headline read from this card is compared with the outlet shown on it. This does not verify every visual element in the image.</div></section><section class="surface source-panel" aria-labelledby="photocard-sources-heading"><span class="eyebrow">RECOGNISED NEWS OUTLETS</span><h2 id="photocard-sources-heading">Outlets a card can be checked against</h2><p class="field-hint">A card is checked only when it shows one of these active verified outlets. Cards from other outlets cannot be checked.</p>@if (sourcesLoading) {<p class="field-hint">Loading the current list…</p>} @else if (sourcesError) {<div class="service-notice" role="status"><p>The outlet list could not be loaded.</p><button type="button" class="btn btn-secondary" (click)="loadSources()">Try again</button></div>} @else if (!sources.length) {<p class="field-hint">No news outlets are available for checking right now.</p>} @else {<details><summary>Show the {{ sources.length }} active outlets</summary><ul class="source-list">@for (src of sources; track src.canonical_name) {<li><span lang="bn">{{ src.display_name }}</span>@if (src.display_name_en) {<span class="source-en"> — {{ src.display_name_en }}</span>}</li>}</ul></details>}</section><section class="context-panel"><h2>A clearer image helps</h2><ol class="guide-list"><li><strong>Include the full headline</strong><p>A sharp, uncropped image is easier to read.</p></li><li><strong>Keep the outlet's name or logo visible</strong><p>The outlet is identified only from what the card shows.</p></li><li><strong>Review what was read</strong><p>The result shows the headline, outlet and date read from the card.</p></li></ol></section></aside></div>}
+@if (step === 'accepted' && accepted) {<section class="surface state-card"><span class="eyebrow">UPLOAD COMPLETE</span><div class="state-mark" aria-hidden="true">✓</div><h2>Your photo card was received</h2><p>Verification may take a few minutes. You can continue browsing. Find preliminary and final results in Fact Explorer or, if signed in, My Submissions.</p>@if (previewUrl) {<img [src]="previewUrl" class="preview-image" alt="Submitted photocard">}<dl class="meta-grid"><div><dt>Read from the card</dt><dd>Headline, news outlet and date</dd></div><div><dt>Scope</dt><dd>Headline only</dd></div></dl><div class="note">Keep this result link to return later.</div><div class="actions"><a class="btn btn-primary" [routerLink]="['/verify',accepted.submission_id]">View progress</a><a class="btn btn-secondary" routerLink="/history">My Submissions</a><button class="btn btn-ghost" (click)="reset()">Verify another card</button></div></section>}
 </div></div>

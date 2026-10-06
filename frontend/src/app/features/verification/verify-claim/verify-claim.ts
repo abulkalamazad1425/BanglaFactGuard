@@ -64,7 +64,6 @@ export class VerifyClaimComponent implements OnInit, OnDestroy {
     claimed_source_text: ['', [Validators.required, trimmedMinLength(1)]],
     body_text: [''],
     published_date: [''],
-    force_refresh: [false],
   });
 
   ngOnInit(): void { this.loadSources(); }
@@ -107,7 +106,6 @@ export class VerifyClaimComponent implements OnInit, OnDestroy {
     const payload: any = {
       headline: v.headline,
       claimed_source_text: v.claimed_source_text,
-      force_refresh: v.force_refresh ?? false,
     };
     if (v.body_text?.trim()) payload.body_text = v.body_text;
     if (v.published_date) payload.published_date = v.published_date;

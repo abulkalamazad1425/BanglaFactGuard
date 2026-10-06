@@ -16,7 +16,7 @@ from app.core.constants import (
     SubmissionType,
 )
 from app.features.submissions.models import (
-    OcrExtraction,
+    PhotocardExtraction,
     RetrievedArticle,
     SourceEvidenceQuery,
     Submission,
@@ -472,19 +472,19 @@ class RetrievedArticleRepository(BaseRepository[RetrievedArticle]):
         await self.session.flush()
 
 
-class OcrExtractionRepository(BaseRepository[OcrExtraction]):
+class PhotocardExtractionRepository(BaseRepository[PhotocardExtraction]):
 
-    model_class = OcrExtraction
+    model_class = PhotocardExtraction
 
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(session)
 
     async def get_by_submission_id(
         self, submission_id: uuid.UUID
-    ) -> OcrExtraction | None:
+    ) -> PhotocardExtraction | None:
         stmt = (
-            select(OcrExtraction)
-            .where(OcrExtraction.submission_id == submission_id)
+            select(PhotocardExtraction)
+            .where(PhotocardExtraction.submission_id == submission_id)
             .limit(1)
         )
         result = await self.session.execute(stmt)

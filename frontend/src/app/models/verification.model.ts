@@ -62,7 +62,6 @@ export interface VerificationRequest {
   claimed_source_text: string;
   body_text?: string | null;
   published_date?: string | null;  // YYYY-MM-DD
-  force_refresh?: boolean;
 }
 
 // ── Sub-types returned in VerificationResponse ───────────────────────

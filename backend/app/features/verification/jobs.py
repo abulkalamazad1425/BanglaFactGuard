@@ -42,12 +42,11 @@ from app.features.nlp.embedding_service import EmbeddingService
 from app.features.nlp.ner_service import NERService
 from app.features.nlp.nli_service import NLIService
 from app.features.notifications.service import notify_once
-from app.features.photocard.ocr_service import BanglaOcrService, OcrEngineUnavailableError
 from app.features.photocard.service import PhotoCardService
 from app.features.photocard.storage_service import PhotoCardStorageService
 from app.features.sources.repository import SourceRepository
 from app.features.submissions.repository import (
-    OcrExtractionRepository,
+    PhotocardExtractionRepository,
     RetrievedArticleRepository,
     SubmissionRepository,
 )
@@ -67,7 +66,6 @@ class JobDeps:
     ner_service: NERService
     nli_service: NLIService
     http_client: httpx.AsyncClient
-    ocr_service: BanglaOcrService | None = None
     photocard_storage: PhotoCardStorageService | None = None
     multimodal_loader: Any = None
     multimodal_storage: Any = None
@@ -80,7 +78,6 @@ class JobDeps:
             ner_service=state.ner_service,
             nli_service=state.nli_service,
             http_client=state.http_client,
-            ocr_service=getattr(state, "photocard_ocr", None),
             photocard_storage=getattr(state, "photocard_storage", None),
             multimodal_loader=getattr(state, "multimodal_loader", None),
             multimodal_storage=getattr(state, "multimodal_storage", None),
@@ -96,7 +93,6 @@ async def execute_job(
     session_factory: Callable[[], Any] = AsyncSessionLocal,
 ) -> None:
     """Run one job body in its own session and commit on success."""
-    force_refresh = bool((payload or {}).get("force_refresh"))
     async with session_factory() as session:
         submission_repo = SubmissionRepository(session)
         submission = await submission_repo.get_by_id_or_none(submission_id)
@@ -127,10 +123,9 @@ async def execute_job(
                 ).process_queued(submission, payload)
             elif kind == "PHOTO_CARD":
                 service = PhotoCardService(
-                    ocr_service=deps.ocr_service or BanglaOcrService(),
                     storage=deps.photocard_storage or PhotoCardStorageService(),
                     submission_repo=submission_repo,
-                    ocr_repo=OcrExtractionRepository(session),
+                    extraction_repo=PhotocardExtractionRepository(session),
                     result_repo=result_repo,
                     article_repo=article_repo,
                     source_repo=source_repo,
@@ -140,7 +135,7 @@ async def execute_job(
                     nli_service=deps.nli_service,
                     http_client=deps.http_client,
                 )
-                await service.process_submission(submission_id, force_refresh=force_refresh)
+                await service.process_submission(submission_id)
             else:
                 service = VerificationService(
                     submission_repo=submission_repo,
@@ -157,7 +152,7 @@ async def execute_job(
                 await submission_repo.mark_processing(submission_id)
                 await submission_repo.set_phase(submission_id, "VERIFYING")
                 await session.commit()
-                await service.run_for_submission(submission_id, force_refresh=force_refresh)
+                await service.run_for_submission(submission_id)
             await session.commit()
         except SourceNotFoundError as exc:
             await session.rollback()
@@ -169,8 +164,27 @@ async def execute_job(
             raise
 
 
+PHOTO_CARD_KINDS = ("PHOTO_CARD",)
+
+
+@dataclass
+class _Lane:
+    """One independently bounded queue consumer. Photo cards get their own
+    lane: their Gemini step can wait out retries for minutes, and must never
+    hold the slots that text and text & image jobs need (nor vice versa)."""
+
+    name: str
+    concurrency: int
+    kinds: tuple[str, ...] | None = None          # only these kinds
+    exclude_kinds: tuple[str, ...] | None = None  # every kind but these
+    slots: asyncio.Semaphore | None = None
+    wake: asyncio.Event | None = None
+    task: asyncio.Task | None = None
+
+
 class VerificationJobWorker:
-    """Drains ``verification_jobs`` with bounded concurrency."""
+    """Drains ``verification_jobs`` with bounded concurrency, in two lanes:
+    photo cards, and everything else."""
 
     def __init__(
         self,
@@ -178,6 +192,7 @@ class VerificationJobWorker:
         *,
         session_factory: Callable[[], Any] = AsyncSessionLocal,
         concurrency: int = 2,
+        photocard_concurrency: int = 4,
         poll_interval_s: float = 5.0,
         stale_after_s: float = 120.0,
         heartbeat_interval_s: float = 30.0,
@@ -185,72 +200,83 @@ class VerificationJobWorker:
     ) -> None:
         self.deps = deps
         self._session_factory = session_factory
-        self._concurrency = concurrency
         self._poll = poll_interval_s
         self._stale_after = stale_after_s
         self._heartbeat_every = heartbeat_interval_s
         self._runner = runner or execute_job
         self._worker_id = f"{socket.gethostname()}:{os.getpid()}:{uuid.uuid4().hex[:6]}"
-        self._wake = asyncio.Event()
         self._stop = False
-        self._loop_task: asyncio.Task | None = None
         self._inflight: set[asyncio.Task] = set()
-        self._slots: asyncio.Semaphore | None = None
+        self._lanes = [
+            _Lane("general", max(1, concurrency), exclude_kinds=PHOTO_CARD_KINDS),
+            _Lane("photocard", max(1, photocard_concurrency), kinds=PHOTO_CARD_KINDS),
+        ]
 
     # ── lifecycle ────────────────────────────────────────────────────────
 
     def start(self) -> None:
-        if self._loop_task is None:
-            self._stop = False
-            self._slots = asyncio.Semaphore(self._concurrency)
-            self._loop_task = asyncio.create_task(self._run_loop(), name="verification-job-worker")
-            logger.info("job_worker_started", worker_id=self._worker_id, concurrency=self._concurrency)
+        if any(lane.task for lane in self._lanes):
+            return
+        self._stop = False
+        for lane in self._lanes:
+            lane.slots = asyncio.Semaphore(lane.concurrency)
+            lane.wake = asyncio.Event()
+            lane.task = asyncio.create_task(self._run_loop(lane), name=f"verification-job-worker-{lane.name}")
+        logger.info("job_worker_started", worker_id=self._worker_id,
+                    lanes={lane.name: lane.concurrency for lane in self._lanes})
 
     async def stop(self) -> None:
         self._stop = True
-        self._wake.set()
-        if self._loop_task:
-            self._loop_task.cancel()
-            await asyncio.gather(self._loop_task, return_exceptions=True)
+        self.wake()
+        tasks = [lane.task for lane in self._lanes if lane.task]
+        for t in tasks:
+            t.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
         for t in list(self._inflight):
             t.cancel()
         await asyncio.gather(*self._inflight, return_exceptions=True)
-        self._loop_task = None
+        for lane in self._lanes:
+            lane.task = None
 
     def wake(self) -> None:
         """Poke the worker after enqueueing; purely a latency optimisation."""
-        self._wake.set()
+        for lane in self._lanes:
+            if lane.wake is not None:
+                lane.wake.set()
 
     # ── loop ─────────────────────────────────────────────────────────────
 
-    async def _run_loop(self) -> None:
-        assert self._slots is not None
+    async def _run_loop(self, lane: _Lane) -> None:
+        assert lane.slots is not None and lane.wake is not None
         while not self._stop:
             try:
-                await self._slots.acquire()
-                job = await self._claim()
+                await lane.slots.acquire()
+                job = await self._claim(lane)
                 if job is None:
-                    self._slots.release()
-                    self._wake.clear()
+                    lane.slots.release()
+                    lane.wake.clear()
                     try:
-                        await asyncio.wait_for(self._wake.wait(), timeout=self._poll)
+                        await asyncio.wait_for(lane.wake.wait(), timeout=self._poll)
                     except asyncio.TimeoutError:
                         pass
                     continue
-                task = asyncio.create_task(self._run_job(job))
+                task = asyncio.create_task(self._run_job(job, lane))
                 self._inflight.add(task)
                 task.add_done_callback(self._inflight.discard)
             except asyncio.CancelledError:
                 raise
             except Exception as exc:  # noqa: BLE001 - the loop must survive anything
-                self._slots.release()
-                logger.error("job_worker_loop_error", error=str(exc)[:200])
+                lane.slots.release()
+                logger.error("job_worker_loop_error", lane=lane.name, error=str(exc)[:200])
                 await asyncio.sleep(self._poll)
 
-    async def _claim(self) -> dict | None:
+    async def _claim(self, lane: _Lane) -> dict | None:
         async with self._session_factory() as session:
             repo = VerificationJobRepository(session)
-            job = await repo.claim_next(self._worker_id, stale_after_s=self._stale_after)
+            job = await repo.claim_next(
+                self._worker_id, stale_after_s=self._stale_after,
+                kinds=lane.kinds, exclude_kinds=lane.exclude_kinds,
+            )
             if job is None:
                 await session.rollback()
                 return None
@@ -264,12 +290,12 @@ class VerificationJobWorker:
             await session.commit()
             return info
 
-    async def _run_job(self, job: dict) -> None:
-        assert self._slots is not None
+    async def _run_job(self, job: dict, lane: _Lane) -> None:
+        assert lane.slots is not None
         log = logger.bind(job_id=str(job["id"]), submission_id=str(job["submission_id"]), kind=job["kind"])
         heartbeat = asyncio.create_task(self._heartbeat(job["id"]))
         try:
-            log.info("verification_job_started", attempt=job["attempts"])
+            log.info("verification_job_started", attempt=job["attempts"], lane=lane.name)
             await self._runner(
                 kind=job["kind"],
                 submission_id=job["submission_id"],
@@ -285,14 +311,12 @@ class VerificationJobWorker:
             raise
         except PermanentJobError as exc:
             await self._fail(job, exc.reason, permanent=True)
-        except OcrEngineUnavailableError as exc:
-            await self._fail(job, exc.message, permanent=False)
         except Exception as exc:  # noqa: BLE001
             log.error("verification_job_failed", error=str(exc)[:200])
             await self._fail(job, "Verification could not be completed. Please try again.", permanent=False, error=str(exc))
         finally:
             heartbeat.cancel()
-            self._slots.release()
+            lane.slots.release()
 
     async def _heartbeat(self, job_id: uuid.UUID) -> None:
         try:

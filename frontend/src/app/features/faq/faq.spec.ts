@@ -31,7 +31,7 @@ describe('FaqComponent', () => {
     }
     const text = el.textContent ?? '';
     for (const phrase of ['TF-IDF cosine similarity', 'Jaccard similarity', 'Normalized Levenshtein similarity',
-      'LaBSE', 'not BERTScore', 'not proof that the claim is false', 'up to three attempts', 'EasyOCR', 'never the article body']) {
+      'LaBSE', 'not BERTScore', 'not proof that the claim is false', 'up to nine attempts', 'only the image', 'never the article body']) {
       expect(text).withContext(phrase).toContain(phrase);
     }
     expect(text).not.toMatch(/\?\s*Source not found/);

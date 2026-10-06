@@ -24,7 +24,10 @@ class PhotoCardAcceptedResponse(BaseModel):
 class PhotoCardResultResponse(BaseModel):
     """Stored photo-card report, retrieved by submission ID. Valid in every
     state: a pending row has no headline/verification yet, a failed one has a
-    failure_reason, a completed one has the saved verification."""
+    failure_reason, a completed one has the saved verification.
+
+    The headline, claimed outlet and claimed date are what Gemini read from
+    the card - there is no separate user-entered source or date."""
 
     submission_id: uuid.UUID
     status: SubmissionStatus
@@ -33,39 +36,28 @@ class PhotoCardResultResponse(BaseModel):
     claim_scope: ClaimScope = ClaimScope.HEADLINE_ONLY
 
     headline: str | None = Field(
-        default=None, description="The extracted headline exactly as returned by the extractor; the only text verified."
+        default=None, description="The headline exactly as printed on the card; the only text verified."
     )
     claimed_source_text: str | None = Field(
-        default=None, description="The outlet the USER selected - the verification target."
+        default=None,
+        description="Canonical id of the active verified source identified on the card - the verification target.",
     )
+    claimed_source_name: str | None = Field(default=None, description="Display name of that source.")
     published_date: date | None = Field(
-        default=None, description="The date the USER supplied - the only date compared with the source."
+        default=None,
+        description="Publication date printed on the card - the claimed date. Null when the card shows no complete date.",
     )
 
-    extraction_method: str | None = Field(
-        default=None, description="GEMINI_IMAGE | OCR_FALLBACK (null until extraction finished or when it failed)."
+    extraction_status: str | None = Field(
+        default=None, description="PENDING | SUCCEEDED | API_FAILED | INVALID_CONTENT"
     )
     extraction_attempts: int | None = Field(
-        default=None, description="Gemini attempts made (first request included, at most 3)."
+        default=None, description="Gemini requests made (first request included, at most 9)."
     )
-    fallback_used: bool = Field(default=False, description="True when EasyOCR + the fallback extractor ran.")
     extraction_model_version: str | None = None
     extraction_failures: list[str] = Field(
-        default_factory=list, description="Short, user-presentable reasons for failed extraction attempts."
+        default_factory=list, description="Short, user-presentable reasons for failed reading attempts."
     )
-    extraction_warnings: list[str] = Field(default_factory=list)
-    extracted_date_text: str | None = Field(
-        default=None,
-        description="Date printed on the card, raw. Display only - never compared. Null when the card shows none.",
-    )
-    extracted_source_text: str | None = Field(
-        default=None,
-        description="Outlet name printed on the card, raw. Display only - never compared. Null when none is visible.",
-    )
-
-    ocr_raw_text: str | None = Field(default=None, description="EasyOCR text (fallback path only).")
-    ocr_engine: str | None = None
-    ocr_confidence: float | None = None
     image_url: str | None = None
 
     verification: VerificationResponse | None = None

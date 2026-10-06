@@ -4,7 +4,7 @@
   </section>
   <section class="methods"><div class="section-heading"><div><span class="eyebrow">THREE WAYS TO CHECK</span><h2>What would you like to verify?</h2></div></div><div class="grid-3">
     <a routerLink="/verify" class="method-card"><span class="method-icon" aria-hidden="true">≡</span><h3>Text &amp; source</h3><p>Compare a headline and optional body text with a selected news source.</p><span class="method-action">Enter text ↗</span></a>
-    <a routerLink="/photo-card" class="method-card"><span class="method-icon" aria-hidden="true">▧</span><h3>Photo card</h3><p>Read a card’s headline and compare it with your selected news source.</p><span class="method-action">Upload a card ↗</span></a>
+    <a routerLink="/photo-card" class="method-card"><span class="method-icon" aria-hidden="true">▧</span><h3>Photo card</h3><p>Upload just the card: its headline, news outlet and date are read and checked with that outlet.</p><span class="method-action">Upload a card ↗</span></a>
     <a routerLink="/multimodal" class="method-card"><span class="method-icon" aria-hidden="true">▤</span><h3>Text &amp; image</h3><p>Get a preliminary AI decision: Likely Real or Likely Fake.</p><span class="method-action">Add text and image ↗</span></a>
   </div></section>
   <section class="reading-guide"><div><span class="eyebrow">EXPERT-REVIEWED RESULTS</span><h2>Four final verdicts</h2><p>Preliminary findings are followed by a final expert verdict. View both in Fact Explorer.</p></div><div class="guide-rows">@for (v of verdicts; track v.label) {<div><span class="badge" [ngClass]="v.cls">{{ v.label }}</span><p>{{ v.desc }}</p></div>}</div></section>

@@ -49,7 +49,6 @@ async def test_verify_claim_endpoint(client):
         payload = {
             "headline": "শেখ হাসিনা নতুন উড়ালসড়ক উদ্বোধন করলেন",
             "claimed_source": "https://prothomalo.com",
-            "force_refresh": True,
         }
 
         response = await client.post("/api/v1/verify", json=payload)

@@ -46,7 +46,6 @@ async def test_full_pipeline_execution(
             claimed_source_text="https://prothomalo.com",
             body_text=None,
             published_date=None,
-            force_refresh=True,
         )
 
         with (
@@ -145,7 +144,6 @@ async def test_pipeline_cache_hit(
         request_payload = VerificationRequest(
             headline="শেখ হাসিনা নতুন উড়ালসড়ক উদ্বোধন করলেন",
             claimed_source_text="https://prothomalo.com",
-            force_refresh=False,
         )
 
         with patch(

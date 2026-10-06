@@ -1,4 +1,4 @@
-import { DEFAULTS, ownerOf, ready, terminal, summarize, cropRect, validateDraft, withoutDateWarnings, headlinePreview } from './shared.js';
+import { DEFAULTS, ownerOf, ready, terminal, summarize, cropRect, validateDraft, withoutDateWarnings, headlinePreview, HttpError, isDeletedOnServer, recheckDelay } from './shared.js';
 import { imageStore } from './db.js';
 import { selectArea } from './capture.js';
 
@@ -40,7 +40,7 @@ async function request(path, { method = 'GET', body, anonymous = false, retry = 
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
     const detail = data.detail;
-    throw Error(typeof detail === 'string' ? detail : detail?.message || (Array.isArray(detail) ? detail.map(x => x.msg).join('; ') : `Server request failed (${response.status}).`));
+    throw new HttpError(typeof detail === 'string' ? detail : detail?.message || (Array.isArray(detail) ? detail.map(x => x.msg).join('; ') : `Server request failed (${response.status}).`), response.status, detail);
   }
   return response.status === 204 ? null : response.json();
 }
@@ -85,19 +85,24 @@ async function deliver(item) {
   item.notified = item.summary.stage;
   item.notificationError = null;
 }
+/** The submission no longer exists on the server: drop every local trace of
+ *  it (summary, unread badge, desktop alert) so a deleted result is never shown. */
+async function forget(item) {
+  await chrome.storage.local.remove(ITEM + item.id);
+  await chrome.notifications.clear(`bfg:${item.id}`).catch(() => {});
+}
 async function pollNow(force = false) {
   if (polling) return polling;
   polling = (async () => {
     if (!(await config()).enabled) return;
     for (const item of await items()) {
       if (!(await config()).enabled) break;
-      if (terminal(item.status)) {
-        if (item.summary?.stage && item.notified !== item.summary.stage) {
-          await deliver(item);
-          await chrome.storage.local.set({ [ITEM + item.id]: item });
-        }
-        continue;
+      if (terminal(item.status) && item.summary?.stage && item.notified !== item.summary.stage) {
+        await deliver(item);
+        await chrome.storage.local.set({ [ITEM + item.id]: item });
       }
+      // Finished items are still re-checked (less often): a submission deleted
+      // on the server must disappear here too, never linger as a cached result.
       if (!force && item.next > Date.now()) continue;
       try {
         const options = { anonymous: item.owner === 'guest' };
@@ -112,9 +117,10 @@ async function pollNow(force = false) {
         item.status = item.summary.status;
         item.headline = item.summary.headline || item.headline;
         item.error = null; item.failures = 0;
-        item.next = Date.now() + (ready(item.status) ? 5 * 60000 : 30000);
+        item.next = Date.now() + recheckDelay(item.status);
         await deliver(item);
       } catch (e) {
+        if (isDeletedOnServer(e, item.id)) { await forget(item); continue; }
         item.error = e.message; item.failures = (item.failures || 0) + 1;
         item.next = Date.now() + Math.min(300000, 30000 * 2 ** Math.min(item.failures, 4));
       }
@@ -141,7 +147,6 @@ async function submit(draft) {
       const form = new FormData();
       form.append('image', image, stored.name || 'capture.png');
       if (draft.type === 'MULTIMODAL') { form.append('headline', draft.headline.trim()); form.append('body_text', draft.body_text.trim()); }
-      else { form.append('claimed_source_text', draft.claimed_source_text.trim()); if (draft.published_date) form.append('published_date', draft.published_date); }
       result = await request(draft.type === 'MULTIMODAL' ? '/multimodal/predict/async' : '/photocard/verify/async', { method: 'POST', body: form });
     }
     const item = { id: result.submission_id, owner, type: draft.type, headline: draft.headline || 'Photo card', created: Date.now(), status: result.status, next: 0, unread: false };

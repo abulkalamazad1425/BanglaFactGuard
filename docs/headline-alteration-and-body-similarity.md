@@ -104,25 +104,34 @@ low < 40 %).
 
 ## 5. Photo-card extraction (`photocard/claim_extraction.py`)
 
-1. The original image goes to Gemini (`photocard/gemini_image_extractor.py`)
-   with a transcribe-only prompt for `headline`, `date`, `source` and a
-   `PRESENT`/`MISSING`/`UNREADABLE` status per field. Text in the image is
-   treated as data.
-2. At most three attempts in total (`GEMINI_MAX_ATTEMPTS`, capped at 3),
-   backoff 1 s / 2 s. Retried: timeouts, network errors, HTTP 429/5xx,
-   malformed or schema-invalid output, unusable headline. HTTP 400/401/403/404
-   stops immediately. A missing optional date/source is not a failure.
-3. After the last failed attempt: EasyOCR (`OCR_ENGINE=easyocr`) → source
-   detection → the deterministic extractor (`photocard/ocr_fallback_extractor.py`).
-   The fallback never re-enters the Gemini loop.
-4. Nothing usable → the submission fails with a reason; no claim is fabricated.
+The user submits the image only (revised 2026-10-06; OCR and every fallback
+were removed).
 
-Only the headline is verified. Raw extracted values are stored unchanged; the
-card's date and outlet are display-only and omitted when absent. Verification
-uses the user's selected source and claimed date. `ocr_extractions` stores
-`extractor_used`, `extraction_attempts`, `fallback_used` and
-`extraction_details` (per-attempt outcomes, raw Gemini fields, OCR engine,
-failure reason).
+1. The original image goes to Gemini (`photocard/gemini_image_extractor.py`)
+   together with the currently active verified sources and their aliases.
+   Headline and printed date are transcribed exactly; the source must be
+   identified from visible evidence (name, logo, alias) and returned as one of
+   the offered canonical ids (schema `enum`), never guessed. Text in the image
+   is treated as data.
+2. At most 9 requests: 3 batches of 3 (`GEMINI_ATTEMPTS_PER_BATCH`,
+   `GEMINI_BATCHES`, both capped at 3), backoff 1 s / 2 s inside a batch and
+   a 10 s pause (`GEMINI_BATCH_PAUSE_SECONDS`) after a failed batch. Retried:
+   timeouts, network errors, HTTP 429/5xx, malformed or schema-invalid output.
+   HTTP 400/401/403/404 stops immediately. The first success stops the loop.
+3. No successful response → the submission fails with a "temporarily
+   unavailable, submit again later" message; no verification.
+4. A successful response without a headline or without an active verified
+   source → the submission fails with a "no valid headline or recognized
+   outlet" message; not retried; no verification. A missing date is not a
+   failure.
+5. Otherwise the headline, the identified source and the printed date
+   (`photocard/card_date.py`; only a complete day-month-year, never guessed)
+   become the submission's headline, claimed source and claimed date - one
+   representation, used exactly like a typed claim's values.
+
+`photocard_extractions` stores the image key, `status`, `failure_code`,
+`model_version`, `attempts` and `extraction_details` (per-attempt outcomes,
+the raw response, the parsed date).
 
 ## 6. Search policy
 
@@ -139,9 +148,13 @@ correspondence measurements and `analysis_details` (headline detail with
 differences and semantic scores, body report, date, search, timings). The
 expert queue reads the same blob.
 
-A result is reused only if it has the current pipeline version, a completed
-source check, a headline verdict when the source is confirmed, no INCOMPLETE
-date and no unavailable body scores. Rows written before this version (no
+A result is reused only if it still exists in the database, has the current
+pipeline version, is an original computation (not a copy of another result), a
+completed source check, a headline verdict when the source is confirmed, no
+INCOMPLETE date and no unavailable body scores. There is no age limit and no
+"check again for updated evidence" option: an identical claim is always
+answered with its saved result; once the original is deleted it is verified
+afresh. Rows written before this version (no
 `headline_check_status`) load with `legacy_result = true` and their old content
 verdict is not shown as a headline verdict.
 

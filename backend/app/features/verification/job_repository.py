@@ -51,19 +51,33 @@ class VerificationJobRepository:
         await self.session.flush()
         return job
 
-    async def claim_next(self, worker_id: str, *, stale_after_s: float) -> VerificationJob | None:
+    async def claim_next(
+        self,
+        worker_id: str,
+        *,
+        stale_after_s: float,
+        kinds: tuple[str, ...] | None = None,
+        exclude_kinds: tuple[str, ...] | None = None,
+    ) -> VerificationJob | None:
+        """The oldest claimable job, optionally restricted to (or excluding)
+        some job kinds - the worker runs one lane per kind group."""
         cutoff = _now() - timedelta(seconds=stale_after_s)
+        conditions = [
+            or_(
+                VerificationJob.status == "QUEUED",
+                and_(
+                    VerificationJob.status == "RUNNING",
+                    VerificationJob.locked_at < cutoff,
+                ),
+            )
+        ]
+        if kinds:
+            conditions.append(VerificationJob.kind.in_(kinds))
+        if exclude_kinds:
+            conditions.append(VerificationJob.kind.not_in(exclude_kinds))
         stmt = (
             select(VerificationJob)
-            .where(
-                or_(
-                    VerificationJob.status == "QUEUED",
-                    and_(
-                        VerificationJob.status == "RUNNING",
-                        VerificationJob.locked_at < cutoff,
-                    ),
-                )
-            )
+            .where(*conditions)
             .order_by(VerificationJob.created_at)
             .limit(1)
             .with_for_update(skip_locked=True)

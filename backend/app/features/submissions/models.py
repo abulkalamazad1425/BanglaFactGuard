@@ -1,4 +1,4 @@
-"""Current submission, source-evidence, retrieved-article and OCR storage.
+"""Current submission, source-evidence, retrieved-article and photo-card extraction storage.
 
 These models are used by the live text, photo-card and multimodal workflows.
 """
@@ -146,8 +146,8 @@ class Submission(UUIDMixin, TimestampMixin, ReprMixin, Base):
         cascade="all, delete-orphan",
     )
 
-    ocr_extraction: Mapped["OcrExtraction | None"] = relationship(
-        "OcrExtraction",
+    photocard_extraction: Mapped["PhotocardExtraction | None"] = relationship(
+        "PhotocardExtraction",
         back_populates="submission",
         lazy="select",
         cascade="all, delete-orphan",
@@ -265,10 +265,17 @@ class RetrievedArticle(UUIDMixin, ReprMixin, Base):
     )
 
 
-class OcrExtraction(UUIDMixin, TimestampMixin, ReprMixin, Base):
-    """DatabaseDescription.pdf Table 4.8 — ocr_extractions."""
+class PhotocardExtraction(UUIDMixin, TimestampMixin, ReprMixin, Base):
+    """Gemini extraction of a photo card (one row per PHOTO_CARD submission).
 
-    __tablename__ = "ocr_extractions"
+    The extracted headline, verified source and published date are NOT
+    stored here: on success they become the submission's own headline,
+    claimed_source_id/claimed_source_text and published_date - the single
+    representation of the claim. This row keeps the stored image and the
+    extraction provenance only.
+    """
+
+    __tablename__ = "photocard_extractions"
 
     submission_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -280,85 +287,48 @@ class OcrExtraction(UUIDMixin, TimestampMixin, ReprMixin, Base):
 
     image_object_key: Mapped[str] = mapped_column(String(1024), nullable=False)
 
-    raw_extracted_text: Mapped[str] = mapped_column(Text, nullable=False)
-
-    confirmed_text: Mapped[str | None] = mapped_column(Text, nullable=True)
-
-    ocr_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
-
-    ocr_engine: Mapped[str] = mapped_column(
-        String(100), nullable=False, default="tesseract-bn"
-    )
-
-    is_confirmed: Mapped[bool] = mapped_column(
-        Boolean,
+    status: Mapped[str] = mapped_column(
+        String(20),
         nullable=False,
-        default=False,
-        comment="Legacy from the retired extract-then-confirm flow; always False.",
+        default="PENDING",
+        server_default="PENDING",
+        comment=(
+            "PENDING | SUCCEEDED | API_FAILED (every Gemini request failed) | "
+            "INVALID_CONTENT (no headline or no active verified source on the card) | "
+            "FAILED (legacy OCR-era failure)"
+        ),
     )
 
-    extractor_used: Mapped[str | None] = mapped_column(
-        String(30),
+    failure_code: Mapped[str | None] = mapped_column(
+        String(40),
         nullable=True,
-        comment="GEMINI_IMAGE | OCR_FALLBACK - which extraction path produced the headline (NULL when none did).",
+        comment="gemini_unavailable | headline_missing | source_not_identified | headline_and_source_missing",
     )
 
-    extraction_model_version: Mapped[str | None] = mapped_column(
+    model_version: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
-        comment="Gemini model id when extractor_used=GEMINI_IMAGE, else NULL.",
+        comment="Gemini model id that read the card.",
     )
 
-    extraction_attempts: Mapped[int | None] = mapped_column(
+    attempts: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
-        comment="Gemini attempts made for this card (first request included, at most 3).",
-    )
-
-    fallback_used: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-        default=False,
-        server_default="false",
-        comment="True when EasyOCR + the deterministic fallback extractor ran.",
+        comment="Gemini requests made for this card (first request included, at most 9).",
     )
 
     extraction_details: Mapped[dict | None] = mapped_column(
         JSONB,
         nullable=True,
         comment=(
-            "Extraction diagnostics: per-attempt Gemini outcomes, the raw validated "
-            "Gemini fields, fallback OCR engine and the failure reason."
+            "Provenance: per-attempt Gemini outcomes, the validated raw response "
+            "(headline, source id + visible evidence, date as printed) and the parsed "
+            "date. Legacy OCR-era values are kept under 'legacy'."
         ),
-    )
-
-    extraction_warnings: Mapped[list | None] = mapped_column(
-        JSONB,
-        nullable=True,
-        comment="Warnings from the fallback extractor (e.g. low-confidence lines dropped).",
-    )
-
-    detected_source_text: Mapped[str | None] = mapped_column(
-        Text,
-        nullable=True,
-        comment="Outlet name printed on the card, raw. Display only; never compared with the user's selected source.",
-    )
-
-    detected_date_text: Mapped[str | None] = mapped_column(
-        Text,
-        nullable=True,
-        comment="Date printed on the card, raw (format unchanged). Display only; never compared with any date.",
     )
 
     submission: Mapped["Submission"] = relationship(
         "Submission",
-        back_populates="ocr_extraction",
+        back_populates="photocard_extraction",
         lazy="select",
-    )
-
-    __table_args__ = (
-        CheckConstraint(
-            "ocr_confidence IS NULL OR (ocr_confidence >= 0.0 AND ocr_confidence <= 1.0)",
-            name="ck_ocr_extractions_confidence_range",
-        ),
     )

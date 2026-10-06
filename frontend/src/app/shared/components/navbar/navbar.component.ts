@@ -32,8 +32,8 @@ import { NotificationService } from '../../../services/notification.service';
         <div class="navbar-links">
           <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">Home</a>
           <a routerLink="/verify" routerLinkActive="active" class="nav-link">Text &amp; source</a>
-          <a routerLink="/multimodal" routerLinkActive="active" class="nav-link">Text &amp; image</a>
           <a routerLink="/photo-card" routerLinkActive="active" class="nav-link">Photo card</a>
+          <a routerLink="/multimodal" routerLinkActive="active" class="nav-link">Text &amp; image</a>
           <a routerLink="/dashboard" routerLinkActive="active" class="nav-link">Fact Explorer</a>
           @if (isExpert() && !isAdmin()) {
             <a routerLink="/expert/queue" routerLinkActive="active" class="nav-link nav-link--expert">Expert Queue</a>
@@ -102,8 +102,8 @@ import { NotificationService } from '../../../services/notification.service';
         <div class="mobile-menu animate-in">
           <a routerLink="/" class="mobile-link" (click)="closeMobileMenu()">Home</a>
           <a routerLink="/verify" class="mobile-link" (click)="closeMobileMenu()">Text &amp; source</a>
-          <a routerLink="/multimodal" class="mobile-link" (click)="closeMobileMenu()">Text &amp; image</a>
           <a routerLink="/photo-card" class="mobile-link" (click)="closeMobileMenu()">Photo card</a>
+          <a routerLink="/multimodal" class="mobile-link" (click)="closeMobileMenu()">Text &amp; image</a>
           <a routerLink="/dashboard" class="mobile-link" (click)="closeMobileMenu()">Fact Explorer</a>
           @if (isLoggedIn()) {
             <a routerLink="/history" class="mobile-link" (click)="closeMobileMenu()">My Submissions</a>

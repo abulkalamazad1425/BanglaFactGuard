@@ -56,7 +56,7 @@
 
       <section class="surface faq-item" id="photocard" aria-labelledby="q-photocard">
         <h2 id="q-photocard">How is a photo card read?</h2>
-        <p>Gemini reads the headline, date and outlet from the image (up to three attempts). If that fails, EasyOCR is used. Only the headline is verified; the outlet and date you selected are used.</p>
+        <p>You submit only the image. Gemini reads the headline exactly as printed, identifies the news outlet from the name or logo on the card (only among the currently active verified outlets, including their known alternative names) and reads the printed date, if there is one. These become the claim: the headline is checked against that outlet, and the date is compared when the card shows one. Nothing is guessed: a missing date stays empty. If the card has no clear headline or no recognised outlet, it is not checked. If the card cannot be read at the moment (up to nine attempts), you are asked to submit it again later.</p>
       </section>
 
       <section class="surface faq-item" id="date" aria-labelledby="q-date">

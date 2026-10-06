@@ -198,7 +198,6 @@ class VerificationRequest(BaseModel):
     body_text: str | None = Field(default=None, max_length=50_000)
     claimed_source_text: str = Field(..., min_length=1, max_length=255)
     published_date: date | None = Field(default=None, examples=["2024-03-15"])
-    force_refresh: bool = Field(default=False)
 
     @field_validator("headline")
     @classmethod
@@ -231,7 +230,6 @@ class VerificationRequest(BaseModel):
                 "body_text": "জাতীয় সংসদে আজ বিকেলে ডিজিটাল নিরাপত্তা আইনের সংশোধনী প্রস্তাব সর্বসম্মতিক্রমে পাস হয়েছে।",
                 "claimed_source_text": "প্রথম আলো",
                 "published_date": "2024-03-15",
-                "force_refresh": False,
             }
         }
     }

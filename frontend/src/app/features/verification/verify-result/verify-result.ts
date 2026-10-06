@@ -24,8 +24,8 @@ import { VotingDetailsComponent } from '../../../shared/components/voting-detail
  * The three methods are not interchangeable: each has its own detail
  * endpoint and its own shape (a source-based claim has a matched article
  * and a 3-part verdict; a multimodal check has an uploaded image and a
- * binary FAKE/REAL call; a photo card has both OCR text and a source
- * verdict). Rather than forcing one of those shapes to stand in for all
+ * binary FAKE/REAL call; a photo card has its image, the headline, outlet
+ * and date read from it, and a source verdict). Rather than forcing one of those shapes to stand in for all
  * three, this component looks up the submission's type first and then
  * renders a layout built for that type specifically.
  */
@@ -206,13 +206,10 @@ export class VerifyResultComponent implements OnInit, OnDestroy {
 
   /* ─── Shared template helpers ─── */
 
-  /** How the headline was read, in plain words (no model names). */
+  /** How the card was read, in plain words (no model names). */
   extractionSummary(p: PhotoCardResultResponse): string {
-    if (p.extraction_method === 'GEMINI_IMAGE') {
-      const n = p.extraction_attempts ?? 1;
-      return `Read directly from the image${n > 1 ? ` (succeeded on attempt ${n} of 3)` : ''}.`;
-    }
-    return 'Image reading was unavailable, so the headline was recovered with text recognition (OCR).';
+    const n = p.extraction_attempts ?? 1;
+    return `Headline, outlet and date were read directly from the image${n > 1 ? ` (succeeded on attempt ${n} of 9)` : ''}.`;
   }
 
   /** Lifecycle states in which a saved automated result exists. */

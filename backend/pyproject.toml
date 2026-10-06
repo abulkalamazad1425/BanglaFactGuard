@@ -42,13 +42,6 @@ dependencies = [
     "torch>=2.3.0",
     "yake>=0.4.8",
 
-    # ── Bangla OCR (photo-card verification) ────────────────────────────
-    # At least one engine is required for /api/v1/photocard/*. pytesseract
-    # also needs the Tesseract binary plus its 'ben' traineddata; easyocr is
-    # pure-pip but slower and downloads its weights on first use.
-    "pytesseract>=0.3.10",
-    "easyocr>=1.7.1",
-
     # ── Web scraping / extraction ───────────────────────────────────────
     "trafilatura>=1.10.0",
     "beautifulsoup4>=4.12.0",

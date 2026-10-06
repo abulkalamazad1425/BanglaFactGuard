@@ -262,7 +262,7 @@ class VerificationJob(UUIDMixin, TimestampMixin, ReprMixin, Base):
     payload: Mapped[dict | None] = mapped_column(
         JSONB,
         nullable=True,
-        comment="Job inputs that are not on the submission row (force_refresh, ...).",
+        comment="Job inputs that are not on the submission row.",
     )
 
     __table_args__ = (Index("ix_verification_jobs_status_created", status, "created_at"),)

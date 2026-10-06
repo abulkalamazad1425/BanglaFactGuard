@@ -2,17 +2,17 @@
 // Photo Card Verification Models — synced with backend
 // app/features/photocard/schemas.py
 //
-// Image + claimed source (+ optional claimed date) in. On the server Gemini
-// reads the headline, date and source from the original image (at most 3
-// attempts); only if every attempt fails, EasyOCR + the deterministic
-// extractor run. Only the headline is verified; the date/source read from
-// the card are shown for reference and never compared with anything.
+// Image only in. On the server Gemini reads the headline, identifies the
+// news outlet among the active verified sources (name, logo or alias) and
+// reads the printed date (at most 9 requests). Those values ARE the claim:
+// claimed_source_text / published_date below are what the card shows.
 // ============================================================
 
 import { ClaimScope, ProcessingPhase, SubmissionStatus, VerificationResponse } from './verification.model';
 
-/** 'GEMINI_IMAGE' (primary) | 'OCR_FALLBACK' (EasyOCR + fallback extractor). */
-export type ExtractionMethod = 'GEMINI_IMAGE' | 'OCR_FALLBACK';
+/** PENDING until read; API_FAILED: the card could not be read (temporary);
+ *  INVALID_CONTENT: no headline or no recognised outlet on the card. */
+export type ExtractionStatus = 'PENDING' | 'SUCCEEDED' | 'API_FAILED' | 'INVALID_CONTENT' | 'FAILED';
 
 /** HTTP 202 from POST /photocard/verify/async. The card is stored and the job is
  *  durable: extraction and verification continue on the server whether or not
@@ -25,12 +25,9 @@ export interface PhotoCardAccepted {
   queued_at: string;
 }
 
-/** POST /photocard/verify/async — multipart form. */
+/** POST /photocard/verify/async — multipart form: the image only. */
 export interface PhotoCardVerifyRequest {
   image: File;
-  claimed_source_text: string;
-  published_date?: string | null; // YYYY-MM-DD
-  force_refresh?: boolean;
 }
 
 /** GET /photocard/{submission_id} — a stored report. */
@@ -42,29 +39,20 @@ export interface PhotoCardResultResponse {
   failure_reason?: string | null;
   /** Always HEADLINE_ONLY for photo cards. */
   claim_scope?: ClaimScope;
-  /** The extracted headline exactly as read — the only text verified. */
+  /** The headline exactly as printed on the card — the only text verified. */
   headline?: string | null;
-  /** The outlet the user selected — the verification target. */
+  /** Canonical id of the verified outlet identified on the card — the claimed outlet. */
   claimed_source_text?: string | null;
-  /** The date the user supplied — the only date compared with the source. */
+  /** Display name of that outlet. */
+  claimed_source_name?: string | null;
+  /** Publication date printed on the card — the claimed date; null when the card shows none. */
   published_date?: string | null;
 
-  extraction_method?: ExtractionMethod | null;
-  /** Gemini attempts made (first request included, at most 3). */
+  extraction_status?: ExtractionStatus | null;
+  /** Gemini requests made (first request included, at most 9). */
   extraction_attempts?: number | null;
-  fallback_used?: boolean;
   extraction_model_version?: string | null;
   extraction_failures?: string[];
-  extraction_warnings: string[];
-  /** Date printed on the card, raw. Display only; null when the card shows none. */
-  extracted_date_text?: string | null;
-  /** Outlet name printed on the card, raw. Display only; null when none is visible. */
-  extracted_source_text?: string | null;
-
-  /** EasyOCR text (fallback path only). */
-  ocr_raw_text?: string | null;
-  ocr_engine?: string | null;
-  ocr_confidence?: number | null;
   image_url?: string | null;
 
   verification?: VerificationResponse | null;

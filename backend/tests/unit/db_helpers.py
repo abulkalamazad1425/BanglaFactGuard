@@ -30,7 +30,7 @@ from app.shared.utils.hashing import compute_claim_hash  # noqa: E402
 from app.core.constants import VERIFICATION_PIPELINE_VERSION  # noqa: E402
 
 TABLES = [
-    "users", "verified_sources", "submissions", "ocr_extractions", "retrieved_articles",
+    "users", "verified_sources", "submissions", "photocard_extractions", "retrieved_articles",
     "verification_results", "verification_jobs", "notifications", "source_evidence_queries",
     "credibility_weight_tiers", "expert_reviews",
 ]

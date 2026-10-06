@@ -14,7 +14,21 @@ export function requestError(error: { status?: number }, fallback = 'Unable to c
   }
 }
 
+/** Photo-card reasons from the server (app/features/photocard/claim_extraction.py). */
+export const PHOTOCARD_UNAVAILABLE_MESSAGE =
+  'Sorry for the temporary inconvenience. Information cannot be collected from the photo card right now. Please submit it again after a while.';
+export const PHOTOCARD_INVALID_MESSAGE =
+  "A valid headline or a recognized news outlet could not be identified on the photo card. Please submit a photo card with a clear headline and the news outlet's name or logo.";
+
 export function verificationFailure(reason?: string | null): string {
+  // The card could not be read right now (every Gemini request failed) vs. it
+  // was read but shows no headline / no recognised outlet: different advice.
+  if (/temporary inconvenience|cannot be collected from the photo card/i.test(reason ?? '')) {
+    return PHOTOCARD_UNAVAILABLE_MESSAGE;
+  }
+  if (/recogni[sz]ed news outlet|valid headline/i.test(reason ?? '')) {
+    return PHOTOCARD_INVALID_MESSAGE;
+  }
   if (/no readable|readable headline|sharper|less cluttered/i.test(reason ?? '')) {
     return 'We could not read the headline. Upload a clearer image with the full Bengali headline visible, or enter the news text instead.';
   }

@@ -18,7 +18,7 @@ from app.core.constants import (
 )
 from app.features.auth.models import User
 from app.features.auth.security import get_current_user
-from app.features.submissions.models import OcrExtraction, Submission
+from app.features.submissions.models import PhotocardExtraction, Submission
 from app.features.verification.presenter import effective_expert_row, effective_status, is_headline_result
 from app.features.verification.headline_status import headline_status_for_result
 from app.features.verification.repository import ResultRepository
@@ -128,7 +128,7 @@ async def get_my_submissions(
         if submission.submission_type == SubmissionType.PHOTO_CARD and photocard_storage:
             key = (
                 await session.execute(
-                    select(OcrExtraction.image_object_key).where(OcrExtraction.submission_id == submission.id)
+                    select(PhotocardExtraction.image_object_key).where(PhotocardExtraction.submission_id == submission.id)
                 )
             ).scalar_one_or_none()
             if key:

@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import 'fake-indexeddb/auto';
 
 function event(){return {addListener(fn){this.listener=fn;}};}
-const data={}, notifications=[], opened=[];
+const data={}, notifications=[], opened=[], cleared=[], sentForms=[];
 const local={
   async get(keys){ if(keys===null)return structuredClone(data);const result={};for(const k of typeof keys==='string'?[keys]:keys)if(k in data)result[k]=structuredClone(data[k]);return result; },
   async set(values){Object.assign(data,structuredClone(values));},
@@ -13,14 +14,17 @@ const local={
 globalThis.chrome={storage:{local},runtime:{id:'test',getURL:path=>'chrome-extension://test/'+path,onMessage:event(),onInstalled:event(),onStartup:event()},
   alarms:{async get(){return true;},async create(){},onAlarm:event()},sidePanel:{async setPanelBehavior(){},async open(){}},
   action:{async setBadgeBackgroundColor(){},async setBadgeText(){},onClicked:event()},contextMenus:{async removeAll(){},create(){},onClicked:event()},
-  notifications:{async getPermissionLevel(){return 'granted';},async create(id,body){notifications.push({id,body});},async getAll(){return {};},async clear(){},onClicked:event()},
+  notifications:{async getPermissionLevel(){return 'granted';},async create(id,body){notifications.push({id,body});},async getAll(){return {};},async clear(id){cleared.push(id);},onClicked:event()},
   permissions:{async contains(){return true;}},tabs:{async create(options){opened.push(options);}}
 };
 let currentResponse, requests=0;
-globalThis.fetch=async()=>{requests++;if(currentResponse instanceof Error)throw currentResponse;return {ok:true,status:200,async json(){return structuredClone(currentResponse);}};};
+// `{httpStatus, body}` simulates an error response; anything else is a 200 body.
+globalThis.fetch=async(url,options={})=>{requests++;if(options.body instanceof FormData)sentForms.push(options.body);if(currentResponse instanceof Error)throw currentResponse;
+  if(currentResponse?.httpStatus)return {ok:false,status:currentResponse.httpStatus,async json(){return structuredClone(currentResponse.body);}};
+  return {ok:true,status:200,async json(){return structuredClone(currentResponse);}};};
 await import('../src/background.js');
 const send=(type,extra={})=>new Promise((resolve,reject)=>chrome.runtime.onMessage.listener({type,...extra},{id:'test',url:'chrome-extension://test/index.html'},reply=>reply.error?reject(Error(reply.error)):resolve(reply.data)));
-function reset(){for(const k of Object.keys(data))delete data[k];notifications.length=0;requests=0;data.settings={enabled:true,notifications:true};}
+function reset(){for(const k of Object.keys(data))delete data[k];notifications.length=0;cleared.length=0;sentForms.length=0;requests=0;data.settings={enabled:true,notifications:true};}
 function claim(extra={}){return {id:'one',owner:'guest',type:'SOURCE_BASED',headline:'A claim',created:1,status:'PENDING',next:0,...extra};}
 
 test('notifications deduplicate across polling, then notify expert finalization',async()=>{
@@ -46,8 +50,47 @@ test('account isolation, failed network backoff, and unauthorized detail access'
   assert.equal(data['claim:one'].status,'PENDING');assert.equal(data['claim:one'].failures,1);assert.equal(notifications.length,0);
 });
 test('terminal result saved before a restart is notified without a network request',async()=>{
-  reset();data['claim:one']=claim({status:'FINALIZED',summary:{stage:'final:REAL',final:true}});
-  await send('poll',{force:true});assert.equal(requests,0);assert.equal(notifications.length,1);
+  reset();data['claim:one']=claim({status:'FINALIZED',summary:{stage:'final:REAL',final:true},next:Date.now()+600000});
+  await send('poll');assert.equal(requests,0);assert.equal(notifications.length,1);
+});
+
+test('a submission deleted on the server disappears from Activity, with its alert and badge',async()=>{
+  for(const status of ['PENDING','EXPERT_REVIEW','FINALIZED','FAILED']){
+    reset();data['claim:one']=claim({status,unread:true,summary:{stage:'preliminary',lines:['Headline: Exact Matched']},notified:'preliminary'});
+    currentResponse={httpStatus:404,body:{detail:{error:'not_found',submission_id:'one'}}};
+    await send('poll',{force:true});
+    assert.equal(requests,1,status);assert.equal(data['claim:one'],undefined,status);
+    assert.deepEqual(cleared,['bfg:one']);assert.equal((await send('state')).items.length,0);
+  }
+});
+
+test('finished results are re-checked later, so a later deletion is noticed',async()=>{
+  reset();data['claim:one']=claim({status:'FINALIZED',summary:{stage:'final:REAL',final:true},notified:'final:REAL',next:0});
+  currentResponse={status:'FINALIZED',result:{source_status:'CONFIRMED',overall_verdict:'REAL'}};
+  await send('poll');assert.equal(requests,1);
+  assert.ok(data['claim:one'].next>Date.now()+5*60000);  // finished: re-checked rarely, not never
+  await send('poll');assert.equal(requests,1);
+  currentResponse={httpStatus:404,body:{detail:{error:'not_found',submission_id:'one'}}};
+  await send('poll',{force:true});assert.equal(data['claim:one'],undefined);
+});
+
+test('a generic 404 (wrong API address) or an outage never deletes saved results',async()=>{
+  for(const response of [{httpStatus:404,body:{detail:'Not Found'}},{httpStatus:404,body:{detail:{error:'not_found',submission_id:'other'}}},{httpStatus:503,body:{}},Error('offline')]){
+    reset();data['claim:one']=claim({status:'EXPERT_REVIEW',summary:{stage:'preliminary',lines:['Headline: Altered']}});
+    currentResponse=response;await send('poll',{force:true});
+    assert.ok(data['claim:one']);assert.deepEqual(data['claim:one'].summary.lines,['Headline: Altered']);assert.equal(data['claim:one'].failures,1);
+  }
+});
+
+test('a photo card is submitted as the image only, whatever an old draft holds',async()=>{
+  reset();
+  const {imageStore}=await import('../src/db.js');
+  await imageStore('guest',{current:new Blob(['png-bytes'],{type:'image/png'}),name:'card.png'});
+  currentResponse={submission_id:'new-card',status:'PENDING'};
+  await send('submit',{owner:'guest',draft:{type:'PHOTO_CARD',headline:'',body_text:'',claimed_source_text:'Prothom Alo',published_date:'2026-01-01'}});
+  assert.equal(sentForms.length,1);assert.deepEqual([...sentForms[0].keys()],['image']);
+  assert.equal(data['claim:new-card'].type,'PHOTO_CARD');
+  await send('poll'); // let the poll started by submit finish before the next test
 });
 test('content scripts cannot invoke privileged extension messages',()=>{
   let called=false;

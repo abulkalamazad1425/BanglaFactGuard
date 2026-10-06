@@ -14,7 +14,7 @@ An English-language Chrome side panel built with **Preact + Vite**, styled to ma
 
 ## 1. Start the existing backend and website
 
-Use your existing database, Redis, MinIO, OCR and model configuration. This extension does not replace those services. From a terminal in the repository root:
+Use your existing database, Redis, MinIO, Gemini and model configuration. This extension does not replace those services. From a terminal in the repository root:
 
 ```powershell
 cd backend
@@ -86,7 +86,8 @@ Headline, body and image are required. Body must contain at least 10 non-whitesp
 - Desktop alerts require Chrome and OS notification permissions and the extension to be ON. Browser closure, sleep, Do Not Disturb or disabling the extension can delay/suppress desktop alerts. Saved Activity and the unread badge remain the fallback. Reopening Chrome/turning ON catches up.
 - Notification clicks open the extension Activity page; **View details** opens the website. Website login is separate when a private pending result requires authentication.
 - Source not found is not automatically a fake verdict. Incomplete retrieval is shown as incomplete. Date mismatch does not imply a false story. Multimodal predictions are clearly preliminary; expert verdict is separate.
-- Photocard OCR dates are not displayed or compared. Extracted source/date conflict warnings are suppressed for both newly processed cards and older saved Activity entries; supplied-date versus source-article checks still appear normally.
+- Photo card: submit only the image (upload or screenshot area). The server reads the headline, the outlet (one of the active verified outlets, listed in the collapsible "Recognised news outlets" section) and the printed date; there are no outlet or date fields.
+- Activity re-checks every saved item, finished ones included; a submission deleted on the server is removed from Activity together with its alert. Only the server's own "not found" answer for that submission triggers this - a wrong API address or an outage never deletes anything.
 
 ## Connection settings and permissions
 
@@ -121,7 +122,7 @@ See [TESTING.md](TESTING.md) for verified behavior and the remaining installed-C
 
 - **Cannot reach server:** start backend, check API base URL and optional host permission. HTTPS deployments must expose the API with a valid certificate and appropriate network access.
 - **404 for `/multimodal/predict/async`:** restart the backend with this checkout. The existing synchronous endpoint remains available to the website.
-- **Model unavailable / processing failed:** check server model, image storage, OCR and worker configuration. The extension does not run the ML pipeline itself.
+- **Model unavailable / processing failed:** check server model, image storage, Gemini and worker configuration. The extension does not run the ML pipeline itself.
 - **Expired session:** sign in again. Authenticated submission never silently becomes anonymous.
 - **Uncertain submission:** if a network connection fails before an acknowledgement, do not blindly resubmit. Check Activity and website history first. Existing APIs have no cross-request idempotency key; the extension prevents in-flight double clicks but cannot promise deduplication when an acknowledgement is lost.
 - **No desktop alert:** check Account notification preference, ON state, Chrome notification permission and OS notification settings. Check Activity for the actual server outcome.

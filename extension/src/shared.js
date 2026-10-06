@@ -3,6 +3,21 @@ export const EMPTY_DRAFT = { type: 'SOURCE_BASED', headline: '', body_text: '', 
 export const ownerOf = auth => auth?.user?.id || 'guest';
 export const terminal = status => ['FINALIZED', 'FAILED'].includes(status);
 export const ready = status => ['EXPERT_REVIEW', 'FINALIZED', 'ESCALATED'].includes(status);
+// Input modes, in the order shown everywhere (same as the website).
+export const MODES = [['SOURCE_BASED', 'Text & source'], ['PHOTO_CARD', 'Photo card'], ['MULTIMODAL', 'Text & image']];
+
+/** A failed API call, keeping the HTTP status and the structured detail. */
+export class HttpError extends Error {
+  constructor(message, status, detail) { super(message); this.status = status; this.detail = detail; }
+}
+/** True only for the server's own "this submission does not exist" answer
+ *  (HTTP 404 naming this very submission) - never for a generic 404 from a
+ *  wrong API address, an outage or a network error. */
+export const isDeletedOnServer = (error, id) =>
+  error?.status === 404 && error.detail?.error === 'not_found' && String(error.detail?.submission_id) === String(id);
+/** How long until an Activity item is re-checked. Finished items are still
+ *  re-checked so that a submission deleted on the server disappears here. */
+export const recheckDelay = status => terminal(status) ? 10 * 60000 : ready(status) ? 5 * 60000 : 30000;
 // Applied to fresh responses and cached Activity entries from older builds.
 export const withoutDateWarnings = warnings => (warnings || []).filter(w => !/\b(?:dates?|years?|months?|source|outlet|publisher)\b|তারিখ/i.test(w));
 
@@ -59,7 +74,7 @@ export function summarize(type, data, lookup = {}) {
   return { status, stage: status === 'FAILED' ? 'failed' : final && status === 'FINALIZED' ? `final:${final}` : result && ready(status) ? 'preliminary' : null,
     phase: data.phase || lookup.processing_phase, lines, headline: data.headline || lookup.headline,
     error: data.error || data.failure_reason || lookup.failure_reason,
-    warnings: type === 'PHOTO_CARD' ? withoutDateWarnings(data.extraction_warnings) : data.extraction_warnings || [], final: Boolean(final),
+    warnings: type === 'PHOTO_CARD' ? [] : data.extraction_warnings || [], final: Boolean(final),
     review: final ? 'Final decision made by reviewers' : 'Under review — preliminary AI result' };
 }
 
@@ -70,11 +85,12 @@ export class FieldError extends Error {
 
 // Required fields (same as the website and the API):
 //   Text & source (SOURCE_BASED): headline (5+ characters), claimed news outlet
-//   Photo card   (PHOTO_CARD):    photocard image, claimed news outlet
+//   Photo card   (PHOTO_CARD):    photocard image only - the headline, outlet and
+//                                 date are read from the card on the server
 //   Text & image (MULTIMODAL):    headline, article text (10+ characters), image
 export const REQUIRED = {
   SOURCE_BASED: ['headline', 'claimed_source_text'],
-  PHOTO_CARD: ['image', 'claimed_source_text'],
+  PHOTO_CARD: ['image'],
   MULTIMODAL: ['headline', 'body_text', 'image'],
 };
 
@@ -86,7 +102,7 @@ export function validateDraft(d, image) {
   if (d.type === 'MULTIMODAL' && d.body_text.trim().length < 10) throw new FieldError('body_text', 'Enter the article text (at least 10 characters).');
   if (d.type !== 'SOURCE_BASED' && !image) throw new FieldError('image', d.type === 'PHOTO_CARD' ? 'Add the photocard image: upload it or select a screenshot area.' : 'Add the image: upload it or select a screenshot area.');
   if (d.type !== 'SOURCE_BASED' && image && (!image.size || image.size > 10 * 1024 * 1024 || !['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(image.type))) throw new FieldError('image', 'Image must be a PNG, JPEG, WebP or GIF up to 10 MB.');
-  if (d.type !== 'MULTIMODAL' && !d.claimed_source_text.trim()) throw new FieldError('claimed_source_text', 'Enter the claimed news outlet.');
+  if (d.type === 'SOURCE_BASED' && !d.claimed_source_text.trim()) throw new FieldError('claimed_source_text', 'Enter the claimed news outlet.');
 }
 export function cropRect(rect, view, bitmap) {
   const x = Math.max(0, Math.min(rect.x, view.width));

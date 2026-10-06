@@ -11,8 +11,8 @@
 > replaced by S08 source correspondence, S09 Headline Alteration (claim headline
 > vs source TITLE only), S10 body similarity (four scores, never a verdict),
 > S11 date verification, S12 result assembly and S13 persistence. Photo cards
-> are read by Gemini from the original image first (≤3 attempts) with EasyOCR +
-> the deterministic extractor as fallback. Internal (outlet-own) search and Google
+> are submitted as an image only and read by Gemini alone (§6.2; no OCR, no
+> fallback; ≤9 requests). Internal (outlet-own) search and Google
 > search run for every publisher. Pipeline
 > version `v4.0-headline-title-body-scores`. The full design, decision rules and
 > limitations are in [headline-alteration-and-body-similarity.md](headline-alteration-and-body-similarity.md);
@@ -169,7 +169,7 @@ GET  /submissions/{id}    type-agnostic lookup shared by all three
                            three detail endpoints to call next.
 ```
 
-`POST /verify/async` (`VerificationService.register_claim`) resolves the claimed source, computes the claim identity (§6.3.6) and — unless `force_refresh` — looks for an identical, complete, fresh, current-version result. A hit gives the requester **their own submission** carrying a copy of that automated result (`cached: true`, no job queued); only the same submitter's identical in-flight claim is handed back. On a miss it creates the `Submission` (`PENDING`, phase `QUEUED`) **and its durable `verification_jobs` row in one transaction** and returns 202; the job worker (§6.3.8) runs the pipeline server-side, independent of the browser.
+`POST /verify/async` (`VerificationService.register_claim`) resolves the claimed source, computes the claim identity (§6.3.6) and looks for an identical, complete, current-version result still in the database (there is no age limit and no way to force a re-check). A hit gives the requester **their own submission** carrying a copy of that automated result (`cached: true`, no job queued); only the same submitter's identical in-flight claim is handed back. On a miss it creates the `Submission` (`PENDING`, phase `QUEUED`) **and its durable `verification_jobs` row in one transaction** and returns 202; the job worker (§6.3.8) runs the pipeline server-side, independent of the browser.
 
 ```
 User submits claim
@@ -182,7 +182,7 @@ User submits claim
       then GET /verify/{id} and renders the SAME saved result (§6.1.10)
 ```
 
-Photo cards use the same pattern: `POST /photocard/verify/async` stores the image, creates the `PHOTO_CARD` submission + job and returns 202; OCR, extraction and verification run in the job (§6.2.1, §6.3.8). The synchronous `POST /photocard/verify` and `POST /verify` remain for compatibility.
+Photo cards use the same pattern: `POST /photocard/verify/async` stores the image, creates the `PHOTO_CARD` submission + job and returns 202; Gemini extraction and verification run in the job (§6.2.1, §6.3.8). The synchronous `POST /verify` remains for compatibility.
 
 ### 6.1.8 Database & Storage
 
@@ -216,150 +216,82 @@ Once a result exists the page (`VerificationReportComponent`, shared by the resu
 
 ## 6.2 Photo-Card Verification Pipeline
 
+> **Rework (2026-10-06).** Photo cards are submitted as an **image only**.
+> Gemini is the only extractor (EasyOCR, Tesseract, image preprocessing, OCR
+> source detection and the deterministic fallback extractor were removed). The
+> headline, verified source and printed date read from the card **are** the
+> claim. `ocr_extractions` became `photocard_extractions`.
+
 ### 6.2.1 Overview
 
-The photo-card feature (`backend/app/features/photocard/`) verifies a **screenshot of a news photo card** rather than typed text. It does not implement a second verification engine: after headline extraction the extracted headline goes through the **exact same 13-stage pipeline** documented in §6.1, always with `ClaimScope.HEADLINE_ONLY` (no body, no synthetic body), against the user's own `claimed_source_text` / `published_date`.
-
-Submission is **accepted fast and processed in the background**:
+The photo-card feature (`backend/app/features/photocard/`) verifies a **screenshot of a news photo card**. It does not implement a second verification engine: the headline read from the card goes through the **same** pipeline as a typed claim (§6.1), always `ClaimScope.HEADLINE_ONLY`.
 
 ```
-POST /photocard/verify/async   (image + claimed_source_text + published_date)
+POST /photocard/verify/async   (image only)
     validate → store image bytes in MinIO (503 if it cannot be stored — nothing
-    is accepted) → Submission(PHOTO_CARD, PENDING, owner = signed-in user) +
-    OcrExtraction(image key) + verification_jobs row, one transaction
-    → HTTP 202 {submission_id, status, phase, message}
-    ── server-side job (own DB session, bounded concurrency, restart-safe) ──
-    load stored ORIGINAL image → Gemini image extraction (≤3 attempts)
-    → only if every attempt failed: EasyOCR → source detection → deterministic
-      extractor → PermanentJobError if nothing usable (submission FAILED with a
-      reason; never Source Not Found / a headline verdict — no check ran)
-    → submission.headline + identity hash set → shared S01–S13 pipeline
-      (or reuse of an identical fresh result copied onto THIS submission)
-    → EXPERT_REVIEW + notification
-GET  /photocard/{id}           current state by id: pending / processing (phase) /
-                                failed (reason) / the saved result — owner-only
-                                until the submission is reviewable
+    is accepted) → Submission(PHOTO_CARD, PENDING, owner, no headline/source/date)
+    + photocard_extractions(image key, status PENDING) + verification_jobs row,
+    one transaction → HTTP 202 {submission_id, status, phase, message}
+    ── server-side job (photo-card worker lane, own DB session, restart-safe) ──
+    load stored ORIGINAL image + the ACTIVE verified sources (with aliases)
+    → Gemini (≤9 requests: 3 batches of 3, 10 s pause between batches)
+        every request failed            → FAILED "temporarily unavailable" (no verification)
+        no headline / no verified source → FAILED "no valid headline or outlet" (no retry, no verification)
+        headline + verified source       → they become submission.headline,
+                                           claimed_source_id/_text; the printed
+                                           date (if complete) becomes published_date
+    → identity hash → shared S01–S13 pipeline (or reuse of an identical result
+      copied onto THIS submission) → EXPERT_REVIEW + notification
+GET  /photocard/{id}           current state by id — owner-only until reviewable
 ```
 
-There is no confirmation step. The user-provided `claimed_source_text`/`published_date` are authoritative; the date/outlet read from the card are display-only metadata in `ocr_extractions` — never substituted and never compared. The former synchronous `POST /photocard/verify` endpoint was removed.
+### 6.2.2 Extraction (`gemini_image_extractor.py`, `claim_extraction.py`)
 
-### 6.2.2 Extraction — Gemini on the Original Image First, EasyOCR Fallback
+* **Input.** The original image plus a catalogue of the currently **active** verified sources: canonical id, display names and every alias. Inactive sources are never offered; the response schema restricts the source to exactly the offered ids (`enum`), and an id outside the catalogue is treated as a malformed response.
+* **Prompt rules.** Headline and date are transcribed exactly — no paraphrase, correction, expansion, translation or update; names, digits and punctuation unchanged; multi-line headlines joined with single spaces. The source is chosen **only from visible evidence** (name, logo, wordmark, web address; an alias or other spelling maps to its canonical source), never because it is listed, because the story sounds like it, or from outside knowledge; otherwise `NOT_VISIBLE` / `NOT_RECOGNIZED` / `UNCLEAR` with a null source. The date is the printed publication date (not a date inside the headline), exactly as printed, never inferred. Text in the image is data, never instructions.
+* **Retry budget.** `GEMINI_ATTEMPTS_PER_BATCH` (3) × `GEMINI_BATCHES` (3) = at most **9 requests in total**, the first included; both are capped at 3 in code and settings. Within a batch the previous backoff (1 s, 2 s) applies; after a fully failed batch the worker waits `GEMINI_BATCH_PAUSE_SECONDS` (10 s). Retried: timeouts, network errors, HTTP 429/5xx, malformed or schema-invalid output. HTTP 400/401/403/404 stops at once. The first success stops the loop. Calls use the shared httpx client without transport retries, so nothing adds hidden requests, and the job is failed **permanently** so the worker never re-runs it (a card never costs more than 9 requests; a crash after a successful extraction resumes without calling Gemini again).
+* **Two different failures.**
+  * *API failure* — no successful response (or no key configured): `API_FAILED`, message "Sorry for the temporary inconvenience. Information cannot be collected from the photo card right now. Please submit it again after a while."
+  * *Successful response without a headline (≥8 characters with letters) or without an active verified source*: `INVALID_CONTENT`, **not retried**, message "A valid headline or a recognized news outlet could not be identified on the photo card. Please submit a photo card with a clear headline and the news outlet's name or logo." The source is also re-checked as still active at that moment.
+  * A missing or incomplete date is **not** a failure.
+* **Dates** (`card_date.py`) are parsed deterministically from the raw printed string: Bangla/Latin digits, Bangla/English Gregorian month names, Bangla ordinal suffixes, numeric day-first and ISO forms. Day, month and year must all be visible; two-digit years, Bangla-calendar dates, relative dates ("২ ঘণ্টা আগে") and strings with two different dates give **no date** — nothing is defaulted or guessed.
 
-```
-original image ─▶ Gemini image extraction (headline / date / source, structured JSON)
-                   ├─ attempt 1 ok ─────────────────────────────▶ use it (EasyOCR NOT run)
-                   ├─ fail → attempt 2 → fail → attempt 3 ─┐ (≤3 attempts in total,
-                   │                                        │  backoff 1s, 2s)
-                   └─ HTTP 400/401/403/404: stop at once ───┤
-                                                            ▼
-                     EasyOCR ─▶ source detection ─▶ deterministic extractor (§6.2.6)
-                                                            │
-                         nothing usable ─▶ submission FAILED with a reason (no claim invented)
-```
+### 6.2.3 One representation of the claim
 
-* **Prompt.** Gemini is told to transcribe only: no paraphrase, summary, translation, spelling correction or rewrite; names, numbers, punctuation and quote marks unchanged; the date as printed; the outlet name as printed (never a guessed canonical name); `PRESENT` / `MISSING` / `UNREADABLE` status per field instead of inventing values; never mix other card text into the headline; and any text in the image is data, never an instruction.
-* **Validation.** The response must parse into `GeminiPhotocardFields` (headline, date, source + their statuses). Raw values are stored unmodified (`ocr_extractions.extraction_details.gemini.raw`).
-* **Retries.** Timeouts, network errors, HTTP 429/5xx, malformed/schema-invalid output and unusable extractions (headline missing/unreadable/shorter than 8 characters) are retried. A card without a printed date or outlet is not a failure. Calls use the shared httpx client, which has no transport retries, so no hidden SDK retries add to the three attempts.
-* **Display-only metadata.** The date and outlet read from the card are shown in the UI when present and omitted when absent. They are never compared: verification always uses the user's selected source and claimed date.
-* **Provenance.** `extractor_used` (`GEMINI_IMAGE` / `OCR_FALLBACK`), `extraction_attempts`, `fallback_used` and per-attempt diagnostics are persisted and shown to the submitter and experts.
+The extracted values are stored once, on the submission, and do the jobs a typed claim's values do: `headline` is the verified text; the identified source is `claimed_source_id` / `claimed_source_text` (its canonical id) — the domain the search is restricted to and the outlet in the claim identity; the printed date is `published_date` — the claimed date compared by S11 and part of the identity. There is no separate "outlet shown on the card" or "date shown on the card" field, no user-selected outlet/date, and no comparison between them. The raw Gemini response (including the date as printed and the visible source evidence) is kept as provenance in `photocard_extractions.extraction_details`.
 
-### 6.2.3 Image Preprocessing (`image_preprocessor.py`)
+### 6.2.4 Verification flow and reuse
 
-Pillow + NumPy only, no OpenCV. Photo cards are screenshots and social graphics, not scans: text is crisp but often small and tightly kerned, and the Bangla *matra* (the connecting headline stroke) merges adjacent glyphs under downscaling or JPEG blur, which makes a single fixed recipe unreliable. Instead, a handful of cheap variants are rendered and the OCR stage below picks whichever one it could actually read the most Bangla from:
+`PhotoCardService.process_submission` (run by the job worker) builds the context from the submission row and runs `build_photocard_stages` (the shared stages with the photo-card normaliser) with the submission id threaded through, so the result is written to **this** `PHOTO_CARD` submission. If S02 finds an identical, complete, current-version result that still exists in the database (§6.3.6), its automated result is copied onto the requester's own submission (`duplicate_of_submission_id`, `verification_results.reused_from_submission_id`); no new search runs.
 
-| Variant | Transform | Why |
-|---|---|---|
-| `grayscale` | Resize into the OCR-friendly resolution band (LANCZOS upscale / BICUBIC downscale) + autocontrast | Safe baseline |
-| `sharpened` | Unsharp mask (radius 2.0, 180%) | Re-separates matra-merged glyphs |
-| `binarised` | Otsu threshold (computed from the 256-bin histogram, between-class variance maximised) | Helps flat-background infographic cards; hurts photographic ones, hence a candidate rather than the default |
-| `inverted` | Only rendered when border-pixel sampling detects light-on-dark | Engines trained on dark-on-light text read nothing at all otherwise |
-
-### 6.2.4 Bangla OCR (`ocr_service.py`)
-
-Two interchangeable engines sit behind one interface, neither imported at module load time — a missing engine surfaces as a `503 OcrEngineUnavailableError` on the photo-card endpoints instead of failing application startup:
-
-- **Tesseract** (preferred, `OEM 1` LSTM engine) — tried at every configured PSM mode per variant, requires the `ben` traineddata.
-- **EasyOCR** (fallback) — a general multilingual reader.
-
-Every preprocessing variant is recognized by the resolved engine independently; the outputs are not merged but scored and the single best one wins:
-
-```
-score = bangla_char_count × (0.5 + 0.5 × confidence) × bangla_ratio(text)
-```
-
-Character count alone would favour a pass that hallucinates long garbage strings; confidence alone would favour a pass that reads three clean words and misses the headline — the product balances both. Each engine's raw output (Tesseract's per-word boxes grouped by `page/block/par/line`; EasyOCR's independent boxes bucketed by vertical overlap and sorted left-to-right within each bucket) is normalised into the same `OcrLine`/`OcrOutput` shape so the rest of the pipeline is engine-agnostic. A card with no recoverable Bangla text raises `422 OcrFailedError`.
-
-### 6.2.5 Source Detection (`source_detector.py`)
-
-Nearly every circulating photo card brands itself — a logo, a wordmark strip, a page URL — and that branding *is* the claim's source attribution. Detection deliberately runs against the **raw** OCR text (before claim cleaning throws the banner away), against **active verified sources only**, in three strategies of decreasing trust:
-
-1. **`domain`** (confidence 1.0) — a URL or bare domain in the text resolves to a source's canonical name or base-URL domain. Unambiguous when present.
-2. **`exact`** (~0.94–1.0) — a source's display name, English name, canonical name, or any configured alias appears verbatim in the normalised text.
-3. **`fuzzy`** (Levenshtein ratio against a configurable threshold) — carries the detector in practice, since Bangla OCR routinely drops a matra or splits a conjunct (`প্রথম আলো` → `প্রথম আল৷`). Candidate windows are anchored to word starts (not every character offset) and tried at several lengths around the needle's own length, since OCR both drops and inserts characters relative to the true match span.
-
-Results are ranked by confidence; the top one becomes `primary_source` only if it clears a separate, higher auto-select threshold — otherwise the user is shown all candidates and must pick (or type) one manually, with a warning surfaced.
-
-### 6.2.6 Deterministic Extraction — the Fallback (`ocr_fallback_extractor.py`)
-
-Runs only after every Gemini attempt failed (or Gemini is not configured), on EasyOCR output (§6.2.2). It also returns the first date-looking line exactly as OCR read it (display only). A typical card is mostly *not* the claim: outlet banner, one-to-three-line headline, maybe a supporting sentence, then a band of chrome — social handles, "লাইক / শেয়ার / ফলো করুন" prompts, bylines, photo credits, timestamps, engagement counters, copyright, ads. Feeding all of that into the verification pipeline dilutes the embedding and drags entity matching toward the outlet's own name rather than the claim. Each OCR line is classified and, if it's chrome, tagged with why:
-
-| Noise reason | Trigger |
-|---|---|
-| `empty`, `no_letters`, `too_short`, `low_confidence`, `not_bangla` | Structural / quality filters |
-| `url`, `social_handle`, `phone_number` | Pure decoration once stripped |
-| `social_cta`, `byline`, `credit`, `timestamp`, `engagement`, `copyright`, `advert` | Pattern-matched furniture specific to Bangladeshi news cards |
-| `source_banner` | Line is (or Levenshtein-close to) a detected outlet's own name — matched using the **same** `source_names` list §6.2.5 detected, so a banner is removed using whichever garbled spelling OCR actually produced |
-
-Surviving lines are joined and segmented into headline + body: the headline grows line-by-line while it still reads as a headline (stops at a sentence-ending danda/punctuation once long enough to stand alone, or at a hard character cap), with a single-paragraph fallback that splits on the first sentence boundary instead when the card has no visual line breaks. Only the headline half of this output is ever used — the business rule is headline-only verification, so the body this extractor segments out is computed but never passed into `build_context()` (§6.2.7). Its warnings (very short headline, low-confidence lines dropped, no survivable text) are carried into `OcrExtraction.extraction_warnings` for expert visibility rather than surfaced for a user to correct — there is no correction step.
-
-### 6.2.7 Verification Flow (shared pipeline reuse)
-
-`PhotoCardService.process_submission` (run by the job worker) drives the same stage list `VerificationService` uses (`build_verification_stages`), with the submission id threaded into the `PipelineContext` so the result is written to **this** `PHOTO_CARD` submission — never to a second text submission. `claim_scope=HEADLINE_ONLY` is passed explicitly; `build_context()` drops any body passed alongside it.
-
-Result reuse never shares a submission across owners. If S02 finds an identical, complete, fresh, current-version verification (identity = normalised headline + canonical source + claimed date + scope + pipeline version, §6.3.6), the service copies its **automated** result onto the requester's own photo-card submission (`duplicate_of_submission_id`, `verification_results.reused_from_submission_id`). The submission's owner, type, image and OCR record are untouched, the detail page works exactly as for a fresh result, and expert state is read through from the original at display time rather than copied.
-
-Every downstream stage is the literal code of §6.1, so a photo card gets the same Source / Headline Alteration / Date result; for HEADLINE_ONLY the body similarity comparison is skipped. The automated system never computes an overall verdict for either flow.
-
-### 6.2.8 Database & Storage
-
-No photo-card-specific result table exists — a photo card's AI verdict lives in the **same** `verification_results` row shape a typed claim uses:
+### 6.2.5 Database & Storage
 
 | Table | Role for a photo card |
 |---|---|
-| `submissions` | One row, `submission_type = PHOTO_CARD`, owner = submitter, `headline` NULL until extracted (`body_text` always NULL — headline-only), `claimed_source_text`/`published_date` exactly as the user provided them, `status` (`PENDING` → `PROCESSING` → `EXPERT_REVIEW` → `FINALIZED`/`ESCALATED`, or `FAILED`), `processing_phase`, `failure_reason` |
-| `ocr_extractions` | Photo-card-only: `image_object_key`, `raw_extracted_text`, `ocr_confidence`, `ocr_engine`, plus extraction provenance added for the Gemini flow — `extractor_used` (`GEMINI` \| `EXISTING_FALLBACK`), `extraction_model_version`, `extraction_warnings` (JSONB array, includes any source/date conflict text), `detected_source_text`, `detected_date_text`. `confirmed_text`/`is_confirmed` are legacy columns from the removed two-step flow — the unattended flow never sets them — kept rather than dropped since historical rows still carry them |
-| `verification_results` | AI result, **immutable** once written by S13 (same columns as §6.1.8). Expert review never overwrites these — it writes `final_source_status`/`final_content_status`/`final_date_status`/`overall_verdict`/`finalized_at` instead, so the AI's original call stays inspectable after the claim moves to Expert Verified |
-| `retrieved_articles`, `source_evidence_queries` | Evidence trail — identical shape and population path to a typed claim |
-| MinIO (object storage) | The uploaded card image, under its own `photocard/{submission_id}/{filename}` prefix — a separate bucket-service instance (`PhotoCardStorageService`) from the multimodal feature's images, so the two can be retained/expired/audited independently. Served back only as short-lived presigned URLs, never a public path. Kept even if the submission row is later deleted as an S02 cache-hit orphan (§6.2.7) |
+| `submissions` | `submission_type = PHOTO_CARD`, owner, `headline` / `claimed_source_id` / `claimed_source_text` / `published_date` NULL until the card is read, then the values read from it; `body_text` always NULL; `status`, `processing_phase` (QUEUED/EXTRACTING/VERIFYING/DONE/FAILED), `failure_reason` |
+| `photocard_extractions` | One row per card: `image_object_key`, `status` (PENDING / SUCCEEDED / API_FAILED / INVALID_CONTENT; FAILED for legacy OCR-era failures), `failure_code`, `model_version`, `attempts`, `extraction_details` (per-attempt outcomes with batch numbers, the validated raw response, the parsed date; OCR-era values of migrated rows under `legacy`) |
+| `verification_results`, `retrieved_articles`, `source_evidence_queries` | Identical to a typed claim (§6.1.8) |
+| MinIO | The card image under `photocard/{submission_id}/{filename}`, served only as presigned URLs |
 
-`content_hash` starts as a provisional per-submission value (`pending:<id>`, which can never collide with a real claim identity) because the headline is unknown at acceptance; after extraction it is replaced by `compute_claim_hash(headline, canonical source, HEADLINE_ONLY, published_date=…)` — the same identity function used everywhere (§6.3.6). The `ocr_extractions` row is created at acceptance (image key, empty OCR text) and filled in by the job, so a pending card already has its image.
+Migration `e5c9a3f7b1d2` renamed the table (with its PK/FK/indexes), dropped `raw_extracted_text`, `confirmed_text`, `ocr_confidence` (+ CHECK), `ocr_engine`, `is_confirmed`, `fallback_used`, `extraction_warnings`, `extractor_used`, `detected_source_text`, `detected_date_text`, renamed `extraction_model_version`/`extraction_attempts` to `model_version`/`attempts`, and added `status`/`failure_code`. Existing rows get a status from their old provenance and keep every dropped value under `extraction_details.legacy`; legacy submissions keep the outlet/date their submitter typed. The downgrade restores the old shape from `legacy`.
 
-### 6.2.9 Expert Review Integration
+### 6.2.6 Expert Review and display
 
-Photo-card submissions are **not** a special case in `ExpertReviewService` — they're one of the two `_STRUCTURED_TYPES` (alongside `SOURCE_BASED`), sharing every code path described in §4's voting engine: the same Source→Content/Date hierarchical vote (Content/Date become N/A the moment Source's winning verdict is Not Found), the same Overall (Fake/Real/Misleading/Altered) vote every submission type casts, and the same weighted T/M/margin finalization, credibility updates, and audit logging.
+Photo cards share every expert-review code path with typed claims. The expert screen, Fact Explorer and result page show the card image (presigned URL) with the headline, outlet and date read from it — once, as the claimed values. Failures show the specific message above; reading attempts are listed under "Reading details".
 
-The one genuinely photo-card-specific piece is **image surfacing**: the expert queue and review-detail screen fetch the submission's `OcrExtraction.image_object_key` and resolve it to a presigned MinIO URL (`ExpertReviewService._fetch_photocard_image_url`, wired through a `PhotoCardStorageService` instance injected alongside the existing multimodal one) so an expert reviewing a photo-card claim sees the actual card next to the AI's preliminary verdict and the matched source article — not just OCR'd text in isolation. The Fact Explorer and the public claim-detail page (`GET /photocard/{id}`) surface the same image as a thumbnail/hero image respectively, through the identical presigned-URL mechanism.
-
-Because the AI verdict and the expert-finalized verdict are stored in separate columns (§6.2.8), a photo card's detail page can show both: the AI's original call, and — once expert review completes — a "experts changed this verdict from X to Y" banner when the two disagree (`VerificationResponse.was_overridden`).
-
-### 6.2.10 Error Handling & Degradation
+### 6.2.7 Error Handling
 
 | Failure | Behaviour |
 |---|---|
-| Claimed source (given at upload time) doesn't resolve | `404 SourceNotFoundError` at acceptance — before anything is stored |
-| Image cannot be stored | `503` at acceptance — nothing is accepted (the job reads the image back from storage) |
-| No OCR engine installed/configured | The job retries (bounded), then the submission is `FAILED` with a reason; app still boots (lazy init) |
-| Image has no recoverable Bangla text | Submission `FAILED` ("No readable Bangla text…"), owner notified once |
-| Gemini unconfigured, HTTP/timeout error, malformed JSON response, empty headline, or ungrounded headline | Silent fallback to the deterministic extractor (§6.2.2) — never surfaced as an error |
-| Neither Gemini nor the fallback produces a headline ≥8 chars | Submission `FAILED` with a reason (sync endpoint: `422 PhotoCardExtractionFailedError`) — distinct from Source Not Found / Content Altered; no automated result exists |
-| MinIO read-back fails inside the job | Retryable; after the attempt limit the submission is `FAILED` with a reason |
-| No active verified source matched the card's own branding | `detected_sources` is empty in the response; verification still proceeds against the user-provided `claimed_source_text` |
-| Card's own text implies a different source/date than provided | Not an error — recorded in `extraction_warnings`, surfaced as `source_date_conflict: true`; verification proceeds against the user-provided values |
-| Pipeline stage failure (S01/S11/S12 critical) | The job is retried up to `max_attempts`, then the submission is `FAILED` with a reason and the owner is notified once; non-critical stage failures degrade exactly as for a typed claim |
+| Image cannot be stored | `503` at acceptance — nothing is accepted |
+| Gemini unreachable / quota / 5xx / malformed for all 9 requests, or no API key | Submission `FAILED` with the temporary-unavailability message; owner notified once; no verification |
+| Card shows no readable headline or no active verified outlet | Submission `FAILED` with the "no valid headline or outlet" message after one successful response; no retry; no verification |
+| MinIO read-back fails inside the job | Retryable (before any Gemini call); after the job's attempt limit the submission is `FAILED` |
+| Pipeline stage failure | As for a typed claim |
 
-### 6.2.11 Observability
+### 6.2.8 Observability
 
-Since the pipeline runs the literal same stage instances as `POST /verify`, every photo-card verification gets the same per-stage timings and `structlog` events described in §6.1.6. The extraction half adds `gemini_extraction_attempt_failed` (attempt, outcome, status code), `gemini_extraction_succeeded`, `photocard_gemini_failed_using_ocr_fallback`, `photocard_extraction_failed` and `photocard_processed` (extraction method), and the same per-attempt outcomes are persisted in `ocr_extractions.extraction_details`.
+The extraction adds `gemini_extraction_attempt_failed` (attempt, batch, outcome, status code), `gemini_extraction_batch_failed_pausing`, `gemini_extraction_succeeded`, `photocard_gemini_failed`, `photocard_extraction_rejected`, `photocard_extraction_failed` and `photocard_processed`; per-attempt outcomes are persisted in `photocard_extractions.extraction_details`.
 
 ## 6.3 Scope-aware Verification, Decisions, Identity and Background Jobs (2026-10-02)
 
@@ -381,7 +313,7 @@ The scope-aware S08 measurements, the S10 sentence-level alteration checks and t
 
 One function — `compute_claim_hash` — builds identity from sorted-key JSON of: pipeline version, claim scope, normalised headline, normalised body (only when the scope has one), canonical source, claimed date. It is used by S01, `register_claim`, S02, S12 and the photo-card flow. Bumping `VERIFICATION_PIPELINE_VERSION` (now `v3.0-scope-aware`) changes every hash, so results from the defective logic are never served as current (and historical rows carry `pipeline_version = NULL` and are never reused); nothing is deleted.
 
-A result is reusable only if: current pipeline version; **no INCOMPLETE dimension** (an incomplete check is never a settled answer); and fresh — `REDIS_TTL_CLAIM_RESULT` (24 h) or the shorter `REDIS_TTL_NOT_FOUND_RESULT` (1 h) for NOT_FOUND, enforced in the database fallback as well as for Redis pointers; expert-finalized results are exempt. `force_refresh` bypasses registration reuse, S02 (Redis and DB) and the search-result cache. A reuse hit never shares a submission: the requester's own submission receives a copy of the automated result (`ResultReuseService.materialize`) and expert state is read through from the original.
+A result is reusable only if: it still exists in the database (a Redis pointer is honoured only after its submission is re-read; a pointer to a deleted submission is rejected and invalidated); current pipeline version; it is an original computation, not a copy (copies carry `analysis_details.reused_from_submission_id`, which survives the SET NULL of their links when the original is deleted, so a deleted original is never resurrected through a copy); and **no INCOMPLETE dimension** (an incomplete check is never a settled answer). **There is no age limit** (revised 2026-10-06): a claim already checked is answered with its saved result and is never re-run to look for newer evidence; the former `force_refresh` option was removed from the API, the website and the extension. The Redis TTLs now only bound how long a pointer lives; the database fallback finds older results. A reuse hit never shares a submission: the requester's own submission receives a copy of the automated result (`ResultReuseService.materialize`) and expert state is read through from the original.
 
 ### 6.3.7 Persistence, versioning and expert snapshots
 
@@ -389,7 +321,7 @@ S12 persists to the submission the run was started for — never adopting anothe
 
 ### 6.3.8 Background jobs and recovery
 
-`verification_jobs` is a database-backed queue: the job row is committed **with** the accepted submission, workers claim with `FOR UPDATE SKIP LOCKED`, heartbeat every 30 s, and a RUNNING job whose heartbeat is older than `JOBS_STALE_AFTER_SECONDS` (default 120) is re-claimed — so jobs accepted before a restart, or left RUNNING by a crash, are recovered (latency ≤ the stale window). Retries are bounded (`max_attempts=3`); permanent failures (unreadable image, no headline) fail immediately with a user-presentable `failure_reason` and exactly one `VERIFICATION_FAILED` notification. Concurrency is bounded (`JOBS_MAX_CONCURRENT`, default 2). This is a DB queue drained by an **in-process** worker, not a separate broker: it survives restarts but only drains while an application process is running. Execution depends on nothing from the originating request (own session; image read back from storage).
+`verification_jobs` is a database-backed queue: the job row is committed **with** the accepted submission, workers claim with `FOR UPDATE SKIP LOCKED`, heartbeat every 30 s, and a RUNNING job whose heartbeat is older than `JOBS_STALE_AFTER_SECONDS` (default 120) is re-claimed — so jobs accepted before a restart, or left RUNNING by a crash, are recovered (latency ≤ the stale window). Retries are bounded (`max_attempts=3`); permanent failures (unreadable image, no headline) fail immediately with a user-presentable `failure_reason` and exactly one `VERIFICATION_FAILED` notification. Concurrency is bounded per lane: photo-card jobs run in their own lane (`JOBS_PHOTOCARD_MAX_CONCURRENT`, default 4) and every other job in the general lane (`JOBS_MAX_CONCURRENT`, default 2), so a card waiting out Gemini batch pauses never delays text or text & image jobs, and vice versa. This is a DB queue drained by an **in-process** worker, not a separate broker: it survives restarts but only drains while an application process is running. Execution depends on nothing from the originating request (own session; image read back from storage).
 
 ### 6.3.9 API summary
 

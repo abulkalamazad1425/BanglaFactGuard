@@ -38,7 +38,6 @@ class PipelineContext:
     raw_news_body: str | None = None
     raw_claimed_source: str = ""
     published_date: date | None = None
-    force_refresh: bool = False
     claim_scope: ClaimScope = ClaimScope.HEADLINE_ONLY
 
     normalized_headline: str = ""
@@ -156,7 +155,6 @@ def build_context(
     *,
     news_body: str | None = None,
     published_date: date | None = None,
-    force_refresh: bool = False,
     submission_id: uuid.UUID | None = None,
     submitter_id: uuid.UUID | None = None,
     claim_scope: ClaimScope | None = None,
@@ -182,7 +180,6 @@ def build_context(
         raw_news_body=news_body if resolved_scope == ClaimScope.HEADLINE_WITH_BODY else None,
         raw_claimed_source=claimed_source,
         published_date=published_date,
-        force_refresh=force_refresh,
         claim_scope=resolved_scope,
         pipeline_start_time=datetime.utcnow(),
     )

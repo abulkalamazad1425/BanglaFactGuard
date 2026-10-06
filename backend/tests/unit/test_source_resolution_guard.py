@@ -14,8 +14,7 @@ warning and continued rather than failing.
 Covers:
 - resolve_claimed_source() resolves via URL/domain, static alias, and DB
   registry, in that order, returning None only when all three miss.
-- VerificationService.verify() / register_claim() and PhotoCardService.verify()
-  all raise SourceNotFoundError BEFORE any Submission row is created or any
+- VerificationService.verify() / register_claim() raise SourceNotFoundError BEFORE any Submission row is created or any
   pipeline/search work begins, when the claimed source can't be resolved.
 - s01_normalizer.py's own defense-in-depth: if an unresolved source somehow
   reaches the pipeline anyway, it raises rather than silently continuing with
@@ -28,7 +27,6 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.core.exceptions import NormalizationError, SourceNotFoundError
-from app.features.photocard.service import PhotoCardService
 from app.features.sources.resolution import resolve_claimed_source
 from app.features.verification.pipeline.context import build_context
 from app.features.verification.pipeline.stages.s01_normalizer import InputNormalizerStage
@@ -135,32 +133,6 @@ async def test_register_claim_proceeds_normally_when_source_resolves():
 
     svc.submission_repo.create.assert_awaited_once()
     assert submission_id == created.id
-
-
-# ─── PhotoCardService.accept_upload() — same guard ──────────────────────
-
-
-@pytest.mark.asyncio
-async def test_photocard_upload_raises_source_not_found_before_storing_or_extracting():
-    svc = PhotoCardService.__new__(PhotoCardService)
-    svc.submission_repo = AsyncMock()
-    svc.ocr_repo = AsyncMock()
-    svc.source_repo = AsyncMock()
-    svc.source_repo.resolve_source.return_value = None
-    svc.ocr_service = AsyncMock()
-    svc.storage = AsyncMock()
-
-    with pytest.raises(SourceNotFoundError):
-        await svc.accept_upload(
-            image_bytes=b"fake-image-bytes",
-            original_filename="card.jpg",
-            claimed_source_text="কোনো অজানা পত্রিকা",
-            published_date=None,
-        )
-
-    svc.storage.upload.assert_not_awaited()
-    svc.ocr_service.recognize.assert_not_awaited()
-    svc.submission_repo.create.assert_not_awaited()
 
 
 # ─── s01_normalizer.py — defense-in-depth backstop ──────────────────────

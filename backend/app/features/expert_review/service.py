@@ -40,7 +40,7 @@ from app.features.multimodal.models import MultimodalAnalysis
 from app.features.multimodal.repository import MultimodalAnalysisRepository
 from app.features.multimodal.storage_service import MultimodalStorageService
 from app.features.photocard.storage_service import PhotoCardStorageService
-from app.features.submissions.models import OcrExtraction, Submission
+from app.features.submissions.models import PhotocardExtraction, Submission
 from app.features.submissions.repository import SubmissionRepository
 from app.features.verification.models import VerificationResult
 from app.features.verification.repository import ResultRepository
@@ -139,11 +139,11 @@ class ExpertReviewService:
             return None
         from sqlalchemy import select
 
-        stmt = select(OcrExtraction).where(OcrExtraction.submission_id == submission_id)
-        ocr = (await self._session.execute(stmt)).scalar_one_or_none()
-        if ocr is None:
+        stmt = select(PhotocardExtraction).where(PhotocardExtraction.submission_id == submission_id)
+        extraction = (await self._session.execute(stmt)).scalar_one_or_none()
+        if extraction is None:
             return None
-        return await self._photocard_storage.get_presigned_url(ocr.image_object_key)
+        return await self._photocard_storage.get_presigned_url(extraction.image_object_key)
 
     async def _fetch_top_article(self, result: VerificationResult | None) -> ExpertTopArticle | None:
         if result is None or result.top_article_id is None:

@@ -22,7 +22,7 @@ from app.core.constants import (
 from app.features.multimodal.models import MultimodalAnalysis
 from app.features.multimodal.storage_service import MultimodalStorageService
 from app.features.photocard.storage_service import PhotoCardStorageService
-from app.features.submissions.models import OcrExtraction, Submission
+from app.features.submissions.models import PhotocardExtraction, Submission
 from app.features.submissions.repository import SubmissionRepository
 from app.features.verification.models import VerificationResult
 from app.features.verification.headline_status import headline_status_for_result
@@ -323,12 +323,12 @@ async def search_explorer(
 
         image_url = None
         if submission.submission_type == SubmissionType.PHOTO_CARD and photocard_storage:
-            ocr_stmt = select(OcrExtraction).where(
-                OcrExtraction.submission_id == submission.id
+            extraction_stmt = select(PhotocardExtraction).where(
+                PhotocardExtraction.submission_id == submission.id
             )
-            ocr = (await session.execute(ocr_stmt)).scalar_one_or_none()
-            if ocr:
-                image_url = await photocard_storage.get_presigned_url(ocr.image_object_key)
+            extraction = (await session.execute(extraction_stmt)).scalar_one_or_none()
+            if extraction:
+                image_url = await photocard_storage.get_presigned_url(extraction.image_object_key)
 
         items.append(
             ExplorerItem(

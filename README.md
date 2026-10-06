@@ -20,7 +20,7 @@ The website and extension use English interface text while accepting Bangla clai
 | Method | Submission type | Inputs | Automated output |
 | --- | --- | --- | --- |
 | Text & source | `SOURCE_BASED` | Headline, claimed source; optional body and claimed publication date | Separate source, Headline Alteration and date findings; four body similarity scores when a body is given |
-| Photo card | `PHOTO_CARD` | Image, claimed source; optional claimed publication date | Headline read from the image (Gemini, EasyOCR fallback) verified against the supplied source |
+| Photo card | `PHOTO_CARD` | Image only | Headline, news outlet (an active verified source) and printed date read from the image by Gemini; the headline is verified against that outlet |
 | Text & image | `MULTIMODAL` | Headline, body text and image | Preliminary `FAKE` / `NON_FAKE` prediction |
 
 ### Source-based and photocard verification
@@ -32,7 +32,7 @@ The shared verification pipeline normalizes the claim, resolves its source, chec
 
 Evidence search creates source-restricted queries from the full headline, all its keywords, and the first 3 and first 4 keywords when available (dated variants of the headline and all-keyword queries when a date is supplied; at most six queries). Both the outlet's own internal search (when configured) and Google search run for every supported publisher. Off-source results are rejected.
 
-Photo cards: Gemini reads the headline, date and outlet name from the original image (transcription only, at most three attempts in total). Only if every attempt fails, EasyOCR and the deterministic extractor are used. Only the headline is verified; the date and outlet read from the card are shown for reference and never compared — the user's selected source and claimed date are used. See [Headline Alteration, body similarity and photo-card extraction](docs/headline-alteration-and-body-similarity.md) and [backend configuration](backend/.env.example).
+Photo cards: the user submits only the image. Gemini reads the headline exactly as printed, identifies the outlet among the active verified sources (by name, logo or alias; never guessed) and reads the printed date (never inferred). These become the claim's headline, claimed outlet and claimed date. At most 9 Gemini requests are made (3 batches of 3, 10 s apart); if none succeeds, or the card shows no headline or no recognised outlet, the submission fails with an explanatory message and no verification runs. There is no OCR fallback. A claim that was already checked is answered with its saved result while that result exists in the database. See [Headline Alteration, body similarity and photo-card extraction](docs/headline-alteration-and-body-similarity.md) and [backend configuration](backend/.env.example).
 
 Result dimensions are independent:
 
@@ -74,7 +74,7 @@ PENDING -> PROCESSING -> EXPERT_REVIEW -> FINALIZED
                          (admin resolution)
 ```
 
-An automated result can be ready while expert review is still pending. Source-based and photocard checks may take around 1.5–2 minutes, but completion time depends on retrieval, OCR, models and server load.
+An automated result can be ready while expert review is still pending. Source-based and photocard checks may take around 1.5–2 minutes, but completion time depends on retrieval, image reading, models and server load.
 
 All three methods use the website detail route `/verify/{submission_id}`. The page resolves the submission type before fetching its report.
 
@@ -137,7 +137,7 @@ The root-level `index.html` and `multimodal.html` are older standalone clients. 
 - PostgreSQL with a database and credentials configured for this project.
 - Docker Compose for the included Redis and MinIO services, or equivalent local services.
 - Desktop Chrome 120 or newer for the extension.
-- Bangla OCR support and trained multimodal weights for the corresponding verification methods.
+- A Gemini API key (photo cards) and trained multimodal weights for the corresponding verification methods.
 
 Commands below use PowerShell. Run each application's commands from its own directory, in separate terminals. On Linux/macOS, use the virtual environment's `bin/python` in place of `.venv\Scripts\python.exe`.
 
@@ -163,7 +163,7 @@ The additional install supplies authentication/validation dependencies imported 
 | `MINIO_*` | Image storage endpoint, credentials and bucket |
 | `AUTH_SECRET_KEY` | JWT signing key; separate from the general `SECRET_KEY` setting |
 | `ML_*` | Local embedding, NLI, NER models and device |
-| `OCR_*` | OCR engine configuration, including `OCR_TESSERACT_CMD` where needed |
+| `GEMINI_*` | Photo-card reading: API key, model, request batches (`GEMINI_ATTEMPTS_PER_BATCH`, `GEMINI_BATCHES`, `GEMINI_BATCH_PAUSE_SECONDS`) |
 | `GEMINI_API_KEY`, `GEMINI_MODEL_NAME` | Optional Gemini headline extraction |
 | `MULTIMODAL_MODEL_DIR`, `MULTIMODAL_DEVICE`, `MULTIMODAL_LOAD_ON_STARTUP` | Trained text/image model loading |
 | `JOBS_ENABLED`, `JOBS_*` | Background worker and recovery settings |
@@ -184,7 +184,7 @@ docker compose up -d
 
 The source-seeding script creates or updates the registered publisher configurations used by source-based verification. Migrations include an initial admin seed; use an appropriately configured admin account for administration. Public registration creates a regular user account.
 
-For photocard OCR, install Tesseract with Bengali language data and configure its executable path when needed, or use the configured EasyOCR option. Initial model/OCR use may download weights.
+Photo cards need `GEMINI_API_KEY`; no OCR engine is used. Initial model use may download weights.
 
 Set `MULTIMODAL_MODEL_DIR` to a directory containing:
 
@@ -322,7 +322,7 @@ and political-organization labels are mapped to ORG.
 
 Completed text/source and photo-card executions store measured stage durations
 under `verification_results.analysis_details.timings`, including S13 and,
-for photo cards, separate image-download/OCR/source-detection/headline-extraction
+for photo cards, separate image-download/Gemini-extraction
 times. Cached executions record only the stages actually executed. Queue wait,
 final transaction commit, expert review and notification polling are not stage
 processing time. Historical results without measurements cannot be broken down
@@ -339,7 +339,7 @@ Model reference: [BanglaTag model card](https://huggingface.co/arafatfahim/Bangl
 - **Unknown claimed source:** seed/configure the registered publisher list and use the publisher named in the claim, not necessarily the website displaying it.
 - **Claims remain queued:** keep `JOBS_ENABLED=true`, the backend running, and the database/model/storage dependencies available.
 - **Multimodal unavailable:** check trained weights, tokenizer, model startup logs and MinIO.
-- **Photocard extraction fails:** check the Gemini key/model (`GEMINI_*`), the EasyOCR installation and image readability; the result page lists each failed attempt. Failed extraction is not a fake-news verdict.
+- **Photocard extraction fails:** "temporarily unavailable" means no Gemini request succeeded (check `GEMINI_*`, quota and network); "no valid headline or recognized outlet" means the card was read but lacks a clear headline or an active verified outlet. The result page lists each failed attempt. Failed extraction is not a fake-news verdict.
 - **Facebook capture access error:** activate the Facebook tab and click the pinned extension toolbar icon before selecting an area. A side-panel button alone does not grant access to a new site.
 - **No desktop notification:** check extension ON state, its notification preference, Chrome/OS permissions and Activity. Browser sleep/closure can delay delivery.
 - **Connection settings missing:** the extension intentionally exposes them only to admins.

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { summarize, cropRect, validateDraft, EMPTY_DRAFT, resultLine, headlinePreview } from '../src/shared.js';
+import { summarize, cropRect, validateDraft, EMPTY_DRAFT, resultLine, headlinePreview, MODES, HttpError, isDeletedOnServer, recheckDelay } from '../src/shared.js';
 
 test('source absent and incomplete never imply FAKE or a final verdict',()=>{
   for(const source_status of ['NOT_FOUND','INCOMPLETE']) {
@@ -30,9 +30,9 @@ test('queued multimodal claims have no prediction and failures preserve the expl
   const s=summarize('PHOTO_CARD',{status:'FAILED',failure_reason:'Unreadable card'});
   assert.equal(s.stage,'failed');assert.equal(s.error,'Unreadable card');
 });
-test('photocard warnings and extracted headline survive summary mapping',()=>{
-  const s=summarize('PHOTO_CARD',{status:'EXPERT_REVIEW',headline:'Extracted claim',published_date:'2026-01-02',extraction_warnings:['Date conflict','Detected source mismatch','Headline OCR is uncertain'],verification:{source_status:'CONFIRMED',date_status:'MISMATCHED'}});
-  assert.equal(s.headline,'Extracted claim');assert.deepEqual(s.warnings,['Headline OCR is uncertain']);assert.equal(s.final,false);
+test('photocard extracted headline and card date drive the summary',()=>{
+  const s=summarize('PHOTO_CARD',{status:'EXPERT_REVIEW',headline:'Extracted claim',published_date:'2026-01-02',claimed_source_text:'prothomalo.com',verification:{source_status:'CONFIRMED',date_status:'MISMATCHED'}});
+  assert.equal(s.headline,'Extracted claim');assert.deepEqual(s.warnings,[]);assert.equal(s.final,false);
   assert.ok(s.lines.includes('Date: Mismatched')); // Actual source verification is unaffected.
   const noDate=summarize('PHOTO_CARD',{status:'EXPERT_REVIEW',verification:{source_status:'CONFIRMED',date_status:'MISMATCHED',headline_status:'EXACT_MATCHED'}});
   assert.deepEqual(noDate.lines,['Headline: Exact Matched']); // no claimed date -> no date comparison
@@ -63,9 +63,8 @@ test('required fields per submission type, with the failing field named',()=>{
   assert.equal(fieldOf({type:'SOURCE_BASED',headline:'Short',claimed_source_text:''}),'claimed_source_text');
   assert.equal(fieldOf({type:'SOURCE_BASED',headline:'abc',claimed_source_text:'x'}),'headline');
   assert.equal(fieldOf({type:'SOURCE_BASED',headline:'Valid headline',claimed_source_text:'Prothom Alo'}),null); // body optional
-  assert.equal(fieldOf({type:'PHOTO_CARD',claimed_source_text:'Prothom Alo'},null),'image');
-  assert.equal(fieldOf({type:'PHOTO_CARD',claimed_source_text:' '},img),'claimed_source_text');
-  assert.equal(fieldOf({type:'PHOTO_CARD',claimed_source_text:'Prothom Alo'},img),null);
+  assert.equal(fieldOf({type:'PHOTO_CARD'},null),'image');
+  assert.equal(fieldOf({type:'PHOTO_CARD',claimed_source_text:''},img),null); // image only: outlet/date come from the card
   assert.equal(fieldOf({type:'MULTIMODAL',headline:'',body_text:'long enough text'},img),'headline');
   assert.equal(fieldOf({type:'MULTIMODAL',headline:'H',body_text:'long enough text'},null),'image');
 });
@@ -73,4 +72,17 @@ test('headline preview keeps five words and adds ... only when longer',()=>{
   assert.equal(headlinePreview('  এক  দুই\u00a0তিন চার পাঁচ ছয় '),'এক দুই তিন চার পাঁচ...');
   assert.equal(headlinePreview('one two three four five'),'one two three four five');
   assert.equal(headlinePreview(''),'');
+});
+
+test('input modes are always Text & source, Photo card, Text & image',()=>{
+  assert.deepEqual(MODES.map(([,label])=>label),['Text & source','Photo card','Text & image']);
+});
+test('only the server naming this submission as not found counts as a deletion',()=>{
+  assert.equal(isDeletedOnServer(new HttpError('x',404,{error:'not_found',submission_id:'abc'}),'abc'),true);
+  assert.equal(isDeletedOnServer(new HttpError('x',404,'Not Found'),'abc'),false);
+  assert.equal(isDeletedOnServer(new HttpError('x',404,{error:'not_found',submission_id:'zzz'}),'abc'),false);
+  assert.equal(isDeletedOnServer(new HttpError('x',500,{error:'not_found',submission_id:'abc'}),'abc'),false);
+  assert.equal(isDeletedOnServer(Error('offline'),'abc'),false);
+  assert.ok(recheckDelay('FINALIZED')>recheckDelay('EXPERT_REVIEW') && recheckDelay('EXPERT_REVIEW')>recheckDelay('PENDING'));
+  assert.ok(Number.isFinite(recheckDelay('FAILED')));
 });

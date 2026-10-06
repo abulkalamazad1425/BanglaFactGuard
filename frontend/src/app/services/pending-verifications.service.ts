@@ -17,6 +17,14 @@ import { SubmissionStatus, SubmissionType } from '../models/verification.model';
  */
 
 const STORAGE_KEY = 'bfg.pending_verifications';
+
+/** True only for the API's own "this submission does not exist" answer (HTTP
+ *  404 naming this submission) - not for a generic 404, outage or offline. */
+export function isDeletedOnServer(err: unknown, submissionId: string): boolean {
+  const e = err as { status?: number; error?: { detail?: { error?: string; submission_id?: string } } } | null;
+  const detail = e?.error?.detail;
+  return e?.status === 404 && detail?.error === 'not_found' && String(detail?.submission_id) === submissionId;
+}
 const POLL_INTERVAL_MS = 4000;
 /** Stop chasing a job that is clearly never going to report back. */
 const MAX_POLL_MS = 10 * 60 * 1000;
@@ -112,8 +120,12 @@ export class PendingVerificationsService {
             this.updateStatus(item.submissionId, res.status);
           }
         },
-        // A single failed poll is not meaningful — the next tick retries.
-        error: () => undefined,
+        // A submission deleted on the server is forgotten here too (never
+        // reported as ready or failed). Any other failed poll is not
+        // meaningful - the next tick retries.
+        error: (err) => {
+          if (isDeletedOnServer(err, item.submissionId)) this.dismiss(item.submissionId);
+        },
       });
     }
   }

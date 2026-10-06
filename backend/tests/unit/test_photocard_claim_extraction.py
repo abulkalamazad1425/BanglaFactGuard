@@ -1,10 +1,13 @@
-"""Photo-card extraction: Gemini first (original image, <= 3 attempts), EasyOCR fallback."""
+"""Photo-card extraction: Gemini only (original image + active verified
+sources with aliases), at most 9 requests in 3 batches, no OCR/fallback;
+API failure and a card without headline/verified source are distinct."""
 
 from __future__ import annotations
 
 import base64
 import json
 import uuid
+from datetime import date
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -13,13 +16,16 @@ import pytest
 
 from app.core.config import GeminiSettings
 from app.features.photocard import claim_extraction
+from app.features.photocard.card_date import parse_card_date
 from app.features.photocard.claim_extraction import (
-    METHOD_GEMINI,
-    METHOD_OCR_FALLBACK,
+    API_FAILURE_MESSAGE,
+    INVALID_CONTENT_MESSAGE,
+    STATUS_API_FAILED,
+    STATUS_INVALID_CONTENT,
+    STATUS_SUCCEEDED,
     PhotocardClaimExtractor,
 )
-from app.features.photocard.gemini_image_extractor import extract_with_gemini
-from app.features.photocard.ocr_service import OcrFailedError, OcrLine, OcrOutput
+from app.features.photocard.gemini_image_extractor import SourceOption, extract_with_gemini
 
 IMAGE = b"\x89PNG\r\n\x1a\n" + b"original-card-pixels"
 HEADLINE = "‘ফার্নান্দেজই পর্তুগালের সবচেয়ে বড় প্রতীক’, বললেন রোনালদো — ৩টি গোল!"
@@ -28,8 +34,8 @@ HEADLINE = "‘ফার্নান্দেজই পর্তুগালে�
 def gemini_body(**fields) -> dict:
     payload = {
         "headline": HEADLINE, "headline_status": "PRESENT",
+        "source": "prothomalo.com", "source_status": "IDENTIFIED", "source_evidence": "প্রথম আলো logo",
         "date": "০৫ অক্টোবর, ২০২৬", "date_status": "PRESENT",
-        "source": "প্রথম আলো", "source_status": "PRESENT",
     }
     payload.update(fields)
     return {"candidates": [{"content": {"parts": [{"text": json.dumps(payload, ensure_ascii=False)}]}}]}
@@ -55,138 +61,227 @@ class Gemini:
         return httpx.AsyncClient(transport=httpx.MockTransport(self.handler))
 
 
-SETTINGS = GeminiSettings(api_key="test-key", model_name="gemini-test", max_attempts=3, retry_base_delay_seconds=0)
+SETTINGS = GeminiSettings(api_key="test-key", model_name="gemini-test", retry_base_delay_seconds=0)
+CATALOGUE = [SourceOption("prothomalo.com", "প্রথম আলো", "Prothom Alo", ("প্র.আ.", "palo"))]
 
 
-async def no_sleep(_):
-    return None
+class Sleeps:
+    def __init__(self) -> None:
+        self.calls: list[float] = []
+
+    async def __call__(self, seconds: float) -> None:
+        self.calls.append(seconds)
 
 
-def fake_ocr(text: str = "প্রথম আলো\nঢাকায় ভারী বৃষ্টিতে জলাবদ্ধতা, দুর্ভোগে নগরবাসী\n০৫ অক্টোবর ২০২৬"):
-    ocr = MagicMock()
-    ocr.recognize = AsyncMock(return_value=OcrOutput(
-        text=text, lines=[OcrLine(t, 0.95) for t in text.splitlines()], confidence=0.9, engine="easyocr", variant="original",
-    ))
-    return ocr
-
-
-def source_repo():
-    prothom_alo = SimpleNamespace(
-        id=uuid.uuid4(), canonical_name="prothomalo.com", base_url="https://www.prothomalo.com",
-        display_name="প্রথম আলো", display_name_en="Prothom Alo", aliases=[],
+def _source(canonical="prothomalo.com", *, active=True, **kw):
+    return SimpleNamespace(
+        id=uuid.uuid4(), canonical_name=canonical, is_active=active,
+        display_name=kw.get("display_name", "প্রথম আলো"), display_name_en=kw.get("display_name_en", "Prothom Alo"),
+        aliases=kw.get("aliases", ["প্রথম আলো", "Prothom-Alo"]),
     )
+
+
+def source_repo(*sources):
+    sources = sources or (_source(), _source("jugantor.com", display_name="যুগান্তর", display_name_en="Jugantor", aliases=["দৈনিক যুগান্তর"]))
     repo = MagicMock()
-    repo.list_active = AsyncMock(return_value=[prothom_alo])
+    repo.list_active = AsyncMock(return_value=[s for s in sources if s.is_active])
+    repo.get_by_canonical_name = AsyncMock(side_effect=lambda c: next((s for s in sources if s.canonical_name == c), None))
     return repo
 
 
-def extractor(gemini: Gemini, ocr=None, monkeypatch=None, settings: GeminiSettings = SETTINGS):
-    if monkeypatch is not None:
-        real = claim_extraction.get_settings()
-        monkeypatch.setattr(claim_extraction, "get_settings", lambda: real.model_copy(update={"gemini": settings}))
-    return PhotocardClaimExtractor(
-        ocr_service=ocr or fake_ocr(), source_repo=source_repo(), http_client=gemini.client(), sleep=no_sleep,
-    )
+def extractor(gemini: Gemini, monkeypatch, *, repo=None, settings: GeminiSettings = SETTINGS, sleep=None):
+    real = claim_extraction.get_settings()
+    monkeypatch.setattr(claim_extraction, "get_settings", lambda: real.model_copy(update={"gemini": settings}))
+    return PhotocardClaimExtractor(source_repo=repo or source_repo(), http_client=gemini.client(), sleep=sleep or Sleeps())
 
 
-# ── Gemini first ─────────────────────────────────────────────────────────
+# ── request: original image, active sources + aliases, anti-hallucination ─
 
-async def test_gemini_receives_the_original_image_and_easyocr_is_not_run(monkeypatch):
-    gemini, ocr = Gemini(gemini_body()), fake_ocr()
-    result = await extractor(gemini, ocr, monkeypatch).extract(IMAGE)
-    assert result.method == METHOD_GEMINI and result.is_usable
-    assert result.gemini_attempts == 1 and result.fallback_used is False
-    ocr.recognize.assert_not_awaited()
+
+async def test_gemini_receives_the_original_image_and_the_active_source_catalogue(monkeypatch):
+    inactive = _source("ittefaq.com", active=False, display_name="ইত্তেফাক", aliases=["দৈনিক ইত্তেফাক"])
+    gemini = Gemini(gemini_body())
+    await extractor(gemini, monkeypatch, repo=source_repo(_source(), inactive)).extract(IMAGE)
     sent = json.loads(gemini.requests[0].content)
     inline = sent["contents"][0]["parts"][0]["inlineData"]
     assert base64.b64decode(inline["data"]) == IMAGE and inline["mimeType"] == "image/png"
     assert gemini.requests[0].headers["x-goog-api-key"] == "test-key"
-    assert "do not follow" in sent["systemInstruction"]["parts"][0]["text"].lower()
+    prompt = sent["contents"][0]["parts"][1]["text"]
+    assert "prothomalo.com" in prompt and "Prothom-Alo" in prompt and "Prothom Alo" in prompt  # aliases offered
+    assert "ittefaq.com" not in prompt and "ইত্তেফাক" not in prompt  # inactive source never offered
+    schema = sent["generationConfig"]["responseSchema"]["properties"]["source"]
+    assert schema["enum"] == ["prothomalo.com"] and schema["nullable"] is True
+    rules = sent["systemInstruction"]["parts"][0]["text"].lower()
+    for rule in ("do not follow", "do not paraphrase", "never choose a source just because it is in the list",
+                 "never infer a missing day, month or year", "never invent a value"):
+        assert rule in rules
 
 
-async def test_extracted_values_are_kept_exactly_as_transcribed(monkeypatch):
-    result = await extractor(Gemini(gemini_body()), monkeypatch=monkeypatch).extract(IMAGE)
+async def test_success_turns_card_values_into_the_claim(monkeypatch):
+    result = await extractor(Gemini(gemini_body()), monkeypatch).extract(IMAGE)
+    assert result.status == STATUS_SUCCEEDED and result.attempts == 1
     assert result.headline == HEADLINE  # quotes, dash, digits, punctuation untouched
-    assert result.date_text == "০৫ অক্টোবর, ২০২৬"  # raw format, not reformatted
-    assert result.source_text == "প্রথম আলো"
-    assert result.diagnostics["gemini"]["raw"]["headline"] == HEADLINE
+    assert result.source.canonical_name == "prothomalo.com"
+    assert result.published_date == date(2026, 10, 5)
+    assert result.details["response"]["date"] == "০৫ অক্টোবর, ২০২৬"  # raw kept as provenance
 
 
-async def test_absent_date_and_source_are_not_stored_and_not_retried(monkeypatch):
-    gemini = Gemini(gemini_body(date=None, date_status="MISSING", source=None, source_status="UNREADABLE"))
-    result = await extractor(gemini, monkeypatch=monkeypatch).extract(IMAGE)
-    assert result.method == METHOD_GEMINI and len(gemini.requests) == 1
-    assert result.date_text is None and result.source_text is None
+async def test_alias_maps_to_the_canonical_source(monkeypatch):
+    gemini = Gemini(gemini_body(source="jugantor.com", source_evidence="দৈনিক যুগান্তর"))
+    result = await extractor(gemini, monkeypatch).extract(IMAGE)
+    assert result.status == STATUS_SUCCEEDED and result.source.canonical_name == "jugantor.com"
 
 
-async def test_second_attempt_success_stops_retrying(monkeypatch):
-    gemini = Gemini(httpx.Response(503, text="busy"), gemini_body())
-    ocr = fake_ocr()
-    result = await extractor(gemini, ocr, monkeypatch).extract(IMAGE)
-    assert result.method == METHOD_GEMINI and result.gemini_attempts == 2
-    assert len(gemini.requests) == 2
-    ocr.recognize.assert_not_awaited()
+async def test_missing_date_is_not_a_failure_and_never_defaulted(monkeypatch):
+    for body in (gemini_body(date=None, date_status="MISSING"), gemini_body(date="৫ অক্টোবর", date_status="PRESENT")):
+        gemini = Gemini(body)
+        result = await extractor(gemini, monkeypatch).extract(IMAGE)
+        assert result.status == STATUS_SUCCEEDED and result.published_date is None
+        assert len(gemini.requests) == 1
+
+
+# ── 8: successful response without headline / verified source: cancel, no retry ─
+
+
+@pytest.mark.parametrize("fields, code", [
+    ({"headline": None, "headline_status": "MISSING"}, "headline_missing"),
+    ({"headline": "ছোট", "headline_status": "PRESENT"}, "headline_missing"),
+    ({"source": None, "source_status": "NOT_VISIBLE"}, "source_not_identified"),
+    ({"source": None, "source_status": "NOT_RECOGNIZED"}, "source_not_identified"),
+    ({"source": "prothomalo.com", "source_status": "UNCLEAR"}, "source_not_identified"),
+    ({"headline": None, "headline_status": "UNREADABLE", "source": None, "source_status": "UNCLEAR"},
+     "headline_and_source_missing"),
+])
+async def test_card_without_headline_or_verified_source_is_rejected_without_retry(monkeypatch, fields, code):
+    gemini = Gemini(gemini_body(**fields), gemini_body())
+    result = await extractor(gemini, monkeypatch).extract(IMAGE)
+    assert result.status == STATUS_INVALID_CONTENT and result.failure_code == code
+    assert result.failure_message == INVALID_CONTENT_MESSAGE
+    assert len(gemini.requests) == 1  # a successful response is never retried
+    assert result.headline is None and result.source is None
+
+
+async def test_source_deactivated_meanwhile_is_not_accepted(monkeypatch):
+    src = _source()
+    repo = source_repo(src)
+    repo.get_by_canonical_name = AsyncMock(return_value=_source(active=False))
+    result = await extractor(Gemini(gemini_body()), monkeypatch, repo=repo).extract(IMAGE)
+    assert result.status == STATUS_INVALID_CONTENT and result.failure_code == "source_not_identified"
+
+
+async def test_an_id_outside_the_catalogue_is_a_malformed_response_never_a_source():
+    gemini = Gemini(gemini_body(source="ittefaq.com"), gemini_body())
+    outcome = await extract_with_gemini(IMAGE, sources=CATALOGUE, http_client=gemini.client(),
+                                        settings=SETTINGS, sleep=Sleeps())
+    assert [a.outcome for a in outcome.attempts] == ["malformed_response", "success"]
+    assert outcome.fields.identified_source() == "prothomalo.com"
+
+
+# ── 7: retry budget - 3 batches of 3, 10 s pause, at most 9 requests ─────
+
+
+async def test_nine_failures_make_exactly_nine_requests_with_two_batch_pauses(monkeypatch):
+    gemini = Gemini(*[httpx.Response(503, text="busy")] * 12)
+    sleeps = Sleeps()
+    settings = GeminiSettings(api_key="k", retry_base_delay_seconds=1.0)
+    result = await extractor(gemini, monkeypatch, settings=settings, sleep=sleeps).extract(IMAGE)
+    assert len(gemini.requests) == 9 and result.attempts == 9  # 9 in total, the first one included
+    assert result.status == STATUS_API_FAILED and result.failure_message == API_FAILURE_MESSAGE
+    assert sleeps.calls == [1.0, 2.0, 10.0, 1.0, 2.0, 10.0, 1.0, 2.0]
+    assert [a["batch"] for a in result.details["attempts"]] == [1, 1, 1, 2, 2, 2, 3, 3, 3]
+
+
+@pytest.mark.parametrize("success_at", [1, 3, 4, 9])
+async def test_first_success_stops_the_remaining_attempts(monkeypatch, success_at):
+    gemini = Gemini(*[httpx.Response(500)] * (success_at - 1), gemini_body(), gemini_body())
+    result = await extractor(gemini, monkeypatch).extract(IMAGE)
+    assert result.status == STATUS_SUCCEEDED and len(gemini.requests) == success_at == result.attempts
 
 
 @pytest.mark.parametrize("failure", [
     httpx.Response(500, text="err"),
+    httpx.Response(429, text="quota"),
     httpx.ReadTimeout("slow"),
+    httpx.ConnectError("down"),
     {"candidates": [{"content": {"parts": [{"text": "not json"}]}}]},
     {"candidates": [{"content": {"parts": [{"text": "{\"headline\": \"x\"}"}]}}]},
 ])
-async def test_each_failure_kind_is_retried(monkeypatch, failure):
+async def test_each_request_failure_kind_is_retried(monkeypatch, failure):
     gemini = Gemini(failure, gemini_body())
-    result = await extractor(gemini, monkeypatch=monkeypatch).extract(IMAGE)
-    assert result.method == METHOD_GEMINI and len(gemini.requests) == 2
+    result = await extractor(gemini, monkeypatch).extract(IMAGE)
+    assert result.status == STATUS_SUCCEEDED and len(gemini.requests) == 2
 
 
-async def test_unusable_headline_is_retried():
-    gemini = Gemini(gemini_body(headline=None, headline_status="UNREADABLE"), gemini_body(headline="ছোট"), gemini_body())
-    outcome = await extract_with_gemini(IMAGE, http_client=gemini.client(), settings=SETTINGS, sleep=no_sleep)
-    assert outcome.succeeded and [a.outcome for a in outcome.attempts] == [
-        "unusable_extraction", "unusable_extraction", "success"]
-
-
-# ── fallback ─────────────────────────────────────────────────────────────
-
-async def test_three_failed_attempts_then_easyocr_and_the_fallback_extractor(monkeypatch):
-    gemini = Gemini(httpx.Response(500), httpx.Response(502), httpx.Response(503), gemini_body())
-    ocr = fake_ocr()
-    result = await extractor(gemini, ocr, monkeypatch).extract(IMAGE)
-    assert len(gemini.requests) == 3  # never a 4th Gemini call
-    ocr.recognize.assert_awaited_once_with(IMAGE)
-    assert result.method == METHOD_OCR_FALLBACK and result.fallback_used and result.gemini_attempts == 3
-    assert result.headline == "ঢাকায় ভারী বৃষ্টিতে জলাবদ্ধতা, দুর্ভোগে নগরবাসী"  # banner + date line removed
-    assert result.date_text == "০৫ অক্টোবর ২০২৬"
-    assert result.source_text == "প্রথম আলো"
-    assert [a["outcome"] for a in result.diagnostics["gemini"]["attempts"]] == ["http_error"] * 3
-
-
-async def test_permanent_request_error_goes_straight_to_the_fallback(monkeypatch):
+async def test_permanent_request_error_stops_at_once(monkeypatch):
     gemini = Gemini(httpx.Response(401, text="bad key"), gemini_body())
-    result = await extractor(gemini, monkeypatch=monkeypatch).extract(IMAGE)
-    assert len(gemini.requests) == 1 and result.method == METHOD_OCR_FALLBACK
+    result = await extractor(gemini, monkeypatch).extract(IMAGE)
+    assert len(gemini.requests) == 1 and result.status == STATUS_API_FAILED
 
 
-async def test_unconfigured_gemini_makes_no_call_and_uses_the_fallback(monkeypatch):
+async def test_unconfigured_gemini_makes_no_call_and_fails_as_unavailable(monkeypatch):
     gemini = Gemini(gemini_body())
-    result = await extractor(gemini, monkeypatch=monkeypatch, settings=GeminiSettings(api_key="")).extract(IMAGE)
-    assert gemini.requests == [] and result.method == METHOD_OCR_FALLBACK and result.gemini_attempts == 0
-    assert result.diagnostics["gemini"]["skipped_reason"]
+    result = await extractor(gemini, monkeypatch, settings=GeminiSettings(api_key="")).extract(IMAGE)
+    assert gemini.requests == [] and result.status == STATUS_API_FAILED and result.details["skipped_reason"]
 
 
-async def test_every_path_failing_is_an_explicit_failure_not_a_fabricated_claim(monkeypatch):
-    ocr = MagicMock()
-    ocr.recognize = AsyncMock(side_effect=OcrFailedError(message="nothing readable"))
-    gemini = Gemini(httpx.Response(500), httpx.Response(500), httpx.Response(500))
-    result = await extractor(gemini, ocr, monkeypatch).extract(IMAGE)
-    assert not result.is_usable and result.method is None and result.headline == ""
-    assert result.failure_reason and result.fallback_used
-    assert len(gemini.requests) == 3
+async def test_never_more_than_nine_requests_even_if_configured_higher():
+    gemini = Gemini(*[httpx.Response(500)] * 30)
+    settings = GeminiSettings.model_construct(**{**SETTINGS.model_dump(), "attempts_per_batch": 10, "batches": 10})
+    outcome = await extract_with_gemini(IMAGE, sources=CATALOGUE, http_client=gemini.client(),
+                                        settings=settings, sleep=Sleeps())
+    assert len(gemini.requests) == 9 and not outcome.succeeded
 
 
-async def test_never_more_than_three_attempts_even_if_configured_higher():
-    gemini = Gemini(*[httpx.Response(500)] * 6)
-    settings = GeminiSettings.model_construct(**{**SETTINGS.model_dump(), "max_attempts": 9})
-    outcome = await extract_with_gemini(IMAGE, http_client=gemini.client(), settings=settings, sleep=no_sleep)
-    assert len(gemini.requests) == 3 and not outcome.succeeded
+def test_settings_cap_the_budget_at_nine():
+    assert GeminiSettings().max_requests == 9 and GeminiSettings().batch_pause_seconds == 10.0
+    with pytest.raises(ValueError):
+        GeminiSettings(attempts_per_batch=4)
+    with pytest.raises(ValueError):
+        GeminiSettings(batches=4)
+
+
+# ── 6: dates are parsed, never guessed ───────────────────────────────────
+
+
+@pytest.mark.parametrize("raw, expected", [
+    ("০৫ অক্টোবর, ২০২৬", date(2026, 10, 5)),
+    ("৫ই অক্টোবর ২০২৬", date(2026, 10, 5)),
+    ("২১শে ফেব্রুয়ারি ২০২৪", date(2024, 2, 21)),
+    ("প্রকাশ: ১লা মে, ২০২৫ | ১০:৩০", date(2025, 5, 1)),
+    ("October 5, 2026", date(2026, 10, 5)),
+    ("5 Oct 2026", date(2026, 10, 5)),
+    ("০৫/১০/২০২৬", date(2026, 10, 5)),  # day first
+    ("05.10.2026", date(2026, 10, 5)),
+    ("2026-10-05", date(2026, 10, 5)),
+    ("শনিবার, ০৪ অক্টোবর ২০২৫", date(2025, 10, 4)),
+])
+def test_card_dates_parse(raw, expected):
+    assert parse_card_date(raw) == expected
+
+
+@pytest.mark.parametrize("raw", [
+    None, "", "৫ অক্টোবর", "অক্টোবর ২০২৬", "২ ঘণ্টা আগে", "আজ", "০৫/১০/২৬", "২০ আশ্বিন ১৪৩৩",
+    "31/02/2026", "০৫ অক্টোবর ২০২৬, আপডেট ০৬ অক্টোবর ২০২৬",
+])
+def test_incomplete_or_ambiguous_dates_are_not_guessed(raw):
+    assert parse_card_date(raw) is None
+
+
+def _quota_429(quota_id: str) -> httpx.Response:
+    return httpx.Response(429, json={"error": {"code": 429, "status": "RESOURCE_EXHAUSTED", "details": [
+        {"@type": "type.googleapis.com/google.rpc.QuotaFailure",
+         "violations": [{"quotaId": quota_id, "quotaValue": "20"}]}]}})
+
+
+async def test_daily_quota_429_stops_at_once_instead_of_spending_more_requests(monkeypatch):
+    gemini = Gemini(_quota_429("GenerateRequestsPerDayPerProjectPerModel-FreeTier"), gemini_body())
+    result = await extractor(gemini, monkeypatch).extract(IMAGE)
+    assert len(gemini.requests) == 1 and result.status == STATUS_API_FAILED
+    assert result.failure_message == API_FAILURE_MESSAGE
+    assert [a["outcome"] for a in result.details["attempts"]] == ["quota_exhausted"]
+
+
+async def test_per_minute_429_is_still_retried(monkeypatch):
+    gemini = Gemini(_quota_429("GenerateRequestsPerMinutePerProjectPerModel-FreeTier"), gemini_body())
+    result = await extractor(gemini, monkeypatch).extract(IMAGE)
+    assert len(gemini.requests) == 2 and result.status == STATUS_SUCCEEDED

@@ -39,15 +39,47 @@ describe('PhotoCardComponent (background submission)', () => {
     fixture.detectChanges();
     const cmp = fixture.componentInstance;
     cmp.selectedFile = new File(['x'], 'card.png', { type: 'image/png' });
-    cmp.claimedSource = 'prothomalo.com';
     return { fixture, cmp };
   }
 
-  it('submits through the 202 background endpoint', () => {
-    const { cmp } = setup();
+  it('submits only the image through the 202 background endpoint', () => {
+    const { cmp, fixture } = setup();
     svc.submitAsync.and.returnValue(of(ACCEPTED));
+    const el = fixture.nativeElement as HTMLElement;
+    // no outlet, date or "check again" inputs: they are read from the card
+    expect(el.querySelector('select')).toBeNull();
+    expect(el.querySelector('input[type=date]')).toBeNull();
+    expect(el.querySelector('input[type=checkbox]')).toBeNull();
+    expect(el.textContent).not.toContain('updated evidence');
     cmp.verify();
-    expect(svc.submitAsync).toHaveBeenCalled();
+    expect(svc.submitAsync).toHaveBeenCalledOnceWith({ image: cmp.selectedFile! });
+  });
+
+  it('lists the active verified outlets in a collapsed section', () => {
+    TestBed.configureTestingModule({
+      imports: [PhotoCardComponent],
+      providers: [
+        provideRouter([]),
+        { provide: PhotoCardService, useValue: jasmine.createSpyObj('PhotoCardService', ['submitAsync']) },
+        { provide: PendingVerificationsService, useValue: jasmine.createSpyObj('PendingVerificationsService', ['track']) },
+        { provide: ToastService, useValue: jasmine.createSpyObj('ToastService', ['error']) },
+        { provide: SourceService, useValue: { listSources: () => of({ items: [
+          { canonical_name: 'jugantor.com', display_name: 'যুগান্তর', display_name_en: 'Jugantor', is_active: true },
+          { canonical_name: 'prothomalo.com', display_name: 'প্রথম আলো', display_name_en: 'Prothom Alo', is_active: true },
+          { canonical_name: 'old.com', display_name: 'পুরনো', is_active: false },
+        ] }) } },
+      ],
+    });
+    const fixture = TestBed.createComponent(PhotoCardComponent);
+    fixture.detectChanges();
+    const details = (fixture.nativeElement as HTMLElement).querySelector('.source-panel details') as HTMLDetailsElement;
+    expect(details).not.toBeNull();
+    expect(details.open).toBeFalse();
+    expect(details.querySelector('summary')!.textContent).toContain('Show the 2 active outlets');
+    const items = Array.from(details.querySelectorAll('li')).map((li) => li.textContent!.trim());
+    expect(items.length).toBe(2);
+    expect(items.join(' ')).toContain('Prothom Alo');
+    expect(items.join(' ')).not.toContain('পুরনো');
   });
 
   it('after acceptance the user can leave: shows a received state with links and does not poll', () => {
