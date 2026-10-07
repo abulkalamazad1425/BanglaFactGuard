@@ -4,12 +4,22 @@
   "description": "Submit Bangla text, photo cards and multimodal claims without leaving the page. Get notified when results are ready.",
   "version": "1.0.3",
   "minimum_chrome_version": "120",
-  "permissions": ["sidePanel", "activeTab", "scripting", "contextMenus", "storage", "alarms", "notifications"],
+  "permissions": [
+    "sidePanel",
+    "activeTab",
+    "scripting",
+    "contextMenus",
+    "storage",
+    "alarms",
+    "notifications"
+  ],
   "host_permissions": ["http://localhost/*", "http://127.0.0.1/*"],
   "optional_host_permissions": ["https://*/*"],
   "background": { "service_worker": "background.js", "type": "module" },
   "action": { "default_title": "Open BanglaFactGuard", "default_icon": "icon.png" },
   "icons": { "128": "icon.png" },
   "side_panel": { "default_path": "index.html" },
-  "content_security_policy": { "extension_pages": "script-src 'self'; object-src 'self'; base-uri 'none'" }
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; base-uri 'none'"
+  }
 }

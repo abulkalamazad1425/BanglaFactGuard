@@ -5,7 +5,7 @@ export default defineConfig({
   build: {
     rollupOptions: {
       input: { panel: 'index.html', background: 'src/background.js' },
-      output: { entryFileNames: '[name].js', chunkFileNames: 'chunks/[name]-[hash].js' }
-    }
-  }
+      output: { entryFileNames: '[name].js', chunkFileNames: 'chunks/[name]-[hash].js' },
+    },
+  },
 });
