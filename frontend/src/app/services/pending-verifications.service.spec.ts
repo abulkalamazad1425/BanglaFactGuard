@@ -8,9 +8,19 @@ describe('PendingVerificationsService', () => {
   beforeEach(() => localStorage.removeItem('bfg.pending_verifications'));
 
   it('recognises only the API naming this submission as not found', () => {
-    expect(isDeletedOnServer({ status: 404, error: { detail: { error: 'not_found', submission_id: 'a' } } }, 'a')).toBeTrue();
+    expect(
+      isDeletedOnServer(
+        { status: 404, error: { detail: { error: 'not_found', submission_id: 'a' } } },
+        'a',
+      ),
+    ).toBeTrue();
     expect(isDeletedOnServer({ status: 404, error: { detail: 'Not Found' } }, 'a')).toBeFalse();
-    expect(isDeletedOnServer({ status: 404, error: { detail: { error: 'not_found', submission_id: 'b' } } }, 'a')).toBeFalse();
+    expect(
+      isDeletedOnServer(
+        { status: 404, error: { detail: { error: 'not_found', submission_id: 'b' } } },
+        'a',
+      ),
+    ).toBeFalse();
     expect(isDeletedOnServer({ status: 0 }, 'a')).toBeFalse();
   });
 
@@ -27,9 +37,13 @@ describe('PendingVerificationsService', () => {
     status.and.returnValue(new Subject()); // first ticks: no answer yet
     svc.track('gone', 'A claim', 'prothomalo.com');
     svc.track('kept', 'Another claim', 'prothomalo.com');
-    status.and.callFake((id: string) => throwError(() => id === 'gone'
-      ? { status: 404, error: { detail: { error: 'not_found', submission_id: 'gone' } } }
-      : { status: 503, error: {} }));
+    status.and.callFake((id: string) =>
+      throwError(() =>
+        id === 'gone'
+          ? { status: 404, error: { detail: { error: 'not_found', submission_id: 'gone' } } }
+          : { status: 503, error: {} },
+      ),
+    );
     tick(4000);
     expect(svc.all().map((i) => i.submissionId)).toEqual(['kept']);
     expect(toast.success).not.toHaveBeenCalled();

@@ -12,68 +12,166 @@
     </header>
 
     @if (loading()) {
-      <div class="loading-overlay" role="status"><div class="spinner"></div><span class="sr-only">Loading dashboard</span></div>
+      <div class="loading-overlay" role="status"
+        ><div class="spinner"></div><span class="sr-only">Loading dashboard</span></div
+      >
     } @else if (error()) {
-      <section class="card state" role="alert"><h2>Dashboard unavailable</h2><p>The dashboard data could not be loaded.</p><button type="button" class="btn btn-primary" (click)="load()">Try again</button></section>
+      <section class="card state" role="alert"
+        ><h2>Dashboard unavailable</h2><p>The dashboard data could not be loaded.</p
+        ><button type="button" class="btn btn-primary" (click)="load()">Try again</button></section
+      >
     }
     @if (!loading() && !error() && data(); as d) {
-      <section class="card action-panel" [class.has-escalations]="d.escalated_count > 0" aria-labelledby="escalated-heading">
+      <section
+        class="card action-panel"
+        [class.has-escalations]="d.escalated_count > 0"
+        aria-labelledby="escalated-heading"
+      >
         <div class="panel-head">
           <div>
             <h2 id="escalated-heading">Escalated claims — your decision needed</h2>
           </div>
-          <span class="count-pill" [attr.aria-label]="d.escalated_count + ' escalated claims'">{{ d.escalated_count }}</span>
+          <span class="count-pill" [attr.aria-label]="d.escalated_count + ' escalated claims'">{{
+            d.escalated_count
+          }}</span>
         </div>
         @if (d.escalated_claims.length) {
           <ul class="claim-list">
             @for (c of d.escalated_claims; track c.submission_id) {
               <li>
                 <div class="claim-main">
-                  <a [routerLink]="['/admin/review-queue', c.submission_id]" class="claim-title" lang="bn">{{ headline(c) }}</a>
-                  <span class="meta">{{ methodLabel(c.submission_type) }} · {{ c.vote_count }} expert vote{{ c.vote_count === 1 ? '' : 's' }} · escalated {{ c.escalated_at ? (c.escalated_at | date:'d MMM, h:mm a') : '—' }}</span>
+                  <a
+                    [routerLink]="['/admin/review-queue', c.submission_id]"
+                    class="claim-title"
+                    lang="bn"
+                    >{{ headline(c) }}</a
+                  >
+                  <span class="meta"
+                    >{{ methodLabel(c.submission_type) }} · {{ c.vote_count }} expert vote{{
+                      c.vote_count === 1 ? '' : 's'
+                    }}
+                    · escalated
+                    {{ c.escalated_at ? (c.escalated_at | date: 'd MMM, h:mm a') : '—' }}</span
+                  >
                 </div>
-                <a [routerLink]="['/admin/review-queue', c.submission_id]" class="btn btn-primary btn-sm">Review &amp; decide</a>
+                <a
+                  [routerLink]="['/admin/review-queue', c.submission_id]"
+                  class="btn btn-primary btn-sm"
+                  >Review &amp; decide</a
+                >
               </li>
             }
           </ul>
-          @if (d.escalated_count > d.escalated_claims.length) {<a routerLink="/admin/review-queue" [queryParams]="{ state: 'escalated' }" class="more-link">See all {{ d.escalated_count }} escalated claims →</a>}
+          @if (d.escalated_count > d.escalated_claims.length) {
+            <a
+              routerLink="/admin/review-queue"
+              [queryParams]="{ state: 'escalated' }"
+              class="more-link"
+              >See all {{ d.escalated_count }} escalated claims →</a
+            >
+          }
         }
       </section>
 
-      <section class="kpi-grid"  aria-label="Key numbers">
-        <a class="kpi card" routerLink="/admin/review-queue" [queryParams]="{ state: 'review' }"><span class="kpi-num">{{ d.pending_review_count }}</span><span class="kpi-lbl">Claims in expert review</span></a>
-        <a class="kpi card" routerLink="/admin/review-queue" [queryParams]="{ state: 'escalated' }"><span class="kpi-num">{{ d.escalated_count }}</span><span class="kpi-lbl">Escalated to admin</span></a>
-        <div class="kpi card"><span class="kpi-num">{{ d.submissions_last_7_days }}</span><span class="kpi-lbl">Submissions, last 7 days</span></div>
-        <div class="kpi card"><span class="kpi-num">{{ d.finalized_last_7_days }}</span><span class="kpi-lbl">Final decisions, last 7 days</span></div>
-        <div class="kpi card"><span class="kpi-num">{{ d.processing_count }}</span><span class="kpi-lbl">Automated checks running</span></div>
-        <div class="kpi card"><span class="kpi-num">{{ d.failed_last_7_days }}</span><span class="kpi-lbl">Failed checks, last 7 days</span></div>
-        <a class="kpi card" routerLink="/admin/experts"><span class="kpi-num">{{ d.active_experts }} <small>/ {{ d.active_experts + d.inactive_experts }}</small></span><span class="kpi-lbl">Active experts ({{ d.inactive_experts }} inactive)</span></a>
-        <div class="kpi card"><span class="kpi-num">{{ d.total_submissions }}</span><span class="kpi-lbl">Submissions, all time</span></div>
+      <section class="kpi-grid" aria-label="Key numbers">
+        <a class="kpi card" routerLink="/admin/review-queue" [queryParams]="{ state: 'review' }"
+          ><span class="kpi-num">{{ d.pending_review_count }}</span
+          ><span class="kpi-lbl">Claims in expert review</span></a
+        >
+        <a class="kpi card" routerLink="/admin/review-queue" [queryParams]="{ state: 'escalated' }"
+          ><span class="kpi-num">{{ d.escalated_count }}</span
+          ><span class="kpi-lbl">Escalated to admin</span></a
+        >
+        <div class="kpi card"
+          ><span class="kpi-num">{{ d.submissions_last_7_days }}</span
+          ><span class="kpi-lbl">Submissions, last 7 days</span></div
+        >
+        <div class="kpi card"
+          ><span class="kpi-num">{{ d.finalized_last_7_days }}</span
+          ><span class="kpi-lbl">Final decisions, last 7 days</span></div
+        >
+        <div class="kpi card"
+          ><span class="kpi-num">{{ d.processing_count }}</span
+          ><span class="kpi-lbl">Automated checks running</span></div
+        >
+        <div class="kpi card"
+          ><span class="kpi-num">{{ d.failed_last_7_days }}</span
+          ><span class="kpi-lbl">Failed checks, last 7 days</span></div
+        >
+        <a class="kpi card" routerLink="/admin/experts"
+          ><span class="kpi-num"
+            >{{ d.active_experts }}
+            <small>/ {{ d.active_experts + d.inactive_experts }}</small></span
+          ><span class="kpi-lbl">Active experts ({{ d.inactive_experts }} inactive)</span></a
+        >
+        <div class="kpi card"
+          ><span class="kpi-num">{{ d.total_submissions }}</span
+          ><span class="kpi-lbl">Submissions, all time</span></div
+        >
       </section>
 
       <div class="two-col">
         <section class="card" aria-labelledby="pending-heading">
-          <div class="panel-head"><h2 id="pending-heading">Waiting longest in expert review</h2><a routerLink="/admin/review-queue" [queryParams]="{ state: 'review' }" class="more-link">Open queue →</a></div>
+          <div class="panel-head"
+            ><h2 id="pending-heading">Waiting longest in expert review</h2
+            ><a
+              routerLink="/admin/review-queue"
+              [queryParams]="{ state: 'review' }"
+              class="more-link"
+              >Open queue →</a
+            ></div
+          >
           @if (d.oldest_pending_reviews.length) {
             <ul class="claim-list compact">
               @for (c of d.oldest_pending_reviews; track c.submission_id) {
-                <li><div class="claim-main"><a [routerLink]="['/admin/review-queue', c.submission_id]" class="claim-title" lang="bn">{{ headline(c) }}</a>
-                  <span class="meta">{{ c.vote_count }} vote{{ c.vote_count === 1 ? '' : 's' }} · submitted {{ c.submitted_at | date:'d MMM, h:mm a' }}</span></div></li>
+                <li
+                  ><div class="claim-main"
+                    ><a
+                      [routerLink]="['/admin/review-queue', c.submission_id]"
+                      class="claim-title"
+                      lang="bn"
+                      >{{ headline(c) }}</a
+                    >
+                    <span class="meta"
+                      >{{ c.vote_count }} vote{{ c.vote_count === 1 ? '' : 's' }} · submitted
+                      {{ c.submitted_at | date: 'd MMM, h:mm a' }}</span
+                    ></div
+                  ></li
+                >
               }
             </ul>
-          } @else {<p class="empty">No claims are waiting for expert review.</p>}
+          } @else {
+            <p class="empty">No claims are waiting for expert review.</p>
+          }
         </section>
 
         <section class="card" aria-labelledby="decisions-heading">
-          <div class="panel-head"><h2 id="decisions-heading">Recent final decisions</h2><a routerLink="/dashboard" class="more-link">Fact Explorer →</a></div>
+          <div class="panel-head"
+            ><h2 id="decisions-heading">Recent final decisions</h2
+            ><a routerLink="/dashboard" class="more-link">Fact Explorer →</a></div
+          >
           @if (d.recent_decisions.length) {
             <ul class="claim-list compact">
               @for (c of d.recent_decisions; track c.submission_id) {
-                <li><div class="claim-main"><a [routerLink]="['/verify', c.submission_id]" class="claim-title" lang="bn">{{ headline(c) }}</a>
-                  <span class="meta">Decision: <strong>{{ verdictLabel(c.final_verdict) }}</strong>@if (c.decided_by_admin) { · <span class="tag">Admin decision</span>} · {{ c.finalized_at ? (c.finalized_at | date:'d MMM, h:mm a') : '' }}</span></div></li>
+                <li
+                  ><div class="claim-main"
+                    ><a [routerLink]="['/verify', c.submission_id]" class="claim-title" lang="bn">{{
+                      headline(c)
+                    }}</a>
+                    <span class="meta"
+                      >Decision: <strong>{{ verdictLabel(c.final_verdict) }}</strong>
+                      @if (c.decided_by_admin) {
+                        · <span class="tag">Admin decision</span>
+                      }
+                      · {{ c.finalized_at ? (c.finalized_at | date: 'd MMM, h:mm a') : '' }}</span
+                    ></div
+                  ></li
+                >
               }
             </ul>
-          } @else {<p class="empty">No final decisions yet.</p>}
+          } @else {
+            <p class="empty">No final decisions yet.</p>
+          }
         </section>
       </div>
 
@@ -83,11 +181,23 @@
           @if (d.recent_submissions.length) {
             <ul class="claim-list compact">
               @for (c of d.recent_submissions; track c.submission_id) {
-                <li><div class="claim-main"><a [routerLink]="claimLink(c)" class="claim-title" lang="bn">{{ headline(c) }}</a>
-                  <span class="meta">{{ methodLabel(c.submission_type) }} · <span class="status-text">{{ statusLabel(c.status) }}</span> · {{ c.submitted_at | date:'d MMM, h:mm a' }}</span></div></li>
+                <li
+                  ><div class="claim-main"
+                    ><a [routerLink]="claimLink(c)" class="claim-title" lang="bn">{{
+                      headline(c)
+                    }}</a>
+                    <span class="meta"
+                      >{{ methodLabel(c.submission_type) }} ·
+                      <span class="status-text">{{ statusLabel(c.status) }}</span> ·
+                      {{ c.submitted_at | date: 'd MMM, h:mm a' }}</span
+                    ></div
+                  ></li
+                >
               }
             </ul>
-          } @else {<p class="empty">No submissions yet.</p>}
+          } @else {
+            <p class="empty">No submissions yet.</p>
+          }
         </section>
 
         <section class="card" aria-labelledby="activity-heading">
@@ -95,34 +205,71 @@
           @if (d.recent_activity.length) {
             <ul class="claim-list compact">
               @for (a of d.recent_activity; track $index) {
-                <li><div class="claim-main"><span><strong>{{ a.actor }}</strong> {{ a.kind === 'ADMIN_DECISION' ? 'made the final decision' : 'voted' }} <strong>{{ verdictLabel(a.overall_vote) }}</strong></span>
-                  <a [routerLink]="['/verify', a.submission_id]" class="meta claim-link" lang="bn">{{ headline(a) }}</a>
-                  <span class="meta">{{ a.at | date:'d MMM, h:mm a' }}</span></div></li>
+                <li
+                  ><div class="claim-main"
+                    ><span
+                      ><strong>{{ a.actor }}</strong>
+                      {{ a.kind === 'ADMIN_DECISION' ? 'made the final decision' : 'voted' }}
+                      <strong>{{ verdictLabel(a.overall_vote) }}</strong></span
+                    >
+                    <a
+                      [routerLink]="['/verify', a.submission_id]"
+                      class="meta claim-link"
+                      lang="bn"
+                      >{{ headline(a) }}</a
+                    >
+                    <span class="meta">{{ a.at | date: 'd MMM, h:mm a' }}</span></div
+                  ></li
+                >
               }
             </ul>
-          } @else {<p class="empty">No votes recorded yet.</p>}
+          } @else {
+            <p class="empty">No votes recorded yet.</p>
+          }
         </section>
       </div>
 
       <section class="card" aria-labelledby="experts-heading">
-        <div class="panel-head"><h2 id="experts-heading">Experts</h2><a routerLink="/admin/experts" class="more-link">Manage experts →</a></div>
+        <div class="panel-head"
+          ><h2 id="experts-heading">Experts</h2
+          ><a routerLink="/admin/experts" class="more-link">Manage experts →</a></div
+        >
         @if (d.experts.length) {
           <div class="table-scroll">
             <table class="data-table">
-              <thead><tr><th scope="col">Name</th><th scope="col">Status</th><th scope="col" class="num">Completed votes</th><th scope="col">Last vote</th></tr></thead>
+              <thead
+                ><tr
+                  ><th scope="col">Name</th><th scope="col">Status</th
+                  ><th scope="col" class="num">Completed votes</th
+                  ><th scope="col">Last vote</th></tr
+                ></thead
+              >
               <tbody>
                 @for (e of d.experts; track e.id) {
                   <tr>
                     <td>{{ e.full_name || 'Unnamed expert' }}</td>
-                    <td><span class="badge" [class.badge-true]="e.is_active" [class.badge-not-found]="!e.is_active">{{ e.is_active ? 'Active' : 'Inactive' }}</span></td>
+                    <td
+                      ><span
+                        class="badge"
+                        [class.badge-true]="e.is_active"
+                        [class.badge-not-found]="!e.is_active"
+                        >{{ e.is_active ? 'Active' : 'Inactive' }}</span
+                      ></td
+                    >
                     <td class="num">{{ e.total_votes }}</td>
-                    <td>{{ e.last_vote_at ? (e.last_vote_at | date:'d MMM y') : 'No votes yet' }}</td>
+                    <td>{{
+                      e.last_vote_at ? (e.last_vote_at | date: 'd MMM y') : 'No votes yet'
+                    }}</td>
                   </tr>
                 }
               </tbody>
             </table>
           </div>
-        } @else {<p class="empty">No expert accounts yet. <a routerLink="/admin/experts/new">Create one</a>.</p>}
+        } @else {
+          <p class="empty"
+            >No expert accounts yet. <a routerLink="/admin/experts/new">Create one</a>.</p
+          >
+        }
       </section>
     }
   </div>

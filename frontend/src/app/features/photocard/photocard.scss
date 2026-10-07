@@ -1,5 +1,18 @@
-:host { display: block; }
+:host {
+  display: block;
+}
 
-.source-panel h2 { font-size: 18px; margin: 6px 0 8px; }
-.source-list { margin: 10px 0 0; padding-left: 20px; max-height: 320px; overflow: auto; line-height: 1.9; }
-.source-en { color: var(--text-muted); }
+.source-panel h2 {
+  font-size: 18px;
+  margin: 6px 0 8px;
+}
+.source-list {
+  margin: 10px 0 0;
+  padding-left: 20px;
+  max-height: 320px;
+  overflow: auto;
+  line-height: 1.9;
+}
+.source-en {
+  color: var(--text-muted);
+}

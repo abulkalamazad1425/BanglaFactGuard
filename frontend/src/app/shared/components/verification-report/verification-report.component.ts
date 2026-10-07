@@ -37,7 +37,14 @@ import { VotingDetailsComponent } from '../voting-details/voting-details.compone
 @Component({
   selector: 'app-verification-report',
   standalone: true,
-  imports: [DatePipe, NgClass, NgTemplateOutlet, RouterLink, VerdictBadgeComponent, VotingDetailsComponent],
+  imports: [
+    DatePipe,
+    NgClass,
+    NgTemplateOutlet,
+    RouterLink,
+    VerdictBadgeComponent,
+    VotingDetailsComponent,
+  ],
   styleUrls: ['./verification-report.component.scss'],
   templateUrl: './verification-report.component.html',
 })
@@ -78,7 +85,12 @@ export class VerificationReportComponent {
   }
 
   get claimedPublishedDate(): string | null {
-    return this.r.claimed_published_date ?? this.claimedDate ?? this.r.analysis?.date?.claimed_date ?? null;
+    return (
+      this.r.claimed_published_date ??
+      this.claimedDate ??
+      this.r.analysis?.date?.claimed_date ??
+      null
+    );
   }
 
   /** Date comparison is part of the result only when the submitter claimed a date. */
@@ -91,7 +103,9 @@ export class VerificationReportComponent {
   }
 
   get dateExplanation(): string {
-    return this.r.date_status ? DATE_EXPLANATIONS[this.r.date_status] : 'No source publication date was available to compare with.';
+    return this.r.date_status
+      ? DATE_EXPLANATIONS[this.r.date_status]
+      : 'No source publication date was available to compare with.';
   }
 
   get bodyApplicable(): boolean {

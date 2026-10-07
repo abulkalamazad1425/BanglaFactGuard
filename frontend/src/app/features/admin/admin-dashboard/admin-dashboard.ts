@@ -11,7 +11,7 @@ import { OverallVerdict } from '../../../models/verification.model';
   standalone: true,
   imports: [CommonModule, RouterLink],
   templateUrl: './admin-dashboard.html',
-  styleUrls: ['./admin-dashboard.scss']
+  styleUrls: ['./admin-dashboard.scss'],
 })
 export class AdminDashboardComponent implements OnInit {
   private readonly adminSvc = inject(AdminService);
@@ -20,30 +20,54 @@ export class AdminDashboardComponent implements OnInit {
   readonly error = signal(false);
   readonly data = signal<AdminDashboard | null>(null);
 
-  ngOnInit(): void { this.load(); }
+  ngOnInit(): void {
+    this.load();
+  }
 
   load(): void {
     this.loading.set(true);
     this.error.set(false);
     this.adminSvc.getDashboard().subscribe({
-      next: d => { this.data.set(d); this.loading.set(false); },
-      error: () => { this.error.set(true); this.loading.set(false); },
+      next: (d) => {
+        this.data.set(d);
+        this.loading.set(false);
+      },
+      error: () => {
+        this.error.set(true);
+        this.loading.set(false);
+      },
     });
   }
 
   methodLabel(type: string): string {
-    return ({ SOURCE_BASED: 'Text & source', PHOTO_CARD: 'Photo card', MULTIMODAL: 'Text & image' } as Record<string, string>)[type] ?? type;
+    return (
+      (
+        {
+          SOURCE_BASED: 'Text & source',
+          PHOTO_CARD: 'Photo card',
+          MULTIMODAL: 'Text & image',
+        } as Record<string, string>
+      )[type] ?? type
+    );
   }
 
   statusLabel(status: string): string {
-    return ({
-      PENDING: 'Queued', PROCESSING: 'Processing', EXPERT_REVIEW: 'In expert review',
-      ESCALATED: 'Escalated — admin decision needed', FINALIZED: 'Final decision', FAILED: 'Failed',
-    } as Record<string, string>)[status] ?? status;
+    return (
+      (
+        {
+          PENDING: 'Queued',
+          PROCESSING: 'Processing',
+          EXPERT_REVIEW: 'In expert review',
+          ESCALATED: 'Escalated — admin decision needed',
+          FINALIZED: 'Final decision',
+          FAILED: 'Failed',
+        } as Record<string, string>
+      )[status] ?? status
+    );
   }
 
   verdictLabel(v: string | null | undefined): string {
-    return v ? OVERALL_LABELS[v as OverallVerdict] ?? v : '—';
+    return v ? (OVERALL_LABELS[v as OverallVerdict] ?? v) : '—';
   }
 
   headline(c: { headline: string | null }): string {
@@ -52,6 +76,8 @@ export class AdminDashboardComponent implements OnInit {
 
   /** Where a claim row leads: the admin review page for open/escalated claims, the result otherwise. */
   claimLink(c: DashboardClaim): string[] {
-    return c.status === 'ESCALATED' || c.status === 'EXPERT_REVIEW' ? ['/admin/review-queue', c.submission_id] : ['/verify', c.submission_id];
+    return c.status === 'ESCALATED' || c.status === 'EXPERT_REVIEW'
+      ? ['/admin/review-queue', c.submission_id]
+      : ['/verify', c.submission_id];
   }
 }

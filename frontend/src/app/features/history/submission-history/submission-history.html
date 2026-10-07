@@ -1,26 +1,80 @@
-<div class="history-page"><div class="container history-container">
-  <header class="page-header"><div><h1>My Submissions</h1></div><a routerLink="/verify" class="btn btn-primary">Submit a claim</a></header>
-  @if (loadError()) {<div class="service-notice" role="alert"><p>Could not load your submissions.</p><button class="btn btn-secondary" (click)="load()">Try again</button></div>}
-  @if (loading()) {<div class="loading-overlay" role="status" aria-label="Loading submissions"><div class="spinner"></div></div>}
-  @if (!loading() && !loadError() && !submissions().length) {<div class="empty-state card"><h2>No submissions on this page</h2><p>Submit a claim or return to the previous page.</p></div>}
-  <div class="submission-list">
-  @for (s of submissions(); track s.submission_id) {
-    <article class="card submission-card">
-      <div class="submission-meta"><span class="type-tag">{{ typeLabel(s.submission_type) }}</span><time>{{ s.submitted_at | date:'MMM d, y, HH:mm' }}</time></div>
-      <h2><a [routerLink]="['/verify',s.submission_id]">{{ headlineText(s) }}</a></h2>
-      @if (s.claimed_source_text) {<p class="text-muted">{{ s.claimed_source_text }}</p>}
-      <div class="submission-outcome" aria-live="polite">
-        @if (isRunning(s)) {<span class="badge badge-pending">{{ phaseText(s) }}</span>}
-        @else if (isFailed(s)) {<span class="badge badge-incomplete">Check incomplete</span>}
-        @else if (hasResult(s)) {
-          <span class="outcome-stage">{{ s.is_finalized ? 'Final decision' : 'Preliminary AI result · under review' }}</span>
-          @if (s.is_finalized && s.overall_verdict) {<app-verdict-badge [overallVerdict]="s.overall_verdict" />}
-          @else {<app-verdict-badge [label]="s.prediction" [sourceStatus]="s.source_status" [headlineStatus]="s.headline_status" [contentStatus]="s.content_status" [dateStatus]="s.date_status" [hideDate]="!s.published_date" />}
-        } @else {<span class="badge badge-pending">Expert review pending</span>}
-      </div>
-      <a [routerLink]="['/verify',s.submission_id]" class="btn btn-secondary btn-sm">{{ isRunning(s) ? 'View progress' : 'View details' }} →</a>
-    </article>
-  }
-  </div>
-  <nav class="pagination" aria-label="Submission pages"><button class="btn btn-ghost" [disabled]="offset() === 0 || loading()" (click)="prev()">← Previous</button><span>Page {{ page() }}</span><button class="btn btn-ghost" [disabled]="submissions().length < limit || loading()" (click)="next()">Next →</button></nav>
-</div></div>
+<div class="history-page"
+  ><div class="container history-container">
+    <header class="page-header"
+      ><div><h1>My Submissions</h1></div
+      ><a routerLink="/verify" class="btn btn-primary">Submit a claim</a></header
+    >
+    @if (loadError()) {
+      <div class="service-notice" role="alert"
+        ><p>Could not load your submissions.</p
+        ><button class="btn btn-secondary" (click)="load()">Try again</button></div
+      >
+    }
+    @if (loading()) {
+      <div class="loading-overlay" role="status" aria-label="Loading submissions"
+        ><div class="spinner"></div
+      ></div>
+    }
+    @if (!loading() && !loadError() && !submissions().length) {
+      <div class="empty-state card"
+        ><h2>No submissions on this page</h2
+        ><p>Submit a claim or return to the previous page.</p></div
+      >
+    }
+    <div class="submission-list">
+      @for (s of submissions(); track s.submission_id) {
+        <article class="card submission-card">
+          <div class="submission-meta"
+            ><span class="type-tag">{{ typeLabel(s.submission_type) }}</span
+            ><time>{{ s.submitted_at | date: 'MMM d, y, HH:mm' }}</time></div
+          >
+          <h2
+            ><a [routerLink]="['/verify', s.submission_id]">{{ headlineText(s) }}</a></h2
+          >
+          @if (s.claimed_source_text) {
+            <p class="text-muted">{{ s.claimed_source_text }}</p>
+          }
+          <div class="submission-outcome" aria-live="polite">
+            @if (isRunning(s)) {
+              <span class="badge badge-pending">{{ phaseText(s) }}</span>
+            } @else if (isFailed(s)) {
+              <span class="badge badge-incomplete">Check incomplete</span>
+            } @else if (hasResult(s)) {
+              <span class="outcome-stage">{{
+                s.is_finalized ? 'Final decision' : 'Preliminary AI result · under review'
+              }}</span>
+              @if (s.is_finalized && s.overall_verdict) {
+                <app-verdict-badge [overallVerdict]="s.overall_verdict" />
+              } @else {
+                <app-verdict-badge
+                  [label]="s.prediction"
+                  [sourceStatus]="s.source_status"
+                  [headlineStatus]="s.headline_status"
+                  [contentStatus]="s.content_status"
+                  [dateStatus]="s.date_status"
+                  [hideDate]="!s.published_date"
+                />
+              }
+            } @else {
+              <span class="badge badge-pending">Expert review pending</span>
+            }
+          </div>
+          <a [routerLink]="['/verify', s.submission_id]" class="btn btn-secondary btn-sm"
+            >{{ isRunning(s) ? 'View progress' : 'View details' }} →</a
+          >
+        </article>
+      }
+    </div>
+    <nav class="pagination" aria-label="Submission pages"
+      ><button class="btn btn-ghost" [disabled]="offset() === 0 || loading()" (click)="prev()"
+        >← Previous</button
+      ><span>Page {{ page() }}</span
+      ><button
+        class="btn btn-ghost"
+        [disabled]="submissions().length < limit || loading()"
+        (click)="next()"
+        >Next →</button
+      ></nav
+    >
+  </div></div
+>

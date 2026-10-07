@@ -1,46 +1,267 @@
-<div class="verification-shell"><div class="flow-container">
-  <div class="report-toolbar"><a routerLink="/dashboard" class="btn btn-ghost">← Fact Explorer</a>@if (lookup()) {<div class="actions"><a routerLink="/verify" [queryParams]="{ method: inputMethod() }" class="btn btn-secondary">Start another check</a><button type="button" class="btn btn-secondary" (click)="copyUrl()">{{ copied ? 'Link copied' : 'Copy report link' }}</button></div>}</div>
-  @if (copyFailed) {<p class="error-copy" role="status">The link could not be copied. Copy the address from your browser to share this report.</p>}
-  <header class="flow-heading"><div><h1>{{ stillRunning() ? 'Your check is in progress.' : failed() ? 'This check could not finish.' : 'Verification result' }}</h1></div></header>@if (lookup()?.headline) {<section class="surface"><span class="eyebrow">SUBMITTED CLAIM</span><h2 class="claim-preview">{{ lookup()!.headline }}</h2></section>}
-  @if (loading()) {<section class="surface state-card" role="status"><div class="spinner"></div><h2>Loading verification details</h2><p>Retrieving the saved claim and its current findings.</p></section>}
-  @else if (loadError()) {<section class="surface state-card" role="alert"><span class="eyebrow">PLEASE TRY AGAIN</span><h2>Result temporarily unavailable</h2><p>We could not load this result. Your submission may still be processing. This is not a verdict on the news.</p><button type="button" class="btn btn-primary" (click)="retry()">Try again</button></section>}
-  @else {
-    @if (stillRunning()) {<section class="surface state-card" role="status"><span class="eyebrow">SUBMISSION RECEIVED</span><div class="spinner"></div><h2>Verification in progress</h2><p>{{ phaseText() }}. This page updates automatically as the check progresses.</p><div class="note"><strong>You can leave this page.</strong><p>Verification may take a few minutes. You can continue browsing. Find preliminary and final results in Fact Explorer or, if signed in, My Submissions. Keep this link or open <a routerLink="/history">My Submissions</a> if you are signed in.</p></div></section>}
-    @if (failed()) {<section class="surface state-card" role="alert"><span class="eyebrow">CHECK INCOMPLETE</span><h2>Verification could not be completed</h2><p>{{ verificationFailure(failureReason()) }}</p><div class="note">No verdict was reached about this news.</div><a routerLink="/verify" [queryParams]="{ method: inputMethod() }" class="btn btn-primary">{{ kind() === 'PHOTO_CARD' ? 'Try another image' : 'Try another check' }}</a></section>}
-    @if (sourceResult(); as r) {<app-verification-report [r]="r" [claimedDate]="lookup()?.published_date" />}
-    @if (photocardResult()?.verification; as v) {<app-verification-report [r]="v" [claimedDate]="photocardResult()?.published_date" />}
-    @if (multimodalResult(); as m) {
-      <section class="surface decision-panel" [class.decided]="!!m.expert_overall_verdict" aria-labelledby="mm-final-heading"><span class="eyebrow">FINAL DECISION</span>
-        @if (m.expert_overall_verdict) {
-          <div class="decision-row"><h2 id="mm-final-heading">Final decision</h2><app-verdict-badge class="decision-badge" [overallVerdict]="m.expert_overall_verdict" /></div>
-          <p class="assessment-explanation">Decided through expert review. The AI result below is preliminary and kept for reference.</p>
-          <app-voting-details [submissionId]="m.submission_id" />
-        } @else {
-          <h2 id="mm-final-heading">Under review</h2>
-          <p class="assessment-explanation">Expert review pending. No final decision has been made yet.</p>
-        }
-      </section>
-      <section class="surface"><span class="eyebrow">PRELIMINARY AI RESULT</span><h2 class="assessment-value"><span class="finding-label">AI decision:</span> {{ predictionLabel(m.prediction) }}</h2>
-      <p class="assessment-explanation">An automated assessment of the text and image together. It is not the final decision.</p>
-      <div class="note"><strong>What this check covers</strong><p>AI assessment of text and image; no source comparison.</p></div>
-      @if (m.is_cached) {<p class="field-hint">A previous assessment of this content was reused.</p>}
-      <p class="field-hint">Assessment recorded {{ m.created_at | date:'medium' }}</p>
-      <a routerLink="/verify" [queryParams]="{ method: 'source' }" class="btn btn-secondary">Check against a news outlet ↗</a></section>
-      <section class="surface claim-section"><div class="section-heading"><span class="eyebrow">ORIGINAL SUBMISSION</span><h2>The article and image that were checked</h2></div><div class="claim-layout" [class.no-image]="!m.image_url || imageFailed">@if (m.image_url && !imageFailed) {<img [src]="m.image_url" class="media-image" alt="Submitted article image" (error)="imageFailed = true">}<div><h3 class="claim-preview">{{ m.headline || 'No headline recorded' }}</h3>@if (imageFailed) {<p class="field-hint">The submitted image is temporarily unavailable.</p>}@if (m.body_text) {<details><summary>Read the submitted article text</summary><p class="long-text">{{ m.body_text }}</p></details>}</div></div></section>
+<div class="verification-shell"
+  ><div class="flow-container">
+    <div class="report-toolbar"
+      ><a routerLink="/dashboard" class="btn btn-ghost">← Fact Explorer</a>
+      @if (lookup()) {
+        <div class="actions"
+          ><a
+            routerLink="/verify"
+            [queryParams]="{ method: inputMethod() }"
+            class="btn btn-secondary"
+            >Start another check</a
+          ><button type="button" class="btn btn-secondary" (click)="copyUrl()">{{
+            copied ? 'Link copied' : 'Copy report link'
+          }}</button></div
+        >
+      }
+    </div>
+    @if (copyFailed) {
+      <p class="error-copy" role="status"
+        >The link could not be copied. Copy the address from your browser to share this report.</p
+      >
     }
-    @if (photocardResult(); as p) {
-      <section class="surface claim-section"><div class="section-heading"><span class="eyebrow">ORIGINAL SUBMISSION</span><h2>The photocard and what was read from it</h2></div>
-      <div class="claim-layout" [class.no-image]="!p.image_url || imageFailed">@if (p.image_url && !imageFailed) {<img [src]="p.image_url" class="media-image" alt="Submitted photo card" (error)="imageFailed = true">}<div>
-      @if (p.headline) {<span class="field-hint">Headline read from the card</span><h3 class="claim-preview" lang="bn">{{ p.headline }}</h3>} @else if (p.status === 'FAILED') {<p class="preview-placeholder">{{ p.extraction_status === 'INVALID_CONTENT' ? 'No valid headline or recognised news outlet was found on this card.' : 'The card could not be read.' }}</p>} @else {<p class="preview-placeholder">Reading the headline, outlet and date from the card…</p>}
-      @if (imageFailed) {<p class="field-hint">The submitted image is temporarily unavailable.</p>}
-      <dl class="meta-grid"><div><dt>Claimed news outlet</dt><dd lang="bn">{{ p.claimed_source_name || p.claimed_source_text || (p.status === 'FAILED' ? 'Not identified' : 'Not read yet') }}</dd></div><div><dt>Claimed publication date</dt><dd>{{ p.published_date ? (p.published_date | date:'d MMM y') : (p.extraction_status === 'SUCCEEDED' ? 'Not shown on the card' : '—') }}</dd></div><div><dt>Comparison scope</dt><dd>Headline only</dd></div><div><dt>Submitted</dt><dd>{{ p.created_at | date:'d MMM y' }}</dd></div></dl>
-      @if (p.extraction_status === 'SUCCEEDED') {<p class="field-hint">{{ extractionSummary(p) }}</p>}
-      @if (p.extraction_failures?.length) {<details><summary>Reading details</summary><ul class="long-text">@for (f of p.extraction_failures; track $index) {<li>{{ f }}</li>}</ul></details>}
-      </div></div></section>
+    <header class="flow-heading"
+      ><div
+        ><h1>{{
+          stillRunning()
+            ? 'Your check is in progress.'
+            : failed()
+              ? 'This check could not finish.'
+              : 'Verification result'
+        }}</h1></div
+      ></header
+    >
+    @if (lookup()?.headline) {
+      <section class="surface"
+        ><span class="eyebrow">SUBMITTED CLAIM</span
+        ><h2 class="claim-preview">{{ lookup()!.headline }}</h2></section
+      >
     }
-    @if (kind() === 'SOURCE_BASED' && lookup(); as l) {
-      <section class="surface claim-section"><div class="section-heading"><span class="eyebrow">ORIGINAL SUBMISSION</span><h2>The claim that was checked</h2></div><h3 class="claim-preview">{{ l.headline || 'No headline recorded' }}</h3><dl class="meta-grid"><div><dt>Claimed outlet</dt><dd>{{ l.claimed_source_text || 'Not recorded' }}</dd></div><div><dt>Claimed publication date</dt><dd>{{ l.published_date ? (l.published_date | date:'d MMM y') : 'Not provided' }}</dd></div></dl>@if (l.body_text) {<details><summary>Read the submitted article text</summary><p class="long-text">{{ l.body_text }}</p></details>}</section>
+    @if (loading()) {
+      <section class="surface state-card" role="status"
+        ><div class="spinner"></div><h2>Loading verification details</h2
+        ><p>Retrieving the saved claim and its current findings.</p></section
+      >
+    } @else if (loadError()) {
+      <section class="surface state-card" role="alert"
+        ><span class="eyebrow">PLEASE TRY AGAIN</span><h2>Result temporarily unavailable</h2
+        ><p
+          >We could not load this result. Your submission may still be processing. This is not a
+          verdict on the news.</p
+        ><button type="button" class="btn btn-primary" (click)="retry()">Try again</button></section
+      >
+    } @else {
+      @if (stillRunning()) {
+        <section class="surface state-card" role="status"
+          ><span class="eyebrow">SUBMISSION RECEIVED</span><div class="spinner"></div
+          ><h2>Verification in progress</h2
+          ><p>{{ phaseText() }}. This page updates automatically as the check progresses.</p
+          ><div class="note"
+            ><strong>You can leave this page.</strong
+            ><p
+              >Verification may take a few minutes. You can continue browsing. Find preliminary and
+              final results in Fact Explorer or, if signed in, My Submissions. Keep this link or
+              open <a routerLink="/history">My Submissions</a> if you are signed in.</p
+            ></div
+          ></section
+        >
+      }
+      @if (failed()) {
+        <section class="surface state-card" role="alert"
+          ><span class="eyebrow">CHECK INCOMPLETE</span><h2>Verification could not be completed</h2
+          ><p>{{ verificationFailure(failureReason()) }}</p
+          ><div class="note">No verdict was reached about this news.</div
+          ><a
+            routerLink="/verify"
+            [queryParams]="{ method: inputMethod() }"
+            class="btn btn-primary"
+            >{{ kind() === 'PHOTO_CARD' ? 'Try another image' : 'Try another check' }}</a
+          ></section
+        >
+      }
+      @if (sourceResult(); as r) {
+        <app-verification-report [r]="r" [claimedDate]="lookup()?.published_date" />
+      }
+      @if (photocardResult()?.verification; as v) {
+        <app-verification-report [r]="v" [claimedDate]="photocardResult()?.published_date" />
+      }
+      @if (multimodalResult(); as m) {
+        <section
+          class="surface decision-panel"
+          [class.decided]="!!m.expert_overall_verdict"
+          aria-labelledby="mm-final-heading"
+          ><span class="eyebrow">FINAL DECISION</span>
+          @if (m.expert_overall_verdict) {
+            <div class="decision-row"
+              ><h2 id="mm-final-heading">Final decision</h2
+              ><app-verdict-badge
+                class="decision-badge"
+                [overallVerdict]="m.expert_overall_verdict"
+            /></div>
+            <p class="assessment-explanation"
+              >Decided through expert review. The AI result below is preliminary and kept for
+              reference.</p
+            >
+            <app-voting-details [submissionId]="m.submission_id" />
+          } @else {
+            <h2 id="mm-final-heading">Under review</h2>
+            <p class="assessment-explanation"
+              >Expert review pending. No final decision has been made yet.</p
+            >
+          }
+        </section>
+        <section class="surface"
+          ><span class="eyebrow">PRELIMINARY AI RESULT</span
+          ><h2 class="assessment-value"
+            ><span class="finding-label">AI decision:</span> {{ predictionLabel(m.prediction) }}</h2
+          >
+          <p class="assessment-explanation"
+            >An automated assessment of the text and image together. It is not the final
+            decision.</p
+          >
+          <div class="note"
+            ><strong>What this check covers</strong
+            ><p>AI assessment of text and image; no source comparison.</p></div
+          >
+          @if (m.is_cached) {
+            <p class="field-hint">A previous assessment of this content was reused.</p>
+          }
+          <p class="field-hint">Assessment recorded {{ m.created_at | date: 'medium' }}</p>
+          <a routerLink="/verify" [queryParams]="{ method: 'source' }" class="btn btn-secondary"
+            >Check against a news outlet ↗</a
+          ></section
+        >
+        <section class="surface claim-section"
+          ><div class="section-heading"
+            ><span class="eyebrow">ORIGINAL SUBMISSION</span
+            ><h2>The article and image that were checked</h2></div
+          ><div class="claim-layout" [class.no-image]="!m.image_url || imageFailed">
+            @if (m.image_url && !imageFailed) {
+              <img
+                [src]="m.image_url"
+                class="media-image"
+                alt="Submitted article image"
+                (error)="imageFailed = true"
+              />
+            }
+            <div
+              ><h3 class="claim-preview">{{ m.headline || 'No headline recorded' }}</h3>
+              @if (imageFailed) {
+                <p class="field-hint">The submitted image is temporarily unavailable.</p>
+              }
+              @if (m.body_text) {
+                <details
+                  ><summary>Read the submitted article text</summary
+                  ><p class="long-text">{{ m.body_text }}</p></details
+                >
+              }
+            </div></div
+          ></section
+        >
+      }
+      @if (photocardResult(); as p) {
+        <section class="surface claim-section"
+          ><div class="section-heading"
+            ><span class="eyebrow">ORIGINAL SUBMISSION</span
+            ><h2>The photocard and what was read from it</h2></div
+          >
+          <div class="claim-layout" [class.no-image]="!p.image_url || imageFailed">
+            @if (p.image_url && !imageFailed) {
+              <img
+                [src]="p.image_url"
+                class="media-image"
+                alt="Submitted photo card"
+                (error)="imageFailed = true"
+              />
+            }
+            <div>
+              @if (p.headline) {
+                <span class="field-hint">Headline read from the card</span
+                ><h3 class="claim-preview" lang="bn">{{ p.headline }}</h3>
+              } @else if (p.status === 'FAILED') {
+                <p class="preview-placeholder">{{
+                  p.extraction_status === 'INVALID_CONTENT'
+                    ? 'No valid headline or recognised news outlet was found on this card.'
+                    : 'The card could not be read.'
+                }}</p>
+              } @else {
+                <p class="preview-placeholder"
+                  >Reading the headline, outlet and date from the card…</p
+                >
+              }
+              @if (imageFailed) {
+                <p class="field-hint">The submitted image is temporarily unavailable.</p>
+              }
+              <dl class="meta-grid"
+                ><div
+                  ><dt>Claimed news outlet</dt
+                  ><dd lang="bn">{{
+                    p.claimed_source_name ||
+                      p.claimed_source_text ||
+                      (p.status === 'FAILED' ? 'Not identified' : 'Not read yet')
+                  }}</dd></div
+                ><div
+                  ><dt>Claimed publication date</dt
+                  ><dd>{{
+                    p.published_date
+                      ? (p.published_date | date: 'd MMM y')
+                      : p.extraction_status === 'SUCCEEDED'
+                        ? 'Not shown on the card'
+                        : '—'
+                  }}</dd></div
+                ><div><dt>Comparison scope</dt><dd>Headline only</dd></div
+                ><div
+                  ><dt>Submitted</dt><dd>{{ p.created_at | date: 'd MMM y' }}</dd></div
+                ></dl
+              >
+              @if (p.extraction_status === 'SUCCEEDED') {
+                <p class="field-hint">{{ extractionSummary(p) }}</p>
+              }
+              @if (p.extraction_failures?.length) {
+                <details
+                  ><summary>Reading details</summary
+                  ><ul class="long-text">
+                    @for (f of p.extraction_failures; track $index) {
+                      <li>{{ f }}</li>
+                    }
+                  </ul></details
+                >
+              }
+            </div></div
+          ></section
+        >
+      }
+      @if (kind() === 'SOURCE_BASED' && lookup(); as l) {
+        <section class="surface claim-section"
+          ><div class="section-heading"
+            ><span class="eyebrow">ORIGINAL SUBMISSION</span
+            ><h2>The claim that was checked</h2></div
+          ><h3 class="claim-preview">{{ l.headline || 'No headline recorded' }}</h3
+          ><dl class="meta-grid"
+            ><div
+              ><dt>Claimed outlet</dt><dd>{{ l.claimed_source_text || 'Not recorded' }}</dd></div
+            ><div
+              ><dt>Claimed publication date</dt
+              ><dd>{{
+                l.published_date ? (l.published_date | date: 'd MMM y') : 'Not provided'
+              }}</dd></div
+            ></dl
+          >
+          @if (l.body_text) {
+            <details
+              ><summary>Read the submitted article text</summary
+              ><p class="long-text">{{ l.body_text }}</p></details
+            >
+          }
+        </section>
+      }
+      @if (!hasDetail() && !stillRunning() && !failed()) {
+        <section class="surface state-card"
+          ><h2>Result not found</h2
+          ><p>This result could not be found. Check the link or start a new verification.</p
+          ><a routerLink="/verify" class="btn btn-primary">Start a new check</a></section
+        >
+      }
     }
-    @if (!hasDetail() && !stillRunning() && !failed()) {<section class="surface state-card"><h2>Result not found</h2><p>This result could not be found. Check the link or start a new verification.</p><a routerLink="/verify" class="btn btn-primary">Start a new check</a></section>}
-  }
-</div></div>
+  </div></div
+>

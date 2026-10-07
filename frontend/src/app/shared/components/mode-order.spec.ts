@@ -8,7 +8,11 @@ import { NotificationService } from '../../services/notification.service';
 import { VerifyFactsComponent } from '../../features/verification/verify-facts/verify-facts';
 
 /** Every place listing the three verification options uses the same order. */
-const ORDER = ['News story against an image', 'News story against claimed source', 'Photocard against claimed source'];
+const ORDER = [
+  'News story against an image',
+  'News story against claimed source',
+  'Photocard against claimed source',
+];
 
 const texts = (root: HTMLElement, selector: string) =>
   Array.from(root.querySelectorAll<HTMLElement>(selector)).map((el) => el.textContent!.trim());
@@ -18,7 +22,16 @@ describe('verification option order', () => {
     TestBed.configureTestingModule({
       providers: [
         provideRouter([]),
-        { provide: AuthService, useValue: { isLoggedIn: signal(false), isAdmin: signal(false), isExpert: signal(false), user: signal(null), logout: () => undefined } },
+        {
+          provide: AuthService,
+          useValue: {
+            isLoggedIn: signal(false),
+            isAdmin: signal(false),
+            isExpert: signal(false),
+            user: signal(null),
+            logout: () => undefined,
+          },
+        },
         { provide: NotificationService, useValue: { unreadCount: signal(0) } },
       ],
     });

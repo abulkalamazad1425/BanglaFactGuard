@@ -19,7 +19,12 @@ export class ExpertService {
   private readonly api = inject(ApiService);
 
   /** GET /api/v1/expert/queue */
-  getQueue(limit = 20, offset = 0, q = '', state: 'all' | 'escalated' | 'review' = 'all'): Observable<ExpertQueueItem[]> {
+  getQueue(
+    limit = 20,
+    offset = 0,
+    q = '',
+    state: 'all' | 'escalated' | 'review' = 'all',
+  ): Observable<ExpertQueueItem[]> {
     return this.api.get<ExpertQueueItem[]>(API_ENDPOINTS.EXPERT_QUEUE, { limit, offset, q, state });
   }
 
@@ -32,16 +37,13 @@ export class ExpertService {
   submitVote(submissionId: string, body: ExpertVoteRequest): Observable<ExpertReviewResponse> {
     return this.api.post<ExpertReviewResponse>(
       `${API_ENDPOINTS.EXPERT_QUEUE}/${submissionId}/vote`,
-      body
+      body,
     );
   }
 
   /** PUT /api/v1/expert/reviews/{review_id} */
   editVote(reviewId: string, body: ExpertVoteUpdateRequest): Observable<ExpertReviewResponse> {
-    return this.api.put<ExpertReviewResponse>(
-      `${API_ENDPOINTS.EXPERT_REVIEWS}/${reviewId}`,
-      body
-    );
+    return this.api.put<ExpertReviewResponse>(`${API_ENDPOINTS.EXPERT_REVIEWS}/${reviewId}`, body);
   }
 
   /** GET /api/v1/expert/history */

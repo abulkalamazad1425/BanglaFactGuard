@@ -1,88 +1,397 @@
-<div class="verification-shell"><div class="flow-container">
-<div class="report-toolbar"><a [routerLink]="queueLink()" class="btn btn-ghost">← Review queue</a>@if (claim()) {<a [routerLink]="['/verify', claim()!.submission_id]" class="btn btn-secondary">View public report ↗</a>}</div>
-<header class="flow-heading"><div><span class="eyebrow">{{ isAdminDecision() ? 'ADMIN FINAL DECISION' : 'EXPERT WORKSPACE' }}</span><h1>Review the claim. Follow the evidence.</h1><p>Read the original submission and source material before making your independent assessment. Automated findings are supporting information, not instructions for your decision.</p></div></header>
-@if (loading()) {<section class="surface state-card" role="status"><div class="spinner"></div><h2>Loading the review</h2><p>Retrieving the claim and the available comparison evidence.</p></section>}
-@else if (forbidden()) {<section class="surface state-card" role="alert"><span class="eyebrow">NOT AVAILABLE</span><h2>This claim has been escalated</h2><p>Expert reviewers could not reach a decision, so an administrator will make the final decision. It is no longer open for expert review.</p><a [routerLink]="queueLink()" class="btn btn-primary">Back to review queue</a></section>}
-@else if (loadError()) {<section class="surface state-card" role="alert"><h2>Review temporarily unavailable</h2><p>The claim could not be loaded. Try again or return to the review queue.</p><button type="button" class="btn btn-primary" (click)="loadReview()">Try again</button></section>}
-@if (!loading() && !loadError() && !forbidden() && claim(); as c) {
-<div class="review-workspace"><div class="review-evidence">
-<section class="surface"><div class="section-heading"><span class="eyebrow">01 / ORIGINAL SUBMISSION</span><h2>{{ isStructuredType() ? 'Read the claim in context' : 'Read the article and inspect its image' }}</h2></div><h3 class="claim-preview" lang="bn">{{ c.headline || 'No headline recorded' }}</h3>
-@if (c.image_url) {<img [src]="c.image_url" class="media-image" alt="Image submitted with this claim">}
-<dl class="meta-grid">@if (isStructuredType()) {<div><dt>Claimed outlet</dt><dd>{{ c.claimed_source_text || 'Not recorded' }}</dd></div><div><dt>Claimed publication date</dt><dd>{{ c.published_date ? (c.published_date | date:'d MMM y') : 'Not provided' }}</dd></div>}<div><dt>Submitted</dt><dd>{{ c.submitted_at | date:'medium' }}</dd></div>@if (c.status === 'ESCALATED') {<div><dt>Escalated</dt><dd>{{ c.escalated_at ? (c.escalated_at | date:'medium') : 'Yes' }}</dd></div>}</dl>
-@if (c.body_text) {<details open><summary>Submitted article text</summary><p class="long-text">{{ c.body_text }}</p></details>}
-@if (photocardDetails(); as p) {<div class="note">Photocard comparison covers the extracted headline only. Check that the headline, outlet and date read from the card match the image.</div><dl class="meta-grid"><div><dt>Claimed outlet (read from the card)</dt><dd lang="bn">{{ p.claimed_source_name || p.claimed_source_text || 'Not identified' }}</dd></div><div><dt>Claimed date (read from the card)</dt><dd>{{ p.published_date ? (p.published_date | date:'d MMM y') : 'Not shown on the card' }}</dd></div><div><dt>How the card was read</dt><dd>{{ p.extraction_status === 'SUCCEEDED' ? 'From the image (attempt ' + (p.extraction_attempts ?? 1) + ' of 9)' : 'Not recorded' }}</dd></div></dl>@if (p.extraction_failures?.length) {<details><summary>Reading details</summary><ul class="long-text">@for (f of p.extraction_failures; track $index) {<li>{{ f }}</li>}</ul></details>}}
-</section>
-@if (aiResult(); as r) {<app-verification-report [r]="r" [reviewer]="true" [claimedDate]="c.published_date" />}
-@if (evidenceError()) {<section class="surface claim-section" role="alert"><h2>Comparison evidence could not be loaded</h2><p class="field-hint">Do not interpret this as a missing source or a false claim. Retry to inspect the recorded evidence before assessing this submission.</p><button type="button" class="btn btn-secondary" (click)="loadReview()">Reload evidence</button></section>}
-@if (!isStructuredType()) {<section class="surface claim-section"><span class="eyebrow">02 / PRELIMINARY AI RESULT</span><h2 class="assessment-value"><span class="finding-label">AI decision:</span> {{ predictionLabel(c.ai_overall_verdict || c.ai_label) }}</h2><p class="assessment-explanation">This automated assessment is preliminary. Review the article and image independently; it does not establish publication by a news outlet.</p><div class="note">No source-report comparison is provided by this verification method. Explain the evidence and limitations supporting your decision.</div></section>}
-</div><aside class="review-decision">
-<section class="surface review-guide"><span class="eyebrow">{{ isAdminDecision() ? 'YOUR FINAL DECISION' : 'YOUR INDEPENDENT REVIEW' }}</span><h2>Before you decide</h2><ol><li>Read the full claim and available source.</li><li>Distinguish missing evidence from a false statement.</li><li>Explain how the evidence supports your decision.</li></ol><p class="field-hint">{{ c.vote_count }} expert vote{{ c.vote_count === 1 ? '' : 's' }} recorded. Only the overall vote decides the claim. After the final decision, each vote and its justification are shown publicly with the reviewer’s name.</p></section>
-@if (submitted() || (c.has_voted && !isAdmin())) {<section class="surface" role="status"><div class="state-mark" aria-hidden="true">✓</div><h2>{{ isAdminDecision() ? 'Final decision recorded' : 'Vote recorded' }}</h2><p class="field-hint">{{ isAdminDecision() ? 'Your overall vote is now the claim’s final decision.' : 'Your vote has been saved. The claim is finalized when the review rules are met.' }}</p><a [routerLink]="queueLink()" class="btn btn-primary">Back to review queue</a></section>}
-@else if (!canVote()) {<section class="surface"><span class="eyebrow">VIEW-ONLY ACCESS</span><h2>{{ isAdmin() ? 'Observe this review' : 'Voting is not available' }}</h2><p class="field-hint">{{ isAdmin() ? 'Administrators can decide only escalated claims. This claim is still in expert review, so you can inspect the evidence but not vote.' : 'You cannot vote on this claim (you submitted it, or it is no longer open for review).' }}</p></section>}
-@else {<section class="surface">
-  @if (isAdminDecision()) {<div class="admin-banner" role="note"><strong>Your vote is the final decision.</strong> Expert reviewers could not agree on this claim; earlier expert votes cannot override your overall vote.</div>}
-  <div class="section-heading"><span class="eyebrow">03 / YOUR VOTE</span><h2>Record your decision</h2><p>Fields marked <span class="req-mark" aria-hidden="true">*</span><span class="sr-only">with an asterisk</span> are required.</p></div>
-  <form [formGroup]="form" (ngSubmit)="onSubmit()" novalidate>
-    <fieldset class="form-group choice-group" [attr.aria-invalid]="!selectedOverall() && formSubmitted" aria-describedby="overall-error">
-      <legend class="form-label">Cast your vote based on your findings <span class="req-mark" aria-hidden="true">*</span><span class="sr-only">(required)</span></legend>
-      <div class="verdict-options">
-        @for (opt of overallOptions; track opt.value) {
-          <label class="verdict-option" [class.selected]="selectedOverall() === opt.value">
-            <input type="radio" name="overall" [id]="'overall-' + opt.value" [value]="opt.value" [checked]="selectedOverall() === opt.value" (change)="selectOverall(opt.value)" required>
-            <span aria-hidden="true">{{ opt.icon }}</span> {{ opt.label }}
-          </label>
-        }
-      </div>
-      @if (!selectedOverall() && formSubmitted) {<span id="overall-error" class="form-error" role="alert">Choose Real, Fake, Misleading or Altered.</span>}
-    </fieldset>
-
-    @if (isStructuredType()) {
-      <details class="supplementary">
-        <summary>Supplementary findings (optional)</summary>
-        <p class="field-hint">Recorded for reference only. They do not affect the final decision or escalation.</p>
-        <fieldset class="form-group choice-group">
-          <legend class="form-label">Relevant article from claimed source</legend>
-          <div class="verdict-options">
-            <label class="verdict-option" [class.selected]="selectedSource() === 'CONFIRMED'"><input type="radio" name="source" [checked]="selectedSource() === 'CONFIRMED'" (change)="selectSource('CONFIRMED')"> Found</label>
-            <label class="verdict-option" [class.selected]="selectedSource() === 'NOT_FOUND'"><input type="radio" name="source" [checked]="selectedSource() === 'NOT_FOUND'" (change)="selectSource('NOT_FOUND')"> Not Found</label>
-          </div>
-          @if (selectedSource()) {<button type="button" class="link-button" (click)="selectSource(null)">Clear</button>}
-        </fieldset>
-        @if (needsContentAndDate()) {
-          <fieldset class="form-group choice-group">
-            <legend class="form-label">Headline compared with the source title</legend>
-            <div class="verdict-options">
-              <label class="verdict-option" [class.selected]="selectedContent() === 'MATCHED'"><input type="radio" name="content" [checked]="selectedContent() === 'MATCHED'" (change)="selectContent('MATCHED')"> Matched</label>
-              <label class="verdict-option" [class.selected]="selectedContent() === 'ALTERED'"><input type="radio" name="content" [checked]="selectedContent() === 'ALTERED'" (change)="selectContent('ALTERED')"> Altered</label>
-            </div>
-          </fieldset>
-          <fieldset class="form-group choice-group">
-            <legend class="form-label">Publication date</legend>
-            <div class="verdict-options">
-              <label class="verdict-option" [class.selected]="selectedDate() === 'MATCHED'"><input type="radio" name="date" [checked]="selectedDate() === 'MATCHED'" (change)="selectDate('MATCHED')"> Matched</label>
-              <label class="verdict-option" [class.selected]="selectedDate() === 'MISMATCHED'"><input type="radio" name="date" [checked]="selectedDate() === 'MISMATCHED'" (change)="selectDate('MISMATCHED')"> Mismatched</label>
-            </div>
-          </fieldset>
-        }
-      </details>
-    }
-
-    <div class="form-group">
-      <label for="expert-review-detail-justification" class="form-label">Justification <span class="req-mark" aria-hidden="true">*</span><span class="sr-only">(required)</span> <span class="optional">at least 50 characters, shown publicly after the final decision</span></label>
-      <textarea id="expert-review-detail-justification" formControlName="justification" class="form-control"
-                [class.is-invalid]="justInvalid" [attr.aria-invalid]="justInvalid" aria-describedby="justification-count justification-error"
-                rows="6" placeholder="Enter your reasoning"></textarea>
-      <div id="justification-count" class="char-count" [class.valid]="charCount >= 50">{{ charCount }} / 50 characters minimum</div>
-      @if (justInvalid) {<span id="justification-error" class="form-error" role="alert">Write at least 50 characters explaining your vote.</span>}
+<div class="verification-shell"
+  ><div class="flow-container">
+    <div class="report-toolbar"
+      ><a [routerLink]="queueLink()" class="btn btn-ghost">← Review queue</a>
+      @if (claim()) {
+        <a [routerLink]="['/verify', claim()!.submission_id]" class="btn btn-secondary"
+          >View public report ↗</a
+        >
+      }
     </div>
+    <header class="flow-heading"
+      ><div
+        ><span class="eyebrow">{{
+          isAdminDecision() ? 'ADMIN FINAL DECISION' : 'EXPERT WORKSPACE'
+        }}</span
+        ><h1>Review the claim. Follow the evidence.</h1
+        ><p
+          >Read the original submission and source material before making your independent
+          assessment. Automated findings are supporting information, not instructions for your
+          decision.</p
+        ></div
+      ></header
+    >
+    @if (loading()) {
+      <section class="surface state-card" role="status"
+        ><div class="spinner"></div><h2>Loading the review</h2
+        ><p>Retrieving the claim and the available comparison evidence.</p></section
+      >
+    } @else if (forbidden()) {
+      <section class="surface state-card" role="alert"
+        ><span class="eyebrow">NOT AVAILABLE</span><h2>This claim has been escalated</h2
+        ><p
+          >Expert reviewers could not reach a decision, so an administrator will make the final
+          decision. It is no longer open for expert review.</p
+        ><a [routerLink]="queueLink()" class="btn btn-primary">Back to review queue</a></section
+      >
+    } @else if (loadError()) {
+      <section class="surface state-card" role="alert"
+        ><h2>Review temporarily unavailable</h2
+        ><p>The claim could not be loaded. Try again or return to the review queue.</p
+        ><button type="button" class="btn btn-primary" (click)="loadReview()"
+          >Try again</button
+        ></section
+      >
+    }
+    @if (!loading() && !loadError() && !forbidden() && claim(); as c) {
+      <div class="review-workspace"
+        ><div class="review-evidence">
+          <section class="surface"
+            ><div class="section-heading"
+              ><span class="eyebrow">01 / ORIGINAL SUBMISSION</span
+              ><h2>{{
+                isStructuredType()
+                  ? 'Read the claim in context'
+                  : 'Read the article and inspect its image'
+              }}</h2></div
+            ><h3 class="claim-preview" lang="bn">{{ c.headline || 'No headline recorded' }}</h3>
+            @if (c.image_url) {
+              <img [src]="c.image_url" class="media-image" alt="Image submitted with this claim" />
+            }
+            <dl class="meta-grid">
+              @if (isStructuredType()) {
+                <div
+                  ><dt>Claimed outlet</dt
+                  ><dd>{{ c.claimed_source_text || 'Not recorded' }}</dd></div
+                ><div
+                  ><dt>Claimed publication date</dt
+                  ><dd>{{
+                    c.published_date ? (c.published_date | date: 'd MMM y') : 'Not provided'
+                  }}</dd></div
+                >
+              }
+              <div
+                ><dt>Submitted</dt><dd>{{ c.submitted_at | date: 'medium' }}</dd></div
+              >
+              @if (c.status === 'ESCALATED') {
+                <div
+                  ><dt>Escalated</dt
+                  ><dd>{{ c.escalated_at ? (c.escalated_at | date: 'medium') : 'Yes' }}</dd></div
+                >
+              }
+            </dl>
+            @if (c.body_text) {
+              <details open
+                ><summary>Submitted article text</summary
+                ><p class="long-text">{{ c.body_text }}</p></details
+              >
+            }
+            @if (photocardDetails(); as p) {
+              <div class="note"
+                >Photocard comparison covers the extracted headline only. Check that the headline,
+                outlet and date read from the card match the image.</div
+              ><dl class="meta-grid"
+                ><div
+                  ><dt>Claimed outlet (read from the card)</dt
+                  ><dd lang="bn">{{
+                    p.claimed_source_name || p.claimed_source_text || 'Not identified'
+                  }}</dd></div
+                ><div
+                  ><dt>Claimed date (read from the card)</dt
+                  ><dd>{{
+                    p.published_date
+                      ? (p.published_date | date: 'd MMM y')
+                      : 'Not shown on the card'
+                  }}</dd></div
+                ><div
+                  ><dt>How the card was read</dt
+                  ><dd>{{
+                    p.extraction_status === 'SUCCEEDED'
+                      ? 'From the image (attempt ' + (p.extraction_attempts ?? 1) + ' of 9)'
+                      : 'Not recorded'
+                  }}</dd></div
+                ></dl
+              >
+              @if (p.extraction_failures?.length) {
+                <details
+                  ><summary>Reading details</summary
+                  ><ul class="long-text">
+                    @for (f of p.extraction_failures; track $index) {
+                      <li>{{ f }}</li>
+                    }
+                  </ul></details
+                >
+              }
+            }
+          </section>
+          @if (aiResult(); as r) {
+            <app-verification-report [r]="r" [reviewer]="true" [claimedDate]="c.published_date" />
+          }
+          @if (evidenceError()) {
+            <section class="surface claim-section" role="alert"
+              ><h2>Comparison evidence could not be loaded</h2
+              ><p class="field-hint"
+                >Do not interpret this as a missing source or a false claim. Retry to inspect the
+                recorded evidence before assessing this submission.</p
+              ><button type="button" class="btn btn-secondary" (click)="loadReview()"
+                >Reload evidence</button
+              ></section
+            >
+          }
+          @if (!isStructuredType()) {
+            <section class="surface claim-section"
+              ><span class="eyebrow">02 / PRELIMINARY AI RESULT</span
+              ><h2 class="assessment-value"
+                ><span class="finding-label">AI decision:</span>
+                {{ predictionLabel(c.ai_overall_verdict || c.ai_label) }}</h2
+              ><p class="assessment-explanation"
+                >This automated assessment is preliminary. Review the article and image
+                independently; it does not establish publication by a news outlet.</p
+              ><div class="note"
+                >No source-report comparison is provided by this verification method. Explain the
+                evidence and limitations supporting your decision.</div
+              ></section
+            >
+          }</div
+        ><aside class="review-decision">
+          <section class="surface review-guide"
+            ><span class="eyebrow">{{
+              isAdminDecision() ? 'YOUR FINAL DECISION' : 'YOUR INDEPENDENT REVIEW'
+            }}</span
+            ><h2>Before you decide</h2
+            ><ol
+              ><li>Read the full claim and available source.</li
+              ><li>Distinguish missing evidence from a false statement.</li
+              ><li>Explain how the evidence supports your decision.</li></ol
+            ><p class="field-hint"
+              >{{ c.vote_count }} expert vote{{ c.vote_count === 1 ? '' : 's' }} recorded. Only the
+              overall vote decides the claim. After the final decision, each vote and its
+              justification are shown publicly with the reviewer’s name.</p
+            ></section
+          >
+          @if (submitted() || (c.has_voted && !isAdmin())) {
+            <section class="surface" role="status"
+              ><div class="state-mark" aria-hidden="true">✓</div
+              ><h2>{{ isAdminDecision() ? 'Final decision recorded' : 'Vote recorded' }}</h2
+              ><p class="field-hint">{{
+                isAdminDecision()
+                  ? 'Your overall vote is now the claim’s final decision.'
+                  : 'Your vote has been saved. The claim is finalized when the review rules are met.'
+              }}</p
+              ><a [routerLink]="queueLink()" class="btn btn-primary"
+                >Back to review queue</a
+              ></section
+            >
+          } @else if (!canVote()) {
+            <section class="surface"
+              ><span class="eyebrow">VIEW-ONLY ACCESS</span
+              ><h2>{{ isAdmin() ? 'Observe this review' : 'Voting is not available' }}</h2
+              ><p class="field-hint">{{
+                isAdmin()
+                  ? 'Administrators can decide only escalated claims. This claim is still in expert review, so you can inspect the evidence but not vote.'
+                  : 'You cannot vote on this claim (you submitted it, or it is no longer open for review).'
+              }}</p></section
+            >
+          } @else {
+            <section class="surface">
+              @if (isAdminDecision()) {
+                <div class="admin-banner" role="note"
+                  ><strong>Your vote is the final decision.</strong> Expert reviewers could not
+                  agree on this claim; earlier expert votes cannot override your overall vote.</div
+                >
+              }
+              <div class="section-heading"
+                ><span class="eyebrow">03 / YOUR VOTE</span><h2>Record your decision</h2
+                ><p
+                  >Fields marked <span class="req-mark" aria-hidden="true">*</span
+                  ><span class="sr-only">with an asterisk</span> are required.</p
+                ></div
+              >
+              <form [formGroup]="form" (ngSubmit)="onSubmit()" novalidate>
+                <fieldset
+                  class="form-group choice-group"
+                  [attr.aria-invalid]="!selectedOverall() && formSubmitted"
+                  aria-describedby="overall-error"
+                >
+                  <legend class="form-label"
+                    >Cast your vote based on your findings
+                    <span class="req-mark" aria-hidden="true">*</span
+                    ><span class="sr-only">(required)</span></legend
+                  >
+                  <div class="verdict-options">
+                    @for (opt of overallOptions; track opt.value) {
+                      <label
+                        class="verdict-option"
+                        [class.selected]="selectedOverall() === opt.value"
+                      >
+                        <input
+                          type="radio"
+                          name="overall"
+                          [id]="'overall-' + opt.value"
+                          [value]="opt.value"
+                          [checked]="selectedOverall() === opt.value"
+                          (change)="selectOverall(opt.value)"
+                          required
+                        />
+                        <span aria-hidden="true">{{ opt.icon }}</span> {{ opt.label }}
+                      </label>
+                    }
+                  </div>
+                  @if (!selectedOverall() && formSubmitted) {
+                    <span id="overall-error" class="form-error" role="alert"
+                      >Choose Real, Fake, Misleading or Altered.</span
+                    >
+                  }
+                </fieldset>
 
-    <button type="submit" class="btn btn-primary btn-full" [disabled]="voting()" [attr.aria-busy]="voting()">
-      @if (voting()) { <span class="btn-spinner" aria-hidden="true"></span> Submitting… }
-      @else { {{ isAdminDecision() ? 'Record final decision' : 'Submit vote' }} }
-    </button>
-  </form>
-  @if (voteError()) {<p class="error-copy" role="alert">{{ voteError() }} Your selections and justification are still here.</p>}
-</section>}
-</aside></div>
-}
-</div></div>
+                @if (isStructuredType()) {
+                  <details class="supplementary">
+                    <summary>Supplementary findings (optional)</summary>
+                    <p class="field-hint"
+                      >Recorded for reference only. They do not affect the final decision or
+                      escalation.</p
+                    >
+                    <fieldset class="form-group choice-group">
+                      <legend class="form-label">Relevant article from claimed source</legend>
+                      <div class="verdict-options">
+                        <label
+                          class="verdict-option"
+                          [class.selected]="selectedSource() === 'CONFIRMED'"
+                          ><input
+                            type="radio"
+                            name="source"
+                            [checked]="selectedSource() === 'CONFIRMED'"
+                            (change)="selectSource('CONFIRMED')"
+                          />
+                          Found</label
+                        >
+                        <label
+                          class="verdict-option"
+                          [class.selected]="selectedSource() === 'NOT_FOUND'"
+                          ><input
+                            type="radio"
+                            name="source"
+                            [checked]="selectedSource() === 'NOT_FOUND'"
+                            (change)="selectSource('NOT_FOUND')"
+                          />
+                          Not Found</label
+                        >
+                      </div>
+                      @if (selectedSource()) {
+                        <button type="button" class="link-button" (click)="selectSource(null)"
+                          >Clear</button
+                        >
+                      }
+                    </fieldset>
+                    @if (needsContentAndDate()) {
+                      <fieldset class="form-group choice-group">
+                        <legend class="form-label">Headline compared with the source title</legend>
+                        <div class="verdict-options">
+                          <label
+                            class="verdict-option"
+                            [class.selected]="selectedContent() === 'MATCHED'"
+                            ><input
+                              type="radio"
+                              name="content"
+                              [checked]="selectedContent() === 'MATCHED'"
+                              (change)="selectContent('MATCHED')"
+                            />
+                            Matched</label
+                          >
+                          <label
+                            class="verdict-option"
+                            [class.selected]="selectedContent() === 'ALTERED'"
+                            ><input
+                              type="radio"
+                              name="content"
+                              [checked]="selectedContent() === 'ALTERED'"
+                              (change)="selectContent('ALTERED')"
+                            />
+                            Altered</label
+                          >
+                        </div>
+                      </fieldset>
+                      <fieldset class="form-group choice-group">
+                        <legend class="form-label">Publication date</legend>
+                        <div class="verdict-options">
+                          <label
+                            class="verdict-option"
+                            [class.selected]="selectedDate() === 'MATCHED'"
+                            ><input
+                              type="radio"
+                              name="date"
+                              [checked]="selectedDate() === 'MATCHED'"
+                              (change)="selectDate('MATCHED')"
+                            />
+                            Matched</label
+                          >
+                          <label
+                            class="verdict-option"
+                            [class.selected]="selectedDate() === 'MISMATCHED'"
+                            ><input
+                              type="radio"
+                              name="date"
+                              [checked]="selectedDate() === 'MISMATCHED'"
+                              (change)="selectDate('MISMATCHED')"
+                            />
+                            Mismatched</label
+                          >
+                        </div>
+                      </fieldset>
+                    }
+                  </details>
+                }
+
+                <div class="form-group">
+                  <label for="expert-review-detail-justification" class="form-label"
+                    >Justification <span class="req-mark" aria-hidden="true">*</span
+                    ><span class="sr-only">(required)</span>
+                    <span class="optional"
+                      >at least 50 characters, shown publicly after the final decision</span
+                    ></label
+                  >
+                  <textarea
+                    id="expert-review-detail-justification"
+                    formControlName="justification"
+                    class="form-control"
+                    [class.is-invalid]="justInvalid"
+                    [attr.aria-invalid]="justInvalid"
+                    aria-describedby="justification-count justification-error"
+                    rows="6"
+                    placeholder="Enter your reasoning"
+                  ></textarea>
+                  <div id="justification-count" class="char-count" [class.valid]="charCount >= 50"
+                    >{{ charCount }} / 50 characters minimum</div
+                  >
+                  @if (justInvalid) {
+                    <span id="justification-error" class="form-error" role="alert"
+                      >Write at least 50 characters explaining your vote.</span
+                    >
+                  }
+                </div>
+
+                <button
+                  type="submit"
+                  class="btn btn-primary btn-full"
+                  [disabled]="voting()"
+                  [attr.aria-busy]="voting()"
+                >
+                  @if (voting()) {
+                    <span class="btn-spinner" aria-hidden="true"></span> Submitting…
+                  } @else {
+                    {{ isAdminDecision() ? 'Record final decision' : 'Submit vote' }}
+                  }
+                </button>
+              </form>
+              @if (voteError()) {
+                <p class="error-copy" role="alert"
+                  >{{ voteError() }} Your selections and justification are still here.</p
+                >
+              }
+            </section>
+          }
+        </aside></div
+      >
+    }
+  </div></div
+>

@@ -16,7 +16,7 @@ export class AppComponent implements OnInit {
   ngOnInit(): void {
     // Load current user if tokens are present
     if (this.auth.user() && localStorage.getItem('bfg_access_token')) {
-      this.auth.loadCurrentUser().subscribe({ error: () => { } });
+      this.auth.loadCurrentUser().subscribe({ error: () => {} });
     }
     // Start notification polling
     this.notificationSvc.startPolling();

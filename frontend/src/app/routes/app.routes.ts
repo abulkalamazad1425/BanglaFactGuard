@@ -10,9 +10,22 @@ export const APP_ROUTES: Routes = [
     path: 'auth',
     component: AuthLayoutComponent,
     children: [
-      { path: 'login',          loadComponent: () => import('../features/auth/login/login').then(m => m.LoginComponent) },
-      { path: 'register',       loadComponent: () => import('../features/auth/register/register').then(m => m.RegisterComponent) },
-      { path: 'forgot-password',loadComponent: () => import('../features/auth/forgot-password/forgot-password').then(m => m.ForgotPasswordComponent) },
+      {
+        path: 'login',
+        loadComponent: () => import('../features/auth/login/login').then((m) => m.LoginComponent),
+      },
+      {
+        path: 'register',
+        loadComponent: () =>
+          import('../features/auth/register/register').then((m) => m.RegisterComponent),
+      },
+      {
+        path: 'forgot-password',
+        loadComponent: () =>
+          import('../features/auth/forgot-password/forgot-password').then(
+            (m) => m.ForgotPasswordComponent,
+          ),
+      },
       { path: '', redirectTo: 'login', pathMatch: 'full' },
     ],
   },
@@ -23,30 +36,66 @@ export const APP_ROUTES: Routes = [
     component: MainLayoutComponent,
     children: [
       // Public
-      { path: '',          loadComponent: () => import('../features/home/home').then(m => m.HomeComponent) },
-      { path: 'dashboard', loadComponent: () => import('../features/dashboard/public-dashboard/public-dashboard').then(m => m.PublicDashboardComponent) },
-      { path: 'verify',    loadComponent: () => import('../features/verification/verify-facts/verify-facts').then(m => m.VerifyFactsComponent) },
-      { path: 'verify/:id',loadComponent: () => import('../features/verification/verify-result/verify-result').then(m => m.VerifyResultComponent) },
+      {
+        path: '',
+        loadComponent: () => import('../features/home/home').then((m) => m.HomeComponent),
+      },
+      {
+        path: 'dashboard',
+        loadComponent: () =>
+          import('../features/dashboard/public-dashboard/public-dashboard').then(
+            (m) => m.PublicDashboardComponent,
+          ),
+      },
+      {
+        path: 'verify',
+        loadComponent: () =>
+          import('../features/verification/verify-facts/verify-facts').then(
+            (m) => m.VerifyFactsComponent,
+          ),
+      },
+      {
+        path: 'verify/:id',
+        loadComponent: () =>
+          import('../features/verification/verify-result/verify-result').then(
+            (m) => m.VerifyResultComponent,
+          ),
+      },
       { path: 'multimodal', redirectTo: () => '/verify?method=image', pathMatch: 'full' },
       { path: 'photo-card', redirectTo: () => '/verify?method=photocard', pathMatch: 'full' },
-      { path: 'faq',       loadComponent: () => import('../features/faq/faq').then(m => m.FaqComponent) },
-      { path: 'about',     loadComponent: () => import('../features/about/about').then(m => m.AboutComponent) },
+      {
+        path: 'faq',
+        loadComponent: () => import('../features/faq/faq').then((m) => m.FaqComponent),
+      },
+      {
+        path: 'about',
+        loadComponent: () => import('../features/about/about').then((m) => m.AboutComponent),
+      },
 
       // Authenticated
       {
         path: 'history',
         canActivate: [authGuard],
-        loadComponent: () => import('../features/history/submission-history/submission-history').then(m => m.SubmissionHistoryComponent),
+        loadComponent: () =>
+          import('../features/history/submission-history/submission-history').then(
+            (m) => m.SubmissionHistoryComponent,
+          ),
       },
       {
         path: 'notifications',
         canActivate: [authGuard],
-        loadComponent: () => import('../features/notifications/notification-list/notification-list').then(m => m.NotificationListComponent),
+        loadComponent: () =>
+          import('../features/notifications/notification-list/notification-list').then(
+            (m) => m.NotificationListComponent,
+          ),
       },
       {
         path: 'settings',
         canActivate: [authGuard],
-        loadComponent: () => import('../features/settings/profile-settings/profile-settings').then(m => m.ProfileSettingsComponent),
+        loadComponent: () =>
+          import('../features/settings/profile-settings/profile-settings').then(
+            (m) => m.ProfileSettingsComponent,
+          ),
       },
 
       // Expert
@@ -54,11 +103,29 @@ export const APP_ROUTES: Routes = [
         path: 'expert',
         canActivate: [authGuard, roleGuard('expert')],
         children: [
-          { path: '',        redirectTo: 'queue', pathMatch: 'full' },
-          { path: 'queue',   loadComponent: () => import('../features/expert/expert-queue/expert-queue').then(m => m.ExpertQueueComponent) },
-          { path: 'queue/:id', loadComponent: () => import('../features/expert/expert-review-detail/expert-review-detail').then(m => m.ExpertReviewDetailComponent) },
-          { path: 'history', loadComponent: () => import('../features/expert/expert-history/expert-history').then(m => m.ExpertHistoryComponent) },
-          { path: 'stats',   redirectTo: '/settings', pathMatch: 'full' },
+          { path: '', redirectTo: 'queue', pathMatch: 'full' },
+          {
+            path: 'queue',
+            loadComponent: () =>
+              import('../features/expert/expert-queue/expert-queue').then(
+                (m) => m.ExpertQueueComponent,
+              ),
+          },
+          {
+            path: 'queue/:id',
+            loadComponent: () =>
+              import('../features/expert/expert-review-detail/expert-review-detail').then(
+                (m) => m.ExpertReviewDetailComponent,
+              ),
+          },
+          {
+            path: 'history',
+            loadComponent: () =>
+              import('../features/expert/expert-history/expert-history').then(
+                (m) => m.ExpertHistoryComponent,
+              ),
+          },
+          { path: 'stats', redirectTo: '/settings', pathMatch: 'full' },
         ],
       },
 
@@ -67,19 +134,65 @@ export const APP_ROUTES: Routes = [
         path: 'admin',
         canActivate: [authGuard, roleGuard('admin')],
         children: [
-          { path: '',            loadComponent: () => import('../features/admin/admin-dashboard/admin-dashboard').then(m => m.AdminDashboardComponent) },
-          { path: 'experts',     loadComponent: () => import('../features/admin/expert-management/expert-management').then(m => m.ExpertManagementComponent) },
-          { path: 'experts/new', loadComponent: () => import('../features/admin/create-expert/create-expert').then(m => m.CreateExpertComponent) },
-          { path: 'sources',     loadComponent: () => import('../features/admin/source-management/source-management.component').then(m => m.SourceManagementComponent) },
-          { path: 'credibility-tiers', loadComponent: () => import('../features/admin/credibility-tiers/credibility-tiers').then(m => m.CredibilityTiersComponent) },
+          {
+            path: '',
+            loadComponent: () =>
+              import('../features/admin/admin-dashboard/admin-dashboard').then(
+                (m) => m.AdminDashboardComponent,
+              ),
+          },
+          {
+            path: 'experts',
+            loadComponent: () =>
+              import('../features/admin/expert-management/expert-management').then(
+                (m) => m.ExpertManagementComponent,
+              ),
+          },
+          {
+            path: 'experts/new',
+            loadComponent: () =>
+              import('../features/admin/create-expert/create-expert').then(
+                (m) => m.CreateExpertComponent,
+              ),
+          },
+          {
+            path: 'sources',
+            loadComponent: () =>
+              import('../features/admin/source-management/source-management.component').then(
+                (m) => m.SourceManagementComponent,
+              ),
+          },
+          {
+            path: 'credibility-tiers',
+            loadComponent: () =>
+              import('../features/admin/credibility-tiers/credibility-tiers').then(
+                (m) => m.CredibilityTiersComponent,
+              ),
+          },
           // Admin expert queue: escalated claims to decide, other claims view-only.
-          { path: 'review-queue', loadComponent: () => import('../features/expert/expert-queue/expert-queue').then(m => m.ExpertQueueComponent) },
-          { path: 'review-queue/:id', loadComponent: () => import('../features/expert/expert-review-detail/expert-review-detail').then(m => m.ExpertReviewDetailComponent) },
+          {
+            path: 'review-queue',
+            loadComponent: () =>
+              import('../features/expert/expert-queue/expert-queue').then(
+                (m) => m.ExpertQueueComponent,
+              ),
+          },
+          {
+            path: 'review-queue/:id',
+            loadComponent: () =>
+              import('../features/expert/expert-review-detail/expert-review-detail').then(
+                (m) => m.ExpertReviewDetailComponent,
+              ),
+          },
         ],
       },
 
       // 404
-      { path: '**', loadComponent: () => import('../features/not-found/not-found').then(m => m.NotFoundComponent) },
+      {
+        path: '**',
+        loadComponent: () =>
+          import('../features/not-found/not-found').then((m) => m.NotFoundComponent),
+      },
     ],
   },
 ];

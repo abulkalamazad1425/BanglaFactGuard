@@ -11,7 +11,7 @@ import { CreateExpertRequest } from '../../../models/admin.model';
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, RouterLink],
   templateUrl: './create-expert.html',
-  styleUrls: ['./create-expert.scss']
+  styleUrls: ['./create-expert.scss'],
 })
 export class CreateExpertComponent {
   private readonly fb = inject(FormBuilder);
@@ -25,22 +25,43 @@ export class CreateExpertComponent {
   form = this.fb.group({
     full_name: ['', Validators.required],
     email: ['', [Validators.required, Validators.email]],
-    password: ['', [Validators.required, Validators.minLength(8), Validators.pattern(/^(?=.*[A-Z])(?=.*\d).+$/)]],
+    password: [
+      '',
+      [Validators.required, Validators.minLength(8), Validators.pattern(/^(?=.*[A-Z])(?=.*\d).+$/)],
+    ],
     expertise_area: ['', Validators.required],
   });
 
-  get nameInvalid() { return this.form.get('full_name')?.invalid && this.form.get('full_name')?.touched; }
-  get emailInvalid() { return this.form.get('email')?.invalid && this.form.get('email')?.touched; }
-  get pwInvalid() { return this.form.get('password')?.invalid && this.form.get('password')?.touched; }
-  get areaInvalid() { return this.form.get('expertise_area')?.invalid && this.form.get('expertise_area')?.touched; }
+  get nameInvalid() {
+    return this.form.get('full_name')?.invalid && this.form.get('full_name')?.touched;
+  }
+  get emailInvalid() {
+    return this.form.get('email')?.invalid && this.form.get('email')?.touched;
+  }
+  get pwInvalid() {
+    return this.form.get('password')?.invalid && this.form.get('password')?.touched;
+  }
+  get areaInvalid() {
+    return this.form.get('expertise_area')?.invalid && this.form.get('expertise_area')?.touched;
+  }
 
   onSubmit(): void {
-    if (this.form.invalid) { this.form.markAllAsTouched(); return; }
-    this.loading = true; this.errorMsg = '';
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
+    this.loading = true;
+    this.errorMsg = '';
 
     this.adminSvc.createExpert(this.form.value as CreateExpertRequest).subscribe({
-      next: () => { this.toast.success('Expert account created successfully.'); this.router.navigate(['/admin/experts']); },
-      error: err => { this.errorMsg = err.error?.message || 'Failed to create expert.'; this.loading = false; },
+      next: () => {
+        this.toast.success('Expert account created successfully.');
+        this.router.navigate(['/admin/experts']);
+      },
+      error: (err) => {
+        this.errorMsg = err.error?.message || 'Failed to create expert.';
+        this.loading = false;
+      },
     });
   }
 }

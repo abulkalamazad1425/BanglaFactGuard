@@ -2,7 +2,11 @@
   <section class="about-hero">
     <span class="eyebrow">ABOUT BANGLAFACTGUARD</span>
     <h1>Fact checking for Bangla news.</h1>
-    <p>BanglaFactGuard helps readers check Bangla news stories, images and photocards before sharing them. Automated checks give a quick first result, and expert reviewers decide the final verdict.</p>
+    <p
+      >BanglaFactGuard helps readers check Bangla news stories, images and photocards before sharing
+      them. Automated checks give a quick first result, and expert reviewers decide the final
+      verdict.</p
+    >
     <div class="hero-actions">
       <a routerLink="/verify" class="btn btn-primary btn-lg">Verify facts ↗</a>
       <a routerLink="/dashboard" class="btn btn-secondary btn-lg">Fact Explorer</a>
@@ -40,7 +44,10 @@
       <h2>Final verdicts</h2>
       <ul class="verdicts">
         @for (v of verdicts; track v.label) {
-          <li><span [class]="'badge ' + v.cls">{{ v.label }}</span><span>{{ v.text }}</span></li>
+          <li
+            ><span [class]="'badge ' + v.cls">{{ v.label }}</span
+            ><span>{{ v.text }}</span></li
+          >
         }
       </ul>
     </div>
@@ -48,7 +55,10 @@
       <h2>Our principles</h2>
       <ul class="principles">
         @for (p of principles; track p.title) {
-          <li><strong>{{ p.title }}</strong><p>{{ p.text }}</p></li>
+          <li
+            ><strong>{{ p.title }}</strong
+            ><p>{{ p.text }}</p></li
+          >
         }
       </ul>
     </div>

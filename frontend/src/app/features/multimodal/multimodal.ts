@@ -7,7 +7,6 @@ import { ToastService } from '../../shared/services/toast.service';
 import { MultimodalService } from '../../services/verification.service';
 import { MultimodalPredictionResult } from '../../models/verification.model';
 
-
 @Component({
   selector: 'app-multimodal',
   standalone: true,
@@ -17,7 +16,16 @@ import { MultimodalPredictionResult } from '../../models/verification.model';
 })
 export class MultimodalComponent {
   readonly predictionLabel = predictionLabel;
-  overallVerdictLabel(value: string): string { return ({ REAL: 'Real', FAKE: 'Fake', MISLEADING: 'Misleading', ALTERED: 'Altered' } as Record<string, string>)[value] || 'Decision unavailable'; }
+  overallVerdictLabel(value: string): string {
+    return (
+      (
+        { REAL: 'Real', FAKE: 'Fake', MISLEADING: 'Misleading', ALTERED: 'Altered' } as Record<
+          string,
+          string
+        >
+      )[value] || 'Decision unavailable'
+    );
+  }
   private readonly svc = inject(MultimodalService);
   private readonly toast = inject(ToastService);
 
@@ -46,9 +54,14 @@ export class MultimodalComponent {
 
   private _setFile(file: File): void {
     if (this.loading) return;
-    if (!'image/jpeg,image/png,image/webp,image/gif'.split(',').includes(file.type) || file.size > 10 * 1024 * 1024 || file.size === 0) {
+    if (
+      !'image/jpeg,image/png,image/webp,image/gif'.split(',').includes(file.type) ||
+      file.size > 10 * 1024 * 1024 ||
+      file.size === 0
+    ) {
       this.errorMsg = 'Choose a supported, non-empty image under 10 MB.';
-      this.selectedFile = null; this.previewUrl = null;
+      this.selectedFile = null;
+      this.previewUrl = null;
       return;
     }
     this.errorMsg = null;

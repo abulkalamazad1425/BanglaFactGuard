@@ -2,7 +2,12 @@
   <div class="flow-container">
     <header class="flow-heading verify-head">
       <div><h1>Verify facts</h1></div>
-      <button type="button" class="btn btn-ghost btn-sm" (click)="toggleDescriptions()" [attr.aria-pressed]="hideDescriptions">
+      <button
+        type="button"
+        class="btn btn-ghost btn-sm"
+        (click)="toggleDescriptions()"
+        [attr.aria-pressed]="hideDescriptions"
+      >
         {{ hideDescriptions ? 'Show descriptions' : 'Hide descriptions' }}
       </button>
     </header>
@@ -10,8 +15,13 @@
     <div class="verify-options" role="radiogroup" aria-label="Verification method">
       @for (opt of options; track opt.key) {
         <div class="verify-option" [class.selected]="method() === opt.key">
-          <button type="button" class="option-select" role="radio"
-                  [attr.aria-checked]="method() === opt.key" (click)="select(opt.key)">
+          <button
+            type="button"
+            class="option-select"
+            role="radio"
+            [attr.aria-checked]="method() === opt.key"
+            (click)="select(opt.key)"
+          >
             <span class="option-radio" aria-hidden="true"></span>
             <span class="option-icon" aria-hidden="true">{{ opt.icon }}</span>
             <span class="option-title">{{ opt.title }}</span>
@@ -24,9 +34,15 @@
     </div>
 
     @switch (method()) {
-      @case ('image') { <app-multimodal /> }
-      @case ('source') { <app-verify-claim /> }
-      @case ('photocard') { <app-photocard /> }
+      @case ('image') {
+        <app-multimodal />
+      }
+      @case ('source') {
+        <app-verify-claim />
+      }
+      @case ('photocard') {
+        <app-photocard />
+      }
     }
   </div>
 </div>

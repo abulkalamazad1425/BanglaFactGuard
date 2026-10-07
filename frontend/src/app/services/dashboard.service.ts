@@ -2,7 +2,12 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
 import { API_ENDPOINTS } from '../core/constants/api-endpoints.constant';
-import { PublicStats, TopSource, ExplorerSearchParams, ExplorerSearchResponse } from '../models/admin.model';
+import {
+  PublicStats,
+  TopSource,
+  ExplorerSearchParams,
+  ExplorerSearchResponse,
+} from '../models/admin.model';
 
 @Injectable({ providedIn: 'root' })
 export class DashboardService {

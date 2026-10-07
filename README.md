@@ -126,7 +126,7 @@ BanglaFactGuard/
 `-- README.md
 ```
 
-The root-level `index.html` and `multimodal.html` are older standalone clients. The current website is the Angular application in `frontend/`; do not use a static Python HTTP server to run it.
+The website is the Angular application in `frontend/`; do not use a static Python HTTP server to run it.
 
 ## Local setup
 

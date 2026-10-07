@@ -32,17 +32,30 @@ import { VotingDetailsComponent } from '../../../shared/components/voting-detail
 @Component({
   selector: 'app-verify-result',
   standalone: true,
-  imports: [CommonModule, RouterLink, VerificationReportComponent, VerdictBadgeComponent, VotingDetailsComponent],
+  imports: [
+    CommonModule,
+    RouterLink,
+    VerificationReportComponent,
+    VerdictBadgeComponent,
+    VotingDetailsComponent,
+  ],
   templateUrl: './verify-result.html',
-  styleUrls: ['./verify-result.scss']
+  styleUrls: ['./verify-result.scss'],
 })
 export class VerifyResultComponent implements OnInit, OnDestroy {
   readonly verificationFailure = verificationFailure;
   readonly predictionLabel = predictionLabel;
   readonly loadError = signal(false);
-  retry(): void { if (this.submissionId) { this.loadError.set(false); this.loading.set(true); this.load(this.submissionId); } }
+  retry(): void {
+    if (this.submissionId) {
+      this.loadError.set(false);
+      this.loading.set(true);
+      this.load(this.submissionId);
+    }
+  }
   private handleLoadError(error: { status?: number }): void {
-    this.stopPolling(); this.loading.set(false);
+    this.stopPolling();
+    this.loading.set(false);
     this.notFound.set(error.status === 404);
     this.loadError.set(error.status !== 404);
   }
@@ -63,8 +76,16 @@ export class VerifyResultComponent implements OnInit, OnDestroy {
   copied = false;
   copyFailed = false;
   imageFailed = false;
-  readonly inputMethod = computed(() => this.kind() === 'PHOTO_CARD' ? 'photocard' : this.kind() === 'MULTIMODAL' ? 'image' : 'source');
-  readonly methodLabel = computed(() => this.kind() === 'PHOTO_CARD' ? 'Photo card' : this.kind() === 'MULTIMODAL' ? 'Text & image' : 'Text & source');
+  readonly inputMethod = computed(() =>
+    this.kind() === 'PHOTO_CARD' ? 'photocard' : this.kind() === 'MULTIMODAL' ? 'image' : 'source',
+  );
+  readonly methodLabel = computed(() =>
+    this.kind() === 'PHOTO_CARD'
+      ? 'Photo card'
+      : this.kind() === 'MULTIMODAL'
+        ? 'Text & image'
+        : 'Text & source',
+  );
   submissionId: string | null = null;
 
   private pollTimer: ReturnType<typeof setInterval> | null = null;
@@ -97,10 +118,14 @@ export class VerifyResultComponent implements OnInit, OnDestroy {
   readonly phaseText = computed(() => {
     const phase = this.photocardResult()?.phase ?? this.lookup()?.processing_phase;
     switch (phase) {
-      case 'QUEUED': return 'Waiting to start';
-      case 'EXTRACTING': return 'Reading the headline, date and source from the card';
-      case 'VERIFYING': return 'Checking the headline against the claimed source';
-      default: return 'Working';
+      case 'QUEUED':
+        return 'Waiting to start';
+      case 'EXTRACTING':
+        return 'Reading the headline, date and source from the card';
+      case 'VERIFYING':
+        return 'Checking the headline against the claimed source';
+      default:
+        return 'Working';
     }
   });
 
@@ -108,7 +133,11 @@ export class VerifyResultComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');
-    if (!id) { this.loading.set(false); this.notFound.set(true); return; }
+    if (!id) {
+      this.loading.set(false);
+      this.notFound.set(true);
+      return;
+    }
     this.submissionId = id;
     this.load(id);
   }
@@ -171,17 +200,26 @@ export class VerifyResultComponent implements OnInit, OnDestroy {
   private loadDetail(id: string, kind: SubmissionLookup['submission_type']): void {
     if (kind === 'SOURCE_BASED') {
       this.verificationSvc.getResult(id).subscribe({
-        next: (r) => { this.sourceResult.set(r); this.loading.set(false); },
+        next: (r) => {
+          this.sourceResult.set(r);
+          this.loading.set(false);
+        },
         error: (err) => this.handleLoadError(err),
       });
     } else if (kind === 'PHOTO_CARD') {
       this.photocardSvc.getResult(id).subscribe({
-        next: (r) => { this.photocardResult.set(r); this.loading.set(false); },
+        next: (r) => {
+          this.photocardResult.set(r);
+          this.loading.set(false);
+        },
         error: (err) => this.handleLoadError(err),
       });
     } else {
       this.multimodalSvc.getBySubmission(id).subscribe({
-        next: (r) => { this.multimodalResult.set(r); this.loading.set(false); },
+        next: (r) => {
+          this.multimodalResult.set(r);
+          this.loading.set(false);
+        },
         error: (err) => this.handleLoadError(err),
       });
     }
@@ -262,7 +300,9 @@ export class VerifyResultComponent implements OnInit, OnDestroy {
     try {
       await navigator.clipboard.writeText(this.shareUrl());
       this.copied = true;
-      setTimeout(() => this.copied = false, 2000);
-    } catch { this.copyFailed = true; }
+      setTimeout(() => (this.copied = false), 2000);
+    } catch {
+      this.copyFailed = true;
+    }
   }
 }

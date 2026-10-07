@@ -37,12 +37,7 @@ export type BodyComparisonStatus = 'COMPUTED' | 'SKIPPED' | 'UNAVAILABLE';
 export type OverallVerdict = 'FAKE' | 'REAL' | 'MISLEADING' | 'ALTERED';
 
 export type SubmissionStatus =
-  | 'PENDING'
-  | 'PROCESSING'
-  | 'EXPERT_REVIEW'
-  | 'FINALIZED'
-  | 'FAILED'
-  | 'ESCALATED';
+  'PENDING' | 'PROCESSING' | 'EXPERT_REVIEW' | 'FINALIZED' | 'FAILED' | 'ESCALATED';
 
 export type SubmissionType = 'SOURCE_BASED' | 'MULTIMODAL' | 'PHOTO_CARD';
 
@@ -61,7 +56,7 @@ export interface VerificationRequest {
   headline: string;
   claimed_source_text: string;
   body_text?: string | null;
-  published_date?: string | null;  // YYYY-MM-DD
+  published_date?: string | null; // YYYY-MM-DD
 }
 
 // ── Sub-types returned in VerificationResponse ───────────────────────
@@ -282,7 +277,7 @@ export interface SubmissionStats {
 export interface MultimodalPredictionResult {
   prediction_id: string;
   submission_id: string;
-  prediction: string;          // 'FAKE' | 'NON_FAKE' — the AI's preliminary call
+  prediction: string; // 'FAKE' | 'NON_FAKE' — the AI's preliminary call
   confidence_fake: number;
   confidence_real: number;
   /** NULL until expert review finalizes this claim — see SubmissionLookup.status. */
@@ -305,7 +300,7 @@ export interface MultimodalPredictionDetail {
   submission_id: string;
   headline: string | null;
   body_text: string | null;
-  prediction: string;          // 'FAKE' | 'NON_FAKE' — the AI's preliminary call
+  prediction: string; // 'FAKE' | 'NON_FAKE' — the AI's preliminary call
   confidence_fake: number;
   confidence_real: number;
   expert_overall_verdict?: OverallVerdict | null;

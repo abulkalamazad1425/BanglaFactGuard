@@ -1,0 +1,11 @@
+{
+  "printWidth": 100,
+  "singleQuote": true,
+  "htmlWhitespaceSensitivity": "strict",
+  "overrides": [
+    {
+      "files": "*.html",
+      "options": { "parser": "angular" }
+    }
+  ]
+}

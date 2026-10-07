@@ -49,19 +49,35 @@ function render(r: VerificationResponse, reviewer = false): HTMLElement {
 }
 
 describe('VerificationReportComponent', () => {
-  beforeEach(() => TestBed.configureTestingModule({ imports: [VerificationReportComponent], providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()] }));
+  beforeEach(() =>
+    TestBed.configureTestingModule({
+      imports: [VerificationReportComponent],
+      providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()],
+    }),
+  );
 
   it('before finalization shows review-pending and NO overall truth badge', () => {
     const el = render(base());
     expect(el.textContent).toContain('Expert review pending.');
     expect(el.textContent).toContain('Under review');
     expect(el.querySelector('app-voting-details')).toBeNull();
-    const badgeTexts = Array.from(el.querySelectorAll('.badge')).map((b) => (b.textContent ?? '').replace(/[^A-Za-z]/g, ''));
-    expect(badgeTexts.some((t) => ['Fake', 'Real', 'Misleading', 'Altered'].includes(t))).toBeFalse();
+    const badgeTexts = Array.from(el.querySelectorAll('.badge')).map((b) =>
+      (b.textContent ?? '').replace(/[^A-Za-z]/g, ''),
+    );
+    expect(
+      badgeTexts.some((t) => ['Fake', 'Real', 'Misleading', 'Altered'].includes(t)),
+    ).toBeFalse();
   });
 
   it('after finalization shows the final decision apart from the preliminary findings, with Voting Details', () => {
-    const el = render(base({ is_finalized: true, review_pending: false, overall_verdict: 'MISLEADING', headline_status: 'EXACT_MATCHED' }));
+    const el = render(
+      base({
+        is_finalized: true,
+        review_pending: false,
+        overall_verdict: 'MISLEADING',
+        headline_status: 'EXACT_MATCHED',
+      }),
+    );
     const decision = el.querySelector('.decision-panel')!.textContent!;
     expect(decision).toContain('Final decision');
     expect(decision).toContain('Misleading');
@@ -71,18 +87,33 @@ describe('VerificationReportComponent', () => {
   });
 
   it('marks an administrator final decision', () => {
-    const el = render(base({ is_finalized: true, review_pending: false, overall_verdict: 'FAKE', decided_by_admin: true }));
-    expect(el.querySelector('.decision-panel')!.textContent).toContain('administrator made this final decision');
+    const el = render(
+      base({
+        is_finalized: true,
+        review_pending: false,
+        overall_verdict: 'FAKE',
+        decided_by_admin: true,
+      }),
+    );
+    expect(el.querySelector('.decision-panel')!.textContent).toContain(
+      'administrator made this final decision',
+    );
   });
 
   it('labels the source finding "Relevant article from claimed source" with Found / Not Found', () => {
-    expect(render(base()).querySelector('.findings-grid')!.textContent).toContain('Relevant article from claimed source: Found');
+    expect(render(base()).querySelector('.findings-grid')!.textContent).toContain(
+      'Relevant article from claimed source: Found',
+    );
     expect(render(base()).textContent).not.toContain('01 / SOURCE');
   });
 
   it('shows the date comparison only when a date was claimed', () => {
-    expect(render(base({ date_status: 'MISMATCHED' })).textContent).not.toContain('Date: Mismatched');
-    expect(render(base({ date_status: 'MISMATCHED', claimed_published_date: '2026-01-02' })).textContent).toContain('Date: Mismatched');
+    expect(render(base({ date_status: 'MISMATCHED' })).textContent).not.toContain(
+      'Date: Mismatched',
+    );
+    expect(
+      render(base({ date_status: 'MISMATCHED', claimed_published_date: '2026-01-02' })).textContent,
+    ).toContain('Date: Mismatched');
   });
 
   it('labels the finding "Headline Alteration", never "Content Alteration"', () => {
@@ -91,28 +122,38 @@ describe('VerificationReportComponent', () => {
     expect(el.textContent).not.toMatch(/content alteration/i);
   });
 
-  it('shows claim headline, source title, publisher, URL, reason and exact match', () => {
+  it('shows claim headline, source title, publisher, reason and exact match', () => {
     const el = render(base());
     const compare = el.querySelector('.headline-compare')!.textContent!;
     expect(compare).toContain('নতুন সেতুর উদ্বোধন');
     expect(compare).toContain('prothomalo.com');
-    expect(el.querySelector('.headline-compare a')?.getAttribute('href')).toBe('https://prothomalo.com/a/b');
     expect(el.querySelector('.headline-verdict')?.textContent).toContain('Exact Matched');
     expect(el.textContent).toContain('exactly matches the source title');
   });
 
   it('an altered headline lists each difference with the claim and source text', () => {
-    const el = render(base({
-      content_status: 'ALTERED',
-      ai_content_status: 'ALTERED',
-      analysis: {
-        headline_alteration: {
-          ...MATCHED_DETAIL, verdict: 'ALTERED', exact_match: false,
-          reason: 'The headline states ১০ জন; the source title states ৫ জন.',
-          differences: [{ kind: 'numbers', detail: 'The headline states ১০ জন; the source title states ৫ জন.', claim_text: '১০ জন', source_text: '৫ জন' }],
+    const el = render(
+      base({
+        content_status: 'ALTERED',
+        ai_content_status: 'ALTERED',
+        analysis: {
+          headline_alteration: {
+            ...MATCHED_DETAIL,
+            verdict: 'ALTERED',
+            exact_match: false,
+            reason: 'The headline states ১০ জন; the source title states ৫ জন.',
+            differences: [
+              {
+                kind: 'numbers',
+                detail: 'The headline states ১০ জন; the source title states ৫ জন.',
+                claim_text: '১০ জন',
+                source_text: '৫ জন',
+              },
+            ],
+          },
         },
-      },
-    }));
+      }),
+    );
     const diff = el.querySelector('.difference')!.textContent!;
     expect(diff).toContain('Number changed');
     expect(diff).toContain('১০ জন');
@@ -120,21 +161,40 @@ describe('VerificationReportComponent', () => {
   });
 
   it('a missing headline verdict explains why instead of showing matched/altered', () => {
-    const el = render(base({
-      content_status: null,
-      headline_check_status: 'MODEL_UNAVAILABLE',
-      analysis: { headline_alteration: { ...MATCHED_DETAIL, status: 'MODEL_UNAVAILABLE', verdict: null, exact_match: false, reason: 'The semantic model was unavailable, so no verdict was reached.' } },
-    }));
+    const el = render(
+      base({
+        content_status: null,
+        headline_check_status: 'MODEL_UNAVAILABLE',
+        analysis: {
+          headline_alteration: {
+            ...MATCHED_DETAIL,
+            status: 'MODEL_UNAVAILABLE',
+            verdict: null,
+            exact_match: false,
+            reason: 'The semantic model was unavailable, so no verdict was reached.',
+          },
+        },
+      }),
+    );
     expect(el.querySelector('.headline-verdict')?.textContent).toContain('No verdict');
-    const verdicts = el.querySelector('.findings-grid')!.textContent! + el.querySelector('.headline-verdict')!.textContent!;
+    const verdicts =
+      el.querySelector('.findings-grid')!.textContent! +
+      el.querySelector('.headline-verdict')!.textContent!;
     expect(verdicts).not.toMatch(/Exact Matched|Meaning Preserved|Headline: Altered/);
   });
 
   it('a missing article says "Not found in claimed source" and hides headline, date and body findings', () => {
-    const el = render(base({
-      source_status: 'NOT_FOUND', content_status: null, headline_check_status: 'SOURCE_NOT_FOUND',
-      date_status: 'MATCHED', claimed_published_date: '2026-01-02', claim_scope: 'HEADLINE_WITH_BODY', analysis: null,
-    }));
+    const el = render(
+      base({
+        source_status: 'NOT_FOUND',
+        content_status: null,
+        headline_check_status: 'SOURCE_NOT_FOUND',
+        date_status: 'MATCHED',
+        claimed_published_date: '2026-01-02',
+        claim_scope: 'HEADLINE_WITH_BODY',
+        analysis: null,
+      }),
+    );
     const text = el.textContent!;
     expect(text).toContain('Relevant article from claimed source: Not Found');
     expect(text).toContain('Not found in claimed source');
@@ -152,19 +212,21 @@ describe('VerificationReportComponent', () => {
   });
 
   it('text with body shows the four labelled scores in their own section, and unavailable is not 0', () => {
-    const el = render(base({
-      claim_scope: 'HEADLINE_WITH_BODY',
-      analysis: {
-        headline_alteration: MATCHED_DETAIL,
-        body_similarity: {
-          status: 'COMPUTED',
-          tfidf_cosine: { available: true, value: 0.9 },
-          jaccard: { available: true, value: 0.32 },
-          normalized_levenshtein: { available: true, value: 0.55 },
-          semantic_cosine: { available: false, value: null, reason: 'embedding model failed' },
+    const el = render(
+      base({
+        claim_scope: 'HEADLINE_WITH_BODY',
+        analysis: {
+          headline_alteration: MATCHED_DETAIL,
+          body_similarity: {
+            status: 'COMPUTED',
+            tfidf_cosine: { available: true, value: 0.9 },
+            jaccard: { available: true, value: 0.32 },
+            normalized_levenshtein: { available: true, value: 0.55 },
+            semantic_cosine: { available: false, value: null, reason: 'embedding model failed' },
+          },
         },
-      },
-    }));
+      }),
+    );
     const cards = Array.from(el.querySelectorAll('.metric-card'));
     expect(cards.length).toBe(4);
     expect(el.textContent).toContain('TF-IDF cosine similarity');
@@ -177,41 +239,86 @@ describe('VerificationReportComponent', () => {
   });
 
   it('body section explains why scores are unavailable', () => {
-    const el = render(base({
-      claim_scope: 'HEADLINE_WITH_BODY',
-      analysis: { headline_alteration: MATCHED_DETAIL, body_similarity: { status: 'UNAVAILABLE', reason: 'The source article’s body could not be extracted.' } },
-    }));
+    const el = render(
+      base({
+        claim_scope: 'HEADLINE_WITH_BODY',
+        analysis: {
+          headline_alteration: MATCHED_DETAIL,
+          body_similarity: {
+            status: 'UNAVAILABLE',
+            reason: 'The source article’s body could not be extracted.',
+          },
+        },
+      }),
+    );
     expect(el.textContent).toContain('Body similarity unavailable');
     expect(el.querySelectorAll('.metric-card').length).toBe(0);
   });
 
   it('a failed search shows coverage and no headline comparison verdict', () => {
-    const el = render(base({
-      source_status: 'INCOMPLETE',
-      content_status: null,
-      headline_check_status: 'SOURCE_CHECK_INCOMPLETE',
-      confidence: 0,
-      analysis: { search: { attempted: 5, success: 0, success_empty: 0, failed: 5, skipped: 0, cached: 0, adequate: false } },
-    }));
+    const el = render(
+      base({
+        source_status: 'INCOMPLETE',
+        content_status: null,
+        headline_check_status: 'SOURCE_CHECK_INCOMPLETE',
+        confidence: 0,
+        analysis: {
+          search: {
+            attempted: 5,
+            success: 0,
+            success_empty: 0,
+            failed: 5,
+            skipped: 0,
+            cached: 0,
+            adequate: false,
+          },
+        },
+      }),
+    );
     expect(el.textContent).toContain('Some searches were unavailable');
     expect(el.textContent).toContain('No conclusion can be drawn');
     expect(el.textContent).toContain('could not be completed');
   });
 
   it('legacy results never show an old content verdict as a headline verdict', () => {
-    const el = render(base({ content_status: null, ai_content_status: null, headline_check_status: null, legacy_result: true, analysis: null }));
+    const el = render(
+      base({
+        content_status: null,
+        ai_content_status: null,
+        headline_check_status: null,
+        legacy_result: true,
+        analysis: null,
+      }),
+    );
     expect(el.textContent).toContain('earlier version of the checker');
-    expect(el.querySelector('.findings-grid')!.textContent).not.toMatch(/Exact Matched|Meaning Preserved/);
+    expect(el.querySelector('.findings-grid')!.textContent).not.toMatch(
+      /Exact Matched|Meaning Preserved/,
+    );
   });
 
   it('reviewers can inspect correspondence measurements; the public view does not show them', () => {
-    const analysis = { headline_alteration: MATCHED_DETAIL, metrics: { headline_title_similarity: { state: 'COMPUTED' as const, value: 0.74 } } };
-    expect(render(base({ analysis }), true).textContent).toContain('Source correspondence measurements');
-    expect(render(base({ analysis })).textContent).not.toContain('Source correspondence measurements');
+    const analysis = {
+      headline_alteration: MATCHED_DETAIL,
+      metrics: { headline_title_similarity: { state: 'COMPUTED' as const, value: 0.74 } },
+    };
+    expect(render(base({ analysis }), true).textContent).toContain(
+      'Source correspondence measurements',
+    );
+    expect(render(base({ analysis })).textContent).not.toContain(
+      'Source correspondence measurements',
+    );
   });
 
   it('keeps the evidence link', () => {
-    const el = render(base({ matched_articles: [{ url: 'https://prothomalo.com/a/b', title: 'T', rank_score: 0.8 } as any] }));
-    expect(el.querySelector('a.article-title')?.getAttribute('href')).toBe('https://prothomalo.com/a/b');
+    const el = render(
+      base({
+        matched_articles: [
+          { url: 'https://prothomalo.com/a/b', title: 'T', rank_score: 0.8 } as any,
+        ],
+      }),
+    );
+    expect(el.querySelector('a.article-title')?.getAttribute('href')).toBe(
+      'https://prothomalo.com/a/b',
+    );
   });
 });

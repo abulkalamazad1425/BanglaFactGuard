@@ -1,15 +1,23 @@
 <div class="tiers-page">
-  <div class="container" style="padding-top:48px; padding-bottom:80px;">
-
+  <div class="container" style="padding-top: 48px; padding-bottom: 80px">
     <div class="page-header">
       <div class="header-text">
         <h1>Credibility Weight Tiers</h1>
-        
       </div>
       <div class="header-actions">
         <a routerLink="/admin" class="btn btn-ghost">← Back to Admin</a>
         <button class="btn btn-primary" (click)="openCreateDrawer()">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+          >
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
           New Tier
         </button>
       </div>
@@ -17,35 +25,92 @@
 
     <div class="card voting-config-card">
       <h3>Voting Configuration</h3>
-  
-      <form [formGroup]="votingConfigForm" class="voting-config-grid" (ngSubmit)="saveVotingConfig()">
+
+      <form
+        [formGroup]="votingConfigForm"
+        class="voting-config-grid"
+        (ngSubmit)="saveVotingConfig()"
+      >
         <div class="form-group">
           <label for="credibility-tiers-min_expert_votes" class="form-label">Min voters (M)</label>
-          <input id="credibility-tiers-min_expert_votes" type="number" min="1" max="50" formControlName="min_expert_votes" class="form-control" />
+          <input
+            id="credibility-tiers-min_expert_votes"
+            type="number"
+            min="1"
+            max="50"
+            formControlName="min_expert_votes"
+            class="form-control"
+          />
         </div>
         <div class="form-group">
-          <label for="credibility-tiers-verified_threshold" class="form-label">Verified threshold (T)</label>
-          <input id="credibility-tiers-verified_threshold" type="number" step="0.1" min="0.01" formControlName="verified_threshold" class="form-control" />
+          <label for="credibility-tiers-verified_threshold" class="form-label"
+            >Verified threshold (T)</label
+          >
+          <input
+            id="credibility-tiers-verified_threshold"
+            type="number"
+            step="0.1"
+            min="0.01"
+            formControlName="verified_threshold"
+            class="form-control"
+          />
         </div>
         <div class="form-group">
           <label for="credibility-tiers-lead_margin" class="form-label">Lead margin</label>
-          <input id="credibility-tiers-lead_margin" type="number" step="0.1" min="0" formControlName="lead_margin" class="form-control" />
+          <input
+            id="credibility-tiers-lead_margin"
+            type="number"
+            step="0.1"
+            min="0"
+            formControlName="lead_margin"
+            class="form-control"
+          />
         </div>
         <div class="form-group">
-          <label for="credibility-tiers-activation_threshold_votes" class="form-label">Activation threshold (N)</label>
-          <input id="credibility-tiers-activation_threshold_votes" type="number" min="0" formControlName="activation_threshold_votes" class="form-control" />
+          <label for="credibility-tiers-activation_threshold_votes" class="form-label"
+            >Activation threshold (N)</label
+          >
+          <input
+            id="credibility-tiers-activation_threshold_votes"
+            type="number"
+            min="0"
+            formControlName="activation_threshold_votes"
+            class="form-control"
+          />
         </div>
         <div class="form-group">
-          <label for="credibility-tiers-max_review_votes" class="form-label">Max review votes</label>
-          <input id="credibility-tiers-max_review_votes" type="number" min="1" formControlName="max_review_votes" class="form-control" placeholder="Not configured" />
+          <label for="credibility-tiers-max_review_votes" class="form-label"
+            >Max review votes</label
+          >
+          <input
+            id="credibility-tiers-max_review_votes"
+            type="number"
+            min="1"
+            formControlName="max_review_votes"
+            class="form-control"
+            placeholder="Not configured"
+          />
         </div>
         <div class="form-group">
-          <label for="credibility-tiers-max_review_hours" class="form-label">Max review hours</label>
-          <input id="credibility-tiers-max_review_hours" type="number" min="1" formControlName="max_review_hours" class="form-control" placeholder="Not configured" />
+          <label for="credibility-tiers-max_review_hours" class="form-label"
+            >Max review hours</label
+          >
+          <input
+            id="credibility-tiers-max_review_hours"
+            type="number"
+            min="1"
+            formControlName="max_review_hours"
+            class="form-control"
+            placeholder="Not configured"
+          />
         </div>
         <div class="form-group voting-config-save">
           <button type="submit" class="btn btn-primary btn-sm" [disabled]="votingConfigSaving()">
-            @if (votingConfigSaving()) { <span class="btn-spinner"></span> Saving... } @else { Save Configuration }
+            @if (votingConfigSaving()) {
+              <span class="btn-spinner"></span> Saving...
+            } @else {
+              Save Configuration
+            }
           </button>
         </div>
       </form>
@@ -77,15 +142,23 @@
               <tr [class.inactive-row]="!tier.is_active">
                 <td class="font-semibold">{{ tier.label }}</td>
                 <td>{{ tier.min_accuracy_pct }}% – {{ tier.max_accuracy_pct }}%</td>
-                <td><span class="badge badge-primary">×{{ tier.weight }}</span></td>
+                <td
+                  ><span class="badge badge-primary">×{{ tier.weight }}</span></td
+                >
                 <td>
-                  <span class="status-badge" [class.active]="tier.is_active" [class.inactive]="!tier.is_active">
+                  <span
+                    class="status-badge"
+                    [class.active]="tier.is_active"
+                    [class.inactive]="!tier.is_active"
+                  >
                     {{ tier.is_active ? 'Active' : 'Disabled' }}
                   </span>
                 </td>
                 <td class="actions-cell">
                   <button class="btn btn-ghost btn-sm" (click)="openEditDrawer(tier)">Edit</button>
-                  <button class="btn btn-ghost btn-sm text-error" (click)="deleteTier(tier)">Delete</button>
+                  <button class="btn btn-ghost btn-sm text-error" (click)="deleteTier(tier)"
+                    >Delete</button
+                  >
                 </td>
               </tr>
             }
@@ -111,22 +184,59 @@
     <form [formGroup]="form" class="drawer-form" (ngSubmit)="onSubmit()">
       <div class="form-section">
         <div class="form-group">
-          <label for="credibility-tiers-label" class="form-label">Label <span class="required">*</span></label>
-          <input id="credibility-tiers-label" type="text" formControlName="label" class="form-control" placeholder="Enter the tier name" />
+          <label for="credibility-tiers-label" class="form-label"
+            >Label <span class="required">*</span></label
+          >
+          <input
+            id="credibility-tiers-label"
+            type="text"
+            formControlName="label"
+            class="form-control"
+            placeholder="Enter the tier name"
+          />
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label for="credibility-tiers-min_accuracy_pct" class="form-label">Min Accuracy % <span class="required">*</span></label>
-            <input id="credibility-tiers-min_accuracy_pct" type="number" formControlName="min_accuracy_pct" class="form-control" min="0" max="100" step="0.1" />
+            <label for="credibility-tiers-min_accuracy_pct" class="form-label"
+              >Min Accuracy % <span class="required">*</span></label
+            >
+            <input
+              id="credibility-tiers-min_accuracy_pct"
+              type="number"
+              formControlName="min_accuracy_pct"
+              class="form-control"
+              min="0"
+              max="100"
+              step="0.1"
+            />
           </div>
           <div class="form-group">
-            <label for="credibility-tiers-max_accuracy_pct" class="form-label">Max Accuracy % <span class="required">*</span></label>
-            <input id="credibility-tiers-max_accuracy_pct" type="number" formControlName="max_accuracy_pct" class="form-control" min="0" max="100" step="0.1" />
+            <label for="credibility-tiers-max_accuracy_pct" class="form-label"
+              >Max Accuracy % <span class="required">*</span></label
+            >
+            <input
+              id="credibility-tiers-max_accuracy_pct"
+              type="number"
+              formControlName="max_accuracy_pct"
+              class="form-control"
+              min="0"
+              max="100"
+              step="0.1"
+            />
           </div>
         </div>
         <div class="form-group">
-          <label for="credibility-tiers-weight" class="form-label">Weight <span class="required">*</span></label>
-          <input id="credibility-tiers-weight" type="number" formControlName="weight" class="form-control" min="0.01" step="0.05" />
+          <label for="credibility-tiers-weight" class="form-label"
+            >Weight <span class="required">*</span></label
+          >
+          <input
+            id="credibility-tiers-weight"
+            type="number"
+            formControlName="weight"
+            class="form-control"
+            min="0.01"
+            step="0.05"
+          />
         </div>
         <div class="form-group checkbox-group">
           <label class="checkbox-label">
@@ -141,8 +251,10 @@
   <div class="drawer-footer">
     <button class="btn btn-ghost" (click)="closeDrawer()">Cancel</button>
     <button class="btn btn-primary" [disabled]="saving()" (click)="onSubmit()">
-      @if (saving()) { <span class="btn-spinner"></span> }
-      {{ saving() ? 'Saving...' : (isEditMode() ? 'Save Changes' : 'Create Tier') }}
+      @if (saving()) {
+        <span class="btn-spinner"></span>
+      }
+      {{ saving() ? 'Saving...' : isEditMode() ? 'Save Changes' : 'Create Tier' }}
     </button>
   </div>
 </div>

@@ -11,7 +11,7 @@ import { ExpertResponse, UpdateExpertRequest } from '../../../models/admin.model
   standalone: true,
   imports: [CommonModule, RouterLink, ReactiveFormsModule],
   templateUrl: './expert-management.html',
-  styleUrls: ['./expert-management.scss']
+  styleUrls: ['./expert-management.scss'],
 })
 export class ExpertManagementComponent implements OnInit {
   private readonly adminSvc = inject(AdminService);
@@ -35,36 +35,64 @@ export class ExpertManagementComponent implements OnInit {
     expertise_area: [''],
   });
 
-  ngOnInit(): void { this.load(); }
+  ngOnInit(): void {
+    this.load();
+  }
 
   load(): void {
     this.loading.set(true);
     this.loadError.set(false);
     this.adminSvc.listExperts().subscribe({
-      next: e => { this.experts.set(e); this.loading.set(false); },
-      error: () => { this.loading.set(false); this.loadError.set(true); },
+      next: (e) => {
+        this.experts.set(e);
+        this.loading.set(false);
+      },
+      error: () => {
+        this.loading.set(false);
+        this.loadError.set(true);
+      },
     });
   }
 
   /** Merge the server's answer into the existing row so a partial response
    *  can never blank a cell or reshape the table. */
-  private applyUpdate(id: string, updated: Partial<ExpertResponse> | null | undefined, fallback: Partial<ExpertResponse>): void {
-    this.experts.update(list => list.map(e => e.id === id ? { ...e, ...fallback, ...(updated ?? {}) } : e));
+  private applyUpdate(
+    id: string,
+    updated: Partial<ExpertResponse> | null | undefined,
+    fallback: Partial<ExpertResponse>,
+  ): void {
+    this.experts.update((list) =>
+      list.map((e) => (e.id === id ? { ...e, ...fallback, ...(updated ?? {}) } : e)),
+    );
   }
 
   deactivate(exp: ExpertResponse): void {
     this.busyId.set(exp.id);
     this.adminSvc.deactivateExpert(exp.id).subscribe({
-      next: updated => { this.applyUpdate(exp.id, updated, { is_active: false }); this.busyId.set(null); this.toast.success('Expert deactivated.'); },
-      error: () => { this.busyId.set(null); this.toast.error('Failed to deactivate expert.'); },
+      next: (updated) => {
+        this.applyUpdate(exp.id, updated, { is_active: false });
+        this.busyId.set(null);
+        this.toast.success('Expert deactivated.');
+      },
+      error: () => {
+        this.busyId.set(null);
+        this.toast.error('Failed to deactivate expert.');
+      },
     });
   }
 
   activate(exp: ExpertResponse): void {
     this.busyId.set(exp.id);
     this.adminSvc.activateExpert(exp.id).subscribe({
-      next: updated => { this.applyUpdate(exp.id, updated, { is_active: true }); this.busyId.set(null); this.toast.success('Expert activated.'); },
-      error: () => { this.busyId.set(null); this.toast.error('Failed to activate expert.'); },
+      next: (updated) => {
+        this.applyUpdate(exp.id, updated, { is_active: true });
+        this.busyId.set(null);
+        this.toast.success('Expert activated.');
+      },
+      error: () => {
+        this.busyId.set(null);
+        this.toast.error('Failed to activate expert.');
+      },
     });
   }
 
@@ -78,7 +106,10 @@ export class ExpertManagementComponent implements OnInit {
   }
 
   confirmEdit(): void {
-    if (this.editForm.invalid) { this.editForm.markAllAsTouched(); return; }
+    if (this.editForm.invalid) {
+      this.editForm.markAllAsTouched();
+      return;
+    }
     this.editing.set(true);
     const body: UpdateExpertRequest = {
       full_name: this.editForm.value.full_name || undefined,
@@ -99,16 +130,28 @@ export class ExpertManagementComponent implements OnInit {
     });
   }
 
-  resetPwd(exp: ExpertResponse): void { this.resetTarget.set(exp); this.pwForm.reset(); }
+  resetPwd(exp: ExpertResponse): void {
+    this.resetTarget.set(exp);
+    this.pwForm.reset();
+  }
 
   confirmReset(): void {
     if (this.pwForm.invalid) return;
     this.resetting.set(true);
-    this.adminSvc.resetExpertPassword(this.resetTarget()!.id, {
-      new_password: this.pwForm.value.password as string,
-    }).subscribe({
-      next: () => { this.resetting.set(false); this.resetTarget.set(null); this.toast.success('Password reset successfully.'); },
-      error: () => { this.resetting.set(false); this.toast.error('Failed to reset password.'); },
-    });
+    this.adminSvc
+      .resetExpertPassword(this.resetTarget()!.id, {
+        new_password: this.pwForm.value.password as string,
+      })
+      .subscribe({
+        next: () => {
+          this.resetting.set(false);
+          this.resetTarget.set(null);
+          this.toast.success('Password reset successfully.');
+        },
+        error: () => {
+          this.resetting.set(false);
+          this.toast.error('Failed to reset password.');
+        },
+      });
   }
 }

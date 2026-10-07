@@ -11,7 +11,7 @@ import { ToastService } from '../../../shared/services/toast.service';
   standalone: true,
   imports: [CommonModule, RouterLink, ReactiveFormsModule],
   templateUrl: './credibility-tiers.html',
-  styleUrls: ['./credibility-tiers.scss']
+  styleUrls: ['./credibility-tiers.scss'],
 })
 export class CredibilityTiersComponent implements OnInit {
   private readonly adminSvc = inject(AdminService);
@@ -48,7 +48,7 @@ export class CredibilityTiersComponent implements OnInit {
   ngOnInit(): void {
     this.load();
     this.adminSvc.getVotingConfig().subscribe({
-      next: c => this.votingConfigForm.patchValue(c),
+      next: (c) => this.votingConfigForm.patchValue(c),
       error: () => this.toast.error('Failed to load voting configuration.'),
     });
   }
@@ -61,14 +61,18 @@ export class CredibilityTiersComponent implements OnInit {
     }
     this.votingConfigSaving.set(true);
     this.adminSvc.updateVotingConfig(this.votingConfigForm.value).subscribe({
-      next: c => {
+      next: (c) => {
         this.votingConfigForm.patchValue(c);
         this.votingConfigSaving.set(false);
         this.toast.success('Voting configuration updated.');
       },
       error: (err) => {
         this.votingConfigSaving.set(false);
-        this.toast.error(err.error?.detail?.message || err.error?.message || 'Failed to update voting configuration.');
+        this.toast.error(
+          err.error?.detail?.message ||
+            err.error?.message ||
+            'Failed to update voting configuration.',
+        );
       },
     });
   }
@@ -76,15 +80,27 @@ export class CredibilityTiersComponent implements OnInit {
   load(): void {
     this.loading.set(true);
     this.adminSvc.listCredibilityTiers().subscribe({
-      next: t => { this.tiers.set(t); this.loading.set(false); },
-      error: () => { this.loading.set(false); this.toast.error('Failed to load credibility tiers.'); },
+      next: (t) => {
+        this.tiers.set(t);
+        this.loading.set(false);
+      },
+      error: () => {
+        this.loading.set(false);
+        this.toast.error('Failed to load credibility tiers.');
+      },
     });
   }
 
   openCreateDrawer(): void {
     this.isEditMode.set(false);
     this.editingTierId = null;
-    this.form.reset({ label: '', min_accuracy_pct: 0, max_accuracy_pct: 100, weight: 1.0, is_active: true });
+    this.form.reset({
+      label: '',
+      min_accuracy_pct: 0,
+      max_accuracy_pct: 100,
+      weight: 1.0,
+      is_active: true,
+    });
     this.drawerOpen.set(true);
   }
 
@@ -128,7 +144,10 @@ export class CredibilityTiersComponent implements OnInit {
   deleteTier(tier: CredibilityWeightTier): void {
     if (!confirm(`Delete tier "${tier.label}"? This cannot be undone.`)) return;
     this.adminSvc.deleteCredibilityTier(tier.id).subscribe({
-      next: () => { this.toast.success('Tier deleted.'); this.load(); },
+      next: () => {
+        this.toast.success('Tier deleted.');
+        this.load();
+      },
       error: () => this.toast.error('Failed to delete tier.'),
     });
   }

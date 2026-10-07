@@ -10,10 +10,12 @@ export const appConfig: ApplicationConfig = {
   providers: [
     provideZoneChangeDetection({ eventCoalescing: true }),
     // Anchor scrolling lets links such as /faq#body-scores open the right answer.
-    provideRouter(APP_ROUTES, withViewTransitions(), withInMemoryScrolling({ anchorScrolling: 'enabled' })),
-    provideHttpClient(
-      withInterceptors([errorInterceptor, authInterceptor])
+    provideRouter(
+      APP_ROUTES,
+      withViewTransitions(),
+      withInMemoryScrolling({ anchorScrolling: 'enabled' }),
     ),
+    provideHttpClient(withInterceptors([errorInterceptor, authInterceptor])),
     provideAnimationsAsync(),
   ],
 };

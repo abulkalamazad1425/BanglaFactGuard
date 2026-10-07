@@ -8,7 +8,7 @@ import { VERIFY_OPTIONS } from '../verification/verify-facts/verify-options';
   standalone: true,
   imports: [CommonModule, RouterLink],
   templateUrl: './home.html',
-  styleUrls: ['./home.scss']
+  styleUrls: ['./home.scss'],
 })
 export class HomeComponent {
   readonly options = VERIFY_OPTIONS;
@@ -16,7 +16,15 @@ export class HomeComponent {
   readonly verdicts = [
     { label: 'Real', cls: 'badge-true', desc: 'Experts found the claim accurate.' },
     { label: 'Fake', cls: 'badge-false', desc: 'Experts found the claim false.' },
-    { label: 'Altered', cls: 'badge-partial', desc: 'Experts found material changes to the original content.' },
-    { label: 'Misleading', cls: 'badge-partial', desc: 'Experts found the claim gives a misleading impression.' },
+    {
+      label: 'Altered',
+      cls: 'badge-partial',
+      desc: 'Experts found material changes to the original content.',
+    },
+    {
+      label: 'Misleading',
+      cls: 'badge-partial',
+      desc: 'Experts found the claim gives a misleading impression.',
+    },
   ];
 }

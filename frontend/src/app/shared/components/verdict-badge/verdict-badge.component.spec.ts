@@ -26,11 +26,21 @@ describe('VerdictBadgeComponent', () => {
   });
 
   it('labels the three headline statuses and hides an unclaimed date', () => {
-    expect(render({ sourceStatus: 'CONFIRMED', headlineStatus: 'MEANING_PRESERVED' }).textContent).toContain('Meaning Preserved');
-    const el = render({ sourceStatus: 'CONFIRMED', headlineStatus: 'ALTERED', dateStatus: 'MISMATCHED', hideDate: true });
+    expect(
+      render({ sourceStatus: 'CONFIRMED', headlineStatus: 'MEANING_PRESERVED' }).textContent,
+    ).toContain('Meaning Preserved');
+    const el = render({
+      sourceStatus: 'CONFIRMED',
+      headlineStatus: 'ALTERED',
+      dateStatus: 'MISMATCHED',
+      hideDate: true,
+    });
     expect(el.textContent).toContain('Headline: Altered');
     expect(el.textContent).not.toContain('Mismatched');
-    expect(render({ sourceStatus: 'CONFIRMED', headlineStatus: 'ALTERED', dateStatus: 'MISMATCHED' }).textContent).toContain('Date: Mismatched');
+    expect(
+      render({ sourceStatus: 'CONFIRMED', headlineStatus: 'ALTERED', dateStatus: 'MISMATCHED' })
+        .textContent,
+    ).toContain('Date: Mismatched');
   });
 
   it('shows the AI decision as Likely Fake / Likely Real, never a final verdict', () => {

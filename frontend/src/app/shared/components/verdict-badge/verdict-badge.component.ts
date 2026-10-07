@@ -25,8 +25,16 @@ const OVERALL_CONFIG: Record<OverallVerdict, BadgeConfig> = {
 };
 
 const HEADLINE_CONFIG: Record<HeadlineAlterationStatus, BadgeConfig> = {
-  EXACT_MATCHED: { text: `Headline: ${HEADLINE_LABELS.EXACT_MATCHED}`, cls: 'badge-true', icon: '✓' },
-  MEANING_PRESERVED: { text: `Headline: ${HEADLINE_LABELS.MEANING_PRESERVED}`, cls: 'badge-true', icon: '≈' },
+  EXACT_MATCHED: {
+    text: `Headline: ${HEADLINE_LABELS.EXACT_MATCHED}`,
+    cls: 'badge-true',
+    icon: '✓',
+  },
+  MEANING_PRESERVED: {
+    text: `Headline: ${HEADLINE_LABELS.MEANING_PRESERVED}`,
+    cls: 'badge-true',
+    icon: '≈',
+  },
   ALTERED: { text: `Headline: ${HEADLINE_LABELS.ALTERED}`, cls: 'badge-partial', icon: '◑' },
 };
 
@@ -60,28 +68,69 @@ const DATE_CONFIG: Record<DateStatus, BadgeConfig> = {
   template: `
     @for (badge of badges; track badge.text) {
       <span class="badge" [ngClass]="badge.cls" [attr.title]="badge.title || null">
-        @if (badge.icon) {<span class="badge-icon" aria-hidden="true">{{ badge.icon }}</span>}
+        @if (badge.icon) {
+          <span class="badge-icon" aria-hidden="true">{{ badge.icon }}</span>
+        }
         {{ badge.text }}
       </span>
     }
   `,
   host: { '[class.inline]': 'true' },
-  styles: [`
-    :host { display: inline-flex; gap: 6px; flex-wrap: wrap; }
-    .badge { padding: 6px 11px; font-size: 13px; font-weight: 700; line-height: 1.4; border: 1px solid currentColor; border-radius: 6px; }
-    .badge-icon { font-weight: 800; }
-  `],
+  styles: [
+    `
+      :host {
+        display: inline-flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .badge {
+        padding: 6px 11px;
+        font-size: 13px;
+        font-weight: 700;
+        line-height: 1.4;
+        border: 1px solid currentColor;
+        border-radius: 6px;
+      }
+      .badge-icon {
+        font-weight: 800;
+      }
+    `,
+  ],
 })
 export class VerdictBadgeComponent {
   private _preliminary = false;
-  @Input() set preliminary(value: boolean) { this._preliminary = value; this.recompute(); }
-  @Input() set label(val: string | null | undefined) { this._aiLabel = val ?? null; this.recompute(); }
-  @Input() set overallVerdict(val: OverallVerdict | null | undefined) { this._overallVerdict = val ?? null; this.recompute(); }
-  @Input() set sourceStatus(val: SourceStatus | null | undefined) { this._sourceStatus = val ?? null; this.recompute(); }
-  @Input() set headlineStatus(val: HeadlineAlterationStatus | null | undefined) { this._headlineStatus = val ?? null; this.recompute(); }
-  @Input() set contentStatus(val: ContentStatus | null | undefined) { this._contentStatus = val ?? null; this.recompute(); }
-  @Input() set dateStatus(val: DateStatus | null | undefined) { this._dateStatus = val ?? null; this.recompute(); }
-  @Input() set hideDate(val: boolean) { this._hideDate = val; this.recompute(); }
+  @Input() set preliminary(value: boolean) {
+    this._preliminary = value;
+    this.recompute();
+  }
+  @Input() set label(val: string | null | undefined) {
+    this._aiLabel = val ?? null;
+    this.recompute();
+  }
+  @Input() set overallVerdict(val: OverallVerdict | null | undefined) {
+    this._overallVerdict = val ?? null;
+    this.recompute();
+  }
+  @Input() set sourceStatus(val: SourceStatus | null | undefined) {
+    this._sourceStatus = val ?? null;
+    this.recompute();
+  }
+  @Input() set headlineStatus(val: HeadlineAlterationStatus | null | undefined) {
+    this._headlineStatus = val ?? null;
+    this.recompute();
+  }
+  @Input() set contentStatus(val: ContentStatus | null | undefined) {
+    this._contentStatus = val ?? null;
+    this.recompute();
+  }
+  @Input() set dateStatus(val: DateStatus | null | undefined) {
+    this._dateStatus = val ?? null;
+    this.recompute();
+  }
+  @Input() set hideDate(val: boolean) {
+    this._hideDate = val;
+    this.recompute();
+  }
 
   private _aiLabel: string | null = null;
   private _overallVerdict: OverallVerdict | null = null;
@@ -96,9 +145,11 @@ export class VerdictBadgeComponent {
   private recompute(): void {
     const badges: BadgeConfig[] = [];
     if (this._overallVerdict) {
-      badges.push(this._preliminary
-        ? { text: `AI: ${aiDecisionLabel(this._overallVerdict)}`, cls: 'badge-pending', icon: '' }
-        : OVERALL_CONFIG[this._overallVerdict]);
+      badges.push(
+        this._preliminary
+          ? { text: `AI: ${aiDecisionLabel(this._overallVerdict)}`, cls: 'badge-pending', icon: '' }
+          : OVERALL_CONFIG[this._overallVerdict],
+      );
     }
     if (this._sourceStatus === 'NOT_FOUND') {
       badges.push({ text: NOT_FOUND_IN_CLAIMED_SOURCE, cls: 'badge-not-found', icon: '' });
@@ -110,7 +161,11 @@ export class VerdictBadgeComponent {
       if (this._dateStatus && !this._hideDate) badges.push(DATE_CONFIG[this._dateStatus]);
     }
     if (!badges.length && this._aiLabel) {
-      badges.push({ text: `AI: ${aiDecisionLabel(this._aiLabel)}`, cls: 'badge-pending', icon: '' });
+      badges.push({
+        text: `AI: ${aiDecisionLabel(this._aiLabel)}`,
+        cls: 'badge-pending',
+        icon: '',
+      });
     }
     this.badges = badges.filter(Boolean);
   }

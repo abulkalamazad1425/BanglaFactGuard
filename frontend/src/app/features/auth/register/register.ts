@@ -1,6 +1,12 @@
 import { requestError } from '../../../shared/utils/presentation';
 import { Component, inject } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators, AbstractControl, ValidationErrors } from '@angular/forms';
+import {
+  FormBuilder,
+  ReactiveFormsModule,
+  Validators,
+  AbstractControl,
+  ValidationErrors,
+} from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { AuthService } from '../../../services/auth.service';
@@ -25,7 +31,7 @@ function passwordMatch(group: AbstractControl): ValidationErrors | null {
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, RouterLink],
   templateUrl: './register.html',
-  styleUrls: ['./register.scss']
+  styleUrls: ['./register.scss'],
 })
 export class RegisterComponent {
   private readonly fb = inject(FormBuilder);
@@ -39,42 +45,64 @@ export class RegisterComponent {
   form = this.fb.group({
     full_name: [''],
     email: ['', [Validators.required, Validators.email]],
-    passwords: this.fb.group({
-      password: ['', [Validators.required, passwordStrength]],
-      confirm: ['', Validators.required],
-    }, { validators: passwordMatch }),
+    passwords: this.fb.group(
+      {
+        password: ['', [Validators.required, passwordStrength]],
+        confirm: ['', Validators.required],
+      },
+      { validators: passwordMatch },
+    ),
   });
 
-  get emailInvalid() { return this.form.get('email')?.invalid && this.form.get('email')?.touched; }
-  get pwGroup() { return this.form.get('passwords'); }
-  get pwCtrl() { return this.pwGroup?.get('password'); }
-  get pwInvalid() { return this.pwCtrl?.invalid && this.pwCtrl?.touched; }
-  get pwError() { return this.pwCtrl?.errors?.['weakPassword'] as string | null; }
-  get confirmCtrl() { return this.pwGroup?.get('confirm'); }
+  get emailInvalid() {
+    return this.form.get('email')?.invalid && this.form.get('email')?.touched;
+  }
+  get pwGroup() {
+    return this.form.get('passwords');
+  }
+  get pwCtrl() {
+    return this.pwGroup?.get('password');
+  }
+  get pwInvalid() {
+    return this.pwCtrl?.invalid && this.pwCtrl?.touched;
+  }
+  get pwError() {
+    return this.pwCtrl?.errors?.['weakPassword'] as string | null;
+  }
+  get confirmCtrl() {
+    return this.pwGroup?.get('confirm');
+  }
   get confirmInvalid() {
-    return (this.pwGroup?.errors?.['mismatch'] && this.confirmCtrl?.touched) ||
-      (this.confirmCtrl?.invalid && this.confirmCtrl?.touched);
+    return (
+      (this.pwGroup?.errors?.['mismatch'] && this.confirmCtrl?.touched) ||
+      (this.confirmCtrl?.invalid && this.confirmCtrl?.touched)
+    );
   }
 
   onSubmit(): void {
-    if (this.form.invalid) { this.form.markAllAsTouched(); return; }
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
     this.loading = true;
     this.errorMsg = '';
 
     const { full_name, email, passwords } = this.form.value;
-    this.auth.register({
-      email: email!,
-      password: passwords!.password!,
-      full_name: full_name || undefined,
-    }).subscribe({
-      next: () => {
-        this.toast.success('Account created! Welcome to BanglaFactGuard.');
-        this.router.navigate(['/']);
-      },
-      error: (err) => {
-        this.errorMsg = requestError(err, 'Registration failed. Please try again.');
-        this.loading = false;
-      },
-    });
+    this.auth
+      .register({
+        email: email!,
+        password: passwords!.password!,
+        full_name: full_name || undefined,
+      })
+      .subscribe({
+        next: () => {
+          this.toast.success('Account created! Welcome to BanglaFactGuard.');
+          this.router.navigate(['/']);
+        },
+        error: (err) => {
+          this.errorMsg = requestError(err, 'Registration failed. Please try again.');
+          this.loading = false;
+        },
+      });
   }
 }

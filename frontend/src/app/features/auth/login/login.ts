@@ -11,7 +11,7 @@ import { ToastService } from '../../../shared/services/toast.service';
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, RouterLink],
   templateUrl: './login.html',
-  styleUrls: ['./login.scss']
+  styleUrls: ['./login.scss'],
 })
 export class LoginComponent {
   private readonly fb = inject(FormBuilder);
@@ -29,11 +29,18 @@ export class LoginComponent {
     password: ['', Validators.required],
   });
 
-  get emailInvalid() { return this.form.get('email')?.invalid && this.form.get('email')?.touched; }
-  get passwordInvalid() { return this.form.get('password')?.invalid && this.form.get('password')?.touched; }
+  get emailInvalid() {
+    return this.form.get('email')?.invalid && this.form.get('email')?.touched;
+  }
+  get passwordInvalid() {
+    return this.form.get('password')?.invalid && this.form.get('password')?.touched;
+  }
 
   onSubmit(): void {
-    if (this.form.invalid) { this.form.markAllAsTouched(); return; }
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
     this.loading = true;
     this.errorMsg = '';
 

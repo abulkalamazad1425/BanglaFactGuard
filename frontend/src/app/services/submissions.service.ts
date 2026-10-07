@@ -24,6 +24,8 @@ export class SubmissionsService {
 
   /** GET /api/v1/submissions/{id}/voting-details — public, 404 until the final decision. */
   getVotingDetails(submissionId: string): Observable<PublicVotingDetails> {
-    return this.api.get<PublicVotingDetails>(`${API_ENDPOINTS.SUBMISSIONS}/${submissionId}/voting-details`);
+    return this.api.get<PublicVotingDetails>(
+      `${API_ENDPOINTS.SUBMISSIONS}/${submissionId}/voting-details`,
+    );
   }
 }

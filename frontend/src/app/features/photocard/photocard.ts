@@ -58,7 +58,9 @@ export class PhotoCardComponent implements OnInit {
   sourcesLoading = true;
   sourcesError = false;
 
-  ngOnInit(): void { this.loadSources(); }
+  ngOnInit(): void {
+    this.loadSources();
+  }
 
   loadSources(): void {
     this.sourcesLoading = true;
@@ -102,9 +104,14 @@ export class PhotoCardComponent implements OnInit {
 
   private setFile(file: File): void {
     if (this.verifying) return;
-    if (!'image/jpeg,image/png,image/webp,image/gif'.split(',').includes(file.type) || file.size > 10 * 1024 * 1024 || file.size === 0) {
+    if (
+      !'image/jpeg,image/png,image/webp,image/gif'.split(',').includes(file.type) ||
+      file.size > 10 * 1024 * 1024 ||
+      file.size === 0
+    ) {
       this.errorMsg = 'Choose a supported, non-empty image under 10 MB.';
-      this.selectedFile = null; this.previewUrl = null;
+      this.selectedFile = null;
+      this.previewUrl = null;
       return;
     }
     this.errorMsg = null;

@@ -1,17 +1,87 @@
-<div class="history-page"><div class="container history-container">
-  <header class="page-header"><div><h1>My Review History</h1></div></header>
-  <form class="search-toolbar" (submit)="$event.preventDefault(); search(searchInput.value)"><label for="history-search">Search reviews</label><div class="search-row"><input #searchInput id="history-search" class="form-control" type="search" maxlength="200" placeholder="Search by headline or source"><button class="btn btn-primary" [disabled]="loading()">Search</button></div></form>
-  @if (loadError()) {<div role="alert" class="service-notice"><p>Could not load your reviews.</p><button class="btn btn-secondary" (click)="load()">Try again</button></div>}
-  @if (loading()) {<div class="loading-overlay" role="status" aria-label="Loading reviews"><div class="spinner"></div></div>}
-  @if (!loading() && !loadError() && !history().length) {<div class="empty-state card"><h2>No reviews found</h2><p>Try another search or return to the review queue.</p></div>}
-  <div class="submission-list">@for (h of history(); track h.review_id) {
-    <article class="card submission-card">
-      <div class="submission-meta"><span>{{ h.submission_type === 'MULTIMODAL' ? 'Text & image' : h.submission_type === 'PHOTO_CARD' ? 'Photo card' : 'Text & source' }}</span><time>{{ h.voted_at | date:'MMM d, y' }}</time></div>
-      <h2><a [routerLink]="['/verify',h.submission_id]">{{ h.headline || 'View submitted claim' }}</a></h2>
-      <div class="review-outcomes"><div><h3>Your vote</h3><app-verdict-badge [overallVerdict]="h.vote_overall_verdict" /></div><div><h3>Final decision</h3>@if (h.final_overall_verdict) {<app-verdict-badge [overallVerdict]="h.final_overall_verdict" />} @else if (h.submission_status === 'ESCALATED') {<span class="badge badge-partial">Escalated — awaiting admin decision</span>} @else {<span class="badge badge-pending">Under review</span>}</div></div>
-      <!-- @if (h.matched !== null) {<p class="text-muted">{{ h.matched ? 'Your vote matches the final verdict.' : 'The final verdict differs from your vote.' }}</p>} -->
-      <a class="btn btn-secondary btn-sm" [routerLink]="['/verify',h.submission_id]">View details →</a>
-    </article>
-  }</div>
-  <nav class="pagination" aria-label="Review pages"><button class="btn btn-ghost" [disabled]="offset() === 0 || loading()" (click)="prev()">← Previous</button><span>Page {{ page() }}</span><button class="btn btn-ghost" [disabled]="history().length < limit || loading()" (click)="next()">Next →</button></nav>
-</div></div>
+<div class="history-page"
+  ><div class="container history-container">
+    <header class="page-header"
+      ><div><h1>My Review History</h1></div></header
+    >
+    <form class="search-toolbar" (submit)="$event.preventDefault(); search(searchInput.value)"
+      ><label for="history-search">Search reviews</label
+      ><div class="search-row"
+        ><input
+          #searchInput
+          id="history-search"
+          class="form-control"
+          type="search"
+          maxlength="200"
+          placeholder="Search by headline or source"
+        /><button class="btn btn-primary" [disabled]="loading()">Search</button></div
+      ></form
+    >
+    @if (loadError()) {
+      <div role="alert" class="service-notice"
+        ><p>Could not load your reviews.</p
+        ><button class="btn btn-secondary" (click)="load()">Try again</button></div
+      >
+    }
+    @if (loading()) {
+      <div class="loading-overlay" role="status" aria-label="Loading reviews"
+        ><div class="spinner"></div
+      ></div>
+    }
+    @if (!loading() && !loadError() && !history().length) {
+      <div class="empty-state card"
+        ><h2>No reviews found</h2><p>Try another search or return to the review queue.</p></div
+      >
+    }
+    <div class="submission-list">
+      @for (h of history(); track h.review_id) {
+        <article class="card submission-card">
+          <div class="submission-meta"
+            ><span>{{
+              h.submission_type === 'MULTIMODAL'
+                ? 'Text & image'
+                : h.submission_type === 'PHOTO_CARD'
+                  ? 'Photo card'
+                  : 'Text & source'
+            }}</span
+            ><time>{{ h.voted_at | date: 'MMM d, y' }}</time></div
+          >
+          <h2
+            ><a [routerLink]="['/verify', h.submission_id]">{{
+              h.headline || 'View submitted claim'
+            }}</a></h2
+          >
+          <div class="review-outcomes"
+            ><div
+              ><h3>Your vote</h3
+              ><app-verdict-badge [overallVerdict]="h.vote_overall_verdict" /></div
+            ><div
+              ><h3>Final decision</h3>
+              @if (h.final_overall_verdict) {
+                <app-verdict-badge [overallVerdict]="h.final_overall_verdict" />
+              } @else if (h.submission_status === 'ESCALATED') {
+                <span class="badge badge-partial">Escalated — awaiting admin decision</span>
+              } @else {
+                <span class="badge badge-pending">Under review</span>
+              }
+            </div></div
+          >
+          <!-- @if (h.matched !== null) {<p class="text-muted">{{ h.matched ? 'Your vote matches the final verdict.' : 'The final verdict differs from your vote.' }}</p>} -->
+          <a class="btn btn-secondary btn-sm" [routerLink]="['/verify', h.submission_id]"
+            >View details →</a
+          >
+        </article>
+      }
+    </div>
+    <nav class="pagination" aria-label="Review pages"
+      ><button class="btn btn-ghost" [disabled]="offset() === 0 || loading()" (click)="prev()"
+        >← Previous</button
+      ><span>Page {{ page() }}</span
+      ><button
+        class="btn btn-ghost"
+        [disabled]="history().length < limit || loading()"
+        (click)="next()"
+        >Next →</button
+      ></nav
+    >
+  </div></div
+>

@@ -34,8 +34,6 @@ export class PhotoCardService {
 
   /** GET /photocard/{submission_id} — current state: pending, processing, failed or the saved report. */
   getResult(submissionId: string): Observable<PhotoCardResultResponse> {
-    return this.api.get<PhotoCardResultResponse>(
-      `${API_ENDPOINTS.PHOTOCARD}/${submissionId}`,
-    );
+    return this.api.get<PhotoCardResultResponse>(`${API_ENDPOINTS.PHOTOCARD}/${submissionId}`);
   }
 }

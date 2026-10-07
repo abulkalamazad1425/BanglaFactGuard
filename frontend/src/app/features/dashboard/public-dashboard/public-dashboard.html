@@ -6,73 +6,257 @@
 
     <section class="archive-summary" aria-label="All-time archive summary">
       <div class="summary-intro"><p>All-time archive activity</p></div>
-      <div class="summary-stat"><strong>{{ summary() ? (summary()!.total | number) : '—' }}</strong><span>Total Claims Submitted</span></div>
-      <div class="summary-stat"><strong>{{ summary() ? (summary()!.finalized | number) : '—' }}</strong><span>Finalized Claims</span></div>
-      <div class="summary-stat"><strong>{{ summary() ? (summary()!.review | number) : '—' }}</strong><span>Claims Under Review</span></div>
+      <div class="summary-stat"
+        ><strong>{{ summary() ? (summary()!.total | number) : '—' }}</strong
+        ><span>Total Claims Submitted</span></div
+      >
+      <div class="summary-stat"
+        ><strong>{{ summary() ? (summary()!.finalized | number) : '—' }}</strong
+        ><span>Finalized Claims</span></div
+      >
+      <div class="summary-stat"
+        ><strong>{{ summary() ? (summary()!.review | number) : '—' }}</strong
+        ><span>Claims Under Review</span></div
+      >
     </section>
 
     <section class="archive-browser" aria-labelledby="browse-heading">
       <!-- <div class="browse-heading"><div><h2 id="browse-heading">Explore Facts </h2></div></div> -->
       <div class="view-switch" aria-label="Review stage">
-        <button type="button" [class.selected]="reviewState() === 'finalized'" [attr.aria-pressed]="reviewState() === 'finalized'" (click)="selectState('finalized')">Final decisions</button>
-        <button type="button" [class.selected]="reviewState() === 'review'" [attr.aria-pressed]="reviewState() === 'review'" (click)="selectState('review')">Under review</button>
+        <button
+          type="button"
+          [class.selected]="reviewState() === 'finalized'"
+          [attr.aria-pressed]="reviewState() === 'finalized'"
+          (click)="selectState('finalized')"
+          >Final decisions</button
+        >
+        <button
+          type="button"
+          [class.selected]="reviewState() === 'review'"
+          [attr.aria-pressed]="reviewState() === 'review'"
+          (click)="selectState('review')"
+          >Under review</button
+        >
       </div>
 
       <form [formGroup]="filterForm" (ngSubmit)="search()" class="search-panel">
         <div class="primary-filters">
-          <label class="search-field" for="archive-keyword"><span>Search claims</span><input id="archive-keyword" formControlName="keyword" class="form-control" maxlength="255" placeholder="Search by headline or keyword" type="search"></label>
+          <label class="search-field" for="archive-keyword"
+            ><span>Search claims</span
+            ><input
+              id="archive-keyword"
+              formControlName="keyword"
+              class="form-control"
+              maxlength="255"
+              placeholder="Search by headline or keyword"
+              type="search"
+          /></label>
           @if (reviewState() === 'finalized') {
-            <label for="archive-verdict"><span>Decision</span><select id="archive-verdict" formControlName="overall_verdict" class="form-control"><option value="">All decisions</option><option value="REAL">Real</option><option value="FAKE">Fake</option><option value="MISLEADING">Misleading</option><option value="ALTERED">Altered</option></select></label>
+            <label for="archive-verdict"
+              ><span>Decision</span
+              ><select id="archive-verdict" formControlName="overall_verdict" class="form-control"
+                ><option value="">All decisions</option
+                ><option value="REAL">Real</option
+                ><option value="FAKE">Fake</option
+                ><option value="MISLEADING">Misleading</option
+                ><option value="ALTERED">Altered</option></select
+              ></label
+            >
           }
-          <label for="archive-method"><span>Content type</span><select id="archive-method" formControlName="method" class="form-control"><option value="">All types</option><option value="SOURCE_BASED">Text &amp; source</option><option value="PHOTO_CARD">Photo card</option><option value="MULTIMODAL">Text &amp; image</option></select></label>
+          <label for="archive-method"
+            ><span>Content type</span
+            ><select id="archive-method" formControlName="method" class="form-control"
+              ><option value="">All types</option
+              ><option value="SOURCE_BASED">Text &amp; source</option
+              ><option value="PHOTO_CARD">Photo card</option
+              ><option value="MULTIMODAL">Text &amp; image</option></select
+            ></label
+          >
           <button type="submit" class="btn btn-primary">Search</button>
         </div>
-        <div class="filter-actions"><button type="button" class="filter-toggle" [attr.aria-expanded]="advanced()" aria-controls="archive-advanced" (click)="advanced.set(!advanced())">{{ advanced() ? '− Fewer filters' : '+ More filters' }}</button><button type="button" class="filter-toggle" (click)="resetFilters()">Clear filters</button></div>
+        <div class="filter-actions"
+          ><button
+            type="button"
+            class="filter-toggle"
+            [attr.aria-expanded]="advanced()"
+            aria-controls="archive-advanced"
+            (click)="advanced.set(!advanced())"
+            >{{ advanced() ? '− Fewer filters' : '+ More filters' }}</button
+          ><button type="button" class="filter-toggle" (click)="resetFilters()"
+            >Clear filters</button
+          ></div
+        >
         <div id="archive-advanced" [hidden]="!advanced()">
           <div class="advanced-filters">
-            <label for="archive-source"><span>Claimed news outlet</span><select id="archive-source" formControlName="source_id" class="form-control"><option value="">All available outlets</option>@for (source of sources(); track source.id) {<option [value]="source.id">{{ source.display_name }}</option>}</select></label>
-            <label for="archive-from"><span>Submitted from (UTC)</span><input id="archive-from" type="date" formControlName="date_from" class="form-control"></label>
-            <label for="archive-to"><span>Submitted through (UTC)</span><input id="archive-to" type="date" formControlName="date_to" class="form-control"></label>
+            <label for="archive-source"
+              ><span>Claimed news outlet</span
+              ><select id="archive-source" formControlName="source_id" class="form-control"
+                ><option value="">All available outlets</option>
+                @for (source of sources(); track source.id) {
+                  <option [value]="source.id">{{ source.display_name }}</option>
+                }
+              </select></label
+            >
+            <label for="archive-from"
+              ><span>Submitted from (UTC)</span
+              ><input
+                id="archive-from"
+                type="date"
+                formControlName="date_from"
+                class="form-control"
+            /></label>
+            <label for="archive-to"
+              ><span>Submitted through (UTC)</span
+              ><input id="archive-to" type="date" formControlName="date_to" class="form-control"
+            /></label>
           </div>
-          <p class="filter-help">Dates refer to when a claim was submitted, not when the news was published. Outlet filters apply to news text and photocards.</p>
-          @if (sourcesError()) {<p class="filter-help" role="status">The outlet list could not be loaded. <button type="button" class="filter-toggle" (click)="loadSources()">Try again</button></p>}
+          <p class="filter-help"
+            >Dates refer to when a claim was submitted, not when the news was published. Outlet
+            filters apply to news text and photocards.</p
+          >
+          @if (sourcesError()) {
+            <p class="filter-help" role="status"
+              >The outlet list could not be loaded.
+              <button type="button" class="filter-toggle" (click)="loadSources()"
+                >Try again</button
+              ></p
+            >
+          }
         </div>
-        @if (validation()) {<p class="validation-message" role="alert">{{ validation() }}</p>}
+        @if (validation()) {
+          <p class="validation-message" role="alert">{{ validation() }}</p>
+        }
       </form>
 
       @if (activeFilters().length) {
-        <div class="active-filters" aria-label="Applied filters">@for (filter of activeFilters(); track filter.key) {<button type="button" (click)="removeFilter(filter.key)" [attr.aria-label]="'Remove filter: ' + filter.label">{{ filter.label }} <span aria-hidden="true">×</span></button>}</div>
+        <div class="active-filters" aria-label="Applied filters">
+          @for (filter of activeFilters(); track filter.key) {
+            <button
+              type="button"
+              (click)="removeFilter(filter.key)"
+              [attr.aria-label]="'Remove filter: ' + filter.label"
+              >{{ filter.label }} <span aria-hidden="true">×</span></button
+            >
+          }
+        </div>
       }
       <div class="results-region" [attr.aria-busy]="loading()">
         @if (loading()) {
-          <div class="result-state" role="status"><div class="spinner"></div><p>Loading fact checks…</p></div>
+          <div class="result-state" role="status"
+            ><div class="spinner"></div><p>Loading fact checks…</p></div
+          >
         } @else if (error()) {
-          <div class="result-state" role="alert"><h3>We couldn’t load the archive</h3><p>Your filters are saved. Please try again shortly.</p><button type="button" class="btn btn-secondary" (click)="retry()">Try again</button></div>
+          <div class="result-state" role="alert"
+            ><h3>We couldn’t load the archive</h3
+            ><p>Your filters are saved. Please try again shortly.</p
+            ><button type="button" class="btn btn-secondary" (click)="retry()"
+              >Try again</button
+            ></div
+          >
         } @else if (!validation() && !items().length) {
-          <div class="result-state"><span class="empty-symbol" aria-hidden="true">⌕</span><h3>{{ activeFilters().length ? 'No matching fact checks' : reviewState() === 'finalized' ? 'No final decisions yet' : 'No checks awaiting review' }}</h3>
-          @if (activeFilters().length) {<button type="button" class="btn btn-secondary" (click)="resetFilters()">Clear filters</button>} @else {<button type="button" class="btn btn-secondary" (click)="selectState(reviewState() === 'finalized' ? 'review' : 'finalized')">{{ reviewState() === 'finalized' ? 'Explore checks under review' : 'Explore final decisions' }}</button>}
+          <div class="result-state"
+            ><span class="empty-symbol" aria-hidden="true">⌕</span
+            ><h3>{{
+              activeFilters().length
+                ? 'No matching fact checks'
+                : reviewState() === 'finalized'
+                  ? 'No final decisions yet'
+                  : 'No checks awaiting review'
+            }}</h3>
+            @if (activeFilters().length) {
+              <button type="button" class="btn btn-secondary" (click)="resetFilters()"
+                >Clear filters</button
+              >
+            } @else {
+              <button
+                type="button"
+                class="btn btn-secondary"
+                (click)="selectState(reviewState() === 'finalized' ? 'review' : 'finalized')"
+                >{{
+                  reviewState() === 'finalized'
+                    ? 'Explore checks under review'
+                    : 'Explore final decisions'
+                }}</button
+              >
+            }
           </div>
         } @else if (!validation()) {
-          <p class="result-count" role="status">Showing {{ first() }}–{{ last() }} of {{ total() | number }} {{ reviewState() === 'finalized' ? 'final decisions' : 'checks under review' }}</p>
+          <p class="result-count" role="status"
+            >Showing {{ first() }}–{{ last() }} of {{ total() | number }}
+            {{ reviewState() === 'finalized' ? 'final decisions' : 'checks under review' }}</p
+          >
           <div class="report-list">
             @for (item of items(); track item.submission_id) {
               <article class="report-card">
-                @if (item.image_url && !failedImages().has(item.submission_id)) {<div class="report-image"><img [src]="item.image_url" alt="Image submitted with this claim" loading="lazy" (error)="imageFailed(item.submission_id)"></div>}
+                @if (item.image_url && !failedImages().has(item.submission_id)) {
+                  <div class="report-image"
+                    ><img
+                      [src]="item.image_url"
+                      alt="Image submitted with this claim"
+                      loading="lazy"
+                      (error)="imageFailed(item.submission_id)"
+                  /></div>
+                }
                 <div class="report-content">
-                  <div class="report-topline"><span class="content-type">{{ methodLabel(item.submission_type) }}</span>@if (item.is_finalized && item.overall_verdict) {<span class="decision-label">Final decision:</span><app-verdict-badge [overallVerdict]="item.overall_verdict" />} @else {<span class="review-label">Under review</span>}</div>
-                  <h3><a [routerLink]="['/verify', item.submission_id]">{{ item.headline || 'A submitted claim awaiting a readable headline' }}</a></h3>
-                  @if (chips(item); as findings) {@if (findings.length) {
-                    <div class="finding" [attr.aria-label]="'Preliminary AI findings for this claim'"><span class="finding-caption">Preliminary AI findings</span>
-                      @for (chip of findings; track chip.label) {<span class="chip" [ngClass]="'chip-' + chip.tone"><span class="chip-label">{{ chip.label }}:</span> {{ chip.value }}</span>}
-                    </div>
-                  }}
-                  <div class="report-meta">@if (item.claimed_source_text) {<span>Claimed outlet: {{ item.claimed_source_text }}</span>}<span>Submitted {{ item.created_at | date:'d MMM y' }}</span></div>
-                  <a class="report-link" [routerLink]="['/verify', item.submission_id]">Read full report <span aria-hidden="true">↗</span><span class="sr-only">: {{ item.headline || 'Submitted claim' }}</span></a>
+                  <div class="report-topline"
+                    ><span class="content-type">{{ methodLabel(item.submission_type) }}</span>
+                    @if (item.is_finalized && item.overall_verdict) {
+                      <span class="decision-label">Final decision:</span
+                      ><app-verdict-badge [overallVerdict]="item.overall_verdict" />
+                    } @else {
+                      <span class="review-label">Under review</span>
+                    }
+                  </div>
+                  <h3
+                    ><a [routerLink]="['/verify', item.submission_id]">{{
+                      item.headline || 'A submitted claim awaiting a readable headline'
+                    }}</a></h3
+                  >
+                  @if (chips(item); as findings) {
+                    @if (findings.length) {
+                      <div
+                        class="finding"
+                        [attr.aria-label]="'Preliminary AI findings for this claim'"
+                        ><span class="finding-caption">Preliminary AI findings</span>
+                        @for (chip of findings; track chip.label) {
+                          <span class="chip" [ngClass]="'chip-' + chip.tone"
+                            ><span class="chip-label">{{ chip.label }}:</span>
+                            {{ chip.value }}</span
+                          >
+                        }
+                      </div>
+                    }
+                  }
+                  <div class="report-meta">
+                    @if (item.claimed_source_text) {
+                      <span>Claimed outlet: {{ item.claimed_source_text }}</span>
+                    }
+                    <span>Submitted {{ item.created_at | date: 'd MMM y' }}</span></div
+                  >
+                  <a class="report-link" [routerLink]="['/verify', item.submission_id]"
+                    >Read full report <span aria-hidden="true">↗</span
+                    ><span class="sr-only">: {{ item.headline || 'Submitted claim' }}</span></a
+                  >
                 </div>
               </article>
             }
           </div>
-          <nav class="pagination" aria-label="Archive pages"><button type="button" class="btn btn-secondary" [disabled]="page() === 1" (click)="changePage(page() - 1)">← Previous</button><span>Page {{ page() }} of {{ pageCount() }}</span><button type="button" class="btn btn-secondary" [disabled]="page() >= pageCount()" (click)="changePage(page() + 1)">Next →</button></nav>
+          <nav class="pagination" aria-label="Archive pages"
+            ><button
+              type="button"
+              class="btn btn-secondary"
+              [disabled]="page() === 1"
+              (click)="changePage(page() - 1)"
+              >← Previous</button
+            ><span>Page {{ page() }} of {{ pageCount() }}</span
+            ><button
+              type="button"
+              class="btn btn-secondary"
+              [disabled]="page() >= pageCount()"
+              (click)="changePage(page() + 1)"
+              >Next →</button
+            ></nav
+          >
         }
       </div>
     </section>

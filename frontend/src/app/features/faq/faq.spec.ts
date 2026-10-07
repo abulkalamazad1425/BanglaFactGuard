@@ -10,7 +10,9 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 
 describe('FaqComponent', () => {
   it('is reachable at /faq through the application routes', async () => {
-    TestBed.configureTestingModule({ providers: [provideRouter(APP_ROUTES), provideHttpClient(), provideHttpClientTesting()] });
+    TestBed.configureTestingModule({
+      providers: [provideRouter(APP_ROUTES), provideHttpClient(), provideHttpClientTesting()],
+    });
     const harness = await RouterTestingHarness.create();
     await harness.navigateByUrl('/faq');
     harness.detectChanges();
@@ -25,13 +27,32 @@ describe('FaqComponent', () => {
     const fixture = TestBed.createComponent(FaqComponent);
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
-    for (const id of ['headline-alteration', 'matched-altered', 'source-not-found', 'body-scores', 'score-range',
-      'not-a-verdict', 'unavailable', 'photocard']) {
-      expect(el.querySelector(`#${id}`)).withContext(id).not.toBeNull();
+    for (const id of [
+      'headline-alteration',
+      'matched-altered',
+      'source-not-found',
+      'body-scores',
+      'score-range',
+      'not-a-verdict',
+      'unavailable',
+      'photocard',
+    ]) {
+      expect(el.querySelector(`#${id}`))
+        .withContext(id)
+        .not.toBeNull();
     }
     const text = el.textContent ?? '';
-    for (const phrase of ['TF-IDF cosine similarity', 'Jaccard similarity', 'Normalized Levenshtein similarity',
-      'LaBSE', 'not BERTScore', 'not proof that the claim is false', 'up to nine attempts', 'only the image', 'never the article body']) {
+    for (const phrase of [
+      'TF-IDF cosine similarity',
+      'Jaccard similarity',
+      'Normalized Levenshtein similarity',
+      'LaBSE',
+      'not BERTScore',
+      'not proof that the claim is false',
+      'up to nine attempts',
+      'only the image',
+      'never the article body',
+    ]) {
       expect(text).withContext(phrase).toContain(phrase);
     }
     expect(text).not.toMatch(/\?\s*Source not found/);
@@ -45,7 +66,9 @@ describe('FaqComponent', () => {
     const links = (cmp: any) => {
       const fixture = TestBed.createComponent(cmp);
       fixture.detectChanges();
-      return Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('a')).map((a) => a.getAttribute('href'));
+      return Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('a')).map((a) =>
+        a.getAttribute('href'),
+      );
     };
     expect(links(FooterComponent)).toContain('/faq');
     expect(links(NavbarComponent)).not.toContain('/faq');

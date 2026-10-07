@@ -1,68 +1,154 @@
-<div class="verification-shell"><div class="flow-container">
-  <header class="flow-heading"><div><span class="eyebrow">HELP / FREQUENTLY ASKED QUESTIONS</span><h1>How results are produced</h1><p>Short answers about the findings in a verification result.</p></div><a routerLink="/verify" class="btn btn-ghost">Check a claim ↗</a></header>
+<div class="verification-shell"
+  ><div class="flow-container">
+    <header class="flow-heading"
+      ><div
+        ><span class="eyebrow">HELP / FREQUENTLY ASKED QUESTIONS</span
+        ><h1>How results are produced</h1
+        ><p>Short answers about the findings in a verification result.</p></div
+      ><a routerLink="/verify" class="btn btn-ghost">Check a claim ↗</a></header
+    >
 
-  <div class="faq-layout">
-    <nav class="faq-toc surface" aria-label="Questions on this page"><span class="eyebrow">ON THIS PAGE</span>
-      <ol>@for (t of topics; track t.id) {<li><a routerLink="/faq" [fragment]="t.id">{{ t.question }}</a></li>}</ol>
-    </nav>
+    <div class="faq-layout">
+      <nav class="faq-toc surface" aria-label="Questions on this page"
+        ><span class="eyebrow">ON THIS PAGE</span>
+        <ol>
+          @for (t of topics; track t.id) {
+            <li
+              ><a routerLink="/faq" [fragment]="t.id">{{ t.question }}</a></li
+            >
+          }
+        </ol>
+      </nav>
 
-    <div class="faq-answers">
-      <section class="surface faq-item" id="headline-alteration" aria-labelledby="q-headline-alteration">
-        <h2 id="q-headline-alteration">What is Headline Alteration?</h2>
-        <p>It checks whether the claim headline says the same thing as the source report's title. Only the title is compared — never the article body — because the title is the statement the outlet stands behind.</p>
-      </section>
+      <div class="faq-answers">
+        <section
+          class="surface faq-item"
+          id="headline-alteration"
+          aria-labelledby="q-headline-alteration"
+        >
+          <h2 id="q-headline-alteration">What is Headline Alteration?</h2>
+          <p
+            >It checks whether the claim headline says the same thing as the source report's title.
+            Only the title is compared — never the article body — because the title is the statement
+            the outlet stands behind.</p
+          >
+        </section>
 
-      <section class="surface faq-item" id="matched-altered" aria-labelledby="q-matched-altered">
-        <h2 id="q-matched-altered">What do Exact Matched, Meaning Preserved and Altered mean?</h2>
-        <p><strong>Exact Matched:</strong> the headline is word-for-word the same as the source title. Only spacing, invisible characters and one final full stop (। . ! ?) are ignored; similar meaning never counts as an exact match.</p>
-        <p><strong>Meaning Preserved:</strong> the wording differs, but the headline says the same thing as the title.</p>
-        <p><strong>Altered:</strong> a name, number, date, negation, attribution or the main statement differs. If none of these can be established, no verdict is given.</p>
-      </section>
+        <section class="surface faq-item" id="matched-altered" aria-labelledby="q-matched-altered">
+          <h2 id="q-matched-altered">What do Exact Matched, Meaning Preserved and Altered mean?</h2>
+          <p
+            ><strong>Exact Matched:</strong> the headline is word-for-word the same as the source
+            title. Only spacing, invisible characters and one final full stop (। . ! ?) are ignored;
+            similar meaning never counts as an exact match.</p
+          >
+          <p
+            ><strong>Meaning Preserved:</strong> the wording differs, but the headline says the same
+            thing as the title.</p
+          >
+          <p
+            ><strong>Altered:</strong> a name, number, date, negation, attribution or the main
+            statement differs. If none of these can be established, no verdict is given.</p
+          >
+        </section>
 
-      <section class="surface faq-item" id="source-not-found" aria-labelledby="q-source-not-found">
-        <h2 id="q-source-not-found">What do “Found” and “Not found in claimed source” mean?</h2>
-        <p>“Relevant article from claimed source” answers one question: did the outlet the claim names publish a relevant article? <strong>Found</strong> means it did — this alone does not make the claim true. <strong>Not Found</strong> means the search found no relevant article there; it is not proof that the claim is false — the report may be worded differently, removed or not yet indexed. Headline, date and body comparisons need a relevant article, so they are not shown when none was found.</p>
-      </section>
+        <section
+          class="surface faq-item"
+          id="source-not-found"
+          aria-labelledby="q-source-not-found"
+        >
+          <h2 id="q-source-not-found">What do “Found” and “Not found in claimed source” mean?</h2>
+          <p
+            >“Relevant article from claimed source” answers one question: did the outlet the claim
+            names publish a relevant article? <strong>Found</strong> means it did — this alone does
+            not make the claim true. <strong>Not Found</strong> means the search found no relevant
+            article there; it is not proof that the claim is false — the report may be worded
+            differently, removed or not yet indexed. Headline, date and body comparisons need a
+            relevant article, so they are not shown when none was found.</p
+          >
+        </section>
 
-      <section class="surface faq-item" id="final-decision" aria-labelledby="q-final-decision">
-        <h2 id="q-final-decision">Who makes the final decision?</h2>
-        <p>Expert reviewers each cast an overall vote — Real, Fake, Misleading or Altered — with a written justification. The final decision comes from those votes only; the automated findings are preliminary. If the reviewers cannot agree within the configured time or vote limit, an administrator makes the final decision. After the decision, anyone can open “Voting Details” on the result page to see each vote and its justification.</p>
-      </section>
+        <section class="surface faq-item" id="final-decision" aria-labelledby="q-final-decision">
+          <h2 id="q-final-decision">Who makes the final decision?</h2>
+          <p
+            >Expert reviewers each cast an overall vote — Real, Fake, Misleading or Altered — with a
+            written justification. The final decision comes from those votes only; the automated
+            findings are preliminary. If the reviewers cannot agree within the configured time or
+            vote limit, an administrator makes the final decision. After the decision, anyone can
+            open “Voting Details” on the result page to see each vote and its justification.</p
+          >
+        </section>
 
-      <section class="surface faq-item" id="body-scores" aria-labelledby="q-body-scores">
-        <h2 id="q-body-scores">What are the body similarity scores?</h2>
-        <dl class="faq-terms">
-          <div><dt>TF-IDF cosine similarity</dt><dd>How much the two bodies share their important words.</dd></div>
-          <div><dt>Jaccard similarity</dt><dd>Words used by both ÷ all distinct words used by either.</dd></div>
-          <div><dt>Normalized Levenshtein similarity</dt><dd>1 − character edits ÷ length of the longer text.</dd></div>
-          <div><dt>Semantic similarity (LaBSE)</dt><dd>Meaning-based closeness from a multilingual embedding model (embedding cosine, not BERTScore).</dd></div>
-        </dl>
-      </section>
+        <section class="surface faq-item" id="body-scores" aria-labelledby="q-body-scores">
+          <h2 id="q-body-scores">What are the body similarity scores?</h2>
+          <dl class="faq-terms">
+            <div
+              ><dt>TF-IDF cosine similarity</dt
+              ><dd>How much the two bodies share their important words.</dd></div
+            >
+            <div
+              ><dt>Jaccard similarity</dt
+              ><dd>Words used by both ÷ all distinct words used by either.</dd></div
+            >
+            <div
+              ><dt>Normalized Levenshtein similarity</dt
+              ><dd>1 − character edits ÷ length of the longer text.</dd></div
+            >
+            <div
+              ><dt>Semantic similarity (LaBSE)</dt
+              ><dd
+                >Meaning-based closeness from a multilingual embedding model (embedding cosine, not
+                BERTScore).</dd
+              ></div
+            >
+          </dl>
+        </section>
 
-      <section class="surface faq-item" id="score-range" aria-labelledby="q-score-range">
-        <h2 id="q-score-range">How should I read a score?</h2>
-        <p>Scores run from 0 (nothing in common) to 1 (identical). High is 75% or more, moderate 40–74%, low below 40%.</p>
-      </section>
+        <section class="surface faq-item" id="score-range" aria-labelledby="q-score-range">
+          <h2 id="q-score-range">How should I read a score?</h2>
+          <p
+            >Scores run from 0 (nothing in common) to 1 (identical). High is 75% or more, moderate
+            40–74%, low below 40%.</p
+          >
+        </section>
 
-      <section class="surface faq-item" id="not-a-verdict" aria-labelledby="q-not-a-verdict">
-        <h2 id="q-not-a-verdict">Why are body scores not a verdict?</h2>
-        <p>Similar wording does not prove truth, and one changed number can hide in very similar text. The scores never decide the headline verdict.</p>
-      </section>
+        <section class="surface faq-item" id="not-a-verdict" aria-labelledby="q-not-a-verdict">
+          <h2 id="q-not-a-verdict">Why are body scores not a verdict?</h2>
+          <p
+            >Similar wording does not prove truth, and one changed number can hide in very similar
+            text. The scores never decide the headline verdict.</p
+          >
+        </section>
 
-      <section class="surface faq-item" id="unavailable" aria-labelledby="q-unavailable">
-        <h2 id="q-unavailable">When is a body score unavailable?</h2>
-        <p>When no body was submitted, no source report was found, the source text could not be read, or that measurement failed. It is shown as “Unavailable”, never 0%.</p>
-      </section>
+        <section class="surface faq-item" id="unavailable" aria-labelledby="q-unavailable">
+          <h2 id="q-unavailable">When is a body score unavailable?</h2>
+          <p
+            >When no body was submitted, no source report was found, the source text could not be
+            read, or that measurement failed. It is shown as “Unavailable”, never 0%.</p
+          >
+        </section>
 
-      <section class="surface faq-item" id="photocard" aria-labelledby="q-photocard">
-        <h2 id="q-photocard">How is a photo card read?</h2>
-        <p>You submit only the image. Gemini reads the headline exactly as printed, identifies the news outlet from the name or logo on the card (only among the currently active verified outlets, including their known alternative names) and reads the printed date, if there is one. These become the claim: the headline is checked against that outlet, and the date is compared when the card shows one. Nothing is guessed: a missing date stays empty. If the card has no clear headline or no recognised outlet, it is not checked. If the card cannot be read at the moment (up to nine attempts), you are asked to submit it again later.</p>
-      </section>
+        <section class="surface faq-item" id="photocard" aria-labelledby="q-photocard">
+          <h2 id="q-photocard">How is a photo card read?</h2>
+          <p
+            >You submit only the image. Gemini reads the headline exactly as printed, identifies the
+            news outlet from the name or logo on the card (only among the currently active verified
+            outlets, including their known alternative names) and reads the printed date, if there
+            is one. These become the claim: the headline is checked against that outlet, and the
+            date is compared when the card shows one. Nothing is guessed: a missing date stays
+            empty. If the card has no clear headline or no recognised outlet, it is not checked. If
+            the card cannot be read at the moment (up to nine attempts), you are asked to submit it
+            again later.</p
+          >
+        </section>
 
-      <section class="surface faq-item" id="date" aria-labelledby="q-date">
-        <h2 id="q-date">How is the publication date checked?</h2>
-        <p>Your claimed date is compared with the report's publication date (Bangladesh time). A mismatch alone does not mean the news is false.</p>
-      </section>
+        <section class="surface faq-item" id="date" aria-labelledby="q-date">
+          <h2 id="q-date">How is the publication date checked?</h2>
+          <p
+            >Your claimed date is compared with the report's publication date (Bangladesh time). A
+            mismatch alone does not mean the news is false.</p
+          >
+        </section>
+      </div>
     </div>
-  </div>
-</div></div>
+  </div></div
+>

@@ -10,7 +10,10 @@ import {
   SubmissionSummary,
   SubmissionStats,
 } from '../models/verification.model';
-import { MultimodalPredictionDetail, MultimodalPredictionResult } from '../models/verification.model';
+import {
+  MultimodalPredictionDetail,
+  MultimodalPredictionResult,
+} from '../models/verification.model';
 
 // ── Verification Service ──────────────────────────────────────────────
 // Covers: POST /api/v1/verify  →  GET /api/v1/verify/{id}
@@ -34,9 +37,7 @@ export class VerificationService {
 
   /** GET /api/v1/verify/{submission_id}/status — poll a queued verification */
   getStatus(submissionId: string): Observable<VerificationStatus> {
-    return this.api.get<VerificationStatus>(
-      `${API_ENDPOINTS.VERIFICATION}/${submissionId}/status`,
-    );
+    return this.api.get<VerificationStatus>(`${API_ENDPOINTS.VERIFICATION}/${submissionId}/status`);
   }
 
   /** GET /api/v1/verify/{submission_id} — fetch the full result */
@@ -70,10 +71,19 @@ export class MultimodalService {
     return this.api.postFormData<MultimodalPredictionResult>(API_ENDPOINTS.MULTIMODAL_PREDICT, fd);
   }
 
-  submitAsync(headline: string, bodyText: string, image: File): Observable<{ submission_id: string; status: string }> {
+  submitAsync(
+    headline: string,
+    bodyText: string,
+    image: File,
+  ): Observable<{ submission_id: string; status: string }> {
     const data = new FormData();
-    data.append('headline', headline); data.append('body_text', bodyText); data.append('image', image);
-    return this.api.postFormData<{ submission_id: string; status: string }>(API_ENDPOINTS.MULTIMODAL_PREDICT + '/async', data);
+    data.append('headline', headline);
+    data.append('body_text', bodyText);
+    data.append('image', image);
+    return this.api.postFormData<{ submission_id: string; status: string }>(
+      API_ENDPOINTS.MULTIMODAL_PREDICT + '/async',
+      data,
+    );
   }
 
   /** GET /api/v1/multimodal/by-submission/{submission_id} */

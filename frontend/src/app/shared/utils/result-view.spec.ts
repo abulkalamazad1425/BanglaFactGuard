@@ -27,31 +27,53 @@ function response(overrides: Partial<VerificationResponse> = {}): VerificationRe
 describe('result-view', () => {
   describe('headlineView', () => {
     it('splits a match into Exact Matched / Meaning Preserved and keeps Altered', () => {
-      expect(headlineView(response({ headline_status: 'EXACT_MATCHED' })).title).toBe('Exact Matched');
-      expect(headlineView(response({ headline_status: 'MEANING_PRESERVED' })).title).toBe('Meaning Preserved');
-      expect(headlineView(response({ content_status: 'ALTERED', headline_status: 'ALTERED' })).title).toBe('Altered');
+      expect(headlineView(response({ headline_status: 'EXACT_MATCHED' })).title).toBe(
+        'Exact Matched',
+      );
+      expect(headlineView(response({ headline_status: 'MEANING_PRESERVED' })).title).toBe(
+        'Meaning Preserved',
+      );
+      expect(
+        headlineView(response({ content_status: 'ALTERED', headline_status: 'ALTERED' })).title,
+      ).toBe('Altered');
       // An older response without headline_status: no evidence of exactness -> Meaning Preserved.
       expect(headlineView(response()).title).toBe('Meaning Preserved');
       expect(headlineView(response({ content_status: 'ALTERED' })).tone).toBe('altered');
     });
 
     it('explains a missing verdict instead of guessing one', () => {
-      const v = headlineView(response({ content_status: null, headline_check_status: 'UNDETERMINED' }));
+      const v = headlineView(
+        response({ content_status: null, headline_check_status: 'UNDETERMINED' }),
+      );
       expect(v.tone).toBe('none');
       expect(v.title).toBe('No verdict');
       expect(v.summary).toContain('no verdict');
     });
 
     it('keeps source-not-found and a failed search apart', () => {
-      const notFound = headlineView(response({ source_status: 'NOT_FOUND', content_status: null, headline_check_status: 'SOURCE_NOT_FOUND' }));
-      const failed = headlineView(response({ source_status: 'INCOMPLETE', content_status: null, headline_check_status: 'SOURCE_CHECK_INCOMPLETE' }));
+      const notFound = headlineView(
+        response({
+          source_status: 'NOT_FOUND',
+          content_status: null,
+          headline_check_status: 'SOURCE_NOT_FOUND',
+        }),
+      );
+      const failed = headlineView(
+        response({
+          source_status: 'INCOMPLETE',
+          content_status: null,
+          headline_check_status: 'SOURCE_CHECK_INCOMPLETE',
+        }),
+      );
       expect(notFound.summary).toContain('No relevant article');
       expect(failed.summary).toContain('could not be completed');
       expect(notFound.summary).not.toEqual(failed.summary);
     });
 
     it('never relabels a legacy content verdict as a headline verdict', () => {
-      const v = headlineView(response({ content_status: null, headline_check_status: null, legacy_result: true }));
+      const v = headlineView(
+        response({ content_status: null, headline_check_status: null, legacy_result: true }),
+      );
       expect(v.tone).toBe('none');
       expect(v.summary).toContain('earlier version');
     });
@@ -62,13 +84,22 @@ describe('result-view', () => {
       status: 'COMPUTED',
       tfidf_cosine: { available: true, value: 0.82 },
       jaccard: { available: true, value: 0.31 },
-      normalized_levenshtein: { available: true, value: 0.55, details: { truncated: true, claim_chars_compared: 20000, source_chars_compared: 20000 } },
+      normalized_levenshtein: {
+        available: true,
+        value: 0.55,
+        details: { truncated: true, claim_chars_compared: 20000, source_chars_compared: 20000 },
+      },
       semantic_cosine: { available: false, value: null, reason: 'embedding model failed' },
     };
 
     it('labels every metric with its range and explanation', () => {
       const rows = buildBodyMetricRows(report);
-      expect(rows.map((r) => r.key)).toEqual(['tfidf_cosine', 'jaccard', 'normalized_levenshtein', 'semantic_cosine']);
+      expect(rows.map((r) => r.key)).toEqual([
+        'tfidf_cosine',
+        'jaccard',
+        'normalized_levenshtein',
+        'semantic_cosine',
+      ]);
       expect(rows[0].label).toBe('TF-IDF cosine similarity');
       expect(rows.every((r) => r.range.includes('0 =') && r.measures.length > 20)).toBeTrue();
       expect(rows[3].label).toContain('LaBSE');
@@ -98,8 +129,12 @@ describe('result-view', () => {
 
     it('a skipped comparison has no rows, and unavailable reasons are surfaced', () => {
       expect(buildBodyMetricRows({ status: 'SKIPPED', reason: 'no body' })).toEqual([]);
-      expect(bodySectionMessage({ status: 'UNAVAILABLE', reason: 'The source body could not be extracted.' }, 'HEADLINE_WITH_BODY'))
-        .toBe('The source body could not be extracted.');
+      expect(
+        bodySectionMessage(
+          { status: 'UNAVAILABLE', reason: 'The source body could not be extracted.' },
+          'HEADLINE_WITH_BODY',
+        ),
+      ).toBe('The source body could not be extracted.');
       expect(bodySectionMessage(report, 'HEADLINE_WITH_BODY')).toBeNull();
       expect(bodySectionMessage(report, 'HEADLINE_ONLY')).toBeNull();
     });
@@ -115,7 +150,11 @@ describe('result-view', () => {
     const rows = buildCorrespondenceRows({
       metrics: {
         headline_title_similarity: { state: 'COMPUTED', value: 0.74 },
-        title_keyword_coverage: { state: 'UNAVAILABLE', value: null, reason: 'source article has no title' },
+        title_keyword_coverage: {
+          state: 'UNAVAILABLE',
+          value: null,
+          reason: 'source article has no title',
+        },
       },
     });
     expect(rows.map((r) => r.display)).toEqual(['74%', 'Unavailable']);

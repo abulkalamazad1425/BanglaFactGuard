@@ -22,7 +22,10 @@ export interface FaqTopic {
 export class FaqComponent {
   readonly topics: FaqTopic[] = [
     { id: 'headline-alteration', question: 'What is Headline Alteration?' },
-    { id: 'matched-altered', question: 'What do Exact Matched, Meaning Preserved and Altered mean?' },
+    {
+      id: 'matched-altered',
+      question: 'What do Exact Matched, Meaning Preserved and Altered mean?',
+    },
     { id: 'source-not-found', question: 'What do “Found” and “Not found in claimed source” mean?' },
     { id: 'final-decision', question: 'Who makes the final decision?' },
     { id: 'body-scores', question: 'What are the body similarity scores?' },

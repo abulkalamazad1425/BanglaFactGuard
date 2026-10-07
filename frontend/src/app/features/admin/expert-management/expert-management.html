@@ -10,25 +10,35 @@
       </div>
     </header>
 
-    @if (loading()) { <div class="loading-overlay" role="status"><div class="spinner"></div><span class="sr-only">Loading experts</span></div> }
-    @else if (loadError()) {
-      <div class="service-notice" role="alert"><p>The expert list could not be loaded.</p><button type="button" class="btn btn-secondary" (click)="load()">Try again</button></div>
+    @if (loading()) {
+      <div class="loading-overlay" role="status"
+        ><div class="spinner"></div><span class="sr-only">Loading experts</span></div
+      >
+    } @else if (loadError()) {
+      <div class="service-notice" role="alert"
+        ><p>The expert list could not be loaded.</p
+        ><button type="button" class="btn btn-secondary" (click)="load()">Try again</button></div
+      >
     } @else {
       <div class="table-card card">
         <div class="table-scroll" role="region" aria-label="Expert accounts" tabindex="0">
           <table class="data-table experts-table">
             <colgroup>
-              <col class="col-name"><col class="col-email"><col class="col-expertise"><col class="col-cred"><col class="col-votes"><col class="col-status"><col class="col-actions">
+              <col class="col-name" /><col class="col-email" /><col class="col-expertise" /><col
+                class="col-cred"
+              /><col class="col-votes" /><col class="col-status" /><col class="col-actions" />
             </colgroup>
-            <thead><tr>
-              <th scope="col">Name</th>
-              <th scope="col">Email</th>
-              <th scope="col">Expertise</th>
-              <th scope="col">Credibility</th>
-              <th scope="col" class="num">Votes</th>
-              <th scope="col">Status</th>
-              <th scope="col">Actions</th>
-            </tr></thead>
+            <thead
+              ><tr>
+                <th scope="col">Name</th>
+                <th scope="col">Email</th>
+                <th scope="col">Expertise</th>
+                <th scope="col">Credibility</th>
+                <th scope="col" class="num">Votes</th>
+                <th scope="col">Status</th>
+                <th scope="col">Actions</th>
+              </tr></thead
+            >
             <tbody>
               @for (exp of experts(); track exp.id) {
                 <tr [class.inactive-row]="!exp.is_active">
@@ -38,29 +48,66 @@
                   <td>
                     @if (exp.credibility_score !== null && exp.credibility_score !== undefined) {
                       <span>{{ (exp.credibility_score * 100).toFixed(1) }}%</span>
-                    } @else { <span class="text-muted">Not yet calculated</span> }
+                    } @else {
+                      <span class="text-muted">Not yet calculated</span>
+                    }
                   </td>
                   <td class="num">{{ exp.total_votes ?? 0 }}</td>
                   <td>
-                    <span class="badge status-badge" [class.badge-true]="exp.is_active" [class.badge-not-found]="!exp.is_active">
-                      <span aria-hidden="true">{{ exp.is_active ? '●' : '○' }}</span> {{ exp.is_active ? 'Active' : 'Inactive' }}
+                    <span
+                      class="badge status-badge"
+                      [class.badge-true]="exp.is_active"
+                      [class.badge-not-found]="!exp.is_active"
+                    >
+                      <span aria-hidden="true">{{ exp.is_active ? '●' : '○' }}</span>
+                      {{ exp.is_active ? 'Active' : 'Inactive' }}
                     </span>
                   </td>
                   <td>
                     <div class="action-btns">
-                      <button type="button" class="btn btn-secondary btn-sm" (click)="openEdit(exp)" [attr.aria-label]="'Edit ' + (exp.full_name || exp.email)">Edit</button>
+                      <button
+                        type="button"
+                        class="btn btn-secondary btn-sm"
+                        (click)="openEdit(exp)"
+                        [attr.aria-label]="'Edit ' + (exp.full_name || exp.email)"
+                        >Edit</button
+                      >
                       @if (exp.is_active) {
-                        <button type="button" class="btn btn-danger btn-sm toggle-btn" [disabled]="busyId() === exp.id" (click)="deactivate(exp)" [attr.aria-label]="'Deactivate ' + (exp.full_name || exp.email)">{{ busyId() === exp.id ? 'Saving…' : 'Deactivate' }}</button>
+                        <button
+                          type="button"
+                          class="btn btn-danger btn-sm toggle-btn"
+                          [disabled]="busyId() === exp.id"
+                          (click)="deactivate(exp)"
+                          [attr.aria-label]="'Deactivate ' + (exp.full_name || exp.email)"
+                          >{{ busyId() === exp.id ? 'Saving…' : 'Deactivate' }}</button
+                        >
                       } @else {
-                        <button type="button" class="btn btn-secondary btn-sm toggle-btn" [disabled]="busyId() === exp.id" (click)="activate(exp)" [attr.aria-label]="'Activate ' + (exp.full_name || exp.email)">{{ busyId() === exp.id ? 'Saving…' : 'Activate' }}</button>
+                        <button
+                          type="button"
+                          class="btn btn-secondary btn-sm toggle-btn"
+                          [disabled]="busyId() === exp.id"
+                          (click)="activate(exp)"
+                          [attr.aria-label]="'Activate ' + (exp.full_name || exp.email)"
+                          >{{ busyId() === exp.id ? 'Saving…' : 'Activate' }}</button
+                        >
                       }
-                      <button type="button" class="btn btn-ghost btn-sm" (click)="resetPwd(exp)" [attr.aria-label]="'Reset password for ' + (exp.full_name || exp.email)">Reset password</button>
+                      <button
+                        type="button"
+                        class="btn btn-ghost btn-sm"
+                        (click)="resetPwd(exp)"
+                        [attr.aria-label]="'Reset password for ' + (exp.full_name || exp.email)"
+                        >Reset password</button
+                      >
                     </div>
                   </td>
                 </tr>
-              }
-              @empty {
-                <tr><td colspan="7" class="empty-cell">No experts yet. <a routerLink="/admin/experts/new">Create the first expert account</a>.</td></tr>
+              } @empty {
+                <tr
+                  ><td colspan="7" class="empty-cell"
+                    >No experts yet.
+                    <a routerLink="/admin/experts/new">Create the first expert account</a>.</td
+                  ></tr
+                >
               }
             </tbody>
           </table>
@@ -70,28 +117,72 @@
 
     @if (editTarget()) {
       <div class="modal-overlay" (click)="editTarget.set(null)">
-        <div class="modal-card card" role="dialog" aria-modal="true" aria-labelledby="edit-expert-title" (click)="$event.stopPropagation()">
+        <div
+          class="modal-card card"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-expert-title"
+          (click)="$event.stopPropagation()"
+        >
           <h2 id="edit-expert-title">Edit {{ editTarget()!.full_name || editTarget()!.email }}</h2>
           <form [formGroup]="editForm" (ngSubmit)="confirmEdit()" novalidate>
             <div class="form-group">
-              <label for="expert-management-full_name" class="form-label">Full name <span class="req-mark" aria-hidden="true">*</span><span class="sr-only">(required)</span></label>
-              <input id="expert-management-full_name" type="text" formControlName="full_name" class="form-control"
-                     [class.is-invalid]="editForm.get('full_name')?.invalid && editForm.get('full_name')?.touched" aria-describedby="edit-name-error" />
-              @if (editForm.get('full_name')?.invalid && editForm.get('full_name')?.touched) {<span id="edit-name-error" class="form-error">Enter the expert’s name.</span>}
+              <label for="expert-management-full_name" class="form-label"
+                >Full name <span class="req-mark" aria-hidden="true">*</span
+                ><span class="sr-only">(required)</span></label
+              >
+              <input
+                id="expert-management-full_name"
+                type="text"
+                formControlName="full_name"
+                class="form-control"
+                [class.is-invalid]="
+                  editForm.get('full_name')?.invalid && editForm.get('full_name')?.touched
+                "
+                aria-describedby="edit-name-error"
+              />
+              @if (editForm.get('full_name')?.invalid && editForm.get('full_name')?.touched) {
+                <span id="edit-name-error" class="form-error">Enter the expert’s name.</span>
+              }
             </div>
             <div class="form-group">
-              <label for="expert-management-email" class="form-label">Email <span class="req-mark" aria-hidden="true">*</span><span class="sr-only">(required)</span></label>
-              <input id="expert-management-email" type="email" formControlName="email" class="form-control"
-                     [class.is-invalid]="editForm.get('email')?.invalid && editForm.get('email')?.touched" aria-describedby="edit-email-error" />
-              @if (editForm.get('email')?.invalid && editForm.get('email')?.touched) {<span id="edit-email-error" class="form-error">Enter a valid email address.</span>}
+              <label for="expert-management-email" class="form-label"
+                >Email <span class="req-mark" aria-hidden="true">*</span
+                ><span class="sr-only">(required)</span></label
+              >
+              <input
+                id="expert-management-email"
+                type="email"
+                formControlName="email"
+                class="form-control"
+                [class.is-invalid]="
+                  editForm.get('email')?.invalid && editForm.get('email')?.touched
+                "
+                aria-describedby="edit-email-error"
+              />
+              @if (editForm.get('email')?.invalid && editForm.get('email')?.touched) {
+                <span id="edit-email-error" class="form-error">Enter a valid email address.</span>
+              }
             </div>
             <div class="form-group">
-              <label for="expert-management-expertise_area" class="form-label">Expertise area <span class="optional">optional</span></label>
-              <input id="expert-management-expertise_area" type="text" formControlName="expertise_area" class="form-control" placeholder="Enter the area of expertise" />
+              <label for="expert-management-expertise_area" class="form-label"
+                >Expertise area <span class="optional">optional</span></label
+              >
+              <input
+                id="expert-management-expertise_area"
+                type="text"
+                formControlName="expertise_area"
+                class="form-control"
+                placeholder="Enter the area of expertise"
+              />
             </div>
             <div class="modal-actions">
-              <button type="button" class="btn btn-ghost" (click)="editTarget.set(null)">Cancel</button>
-              <button type="submit" class="btn btn-primary" [disabled]="editing()">{{ editing() ? 'Saving…' : 'Save changes' }}</button>
+              <button type="button" class="btn btn-ghost" (click)="editTarget.set(null)"
+                >Cancel</button
+              >
+              <button type="submit" class="btn btn-primary" [disabled]="editing()">{{
+                editing() ? 'Saving…' : 'Save changes'
+              }}</button>
             </div>
           </form>
         </div>
@@ -100,17 +191,44 @@
 
     @if (resetTarget()) {
       <div class="modal-overlay" (click)="resetTarget.set(null)">
-        <div class="modal-card card" role="dialog" aria-modal="true" aria-labelledby="reset-title" (click)="$event.stopPropagation()">
-          <h2 id="reset-title">Reset password for {{ resetTarget()!.full_name || resetTarget()!.email }}</h2>
+        <div
+          class="modal-card card"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="reset-title"
+          (click)="$event.stopPropagation()"
+        >
+          <h2 id="reset-title"
+            >Reset password for {{ resetTarget()!.full_name || resetTarget()!.email }}</h2
+          >
           <form [formGroup]="pwForm" (ngSubmit)="confirmReset()" novalidate>
             <div class="form-group">
-              <label for="expert-management-password" class="form-label">New password <span class="req-mark" aria-hidden="true">*</span><span class="sr-only">(required)</span></label>
-              <input id="expert-management-password" type="password" formControlName="password" class="form-control" autocomplete="new-password" aria-describedby="reset-hint" />
-              <span id="reset-hint" class="field-hint">At least 8 characters, with an uppercase letter and a digit.</span>
+              <label for="expert-management-password" class="form-label"
+                >New password <span class="req-mark" aria-hidden="true">*</span
+                ><span class="sr-only">(required)</span></label
+              >
+              <input
+                id="expert-management-password"
+                type="password"
+                formControlName="password"
+                class="form-control"
+                autocomplete="new-password"
+                aria-describedby="reset-hint"
+              />
+              <span id="reset-hint" class="field-hint"
+                >At least 8 characters, with an uppercase letter and a digit.</span
+              >
             </div>
             <div class="modal-actions">
-              <button type="button" class="btn btn-ghost" (click)="resetTarget.set(null)">Cancel</button>
-              <button type="submit" class="btn btn-primary" [disabled]="pwForm.invalid || resetting()">{{ resetting() ? 'Resetting…' : 'Reset password' }}</button>
+              <button type="button" class="btn btn-ghost" (click)="resetTarget.set(null)"
+                >Cancel</button
+              >
+              <button
+                type="submit"
+                class="btn btn-primary"
+                [disabled]="pwForm.invalid || resetting()"
+                >{{ resetting() ? 'Resetting…' : 'Reset password' }}</button
+              >
             </div>
           </form>
         </div>

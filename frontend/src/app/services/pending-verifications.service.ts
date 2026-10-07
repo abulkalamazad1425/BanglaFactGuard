@@ -21,9 +21,16 @@ const STORAGE_KEY = 'bfg.pending_verifications';
 /** True only for the API's own "this submission does not exist" answer (HTTP
  *  404 naming this submission) - not for a generic 404, outage or offline. */
 export function isDeletedOnServer(err: unknown, submissionId: string): boolean {
-  const e = err as { status?: number; error?: { detail?: { error?: string; submission_id?: string } } } | null;
+  const e = err as {
+    status?: number;
+    error?: { detail?: { error?: string; submission_id?: string } };
+  } | null;
   const detail = e?.error?.detail;
-  return e?.status === 404 && detail?.error === 'not_found' && String(detail?.submission_id) === submissionId;
+  return (
+    e?.status === 404 &&
+    detail?.error === 'not_found' &&
+    String(detail?.submission_id) === submissionId
+  );
 }
 const POLL_INTERVAL_MS = 4000;
 /** Stop chasing a job that is clearly never going to report back. */
@@ -60,10 +67,23 @@ export class PendingVerificationsService {
   }
 
   /** Begin following a queued verification. */
-  track(submissionId: string, headline: string, source: string, kind: SubmissionType = 'SOURCE_BASED'): void {
+  track(
+    submissionId: string,
+    headline: string,
+    source: string,
+    kind: SubmissionType = 'SOURCE_BASED',
+  ): void {
     if (this.items().some((i) => i.submissionId === submissionId)) return;
     this.items.update((list) => [
-      { submissionId, headline, source, kind, status: 'PENDING', queuedAt: Date.now(), done: false },
+      {
+        submissionId,
+        headline,
+        source,
+        kind,
+        status: 'PENDING',
+        queuedAt: Date.now(),
+        done: false,
+      },
       ...list,
     ]);
     this.persist();
@@ -115,7 +135,9 @@ export class PendingVerificationsService {
             this.toast.success(`Verification ready: ${this.short(item.headline)}`);
           } else if (res.status === 'FAILED') {
             this.settle(item.submissionId, 'FAILED');
-            this.toast.error('A verification could not be completed. Open its result to try again; no verdict was reached.');
+            this.toast.error(
+              'A verification could not be completed. Open its result to try again; no verdict was reached.',
+            );
           } else {
             this.updateStatus(item.submissionId, res.status);
           }

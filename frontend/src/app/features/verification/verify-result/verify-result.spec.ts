@@ -1,4 +1,10 @@
-import { ComponentFixture, TestBed, fakeAsync, tick, discardPeriodicTasks } from '@angular/core/testing';
+import {
+  ComponentFixture,
+  TestBed,
+  fakeAsync,
+  tick,
+  discardPeriodicTasks,
+} from '@angular/core/testing';
 import { ActivatedRoute, provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { VerifyResultComponent } from './verify-result';
@@ -90,12 +96,21 @@ describe('VerifyResultComponent (photo card, returning later)', () => {
     tick(4000);
     expect(photocard.getResult).toHaveBeenCalledTimes(2); // still pending -> keeps following
 
-    photocard.getResult.and.returnValue(of(pendingCard({ status: 'EXPERT_REVIEW', phase: 'DONE', headline: 'শিরোনাম', verification: VERIFICATION })));
+    photocard.getResult.and.returnValue(
+      of(
+        pendingCard({
+          status: 'EXPERT_REVIEW',
+          phase: 'DONE',
+          headline: 'শিরোনাম',
+          verification: VERIFICATION,
+        }),
+      ),
+    );
     tick(4000);
     const callsWhenDone = photocard.getResult.calls.count();
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
-    expect(el.textContent).toContain('Expert review pending.');   // preliminary: no overall truth badge
+    expect(el.textContent).toContain('Expert review pending.'); // preliminary: no overall truth badge
     expect(el.textContent).toContain('শিরোনাম');
     expect(el.textContent).not.toContain('BODY SIMILARITY'); // a photo card has no body scores
 
@@ -137,7 +152,13 @@ describe('VerifyResultComponent (photo card, returning later)', () => {
   it('a failed card shows the reason and no verdict', () => {
     const fixture = setup({ ...LOOKUP, status: 'FAILED' });
     photocard.getResult.and.returnValue(
-      of(pendingCard({ status: 'FAILED', phase: 'FAILED', failure_reason: 'Could not extract a readable headline from this photo card.' })),
+      of(
+        pendingCard({
+          status: 'FAILED',
+          phase: 'FAILED',
+          failure_reason: 'Could not extract a readable headline from this photo card.',
+        }),
+      ),
     );
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
@@ -148,7 +169,6 @@ describe('VerifyResultComponent (photo card, returning later)', () => {
   });
 });
 
-
 describe('VerifyResultComponent (photo card extraction preview)', () => {
   function render(card: PhotoCardResultResponse): HTMLElement {
     TestBed.configureTestingModule({
@@ -156,7 +176,10 @@ describe('VerifyResultComponent (photo card extraction preview)', () => {
       providers: [
         provideRouter([]),
         { provide: ActivatedRoute, useValue: { snapshot: { paramMap: { get: () => 'p1' } } } },
-        { provide: SubmissionsService, useValue: { getLookup: () => of({ ...LOOKUP, status: 'EXPERT_REVIEW' }) } },
+        {
+          provide: SubmissionsService,
+          useValue: { getLookup: () => of({ ...LOOKUP, status: 'EXPERT_REVIEW' }) },
+        },
         { provide: PhotoCardService, useValue: { getResult: () => of(card) } },
         { provide: VerificationService, useValue: {} },
         { provide: MultimodalService, useValue: {} },
@@ -168,11 +191,19 @@ describe('VerifyResultComponent (photo card extraction preview)', () => {
   }
 
   it('shows the outlet and date read from the card once, as the claimed values', () => {
-    const el = render(pendingCard({
-      status: 'EXPERT_REVIEW', phase: 'DONE', headline: 'শিরোনাম', verification: VERIFICATION,
-      extraction_status: 'SUCCEEDED', extraction_attempts: 2,
-      claimed_source_text: 'prothomalo.com', claimed_source_name: 'প্রথম আলো', published_date: '2026-10-05',
-    }));
+    const el = render(
+      pendingCard({
+        status: 'EXPERT_REVIEW',
+        phase: 'DONE',
+        headline: 'শিরোনাম',
+        verification: VERIFICATION,
+        extraction_status: 'SUCCEEDED',
+        extraction_attempts: 2,
+        claimed_source_text: 'prothomalo.com',
+        claimed_source_name: 'প্রথম আলো',
+        published_date: '2026-10-05',
+      }),
+    );
     const text = el.textContent ?? '';
     expect(text).toContain('Claimed news outlet');
     expect(text).toContain('প্রথম আলো');
@@ -186,27 +217,46 @@ describe('VerifyResultComponent (photo card extraction preview)', () => {
   });
 
   it('a card without a printed date says so instead of inventing one', () => {
-    const el = render(pendingCard({
-      status: 'EXPERT_REVIEW', phase: 'DONE', headline: 'শিরোনাম', verification: VERIFICATION,
-      extraction_status: 'SUCCEEDED', claimed_source_text: 'prothomalo.com', claimed_source_name: 'প্রথম আলো',
-      published_date: null,
-    }));
+    const el = render(
+      pendingCard({
+        status: 'EXPERT_REVIEW',
+        phase: 'DONE',
+        headline: 'শিরোনাম',
+        verification: VERIFICATION,
+        extraction_status: 'SUCCEEDED',
+        claimed_source_text: 'prothomalo.com',
+        claimed_source_name: 'প্রথম আলো',
+        published_date: null,
+      }),
+    );
     expect(el.textContent).toContain('Not shown on the card');
   });
 
   it('distinguishes an unreadable card from one without a headline or recognised outlet', () => {
-    const apiFailed = render(pendingCard({
-      status: 'FAILED', phase: 'FAILED', extraction_status: 'API_FAILED',
-      failure_reason: 'Sorry for the temporary inconvenience. Information cannot be collected from the photo card right now. Please submit it again after a while.',
-    }));
+    const apiFailed = render(
+      pendingCard({
+        status: 'FAILED',
+        phase: 'FAILED',
+        extraction_status: 'API_FAILED',
+        failure_reason:
+          'Sorry for the temporary inconvenience. Information cannot be collected from the photo card right now. Please submit it again after a while.',
+      }),
+    );
     expect(apiFailed.textContent).toContain('Please submit it again after a while');
     expect(apiFailed.textContent).toContain('The card could not be read.');
     TestBed.resetTestingModule();
-    const invalid = render(pendingCard({
-      status: 'FAILED', phase: 'FAILED', extraction_status: 'INVALID_CONTENT',
-      failure_reason: 'A valid headline or a recognized news outlet could not be identified on the photo card. Please submit a photo card with a clear headline and the news outlet\'s name or logo.',
-    }));
-    expect(invalid.textContent).toContain('No valid headline or recognised news outlet was found on this card.');
+    const invalid = render(
+      pendingCard({
+        status: 'FAILED',
+        phase: 'FAILED',
+        extraction_status: 'INVALID_CONTENT',
+        failure_reason:
+          "A valid headline or a recognized news outlet could not be identified on the photo card. Please submit a photo card with a clear headline and the news outlet's name or logo.",
+      }),
+    );
+    expect(invalid.textContent).toContain(
+      'No valid headline or recognised news outlet was found on this card.',
+    );
     expect(invalid.textContent).toContain('clear headline');
   });
 });

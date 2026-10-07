@@ -23,25 +23,39 @@ export class VerifyFactsComponent {
 
   readonly options = VERIFY_OPTIONS;
   readonly method = toSignal(
-    this.route.queryParamMap.pipe(map((q) => {
-      const m = q.get('method');
-      return VERIFY_OPTIONS.some((o) => o.key === m) ? (m as VerifyMethod) : null;
-    })),
+    this.route.queryParamMap.pipe(
+      map((q) => {
+        const m = q.get('method');
+        return VERIFY_OPTIONS.some((o) => o.key === m) ? (m as VerifyMethod) : null;
+      }),
+    ),
     { initialValue: null },
   );
 
   hideDescriptions = readHidden();
 
   select(key: VerifyMethod): void {
-    this.router.navigate([], { relativeTo: this.route, queryParams: { method: key }, replaceUrl: true });
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { method: key },
+      replaceUrl: true,
+    });
   }
 
   toggleDescriptions(): void {
     this.hideDescriptions = !this.hideDescriptions;
-    try { localStorage.setItem(DESC_KEY, this.hideDescriptions ? '1' : '0'); } catch { /* storage unavailable */ }
+    try {
+      localStorage.setItem(DESC_KEY, this.hideDescriptions ? '1' : '0');
+    } catch {
+      /* storage unavailable */
+    }
   }
 }
 
 function readHidden(): boolean {
-  try { return localStorage.getItem(DESC_KEY) === '1'; } catch { return false; }
+  try {
+    return localStorage.getItem(DESC_KEY) === '1';
+  } catch {
+    return false;
+  }
 }

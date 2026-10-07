@@ -1,11 +1,17 @@
 import { requestError } from '../../../shared/utils/presentation';
 import { Component, OnDestroy, OnInit, inject } from '@angular/core';
-import { AbstractControl, FormBuilder, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
+import {
+  AbstractControl,
+  FormBuilder,
+  ReactiveFormsModule,
+  ValidationErrors,
+  Validators,
+} from '@angular/forms';
 
 /** Like minLength, but whitespace never counts (the API strips it). */
 export function trimmedMinLength(min: number) {
   return (c: AbstractControl): ValidationErrors | null =>
-    (String(c.value ?? '').trim().length >= min ? null : { trimmedMinLength: { min } });
+    String(c.value ?? '').trim().length >= min ? null : { trimmedMinLength: { min } };
 }
 import { Router, RouterLink } from '@angular/router';
 import { CommonModule } from '@angular/common';
@@ -21,7 +27,6 @@ import {
 import { VerificationReportComponent } from '../../../shared/components/verification-report/verification-report.component';
 import { SourceService } from '../../../services/source.service';
 import { SourceResponse } from '../../../models/source.model';
-
 
 @Component({
   selector: 'app-verify-claim',
@@ -66,7 +71,9 @@ export class VerifyClaimComponent implements OnInit, OnDestroy {
     published_date: [''],
   });
 
-  ngOnInit(): void { this.loadSources(); }
+  ngOnInit(): void {
+    this.loadSources();
+  }
 
   loadSources(): void {
     this.sourcesLoading = true;
@@ -74,10 +81,15 @@ export class VerifyClaimComponent implements OnInit, OnDestroy {
     // Only active verified sources are ever eligible for selection here.
     this.sourceSvc.listSources(undefined, 1, 100).subscribe({
       next: (res) => {
-        this.sources = [...res.items].sort((a, b) => a.display_name.localeCompare(b.display_name, 'bn'));
+        this.sources = [...res.items].sort((a, b) =>
+          a.display_name.localeCompare(b.display_name, 'bn'),
+        );
         this.sourcesLoading = false;
       },
-      error: () => { this.sourcesLoading = false; this.sourcesError = true; },
+      error: () => {
+        this.sourcesLoading = false;
+        this.sourcesError = true;
+      },
     });
   }
 
@@ -86,13 +98,21 @@ export class VerifyClaimComponent implements OnInit, OnDestroy {
   }
 
   get sourceInvalid() {
-    return this.form.get('claimed_source_text')?.invalid && this.form.get('claimed_source_text')?.touched;
+    return (
+      this.form.get('claimed_source_text')?.invalid && this.form.get('claimed_source_text')?.touched
+    );
   }
 
   onSubmit(): void {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
-      document.getElementById(this.form.get('headline')?.invalid ? 'verify-claim-headline' : 'verify-claim-claimed_source_text')?.focus();
+      document
+        .getElementById(
+          this.form.get('headline')?.invalid
+            ? 'verify-claim-headline'
+            : 'verify-claim-claimed_source_text',
+        )
+        ?.focus();
       return;
     }
 
@@ -128,11 +148,7 @@ export class VerifyClaimComponent implements OnInit, OnDestroy {
 
         // Registered and running on the server. Follow it here for anyone who
         // stays, and hand it to the tracker so leaving the page is safe.
-        this.pending.track(
-          queued.submission_id,
-          this.pendingHeadline,
-          v.claimed_source_text ?? '',
-        );
+        this.pending.track(queued.submission_id, this.pendingHeadline, v.claimed_source_text ?? '');
         this.startPolling(queued.submission_id);
       },
       error: (err) => {
@@ -151,7 +167,11 @@ export class VerifyClaimComponent implements OnInit, OnDestroy {
       this.svc.getStatus(submissionId).subscribe({
         next: (res) => {
           this.pendingStatus = res.status;
-          if (res.status === 'EXPERT_REVIEW' || res.status === 'FINALIZED' || res.status === 'ESCALATED') {
+          if (
+            res.status === 'EXPERT_REVIEW' ||
+            res.status === 'FINALIZED' ||
+            res.status === 'ESCALATED'
+          ) {
             this.stopPolling();
             if (res.result) {
               this.result = res.result;
@@ -163,7 +183,8 @@ export class VerifyClaimComponent implements OnInit, OnDestroy {
           } else if (res.status === 'FAILED') {
             this.stopPolling();
             this.pendingSubmissionId = null;
-            this.error = 'Verification could not be completed. Please try again. No verdict was reached.';
+            this.error =
+              'Verification could not be completed. Please try again. No verdict was reached.';
             this.pending.dismiss(submissionId);
           }
         },
@@ -188,7 +209,8 @@ export class VerifyClaimComponent implements OnInit, OnDestroy {
       error: () => {
         this.pendingSubmissionId = null;
         this.resultLoadError = true;
-        this.error = 'Your claim was received, but the saved result could not be loaded. Open its report to try again.';
+        this.error =
+          'Your claim was received, but the saved result could not be loaded. Open its report to try again.';
       },
     });
   }
@@ -211,7 +233,10 @@ export class VerifyClaimComponent implements OnInit, OnDestroy {
 
   /** Ring/accent colour for the overall verdict — content status wins once
    *  the source is confirmed; a date mismatch never changes this colour. */
-  verdictColor(sourceStatus: SourceStatus | null | undefined, contentStatus?: ContentStatus | null): string {
+  verdictColor(
+    sourceStatus: SourceStatus | null | undefined,
+    contentStatus?: ContentStatus | null,
+  ): string {
     if (sourceStatus === 'NOT_FOUND') return '#6b7280';
     if (contentStatus === 'MATCHED') return '#10b981';
     if (contentStatus === 'ALTERED') return '#f59e0b';

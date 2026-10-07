@@ -11,7 +11,7 @@ import { ToastService } from '../../../shared/services/toast.service';
   standalone: true,
   imports: [CommonModule, RouterLink],
   templateUrl: './notification-list.html',
-  styleUrls: ['./notification-list.scss']
+  styleUrls: ['./notification-list.scss'],
 })
 export class NotificationListComponent implements OnInit, OnDestroy {
   readonly readableExplanation = readableExplanation;
@@ -23,50 +23,69 @@ export class NotificationListComponent implements OnInit, OnDestroy {
   readonly notifications = signal<NotificationItem[]>([]);
 
   // Computed to avoid arrow functions in template
-  readonly hasUnread = computed(() => this.notifications().some(n => !n.is_read));
+  readonly hasUnread = computed(() => this.notifications().some((n) => !n.is_read));
 
   private timer?: ReturnType<typeof setInterval>;
   ngOnInit(): void {
     this.load();
-    this.timer ??= setInterval(() => { if (!document.hidden) this.load(); }, 15000);
+    this.timer ??= setInterval(() => {
+      if (!document.hidden) this.load();
+    }, 15000);
   }
-  ngOnDestroy(): void { if (this.timer) clearInterval(this.timer); }
+  ngOnDestroy(): void {
+    if (this.timer) clearInterval(this.timer);
+  }
   load(): void {
     this.notifSvc.list(50).subscribe({
-      next: n => { this.notifications.set(n); this.loading.set(false); this.loadError.set(false); },
-      error: () => { this.loading.set(false); this.loadError.set(true); },
+      next: (n) => {
+        this.notifications.set(n);
+        this.loading.set(false);
+        this.loadError.set(false);
+      },
+      error: () => {
+        this.loading.set(false);
+        this.loadError.set(true);
+      },
     });
   }
 
   /** These notifications carry the claim headline's first words — shown as written. */
   isHeadlinePreview(n: NotificationItem): boolean {
-    return ['VERIFICATION_COMPLETE', 'EXPERT_REVIEW_COMPLETE', 'CLAIM_ESCALATED'].includes(n.notification_type);
+    return ['VERIFICATION_COMPLETE', 'EXPERT_REVIEW_COMPLETE', 'CLAIM_ESCALATED'].includes(
+      n.notification_type,
+    );
   }
 
   typeLabel(type: string): string {
-    return ({
-      VERIFICATION_COMPLETE: 'Preliminary result',
-      EXPERT_REVIEW_COMPLETE: 'Final decision',
-      CLAIM_ESCALATED: 'Escalated claim',
-      VERIFICATION_FAILED: 'Check incomplete',
-    } as Record<string, string>)[type] ?? 'Update';
+    return (
+      (
+        {
+          VERIFICATION_COMPLETE: 'Preliminary result',
+          EXPERT_REVIEW_COMPLETE: 'Final decision',
+          CLAIM_ESCALATED: 'Escalated claim',
+          VERIFICATION_FAILED: 'Check incomplete',
+        } as Record<string, string>
+      )[type] ?? 'Update'
+    );
   }
 
   markRead(n: NotificationItem): void {
     if (n.is_read) return;
     this.notifSvc.markRead(n.id).subscribe({
       next: () => {
-        this.notifications.update(list => list.map(x => x.id === n.id ? { ...x, is_read: true } : x));
+        this.notifications.update((list) =>
+          list.map((x) => (x.id === n.id ? { ...x, is_read: true } : x)),
+        );
         this.notifSvc.refreshCount();
       },
-      error: () => { },
+      error: () => {},
     });
   }
 
   markAllRead(): void {
     this.notifSvc.markAllRead().subscribe({
       next: () => {
-        this.notifications.update(list => list.map(n => ({ ...n, is_read: true })));
+        this.notifications.update((list) => list.map((n) => ({ ...n, is_read: true })));
         this.toast.success('All notifications marked as read.');
       },
       error: () => this.toast.error('Failed to mark notifications as read.'),

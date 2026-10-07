@@ -31,9 +31,14 @@ export const SOURCE_LABELS: Record<SourceStatus, string> = {
 };
 
 export const SOURCE_EXPLANATIONS: Record<SourceStatus, string> = {
-  CONFIRMED: 'A relevant article was found in the news outlet the claim names. This alone does not make the claim true.',
-  NOT_FOUND: 'No relevant article was found in the news outlet the claim names. This alone does not prove the news is false.',
-  INCOMPLETE: 'The search of the claimed outlet could not be completed. No conclusion can be drawn about whether it published this report; try a new check later.',
+  CONFIRMED:
+    'A relevant article was found in the news outlet the claim names. This alone does not make the claim true.',
+  NOT_FOUND:
+    'No relevant article was found in the news outlet the claim names. This alone does not prove the news is false.',
+  INCOMPLETE:
+    'The search of the claimed outlet could not be completed. No conclusion ' +
+    'can be drawn about whether it published this report; try a new check ' +
+    'later.',
 };
 
 export const HEADLINE_LABELS: Record<HeadlineAlterationStatus, string> = {
@@ -43,7 +48,8 @@ export const HEADLINE_LABELS: Record<HeadlineAlterationStatus, string> = {
 };
 
 export const HEADLINE_EXPLANATIONS: Record<HeadlineAlterationStatus, string> = {
-  EXACT_MATCHED: 'The claim headline is word-for-word the same as the source title (ignoring spacing and a final full stop).',
+  EXACT_MATCHED:
+    'The claim headline is word-for-word the same as the source title (ignoring spacing and a final full stop).',
   MEANING_PRESERVED: 'The wording differs from the source title, but the meaning is the same.',
   ALTERED: 'The claim headline differs meaningfully from the source title. See the evidence below.',
 };
@@ -56,7 +62,8 @@ export const DATE_LABELS: Record<DateStatus, string> = {
 
 export const DATE_EXPLANATIONS: Record<DateStatus, string> = {
   MATCHED: 'The claimed publication date agrees with the source article’s date.',
-  MISMATCHED: 'The claimed publication date differs from the source article’s date. This alone does not mean the news is false.',
+  MISMATCHED:
+    'The claimed publication date differs from the source article’s date. This alone does not mean the news is false.',
   INCOMPLETE: 'The source article’s own publication date could not be determined.',
 };
 
@@ -96,11 +103,26 @@ export function preliminaryChips(f: {
     return [{ label: 'Source', value: 'Check incomplete', tone: 'neutral' }];
   }
   const chips: FindingChip[] = [];
-  chips.push(f.headline_status
-    ? { label: 'Headline', value: HEADLINE_LABELS[f.headline_status], tone: f.headline_status === 'ALTERED' ? 'caution' : 'positive' }
-    : { label: 'Headline', value: 'No verdict', tone: 'neutral' });
+  chips.push(
+    f.headline_status
+      ? {
+          label: 'Headline',
+          value: HEADLINE_LABELS[f.headline_status],
+          tone: f.headline_status === 'ALTERED' ? 'caution' : 'positive',
+        }
+      : { label: 'Headline', value: 'No verdict', tone: 'neutral' },
+  );
   if (f.claimed_date && f.date_status) {
-    chips.push({ label: 'Date', value: DATE_LABELS[f.date_status], tone: f.date_status === 'MATCHED' ? 'positive' : f.date_status === 'MISMATCHED' ? 'caution' : 'neutral' });
+    chips.push({
+      label: 'Date',
+      value: DATE_LABELS[f.date_status],
+      tone:
+        f.date_status === 'MATCHED'
+          ? 'positive'
+          : f.date_status === 'MISMATCHED'
+            ? 'caution'
+            : 'neutral',
+    });
   }
   return chips;
 }

@@ -15,7 +15,7 @@ const RING_RADIUS = 52;
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule],
   templateUrl: './profile-settings.html',
-  styleUrls: ['./profile-settings.scss']
+  styleUrls: ['./profile-settings.scss'],
 })
 export class ProfileSettingsComponent implements OnInit {
   readonly auth = inject(AuthService);
@@ -33,11 +33,21 @@ export class ProfileSettingsComponent implements OnInit {
   // Requirement 2.2: experts may VIEW their profile but never modify it.
   readonly isExpertOnly = computed(() => this.auth.user()?.role === 'expert');
 
-  readonly displayName = computed(() => this.profile()?.full_name || this.auth.user()?.full_name || this.auth.user()?.email?.split('@')[0] || 'User');
+  readonly displayName = computed(
+    () =>
+      this.profile()?.full_name ||
+      this.auth.user()?.full_name ||
+      this.auth.user()?.email?.split('@')[0] ||
+      'User',
+  );
   readonly initial = computed(() => this.displayName().charAt(0).toUpperCase());
   readonly roleLabel = computed(() => {
     const role = this.auth.user()?.role;
-    return role === 'admin' ? 'Administrator' : role === 'expert' ? 'Expert reviewer' : 'Registered user';
+    return role === 'admin'
+      ? 'Administrator'
+      : role === 'expert'
+        ? 'Expert reviewer'
+        : 'Registered user';
   });
 
   readonly ringCircumference = 2 * Math.PI * RING_RADIUS;
@@ -66,7 +76,10 @@ export class ProfileSettingsComponent implements OnInit {
 
   pwForm = this.fb.group({
     current_password: ['', Validators.required],
-    new_password: ['', [Validators.required, Validators.minLength(8), Validators.pattern(/^(?=.*[A-Z])(?=.*\d).+$/)]],
+    new_password: [
+      '',
+      [Validators.required, Validators.minLength(8), Validators.pattern(/^(?=.*[A-Z])(?=.*\d).+$/)],
+    ],
   });
 
   ngOnInit(): void {
@@ -98,18 +111,35 @@ export class ProfileSettingsComponent implements OnInit {
     if (this.isExpertOnly() || this.profileForm.invalid) return;
     this.savingProfile.set(true);
     this.auth.updateProfile({ full_name: this.profileForm.value.full_name ?? '' }).subscribe({
-      next: (p) => { this.profile.set(p); this.savingProfile.set(false); this.toast.success('Profile updated.'); },
-      error: () => { this.savingProfile.set(false); this.toast.error('Failed to update profile.'); },
+      next: (p) => {
+        this.profile.set(p);
+        this.savingProfile.set(false);
+        this.toast.success('Profile updated.');
+      },
+      error: () => {
+        this.savingProfile.set(false);
+        this.toast.error('Failed to update profile.');
+      },
     });
   }
 
   changePassword(): void {
-    if (this.pwForm.invalid) { this.pwForm.markAllAsTouched(); return; }
+    if (this.pwForm.invalid) {
+      this.pwForm.markAllAsTouched();
+      return;
+    }
     this.changingPw.set(true);
     const { current_password, new_password } = this.pwForm.value;
     this.auth.changePassword(current_password!, new_password!).subscribe({
-      next: () => { this.changingPw.set(false); this.toast.success('Password changed successfully.'); this.pwForm.reset(); },
-      error: err => { this.changingPw.set(false); this.toast.error(requestError(err, 'Failed to change password.')); },
+      next: () => {
+        this.changingPw.set(false);
+        this.toast.success('Password changed successfully.');
+        this.pwForm.reset();
+      },
+      error: (err) => {
+        this.changingPw.set(false);
+        this.toast.error(requestError(err, 'Failed to change password.'));
+      },
     });
   }
 }

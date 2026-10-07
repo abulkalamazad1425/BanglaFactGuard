@@ -42,29 +42,36 @@ export interface HeadlineView {
   summary: string;
 }
 
-export const HEADLINE_STATUS_TEXT: Record<HeadlineCheckStatus, { title: string; summary: string }> = {
-  COMPLETED: { title: 'Compared', summary: '' },
-  SOURCE_NOT_FOUND: {
-    title: 'Not compared',
-    summary: 'No relevant article was found in the claimed outlet, so there is no title to compare with.',
-  },
-  SOURCE_CHECK_INCOMPLETE: {
-    title: 'Not compared',
-    summary: 'The source search could not be completed, so the headline was not compared. This is not a finding about the headline.',
-  },
-  SOURCE_TITLE_MISSING: {
-    title: 'No verdict',
-    summary: 'The source report has no readable title, so the headline could not be compared.',
-  },
-  MODEL_UNAVAILABLE: {
-    title: 'No verdict',
-    summary: 'The meaning comparison was unavailable, so no verdict was reached. This does not mean the headline was altered.',
-  },
-  UNDETERMINED: {
-    title: 'No verdict',
-    summary: 'Neither the same meaning nor a meaningful difference could be established, so no verdict was reached.',
-  },
-};
+export const HEADLINE_STATUS_TEXT: Record<HeadlineCheckStatus, { title: string; summary: string }> =
+  {
+    COMPLETED: { title: 'Compared', summary: '' },
+    SOURCE_NOT_FOUND: {
+      title: 'Not compared',
+      summary:
+        'No relevant article was found in the claimed outlet, so there is no title to compare with.',
+    },
+    SOURCE_CHECK_INCOMPLETE: {
+      title: 'Not compared',
+      summary:
+        'The source search could not be completed, so the headline was not ' +
+        'compared. This is not a finding about the headline.',
+    },
+    SOURCE_TITLE_MISSING: {
+      title: 'No verdict',
+      summary: 'The source report has no readable title, so the headline could not be compared.',
+    },
+    MODEL_UNAVAILABLE: {
+      title: 'No verdict',
+      summary:
+        'The meaning comparison was unavailable, so no verdict was reached. This ' +
+        'does not mean the headline was altered.',
+    },
+    UNDETERMINED: {
+      title: 'No verdict',
+      summary:
+        'Neither the same meaning nor a meaningful difference could be established, so no verdict was reached.',
+    },
+  };
 
 /** Display status for a result, also for a response from an older API that
  *  only carries the MATCHED/ALTERED verdict (exactness then comes from the
@@ -83,13 +90,18 @@ export function headlineStatusOf(r: VerificationResponse): HeadlineAlterationSta
 export function headlineView(r: VerificationResponse): HeadlineView {
   const status = headlineStatusOf(r);
   if (status) {
-    return { tone: status === 'ALTERED' ? 'altered' : 'matched', title: HEADLINE_LABELS[status], summary: HEADLINE_EXPLANATIONS[status] };
+    return {
+      tone: status === 'ALTERED' ? 'altered' : 'matched',
+      title: HEADLINE_LABELS[status],
+      summary: HEADLINE_EXPLANATIONS[status],
+    };
   }
   if (r.legacy_result) {
     return {
       tone: 'none',
       title: 'Not available',
-      summary: 'This result was recorded by an earlier version of the checker; it has no Headline Alteration verdict.',
+      summary:
+        'This result was recorded by an earlier version of the checker; it has no Headline Alteration verdict.',
     };
   }
   const check: HeadlineCheckStatus =
@@ -117,7 +129,8 @@ export function differenceLabel(kind: string): string {
 
 // ── Body similarity (measurements only — never a verdict) ───────────────
 
-export type BodyMetricKey = 'tfidf_cosine' | 'jaccard' | 'normalized_levenshtein' | 'semantic_cosine';
+export type BodyMetricKey =
+  'tfidf_cosine' | 'jaccard' | 'normalized_levenshtein' | 'semantic_cosine';
 
 export interface BodyMetricSpec {
   key: BodyMetricKey;
@@ -130,7 +143,8 @@ export const BODY_METRICS: BodyMetricSpec[] = [
   {
     key: 'tfidf_cosine',
     label: 'TF-IDF cosine similarity',
-    measures: 'How much the two texts share their important words, giving distinctive words more weight than common ones.',
+    measures:
+      'How much the two texts share their important words, giving distinctive words more weight than common ones.',
     range: '0 = no important words in common · 1 = the same words in the same proportions',
   },
   {
@@ -142,13 +156,18 @@ export const BODY_METRICS: BodyMetricSpec[] = [
   {
     key: 'normalized_levenshtein',
     label: 'Normalized Levenshtein similarity',
-    measures: 'How few character edits turn one text into the other: 1 − edits ÷ length of the longer text. Low when one text is much longer.',
+    measures:
+      'How few character edits turn one text into the other: 1 − edits ÷ ' +
+      'length of the longer text. Low when one text is much longer.',
     range: '0 = entirely different characters · 1 = identical text',
   },
   {
     key: 'semantic_cosine',
     label: 'Semantic similarity (LaBSE embedding cosine)',
-    measures: 'Meaning-based closeness from a multilingual sentence-embedding model, so reworded text can still score high. Long texts are compared passage by passage.',
+    measures:
+      'Meaning-based closeness from a multilingual sentence-embedding model, ' +
+      'so reworded text can still score high. Long texts are compared passage ' +
+      'by passage.',
     range: '0 = unrelated meaning · 1 = the same meaning (negative raw values are shown as 0)',
   },
 ];
@@ -172,7 +191,9 @@ export interface BodyMetricRow extends BodyMetricSpec {
   note: string | null;
 }
 
-export function buildBodyMetricRows(report: BodySimilarityReport | null | undefined): BodyMetricRow[] {
+export function buildBodyMetricRows(
+  report: BodySimilarityReport | null | undefined,
+): BodyMetricRow[] {
   if (!report || report.status === 'SKIPPED') return [];
   return BODY_METRICS.map((spec) => {
     const m: BodySimilarityMetric | null | undefined = report[spec.key];
@@ -183,12 +204,18 @@ export function buildBodyMetricRows(report: BodySimilarityReport | null | undefi
       value,
       display: value === null ? 'Unavailable' : formatPercent(value),
       band: value === null ? null : scoreBand(value),
-      note: value === null ? (m?.reason ?? report.reason ?? 'This score could not be computed.') : bodyMetricNote(spec.key, m),
+      note:
+        value === null
+          ? (m?.reason ?? report.reason ?? 'This score could not be computed.')
+          : bodyMetricNote(spec.key, m),
     };
   });
 }
 
-function bodyMetricNote(key: BodyMetricKey, m: BodySimilarityMetric | null | undefined): string | null {
+function bodyMetricNote(
+  key: BodyMetricKey,
+  m: BodySimilarityMetric | null | undefined,
+): string | null {
   const d = m?.details ?? {};
   if (key === 'normalized_levenshtein' && d['truncated']) {
     return `Compared on the first ${d['claim_chars_compared']} / ${d['source_chars_compared']} characters of very long texts.`;
@@ -200,7 +227,10 @@ function bodyMetricNote(key: BodyMetricKey, m: BodySimilarityMetric | null | und
 }
 
 /** Why the body section has no scores, or null when it does. */
-export function bodySectionMessage(report: BodySimilarityReport | null | undefined, scope: ClaimScope | null | undefined): string | null {
+export function bodySectionMessage(
+  report: BodySimilarityReport | null | undefined,
+  scope: ClaimScope | null | undefined,
+): string | null {
   if (!hasBody(scope)) return null;
   if (!report) return 'Body similarity was not recorded for this result.';
   if (report.status === 'COMPUTED') return null;
@@ -220,10 +250,15 @@ export interface MeasurementRow {
 const CORRESPONDENCE_SPECS: Array<{ key: string; label: string }> = [
   { key: 'headline_title_similarity', label: 'Headline / source title similarity' },
   { key: 'title_keyword_coverage', label: 'Claim keywords found in the source title' },
-  { key: 'passage_keyword_coverage', label: 'Claim keywords found in the source title and passages' },
+  {
+    key: 'passage_keyword_coverage',
+    label: 'Claim keywords found in the source title and passages',
+  },
 ];
 
-export function buildCorrespondenceRows(analysis: AnalysisDetails | null | undefined): MeasurementRow[] {
+export function buildCorrespondenceRows(
+  analysis: AnalysisDetails | null | undefined,
+): MeasurementRow[] {
   const metrics = analysis?.metrics ?? {};
   return CORRESPONDENCE_SPECS.filter((s) => metrics[s.key]).map((s) => {
     const m = metrics[s.key];

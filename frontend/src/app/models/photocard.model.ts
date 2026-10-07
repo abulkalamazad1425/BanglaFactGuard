@@ -8,11 +8,17 @@
 // claimed_source_text / published_date below are what the card shows.
 // ============================================================
 
-import { ClaimScope, ProcessingPhase, SubmissionStatus, VerificationResponse } from './verification.model';
+import {
+  ClaimScope,
+  ProcessingPhase,
+  SubmissionStatus,
+  VerificationResponse,
+} from './verification.model';
 
 /** PENDING until read; API_FAILED: the card could not be read (temporary);
  *  INVALID_CONTENT: no headline or no recognised outlet on the card. */
-export type ExtractionStatus = 'PENDING' | 'SUCCEEDED' | 'API_FAILED' | 'INVALID_CONTENT' | 'FAILED';
+export type ExtractionStatus =
+  'PENDING' | 'SUCCEEDED' | 'API_FAILED' | 'INVALID_CONTENT' | 'FAILED';
 
 /** HTTP 202 from POST /photocard/verify/async. The card is stored and the job is
  *  durable: extraction and verification continue on the server whether or not

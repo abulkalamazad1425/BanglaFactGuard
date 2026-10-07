@@ -3,26 +3,52 @@
     <header class="page-header">
       <div>
         <h1>{{ isAdmin() ? 'Review queue' : 'Expert review queue' }}</h1>
-        @if (isAdmin()) {
-        } 
+        @if (isAdmin()) {}
       </div>
-     
     </header>
 
     @if (isAdmin()) {
       <div class="view-switch" role="group" aria-label="Filter the review queue">
         @for (s of states; track s.key) {
-          <button type="button" [class.selected]="state() === s.key" [attr.aria-pressed]="state() === s.key" (click)="selectState(s.key)">{{ s.label }}</button>
+          <button
+            type="button"
+            [class.selected]="state() === s.key"
+            [attr.aria-pressed]="state() === s.key"
+            (click)="selectState(s.key)"
+            >{{ s.label }}</button
+          >
         }
       </div>
     }
 
-    <form class="search-toolbar" role="search" (submit)="$event.preventDefault(); search(searchInput.value)">
+    <form
+      class="search-toolbar"
+      role="search"
+      (submit)="$event.preventDefault(); search(searchInput.value)"
+    >
       <label for="queue-search">Search claims</label>
-      <div class="search-row"><input #searchInput id="queue-search" class="form-control" type="search" maxlength="200" placeholder="Search by headline, text or source"><button type="submit" class="btn btn-primary" [disabled]="loading()">Search</button></div>
+      <div class="search-row"
+        ><input
+          #searchInput
+          id="queue-search"
+          class="form-control"
+          type="search"
+          maxlength="200"
+          placeholder="Search by headline, text or source"
+        /><button type="submit" class="btn btn-primary" [disabled]="loading()">Search</button></div
+      >
     </form>
-    @if (loadError()) {<div class="service-notice" role="alert"><p>This list could not be loaded. Please try again.</p><button type="button" class="btn btn-secondary" (click)="load()">Try again</button></div>}
-    @if (loading()) { <div class="loading-overlay" role="status"><div class="spinner"></div><span class="sr-only">Loading claims</span></div> }
+    @if (loadError()) {
+      <div class="service-notice" role="alert"
+        ><p>This list could not be loaded. Please try again.</p
+        ><button type="button" class="btn btn-secondary" (click)="load()">Try again</button></div
+      >
+    }
+    @if (loading()) {
+      <div class="loading-overlay" role="status"
+        ><div class="spinner"></div><span class="sr-only">Loading claims</span></div
+      >
+    }
 
     @if (!loading() && !loadError() && queue().length === 0) {
       <div class="empty-state card">
@@ -37,29 +63,63 @@
             <div class="queue-header">
               <div class="queue-meta">
                 <span class="type-tag">{{ typeLabel(item.submission_type) }}</span>
-                @if (item.status === 'ESCALATED') {<span class="status-tag status-escalated">Escalated — admin decision needed</span>}
-                @else if (isAdmin()) {<span class="status-tag">In expert review · view only</span>}
-                <span class="meta">Submitted {{ item.submitted_at | date:'d MMM y' }}</span>
-                <span class="meta">{{ item.vote_count }} vote{{ item.vote_count === 1 ? '' : 's' }}</span>
+                @if (item.status === 'ESCALATED') {
+                  <span class="status-tag status-escalated">Escalated — admin decision needed</span>
+                } @else if (isAdmin()) {
+                  <span class="status-tag">In expert review · view only</span>
+                }
+                <span class="meta">Submitted {{ item.submitted_at | date: 'd MMM y' }}</span>
+                <span class="meta"
+                  >{{ item.vote_count }} vote{{ item.vote_count === 1 ? '' : 's' }}</span
+                >
               </div>
               <app-verdict-badge
-                [preliminary]="true" [overallVerdict]="item.ai_overall_verdict"
+                [preliminary]="true"
+                [overallVerdict]="item.ai_overall_verdict"
                 [sourceStatus]="item.source_status"
                 [headlineStatus]="item.headline_status"
                 [contentStatus]="item.content_status"
                 [dateStatus]="item.date_status"
-                [hideDate]="!item.published_date" />
+                [hideDate]="!item.published_date"
+              />
             </div>
 
-            @if (item.claimed_source_text) {<p class="meta">Claimed outlet: {{ item.claimed_source_text }}</p>}
-            @if (item.image_url) {<div class="queue-image-wrap"><img [src]="item.image_url" class="queue-image" alt="Image submitted with this claim" /></div>}
+            @if (item.claimed_source_text) {
+              <p class="meta">Claimed outlet: {{ item.claimed_source_text }}</p>
+            }
+            @if (item.image_url) {
+              <div class="queue-image-wrap"
+                ><img
+                  [src]="item.image_url"
+                  class="queue-image"
+                  alt="Image submitted with this claim"
+              /></div>
+            }
 
-            <h2 class="queue-headline"><a [routerLink]="detailLink(item)" lang="bn">{{ item.headline || 'Headline not available' }}</a></h2>
-            @if (item.body_text) {<p class="queue-body-snippet">{{ item.body_text }}</p>}
+            <h2 class="queue-headline"
+              ><a [routerLink]="detailLink(item)" lang="bn">{{
+                item.headline || 'Headline not available'
+              }}</a></h2
+            >
+            @if (item.body_text) {
+              <p class="queue-body-snippet">{{ item.body_text }}</p>
+            }
 
             <div class="queue-footer">
-              <a [routerLink]="detailLink(item)" class="btn btn-sm" [class.btn-primary]="item.can_vote" [class.btn-secondary]="!item.can_vote">
-                {{ item.status === 'ESCALATED' && isAdmin() ? 'Review & decide' : item.can_vote ? 'Review & vote' : 'View claim' }} <span aria-hidden="true">→</span>
+              <a
+                [routerLink]="detailLink(item)"
+                class="btn btn-sm"
+                [class.btn-primary]="item.can_vote"
+                [class.btn-secondary]="!item.can_vote"
+              >
+                {{
+                  item.status === 'ESCALATED' && isAdmin()
+                    ? 'Review & decide'
+                    : item.can_vote
+                      ? 'Review & vote'
+                      : 'View claim'
+                }}
+                <span aria-hidden="true">→</span>
               </a>
             </div>
           </li>
@@ -67,9 +127,21 @@
       </ul>
     }
     <nav class="pagination" aria-label="Queue pages">
-      <button type="button" class="btn btn-secondary btn-sm" [disabled]="offset() === 0 || loading()" (click)="prev()">← Previous</button>
+      <button
+        type="button"
+        class="btn btn-secondary btn-sm"
+        [disabled]="offset() === 0 || loading()"
+        (click)="prev()"
+        >← Previous</button
+      >
       <span class="meta">Page {{ page() }}</span>
-      <button type="button" class="btn btn-secondary btn-sm" [disabled]="queue().length < limit || loading()" (click)="next()">Next →</button>
+      <button
+        type="button"
+        class="btn btn-secondary btn-sm"
+        [disabled]="queue().length < limit || loading()"
+        (click)="next()"
+        >Next →</button
+      >
     </nav>
   </div>
 </div>

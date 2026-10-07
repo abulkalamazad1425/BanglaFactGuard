@@ -19,13 +19,18 @@ import { ToastComponent } from '../../shared/components/toast/toast.component';
       <app-toast />
     </div>
   `,
-  styles: [`
-    .app-shell {
-      display: flex; flex-direction: column; min-height: 100vh;
-    }
-    .main-content {
-      flex: 1; padding-top: 64px; /* navbar height */
-    }
-  `]
+  styles: [
+    `
+      .app-shell {
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+      }
+      .main-content {
+        flex: 1;
+        padding-top: 64px; /* navbar height */
+      }
+    `,
+  ],
 })
 export class MainLayoutComponent {}

@@ -19,7 +19,7 @@ type QueueState = 'all' | 'escalated' | 'review';
   standalone: true,
   imports: [CommonModule, RouterLink, VerdictBadgeComponent],
   templateUrl: './expert-queue.html',
-  styleUrls: ['./expert-queue.scss']
+  styleUrls: ['./expert-queue.scss'],
 })
 export class ExpertQueueComponent implements OnInit {
   private readonly expertSvc = inject(ExpertService);
@@ -44,7 +44,7 @@ export class ExpertQueueComponent implements OnInit {
   readonly page = () => Math.floor(this.offset() / this.limit) + 1;
 
   ngOnInit(): void {
-    this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(params => {
+    this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
       const s = params.get('state');
       this.state.set(this.isAdmin() && (s === 'escalated' || s === 'review') ? s : 'all');
       this.offset.set(0);
@@ -52,20 +52,44 @@ export class ExpertQueueComponent implements OnInit {
     });
   }
 
-  search(value: string): void { this.query = value.trim(); this.offset.set(0); this.load(); }
+  search(value: string): void {
+    this.query = value.trim();
+    this.offset.set(0);
+    this.load();
+  }
 
   selectState(state: QueueState): void {
-    this.router.navigate([], { relativeTo: this.route, queryParams: { state: state === 'all' ? null : state } });
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { state: state === 'all' ? null : state },
+    });
   }
 
   load(): void {
     this.loading.set(true);
-    this.expertSvc.getQueue(this.limit, this.offset(), this.query, this.isAdmin() ? this.state() : 'all')
-      .subscribe({ next: q => { this.queue.set(q); this.loading.set(false); this.loadError.set(false); }, error: () => { this.loading.set(false); this.loadError.set(true); } });
+    this.expertSvc
+      .getQueue(this.limit, this.offset(), this.query, this.isAdmin() ? this.state() : 'all')
+      .subscribe({
+        next: (q) => {
+          this.queue.set(q);
+          this.loading.set(false);
+          this.loadError.set(false);
+        },
+        error: () => {
+          this.loading.set(false);
+          this.loadError.set(true);
+        },
+      });
   }
 
-  prev(): void { this.offset.update(o => Math.max(0, o - this.limit)); this.load(); }
-  next(): void { this.offset.update(o => o + this.limit); this.load(); }
+  prev(): void {
+    this.offset.update((o) => Math.max(0, o - this.limit));
+    this.load();
+  }
+  next(): void {
+    this.offset.update((o) => o + this.limit);
+    this.load();
+  }
 
   detailLink(item: ExpertQueueItem): string[] {
     return [this.isAdmin() ? '/admin/review-queue' : '/expert/queue', item.submission_id];

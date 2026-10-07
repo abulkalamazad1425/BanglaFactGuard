@@ -1,50 +1,195 @@
-:host { display: block; }
-.about { max-width: 1100px; padding-block: 56px 80px; display: grid; gap: 56px; }
+:host {
+  display: block;
+}
+.about {
+  max-width: 1100px;
+  padding-block: 56px 80px;
+  display: grid;
+  gap: 56px;
+}
 
-.eyebrow { display: block; font-size: 11px; font-weight: 700; letter-spacing: .15em; color: var(--primary-dark, var(--primary)); margin-bottom: 14px; }
+.eyebrow {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  color: var(--primary-dark, var(--primary));
+  margin-bottom: 14px;
+}
 .about-hero {
   max-width: 760px;
-  h1 { font-size: clamp(2.2rem, 4.4vw, 3.4rem); line-height: 1.15; margin: 0 0 18px; }
-  p { font-size: 17px; line-height: 1.8; color: var(--text-secondary); margin: 0; }
+  h1 {
+    font-size: clamp(2.2rem, 4.4vw, 3.4rem);
+    line-height: 1.15;
+    margin: 0 0 18px;
+  }
+  p {
+    font-size: 17px;
+    line-height: 1.8;
+    color: var(--text-secondary);
+    margin: 0;
+  }
 }
-.hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 28px;
+}
 
-.about-section h2 { font-size: 24px; margin: 0 0 20px; }
+.about-section h2 {
+  font-size: 24px;
+  margin: 0 0 20px;
+}
 
-.card-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
 .info-card {
-  display: grid; align-content: start; gap: 10px; padding: 24px; text-decoration: none; color: inherit;
-  transition: border-color .15s, transform .15s;
-  &:hover { border-color: var(--primary); transform: translateY(-2px); }
-  h3 { font-size: 17px; margin: 0; }
-  p { margin: 0; font-size: 14px; line-height: 1.7; color: var(--text-secondary); }
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 24px;
+  text-decoration: none;
+  color: inherit;
+  transition:
+    border-color 0.15s,
+    transform 0.15s;
+  &:hover {
+    border-color: var(--primary);
+    transform: translateY(-2px);
+  }
+  h3 {
+    font-size: 17px;
+    margin: 0;
+  }
+  p {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--text-secondary);
+  }
 }
-.info-icon { display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: var(--bg-surface-2); color: var(--primary); font-size: 20px; }
-
-.steps { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px;
-  li { padding: 22px; h3 { font-size: 16px; margin: 12px 0 6px; } p { margin: 0; font-size: 13.5px; line-height: 1.7; color: var(--text-secondary); } }
+.info-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--bg-surface-2);
+  color: var(--primary);
+  font-size: 20px;
 }
-.step-num { display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--gradient-primary); color: #fff; font-weight: 700; font-size: 14px; }
 
-.split { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 40px; }
-.verdicts, .principles { list-style: none; padding: 0; margin: 0; display: grid; gap: 14px; }
-.verdicts li { display: flex; align-items: center; gap: 14px; font-size: 14px; color: var(--text-secondary); .badge { min-width: 92px; justify-content: center; text-align: center; } }
-.principles li { border-left: 3px solid var(--primary); padding-left: 14px;
-  strong { display: block; font-size: 15px; margin-bottom: 2px; }
-  p { margin: 0; font-size: 13.5px; line-height: 1.7; color: var(--text-secondary); }
+.steps {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  li {
+    padding: 22px;
+    h3 {
+      font-size: 16px;
+      margin: 12px 0 6px;
+    }
+    p {
+      margin: 0;
+      font-size: 13.5px;
+      line-height: 1.7;
+      color: var(--text-secondary);
+    }
+  }
+}
+.step-num {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--gradient-primary);
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.split {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 40px;
+}
+.verdicts,
+.principles {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 14px;
+}
+.verdicts li {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  .badge {
+    min-width: 92px;
+    justify-content: center;
+    text-align: center;
+  }
+}
+.principles li {
+  border-left: 3px solid var(--primary);
+  padding-left: 14px;
+  strong {
+    display: block;
+    font-size: 15px;
+    margin-bottom: 2px;
+  }
+  p {
+    margin: 0;
+    font-size: 13.5px;
+    line-height: 1.7;
+    color: var(--text-secondary);
+  }
 }
 
 .about-cta {
-  display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; padding: 28px 32px;
-  background: linear-gradient(135deg, rgba(31, 127, 78, .1), transparent 70%), var(--bg-surface);
-  h2 { font-size: 22px; margin: 0 0 4px; } p { margin: 0; color: var(--text-secondary); }
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 28px 32px;
+  background: linear-gradient(135deg, rgba(31, 127, 78, 0.1), transparent 70%), var(--bg-surface);
+  h2 {
+    font-size: 22px;
+    margin: 0 0 4px;
+  }
+  p {
+    margin: 0;
+    color: var(--text-secondary);
+  }
 }
 
 @media (max-width: 900px) {
-  .card-grid, .split { grid-template-columns: 1fr; }
-  .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .card-grid,
+  .split {
+    grid-template-columns: 1fr;
+  }
+  .steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 @media (max-width: 520px) {
-  .about { padding-block: 36px 56px; gap: 40px; }
-  .steps { grid-template-columns: 1fr; }
+  .about {
+    padding-block: 36px 56px;
+    gap: 40px;
+  }
+  .steps {
+    grid-template-columns: 1fr;
+  }
 }

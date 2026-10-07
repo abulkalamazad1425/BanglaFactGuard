@@ -13,7 +13,7 @@ type Step = 'request' | 'confirm';
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, RouterLink],
   templateUrl: './forgot-password.html',
-  styleUrls: ['./forgot-password.scss']
+  styleUrls: ['./forgot-password.scss'],
 })
 export class ForgotPasswordComponent {
   private readonly fb = inject(FormBuilder);
@@ -31,25 +31,47 @@ export class ForgotPasswordComponent {
 
   confirmForm = this.fb.group({
     otp: ['', [Validators.required, Validators.pattern(/^\d{4,10}$/)]],
-    new_password: ['', [Validators.required, Validators.minLength(8), Validators.pattern(/^(?=.*[A-Z])(?=.*\d).+$/)]],
+    new_password: [
+      '',
+      [Validators.required, Validators.minLength(8), Validators.pattern(/^(?=.*[A-Z])(?=.*\d).+$/)],
+    ],
     confirm_password: ['', [Validators.required]],
   });
 
-  get emailInvalid() { return this.requestForm.get('email')?.invalid && this.requestForm.get('email')?.touched; }
-  get otpInvalid() { return this.confirmForm.get('otp')?.invalid && this.confirmForm.get('otp')?.touched; }
-  get newPasswordInvalid() { return this.confirmForm.get('new_password')?.invalid && this.confirmForm.get('new_password')?.touched; }
+  get emailInvalid() {
+    return this.requestForm.get('email')?.invalid && this.requestForm.get('email')?.touched;
+  }
+  get otpInvalid() {
+    return this.confirmForm.get('otp')?.invalid && this.confirmForm.get('otp')?.touched;
+  }
+  get newPasswordInvalid() {
+    return (
+      this.confirmForm.get('new_password')?.invalid && this.confirmForm.get('new_password')?.touched
+    );
+  }
   get passwordMismatch() {
     const { new_password, confirm_password } = this.confirmForm.value;
     return !!confirm_password && new_password !== confirm_password;
   }
 
   requestOtp(): void {
-    if (this.requestForm.invalid) { this.requestForm.markAllAsTouched(); return; }
+    if (this.requestForm.invalid) {
+      this.requestForm.markAllAsTouched();
+      return;
+    }
     this.loading = true;
     const email = this.requestForm.value.email!;
     this.auth.requestPasswordReset(email).subscribe({
-      next: () => { this.submittedEmail = email; this.step = 'confirm'; this.loading = false; },
-      error: () => { this.submittedEmail = email; this.step = 'confirm'; this.loading = false; }, // never reveal whether the email exists
+      next: () => {
+        this.submittedEmail = email;
+        this.step = 'confirm';
+        this.loading = false;
+      },
+      error: () => {
+        this.submittedEmail = email;
+        this.step = 'confirm';
+        this.loading = false;
+      }, // never reveal whether the email exists
     });
   }
 

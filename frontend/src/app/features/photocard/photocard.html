@@ -1,10 +1,28 @@
-@if (step === 'upload') {<div class="flow-grid"><section class="surface"><div class="section-heading"><h2>Add the photocard</h2></div><fieldset [disabled]="verifying"><p class="form-label" id="photocard-image-label">Photocard image <span class="req-mark" aria-hidden="true">*</span><span class="sr-only">(required)</span></p><div class="dropzone" aria-labelledby="photocard-image-label" aria-describedby="photocard-image-error" [class.is-invalid]="submitted && !selectedFile"
-             [class.active]="dragActive"
-             [class.has-file]="!!previewUrl"
-             role="button" tabindex="0" aria-label="Upload an image" (keydown.enter)="fileInput.click()" (keydown.space)="$event.preventDefault(); fileInput.click()" (click)="fileInput.click()"
-             (dragover)="onDragOver($event)"
-             (dragleave)="onDragLeave()"
-             (drop)="onDrop($event)">
+@if (step === 'upload') {
+  <div class="flow-grid"
+    ><section class="surface"
+      ><div class="section-heading"><h2>Add the photocard</h2></div
+      ><fieldset [disabled]="verifying"
+        ><p class="form-label" id="photocard-image-label"
+          >Photocard image <span class="req-mark" aria-hidden="true">*</span
+          ><span class="sr-only">(required)</span></p
+        ><div
+          class="dropzone"
+          aria-labelledby="photocard-image-label"
+          aria-describedby="photocard-image-error"
+          [class.is-invalid]="submitted && !selectedFile"
+          [class.active]="dragActive"
+          [class.has-file]="!!previewUrl"
+          role="button"
+          tabindex="0"
+          aria-label="Upload an image"
+          (keydown.enter)="fileInput.click()"
+          (keydown.space)="$event.preventDefault(); fileInput.click()"
+          (click)="fileInput.click()"
+          (dragover)="onDragOver($event)"
+          (dragleave)="onDragLeave()"
+          (drop)="onDrop($event)"
+        >
           @if (previewUrl) {
             <img [src]="previewUrl" class="dropzone-preview" alt="Selected photo card" />
             <div class="dropzone-overlay">Click to choose a different image</div>
@@ -13,31 +31,106 @@
             <span class="dropzone-label">Click to upload, or drag &amp; drop</span>
             <span class="dropzone-hint">JPEG, PNG, WebP or GIF — up to 10 MB</span>
           }
-          <input #fileInput aria-label="Choose an image" type="file" class="sr-only"
-                 accept="image/jpeg,image/png,image/webp,image/gif"
-                 (change)="onFileChange($event)" />
+          <input
+            #fileInput
+            aria-label="Choose an image"
+            type="file"
+            class="sr-only"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            (change)="onFileChange($event)"
+          />
         </div>
 
         @if (selectedFile) {
-          <p class="file-name">Selected: <strong>{{ selectedFile.name }}</strong></p>
+          <p class="file-name"
+            >Selected: <strong>{{ selectedFile.name }}</strong></p
+          >
         }
         @if (submitted && !selectedFile) {
-          <span id="photocard-image-error" class="form-error" role="alert">Choose the photocard image.</span>
+          <span id="photocard-image-error" class="form-error" role="alert"
+            >Choose the photocard image.</span
+          >
         }
 
         @if (errorMsg) {
           <div class="note warning" role="alert">{{ errorMsg }}</div>
         }
 
-        <button type="button" class="btn btn-primary btn-full btn-lg mt-4"
-                [disabled]="verifying" [attr.aria-busy]="verifying" (click)="verify()">
+        <button
+          type="button"
+          class="btn btn-primary btn-full btn-lg mt-4"
+          [disabled]="verifying"
+          [attr.aria-busy]="verifying"
+          (click)="verify()"
+        >
           @if (verifying) {
             <span class="btn-spinner"></span> Uploading…
           } @else {
             Verify photo card
           }
         </button>
-
-        </fieldset></section><aside class="side-stack"><section class="surface"><h2 class="claim-preview">Preview Your Submission</h2>@if (previewUrl) {<img [src]="previewUrl" class="preview-image" alt="Selected photocard preview">}</section><section class="surface source-panel" aria-labelledby="photocard-sources-heading"><h2 id="photocard-sources-heading">Verified news sources</h2><p class="field-hint">The system recognizes the following sources as verified Bangla news sources</p>@if (sourcesLoading) {<p class="field-hint">Loading the current list…</p>} @else if (sourcesError) {<div class="service-notice" role="status"><p>The outlet list could not be loaded.</p><button type="button" class="btn btn-secondary" (click)="loadSources()">Try again</button></div>} @else if (!sources.length) {<p class="field-hint">No news outlets are available for checking right now.</p>} @else {<details><summary>Show the {{ sources.length }} active outlets</summary><ul class="source-list">@for (src of sources; track src.canonical_name) {<li><span lang="bn">{{ src.display_name }}</span>@if (src.display_name_en) {<span class="source-en"> — {{ src.display_name_en }}</span>}</li>}</ul></details>}</section></aside></div>}
-@if (step === 'accepted' && accepted) {<section class="surface state-card"><span class="eyebrow">UPLOAD COMPLETE</span><div class="state-mark" aria-hidden="true">✓</div><h2>Your photo card was received</h2><p>Verification may take a few minutes. You can continue browsing. Find preliminary and final results in Fact Explorer or, if signed in, My Submissions.</p>@if (previewUrl) {<img [src]="previewUrl" class="preview-image" alt="Submitted photocard">}<dl class="meta-grid"><div><dt>Read from the card</dt><dd>Headline, news outlet and date</dd></div><div><dt>Scope</dt><dd>Headline only</dd></div></dl><div class="note">Keep this result link to return later.</div><div class="actions"><a class="btn btn-primary" [routerLink]="['/verify',accepted.submission_id]">View progress</a><a class="btn btn-secondary" routerLink="/history">My Submissions</a><button class="btn btn-ghost" (click)="reset()">Verify another card</button></div></section>}
-
+      </fieldset></section
+    ><aside class="side-stack"
+      ><section class="surface"
+        ><h2 class="claim-preview">Preview Your Submission</h2>
+        @if (previewUrl) {
+          <img [src]="previewUrl" class="preview-image" alt="Selected photocard preview" />
+        }</section
+      ><section class="surface source-panel" aria-labelledby="photocard-sources-heading"
+        ><h2 id="photocard-sources-heading">Verified news sources</h2
+        ><p class="field-hint"
+          >The system recognizes the following sources as verified Bangla news sources</p
+        >
+        @if (sourcesLoading) {
+          <p class="field-hint">Loading the current list…</p>
+        } @else if (sourcesError) {
+          <div class="service-notice" role="status"
+            ><p>The outlet list could not be loaded.</p
+            ><button type="button" class="btn btn-secondary" (click)="loadSources()"
+              >Try again</button
+            ></div
+          >
+        } @else if (!sources.length) {
+          <p class="field-hint">No news outlets are available for checking right now.</p>
+        } @else {
+          <details
+            ><summary>Show the {{ sources.length }} active outlets</summary
+            ><ul class="source-list">
+              @for (src of sources; track src.canonical_name) {
+                <li
+                  ><span lang="bn">{{ src.display_name }}</span>
+                  @if (src.display_name_en) {
+                    <span class="source-en"> — {{ src.display_name_en }}</span>
+                  }
+                </li>
+              }
+            </ul></details
+          >
+        }
+      </section></aside
+    ></div
+  >
+}
+@if (step === 'accepted' && accepted) {
+  <section class="surface state-card"
+    ><span class="eyebrow">UPLOAD COMPLETE</span><div class="state-mark" aria-hidden="true">✓</div
+    ><h2>Your photo card was received</h2
+    ><p
+      >Verification may take a few minutes. You can continue browsing. Find preliminary and final
+      results in Fact Explorer or, if signed in, My Submissions.</p
+    >
+    @if (previewUrl) {
+      <img [src]="previewUrl" class="preview-image" alt="Submitted photocard" />
+    }
+    <dl class="meta-grid"
+      ><div><dt>Read from the card</dt><dd>Headline, news outlet and date</dd></div
+      ><div><dt>Scope</dt><dd>Headline only</dd></div></dl
+    ><div class="note">Keep this result link to return later.</div
+    ><div class="actions"
+      ><a class="btn btn-primary" [routerLink]="['/verify', accepted.submission_id]"
+        >View progress</a
+      ><a class="btn btn-secondary" routerLink="/history">My Submissions</a
+      ><button class="btn btn-ghost" (click)="reset()">Verify another card</button></div
+    ></section
+  >
+}

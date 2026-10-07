@@ -20,7 +20,7 @@ import { VerdictBadgeComponent } from '../../../shared/components/verdict-badge/
   standalone: true,
   imports: [CommonModule, RouterLink, VerdictBadgeComponent],
   templateUrl: './submission-history.html',
-  styleUrls: ['./submission-history.scss']
+  styleUrls: ['./submission-history.scss'],
 })
 export class SubmissionHistoryComponent implements OnInit, OnDestroy {
   private readonly verificationSvc = inject(VerificationService);
@@ -47,21 +47,26 @@ export class SubmissionHistoryComponent implements OnInit, OnDestroy {
 
   private refreshStats(): void {
     this.verificationSvc.getMyStats().subscribe({
-      next: s => this.stats.set(s), error: () => { }
+      next: (s) => this.stats.set(s),
+      error: () => {},
     });
   }
 
   load(silent = false): void {
     if (!silent) this.loading.set(true);
-    this.verificationSvc.getMySubmissions(this.limit, this.offset())
-      .subscribe({
-        next: s => {
-          this.submissions.set(s);
-          this.loading.set(false); this.loadError.set(false);
-          if (s.some(x => !x.is_finalized && !this.isFailed(x))) this.ensureRefresh(); else this.stopRefresh();
-        },
-        error: () => { this.loading.set(false); this.loadError.set(true); },
-      });
+    this.verificationSvc.getMySubmissions(this.limit, this.offset()).subscribe({
+      next: (s) => {
+        this.submissions.set(s);
+        this.loading.set(false);
+        this.loadError.set(false);
+        if (s.some((x) => !x.is_finalized && !this.isFailed(x))) this.ensureRefresh();
+        else this.stopRefresh();
+      },
+      error: () => {
+        this.loading.set(false);
+        this.loadError.set(true);
+      },
+    });
   }
 
   private ensureRefresh(): void {
@@ -79,8 +84,14 @@ export class SubmissionHistoryComponent implements OnInit, OnDestroy {
     this.refreshTimer = null;
   }
 
-  prev(): void { this.offset.update(o => Math.max(0, o - this.limit)); this.load(); }
-  next(): void { this.offset.update(o => o + this.limit); this.load(); }
+  prev(): void {
+    this.offset.update((o) => Math.max(0, o - this.limit));
+    this.load();
+  }
+  next(): void {
+    this.offset.update((o) => o + this.limit);
+    this.load();
+  }
 
   /* ─── Row state helpers ─── */
 
@@ -93,11 +104,19 @@ export class SubmissionHistoryComponent implements OnInit, OnDestroy {
   }
 
   hasResult(s: SubmissionSummary): boolean {
-    return !this.isRunning(s) && !this.isFailed(s) && Boolean(s.source_status || s.prediction || s.overall_verdict);
+    return (
+      !this.isRunning(s) &&
+      !this.isFailed(s) &&
+      Boolean(s.source_status || s.prediction || s.overall_verdict)
+    );
   }
 
   typeLabel(t: string): string {
-    return t === 'PHOTO_CARD' ? 'Photo card' : t === 'MULTIMODAL' ? 'Text & image' : 'Text & source';
+    return t === 'PHOTO_CARD'
+      ? 'Photo card'
+      : t === 'MULTIMODAL'
+        ? 'Text & image'
+        : 'Text & source';
   }
 
   /** What to show where the headline would be — a pending photo card has none yet. */
@@ -111,10 +130,14 @@ export class SubmissionHistoryComponent implements OnInit, OnDestroy {
 
   phaseText(s: SubmissionSummary): string {
     switch (s.phase) {
-      case 'EXTRACTING': return 'Reading the card';
-      case 'VERIFYING': return 'Checking the source';
-      case 'QUEUED': return 'Queued';
-      default: return s.status === 'PENDING' ? 'Queued' : 'In progress';
+      case 'EXTRACTING':
+        return 'Reading the card';
+      case 'VERIFYING':
+        return 'Checking the source';
+      case 'QUEUED':
+        return 'Queued';
+      default:
+        return s.status === 'PENDING' ? 'Queued' : 'In progress';
     }
   }
 

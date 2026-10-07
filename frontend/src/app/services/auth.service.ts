@@ -1,10 +1,27 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
-import { Observable, tap, catchError, throwError, defer, finalize, shareReplay, firstValueFrom, timeout } from 'rxjs';
+import {
+  Observable,
+  tap,
+  catchError,
+  throwError,
+  defer,
+  finalize,
+  shareReplay,
+  firstValueFrom,
+  timeout,
+} from 'rxjs';
 import { HttpBackend, HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { environment } from '../../environments/environment';
 import { API_ENDPOINTS } from '../core/constants/api-endpoints.constant';
-import { LoginRequest, RegisterRequest, TokenResponse, User, UserProfile, UpdateProfileRequest } from '../models/user.model';
+import {
+  LoginRequest,
+  RegisterRequest,
+  TokenResponse,
+  User,
+  UserProfile,
+  UpdateProfileRequest,
+} from '../models/user.model';
 import { ApiService } from './api.service';
 import { StorageService } from './storage.service';
 
@@ -20,7 +37,9 @@ export class AuthService {
   readonly user = this._user.asReadonly();
   readonly isLoggedIn = computed(() => this._user() !== null);
   readonly isAdmin = computed(() => this._user()?.role === 'admin');
-  readonly isExpert = computed(() => this._user()?.role === 'expert' || this._user()?.role === 'admin');
+  readonly isExpert = computed(
+    () => this._user()?.role === 'expert' || this._user()?.role === 'admin',
+  );
 
   // ── Proactive refresh ───────────────────────────────────────
   // The access token is short-lived. It is renewed shortly BEFORE it expires
@@ -34,12 +53,16 @@ export class AuthService {
   constructor() {
     this.scheduleRefresh();
     if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-      const wake = () => { if (document.visibilityState !== 'hidden') this.refreshIfExpiringSoon(); };
+      const wake = () => {
+        if (document.visibilityState !== 'hidden') this.refreshIfExpiringSoon();
+      };
       document.addEventListener('visibilitychange', wake);
       window.addEventListener('focus', wake);
       window.addEventListener('online', wake);
       // Another tab rotated the shared tokens: follow its schedule.
-      window.addEventListener('storage', e => { if (e.key === null || e.key === 'bfg_access_token') this.scheduleRefresh(); });
+      window.addEventListener('storage', (e) => {
+        if (e.key === null || e.key === 'bfg_access_token') this.scheduleRefresh();
+      });
     }
   }
 
@@ -65,7 +88,10 @@ export class AuthService {
       if (expiry === null) return;
       delayMs = expiry - Date.now() - AuthService.REFRESH_LEAD_MS;
     }
-    this.refreshTimer = setTimeout(() => this.refreshIfExpiringSoon(), Math.min(Math.max(delayMs, 0), 2_147_000_000));
+    this.refreshTimer = setTimeout(
+      () => this.refreshIfExpiringSoon(),
+      Math.min(Math.max(delayMs, 0), 2_147_000_000),
+    );
   }
 
   /** Refresh now if the access token expires within the lead time. */
@@ -73,28 +99,33 @@ export class AuthService {
     if (!this.storage.getRefreshToken()) return;
     const expiry = this.accessExpiry();
     if (expiry === null) return; // undecodable: the 401 path still refreshes
-    if (expiry - Date.now() > AuthService.REFRESH_LEAD_MS) { this.scheduleRefresh(); return; }
+    if (expiry - Date.now() > AuthService.REFRESH_LEAD_MS) {
+      this.scheduleRefresh();
+      return;
+    }
     this.refresh().subscribe({
       // A network/server failure is not a logout: keep the session and retry.
-      error: err => { if (err?.status !== 401 && err?.status !== 403) this.scheduleRefresh(AuthService.RETRY_MS); },
+      error: (err) => {
+        if (err?.status !== 401 && err?.status !== 403) this.scheduleRefresh(AuthService.RETRY_MS);
+      },
     });
   }
 
   // ── Registration ────────────────────────────────────────────
   register(req: RegisterRequest): Observable<User> {
-    return this.api.post<User>(API_ENDPOINTS.AUTH_REGISTER, req).pipe(
-      tap(user => this._handleAuthSuccess(user))
-    );
+    return this.api
+      .post<User>(API_ENDPOINTS.AUTH_REGISTER, req)
+      .pipe(tap((user) => this._handleAuthSuccess(user)));
   }
 
   // ── Login ────────────────────────────────────────────────────
   login(req: LoginRequest): Observable<TokenResponse> {
     return this.api.post<TokenResponse>(API_ENDPOINTS.AUTH_LOGIN, req).pipe(
-      tap(tokens => {
+      tap((tokens) => {
         this.storage.setTokens(tokens.access_token, tokens.refresh_token);
         this.scheduleRefresh();
         this._loadMe();
-      })
+      }),
     );
   }
 
@@ -115,27 +146,51 @@ export class AuthService {
     const originalOwner = this.storage.getUser<User>()?.id;
     const exchange = async (): Promise<TokenResponse> => {
       const currentToken = this.storage.getRefreshToken();
-      if (this.storage.getUser<User>()?.id !== originalOwner) throw new HttpErrorResponse({ status: 401 });
+      if (this.storage.getUser<User>()?.id !== originalOwner)
+        throw new HttpErrorResponse({ status: 401 });
       // Another tab may have rotated the shared refresh token while we waited.
       if (currentToken && currentToken !== originalToken) {
-        return { access_token: this.storage.getAccessToken()!, refresh_token: currentToken, token_type: 'bearer', expires_in: 0 };
+        return {
+          access_token: this.storage.getAccessToken()!,
+          refresh_token: currentToken,
+          token_type: 'bearer',
+          expires_in: 0,
+        };
       }
       if (!currentToken) throw new HttpErrorResponse({ status: 401 });
-      const tokens = await firstValueFrom(this.rawHttp.post<TokenResponse>(environment.apiUrl + API_ENDPOINTS.AUTH_REFRESH, { refresh_token: currentToken }).pipe(timeout(15000)));
+      const tokens = await firstValueFrom(
+        this.rawHttp
+          .post<TokenResponse>(environment.apiUrl + API_ENDPOINTS.AUTH_REFRESH, {
+            refresh_token: currentToken,
+          })
+          .pipe(timeout(15000)),
+      );
       // An explicit logout during refresh must not restore the session.
-      if (this.storage.getRefreshToken() !== currentToken) throw new HttpErrorResponse({ status: 401 });
+      if (this.storage.getRefreshToken() !== currentToken)
+        throw new HttpErrorResponse({ status: 401 });
       this.storage.setTokens(tokens.access_token, tokens.refresh_token);
       this.scheduleRefresh();
       return tokens;
     };
-    this.refreshRequest = defer((): Promise<TokenResponse> => typeof navigator !== 'undefined' && navigator.locks
-      ? navigator.locks.request('banglafactguard-refresh', exchange) as unknown as Promise<TokenResponse>
-      : exchange()).pipe(
-      catchError(err => {
-        if ((err.status === 401 || err.status === 403) && this.storage.getRefreshToken() === originalToken) this.expireSession();
+    this.refreshRequest = defer((): Promise<TokenResponse> =>
+      typeof navigator !== 'undefined' && navigator.locks
+        ? (navigator.locks.request(
+            'banglafactguard-refresh',
+            exchange,
+          ) as unknown as Promise<TokenResponse>)
+        : exchange(),
+    ).pipe(
+      catchError((err) => {
+        if (
+          (err.status === 401 || err.status === 403) &&
+          this.storage.getRefreshToken() === originalToken
+        )
+          this.expireSession();
         return throwError(() => err);
       }),
-      finalize(() => { this.refreshRequest = undefined; }),
+      finalize(() => {
+        this.refreshRequest = undefined;
+      }),
       shareReplay({ bufferSize: 1, refCount: false }),
     );
     return this.refreshRequest;
@@ -145,8 +200,9 @@ export class AuthService {
   logout(): void {
     const refreshToken = this.storage.getRefreshToken();
     if (refreshToken) {
-      this.api.post(API_ENDPOINTS.AUTH_LOGOUT, { refresh_token: refreshToken })
-        .subscribe({ error: () => { } }); // fire and forget
+      this.api
+        .post(API_ENDPOINTS.AUTH_LOGOUT, { refresh_token: refreshToken })
+        .subscribe({ error: () => {} }); // fire and forget
     }
     clearTimeout(this.refreshTimer);
     this.storage.clearTokens();
@@ -157,13 +213,13 @@ export class AuthService {
   // ── Load current user ────────────────────────────────────────
   loadCurrentUser(): Observable<User> {
     return this.api.get<User>(API_ENDPOINTS.AUTH_ME).pipe(
-      tap(user => {
+      tap((user) => {
         this._user.set(user);
         this.storage.setUser(user);
       }),
-      catchError(err => {
+      catchError((err) => {
         return throwError(() => err);
-      })
+      }),
     );
   }
 
@@ -174,7 +230,7 @@ export class AuthService {
 
   updateProfile(data: UpdateProfileRequest): Observable<UserProfile> {
     return this.api.put<UserProfile>(API_ENDPOINTS.USERS_PROFILE, data).pipe(
-      tap(() => this._loadMe()) // Reload user to reflect changes (e.g. full_name)
+      tap(() => this._loadMe()), // Reload user to reflect changes (e.g. full_name)
     );
   }
 
@@ -191,7 +247,11 @@ export class AuthService {
     return this.api.post<{ message: string }>(API_ENDPOINTS.AUTH_PASSWORD_RESET_REQUEST, { email });
   }
 
-  confirmPasswordReset(email: string, otp: string, new_password: string): Observable<{ message: string }> {
+  confirmPasswordReset(
+    email: string,
+    otp: string,
+    new_password: string,
+  ): Observable<{ message: string }> {
     return this.api.post<{ message: string }>(API_ENDPOINTS.AUTH_PASSWORD_RESET_CONFIRM, {
       email,
       otp,
@@ -210,6 +270,6 @@ export class AuthService {
   }
 
   private _loadMe(): void {
-    this.loadCurrentUser().subscribe({ error: () => { } });
+    this.loadCurrentUser().subscribe({ error: () => {} });
   }
 }

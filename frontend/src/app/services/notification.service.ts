@@ -19,7 +19,11 @@ export class NotificationService {
 
   constructor() {
     // Load initial count on service init (silent, no error propagation needed)
-    effect(() => { this.auth.user(); this.unreadCount.set(0); this.refreshCount(); });
+    effect(() => {
+      this.auth.user();
+      this.unreadCount.set(0);
+      this.refreshCount();
+    });
   }
 
   /** GET /api/v1/notifications?limit=&offset=&unread_only= */
@@ -36,9 +40,9 @@ export class NotificationService {
     if (!this.auth.isLoggedIn()) {
       return of({ unread_count: 0 });
     }
-    return this.api.get<UnreadCountResponse>(API_ENDPOINTS.NOTIFICATIONS_COUNT).pipe(
-      tap(r => this.unreadCount.set(r.unread_count))
-    );
+    return this.api
+      .get<UnreadCountResponse>(API_ENDPOINTS.NOTIFICATIONS_COUNT)
+      .pipe(tap((r) => this.unreadCount.set(r.unread_count)));
   }
 
   /** Refresh the unread count signal silently */
@@ -53,9 +57,9 @@ export class NotificationService {
 
   /** POST /api/v1/notifications/read-all */
   markAllRead(): Observable<void> {
-    return this.api.post<void>(API_ENDPOINTS.NOTIFICATIONS_READ_ALL).pipe(
-      tap(() => this.unreadCount.set(0))
-    );
+    return this.api
+      .post<void>(API_ENDPOINTS.NOTIFICATIONS_READ_ALL)
+      .pipe(tap(() => this.unreadCount.set(0)));
   }
 
   /** Start periodic polling every 15s (call once in AppComponent) */

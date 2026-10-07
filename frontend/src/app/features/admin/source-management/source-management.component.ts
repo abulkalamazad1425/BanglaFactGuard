@@ -11,7 +11,7 @@ import { ToastService } from '../../../shared/services/toast.service';
   standalone: true,
   imports: [CommonModule, RouterModule, ReactiveFormsModule],
   templateUrl: './source-management.component.html',
-  styleUrls: ['./source-management.component.scss']
+  styleUrls: ['./source-management.component.scss'],
 })
 export class SourceManagementComponent implements OnInit {
   protected readonly Math = Math;
@@ -31,7 +31,13 @@ export class SourceManagementComponent implements OnInit {
   editingSourceId: string | null = null;
 
   form: FormGroup = this.fb.group({
-    canonical_name: ['', [Validators.required, Validators.pattern(/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/)]],
+    canonical_name: [
+      '',
+      [
+        Validators.required,
+        Validators.pattern(/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/),
+      ],
+    ],
     display_name: ['', Validators.required],
     display_name_en: [''],
     aliases: this.fb.array([]),
@@ -45,14 +51,24 @@ export class SourceManagementComponent implements OnInit {
     body_selectors: this.fb.array([]),
     title_selectors: this.fb.array([]),
     date_selectors: this.fb.array([]),
-    article_url_patterns: this.fb.array([])
+    article_url_patterns: this.fb.array([]),
   });
 
-  get aliases() { return this.form.get('aliases') as FormArray; }
-  get bodySelectors() { return this.form.get('body_selectors') as FormArray; }
-  get titleSelectors() { return this.form.get('title_selectors') as FormArray; }
-  get dateSelectors() { return this.form.get('date_selectors') as FormArray; }
-  get articleUrlPatterns() { return this.form.get('article_url_patterns') as FormArray; }
+  get aliases() {
+    return this.form.get('aliases') as FormArray;
+  }
+  get bodySelectors() {
+    return this.form.get('body_selectors') as FormArray;
+  }
+  get titleSelectors() {
+    return this.form.get('title_selectors') as FormArray;
+  }
+  get dateSelectors() {
+    return this.form.get('date_selectors') as FormArray;
+  }
+  get articleUrlPatterns() {
+    return this.form.get('article_url_patterns') as FormArray;
+  }
 
   ngOnInit() {
     this.loadSources();
@@ -65,7 +81,7 @@ export class SourceManagementComponent implements OnInit {
         this.sources.set(res.items);
         this.total.set(res.total);
       },
-      error: () => this.toast.error('Failed to load sources')
+      error: () => this.toast.error('Failed to load sources'),
     });
   }
 
@@ -106,7 +122,7 @@ export class SourceManagementComponent implements OnInit {
   setFormArray(name: string, items: string[]) {
     const arr = this.form.get(name) as FormArray;
     arr.clear();
-    items?.forEach(item => arr.push(this.fb.control(item)));
+    items?.forEach((item) => arr.push(this.fb.control(item)));
   }
 
   addArrayItem(name: string) {
@@ -130,7 +146,10 @@ export class SourceManagementComponent implements OnInit {
     const raw = this.form.getRawValue();
 
     const request = this.isEditMode()
-      ? this.sourceService.updateSource(this.editingSourceId!, { ...raw, canonical_name: undefined })
+      ? this.sourceService.updateSource(this.editingSourceId!, {
+          ...raw,
+          canonical_name: undefined,
+        })
       : this.sourceService.createSource(raw);
 
     request.subscribe({
@@ -143,17 +162,17 @@ export class SourceManagementComponent implements OnInit {
       error: (err) => {
         this.toast.error(err.error?.detail?.message || 'An error occurred.');
         this.saving.set(false);
-      }
+      },
     });
   }
 
   toggleActive(source: SourceResponse) {
     this.sourceService.updateSource(source.id, { is_active: !source.is_active }).subscribe({
       next: (res) => {
-        this.sources.update(items => items.map(i => i.id === res.id ? res : i));
+        this.sources.update((items) => items.map((i) => (i.id === res.id ? res : i)));
         this.toast.success(`Source ${res.is_active ? 'enabled' : 'disabled'}.`);
       },
-      error: () => this.toast.error('Failed to update source.')
+      error: () => this.toast.error('Failed to update source.'),
     });
   }
 
@@ -164,19 +183,19 @@ export class SourceManagementComponent implements OnInit {
           this.loadSources();
           this.toast.success('Source deleted.');
         },
-        error: () => this.toast.error('Failed to delete source.')
+        error: () => this.toast.error('Failed to delete source.'),
       });
     }
   }
 
   nextPage() {
-    this.page.update(p => p + 1);
+    this.page.update((p) => p + 1);
     this.loadSources();
   }
 
   prevPage() {
     if (this.page() > 1) {
-      this.page.update(p => p - 1);
+      this.page.update((p) => p - 1);
       this.loadSources();
     }
   }

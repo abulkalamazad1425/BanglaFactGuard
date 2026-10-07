@@ -2,7 +2,13 @@
 // Admin Models — synced with backend admin/schemas.py
 // ============================================================
 
-import { ContentStatus, DateStatus, HeadlineAlterationStatus, OverallVerdict, SourceStatus } from './verification.model';
+import {
+  ContentStatus,
+  DateStatus,
+  HeadlineAlterationStatus,
+  OverallVerdict,
+  SourceStatus,
+} from './verification.model';
 
 // ── Expert account response from GET /admin/experts ──────────────────
 export interface ExpertResponse {
@@ -79,7 +85,6 @@ export interface AdminDashboard {
   experts: DashboardExpert[];
   recent_activity: DashboardActivity[];
 }
-
 
 // ── Request to POST /admin/experts ───────────────────────────────────
 export interface CreateExpertRequest {

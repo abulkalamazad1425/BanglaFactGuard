@@ -7,7 +7,7 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
   const toast = inject(ToastService);
 
   return next(req).pipe(
-    catchError(err => {
+    catchError((err) => {
       const status = err.status;
 
       if (status === 401) {
@@ -23,6 +23,6 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
       }
 
       return throwError(() => err);
-    })
+    }),
   );
 };

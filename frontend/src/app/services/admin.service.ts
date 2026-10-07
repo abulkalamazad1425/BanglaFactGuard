@@ -43,10 +43,13 @@ export class AdminService {
   }
 
   /** POST /api/v1/admin/experts/{id}/reset-password */
-  resetExpertPassword(id: string, body: ResetExpertPasswordRequest): Observable<{ message: string }> {
+  resetExpertPassword(
+    id: string,
+    body: ResetExpertPasswordRequest,
+  ): Observable<{ message: string }> {
     return this.api.post<{ message: string }>(
       `${API_ENDPOINTS.ADMIN_EXPERTS}/${id}/reset-password`,
-      body
+      body,
     );
   }
 
@@ -83,11 +86,11 @@ export class AdminService {
   /** PUT /api/v1/admin/credibility-tiers/{id} */
   updateCredibilityTier(
     id: string,
-    body: CredibilityWeightTierUpdateRequest
+    body: CredibilityWeightTierUpdateRequest,
   ): Observable<CredibilityWeightTier> {
     return this.api.put<CredibilityWeightTier>(
       `${API_ENDPOINTS.ADMIN_CREDIBILITY_TIERS}/${id}`,
-      body
+      body,
     );
   }
 
