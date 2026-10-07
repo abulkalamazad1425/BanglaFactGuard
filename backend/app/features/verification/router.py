@@ -78,7 +78,7 @@ async def verify_claim(
     status_code=status.HTTP_202_ACCEPTED,
     summary="Queue a claim for verification and return immediately",
     description=(
-        "Registers the claim and runs the 12-stage pipeline in the background. "
+        "Registers the claim and runs the 13-stage pipeline in the background. "
         "Responds at once with a submission ID to poll via "
         "`GET /verify/{submission_id}/status`, so the caller does not have to "
         "wait on the request. If this exact claim was verified before, the "

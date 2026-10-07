@@ -150,19 +150,19 @@ cd backend
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe -m pip install "python-jose[cryptography]" bcrypt email-validator
+.\.venv\Scripts\python.exe -m playwright install chromium
 if (!(Test-Path .env)) { Copy-Item .env.example .env }
 ```
 
-The additional install supplies authentication/validation dependencies imported by the current backend but not listed in `requirements.txt`. Configure `.env` with your own values; keep an existing working environment rather than replacing it.
+`requirements.txt` lists every runtime dependency; Chromium is used to read sources that render their articles with JavaScript. Configure `.env` with your own values; keep an existing working environment rather than replacing it. `AUTH_SECRET_KEY` is required - the backend does not start without it. Generate one with `.\.venv\Scripts\python.exe -c "import secrets; print(secrets.token_urlsafe(48))"`.
 
 | Configuration | Purpose |
 | --- | --- |
 | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | PostgreSQL connection |
 | `REDIS_HOST`, `REDIS_PORT` | Redis connection |
 | `MINIO_*` | Image storage endpoint, credentials and bucket |
-| `AUTH_SECRET_KEY` | JWT signing key; separate from the general `SECRET_KEY` setting |
-| `ML_*` | Local embedding, NLI, NER models and device |
+| `AUTH_SECRET_KEY` | Required JWT signing key (at least 32 characters); keep it secret |
+| `ML_*` | Local embedding (`sentence-transformers/LaBSE`), NLI and NER models |
 | `GEMINI_*` | Photo-card reading: API key, model, request batches (`GEMINI_ATTEMPTS_PER_BATCH`, `GEMINI_BATCHES`, `GEMINI_BATCH_PAUSE_SECONDS`) |
 | `GEMINI_API_KEY`, `GEMINI_MODEL_NAME` | Optional Gemini headline extraction |
 | `MULTIMODAL_MODEL_DIR`, `MULTIMODAL_DEVICE`, `MULTIMODAL_LOAD_ON_STARTUP` | Trained text/image model loading |
@@ -305,7 +305,7 @@ cd backend
 The suite includes deterministic model/service fakes and database tests. Dependency and database requirements vary by test; the default pytest configuration includes coverage reporting and a coverage threshold. For focused extension-related checks:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest tests/unit/test_multimodal_background.py tests/unit/test_photocard_background.py tests/unit/test_photocard_extraction_failure.py -q --no-cov
+.\.venv\Scripts\python.exe -m pytest tests/unit/test_multimodal_background.py tests/unit/test_photocard_background.py tests/unit/test_photocard_claim_extraction.py -q --no-cov
 ```
 
 ## Troubleshooting

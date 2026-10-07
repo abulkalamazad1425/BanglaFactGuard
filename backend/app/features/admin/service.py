@@ -12,7 +12,6 @@ from app.core.exceptions import (
     DomainValidationError,
     DuplicateRecordError,
     RecordNotFoundError,
-    WeakPasswordError,
 )
 from app.features.admin.schemas import (
     AdminDashboardResponse,
@@ -30,6 +29,7 @@ from app.features.admin.schemas import (
 from app.features.auth.models import User
 from app.features.auth.repository import RefreshTokenRepository, UserRepository
 from app.features.auth.security import hash_password
+from app.features.auth.service import validate_password_strength
 from app.features.expert_review.models import CredibilityWeightTier, VotingConfig
 from app.features.expert_review.repository import (
     CredibilityWeightTierRepository,
@@ -40,12 +40,6 @@ from app.features.submissions.models import Submission
 from app.features.verification.models import VerificationResult
 
 logger = structlog.get_logger(__name__)
-
-
-def _validate_password(password: str) -> None:
-    from app.features.auth.service import _validate_password_strength
-
-    _validate_password_strength(password)
 
 
 class AdminService:
@@ -65,7 +59,7 @@ class AdminService:
         self._tokens = token_repo
 
     async def create_expert(self, req: CreateExpertRequest) -> ExpertResponse:
-        _validate_password(req.password)
+        validate_password_strength(req.password)
 
         if await self._users.email_exists(req.email):
             raise DuplicateRecordError(model="User", field="email", value=req.email)
@@ -150,7 +144,7 @@ class AdminService:
     async def reset_expert_password(
         self, user_id: uuid.UUID, req: ResetExpertPasswordRequest
     ) -> dict:
-        _validate_password(req.new_password)
+        validate_password_strength(req.new_password)
         user = await self._users.get_by_id(user_id)
         if user.role not in ("expert", "admin"):
             raise RecordNotFoundError(model="Expert", identifier=str(user_id))
@@ -162,7 +156,7 @@ class AdminService:
         return {"message": "Password has been reset. The expert must log in again."}
 
     async def deactivate_expert(self, user_id: uuid.UUID) -> ExpertResponse:
-        user = await self._users.update(
+        await self._users.update(
             await self._users.get_by_id(user_id), is_active=False
         )
         await self._tokens.revoke_all_for_user(user_id)
@@ -222,7 +216,6 @@ class AdminService:
         tier_id: uuid.UUID | None,
         min_pct: float,
         max_pct: float,
-        weight: float,
         is_active: bool,
     ) -> None:
         if max_pct <= min_pct:
@@ -258,13 +251,12 @@ class AdminService:
             )
 
     async def create_credibility_tier(
-        self, req: CredibilityWeightTierRequest, admin_id: uuid.UUID | None = None
+        self, req: CredibilityWeightTierRequest
     ) -> CredibilityWeightTierResponse:
         await self._validate_tier(
             tier_id=None,
             min_pct=req.min_accuracy_pct,
             max_pct=req.max_accuracy_pct,
-            weight=req.weight,
             is_active=req.is_active,
         )
         tier = CredibilityWeightTier(
@@ -284,7 +276,6 @@ class AdminService:
         self,
         tier_id: uuid.UUID,
         req: CredibilityWeightTierUpdateRequest,
-        admin_id: uuid.UUID | None = None,
     ) -> CredibilityWeightTierResponse:
         tier = await self._session.get(CredibilityWeightTier, tier_id)
         if tier is None:
@@ -295,7 +286,6 @@ class AdminService:
             tier_id=tier_id,
             min_pct=updates.get("min_accuracy_pct", tier.min_accuracy_pct),
             max_pct=updates.get("max_accuracy_pct", tier.max_accuracy_pct),
-            weight=updates.get("weight", tier.weight),
             is_active=updates.get("is_active", tier.is_active),
         )
         for field, value in updates.items():
@@ -306,7 +296,7 @@ class AdminService:
         return _tier_to_response(tier)
 
     async def delete_credibility_tier(
-        self, tier_id: uuid.UUID, admin_id: uuid.UUID | None = None
+        self, tier_id: uuid.UUID
     ) -> None:
         tier = await self._session.get(CredibilityWeightTier, tier_id)
         if tier is None:
@@ -319,7 +309,7 @@ class AdminService:
         return _voting_config_to_response(row)
 
     async def update_voting_config(
-        self, req: VotingConfigUpdateRequest, admin_id: uuid.UUID | None = None
+        self, req: VotingConfigUpdateRequest
     ) -> VotingConfigResponse:
         repo = VotingConfigRepository(self._session)
         row = await repo.get_or_create()

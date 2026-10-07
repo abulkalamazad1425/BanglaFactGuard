@@ -112,7 +112,8 @@ async def test_register_claim_raises_source_not_found_before_creating_a_submissi
         await svc.register_claim(_request())
 
     svc.submission_repo.create.assert_not_awaited()
-    svc.submission_repo.get_verified_by_content_hash.assert_not_awaited()
+    svc.submission_repo.get_in_flight_by_content_hash.assert_not_awaited()
+    svc.submission_repo.get_reusable_candidates.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -121,7 +122,6 @@ async def test_register_claim_proceeds_normally_when_source_resolves():
     svc.source_repo = AsyncMock()
     svc.source_repo.resolve_source.return_value = None  # irrelevant: URL extraction wins first
     svc.submission_repo = AsyncMock()
-    svc.submission_repo.get_verified_by_content_hash.return_value = None
     svc.submission_repo.get_in_flight_by_content_hash.return_value = None
     svc.reuse = MagicMock(find_reusable=AsyncMock(return_value=None))
     created = MagicMock(id=uuid.uuid4())

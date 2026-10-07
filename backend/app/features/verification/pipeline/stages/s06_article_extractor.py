@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import json
 import re
-from datetime import date, datetime
 from urllib.parse import urlparse
 
 import trafilatura
@@ -23,30 +22,6 @@ logger = structlog.get_logger(__name__)
 _SETTINGS = get_settings()
 
 
-_BANGLA_TO_ARABIC = str.maketrans("০১২৩৪৫৬৭৮৯", "0123456789")
-
-_BANGLA_MONTHS = {
-    "জানুয়ারি": "January",
-    "ফেব্রুয়ারি": "February",
-    "মার্চ": "March",
-    "এপ্রিল": "April",
-    "মে": "May",
-    "জুন": "June",
-    "জুলাই": "July",
-    "আগস্ট": "August",
-    "সেপ্টেম্বর": "September",
-    "অক্টোবর": "October",
-    "নভেম্বর": "November",
-    "ডিসেম্বর": "December",
-    "জানু": "January",
-    "ফেব্রু": "February",
-    "সেপ্টে": "September",
-    "অক্টো": "October",
-    "নভে": "November",
-    "ডিসে": "December",
-}
-
-
 _TITLE_SUFFIX_RE = re.compile(
     r"\s*[\|–\-]\s*(?:প্রথম আলো|কালের কণ্ঠ|যুগান্তর|বাংলাদেশ প্রতিদিন|"
     r"ইত্তেফাক|সমকাল|মানবজমিন|ইনকিলাব|নয়া দিগন্ত|"
@@ -54,22 +29,6 @@ _TITLE_SUFFIX_RE = re.compile(
     r"Daily Inqilab|Naya Diganta|Manab Zamin|BD Pratidin).*$",
     re.IGNORECASE,
 )
-
-_DATE_FORMATS = [
-    "%Y-%m-%dT%H:%M:%S%z",
-    "%Y-%m-%dT%H:%M:%S",
-    "%Y-%m-%dT%H:%M:%S.%f%z",
-    "%Y-%m-%dT%H:%M",
-    "%Y-%m-%d %H:%M:%S",
-    "%Y-%m-%d",
-    "%d/%m/%Y",
-    "%d-%m-%Y",
-    "%B %d, %Y",
-    "%d %B %Y",
-    "%b %d, %Y",
-    "%d %b %Y",
-]
-
 
 class ArticleExtractorStage:
 
@@ -82,7 +41,7 @@ class ArticleExtractorStage:
         self._selector_misses: dict[str, int] = {}
 
     async def execute(self, context: PipelineContext) -> PipelineContext:
-        raw_html_cache: dict[str, str] = getattr(context, "_raw_html_cache", {})
+        raw_html_cache: dict[str, str] = context.fetched_html
         if not raw_html_cache:
             return context
 
@@ -265,7 +224,7 @@ class ArticleExtractorStage:
                     break
 
         if not body or len(body) < self._min_body_length:
-            t_title, t_body, t_author, t_date = self._extract_trafilatura(url, html)
+            t_title, t_body, t_author = self._extract_trafilatura(url, html)
             if t_body and len(t_body) >= self._min_body_length:
                 title = title or t_title
                 body = t_body
@@ -287,7 +246,7 @@ class ArticleExtractorStage:
                 pass
 
         if not body or len(body) < self._min_body_length:
-            bs_title, bs_body, bs_author, bs_date = self._extract_bs4(url, html, config)
+            bs_title, bs_body, bs_author = self._extract_bs4(url, html, config)
             if bs_body and len(bs_body) > len(body or ""):
                 title = title or bs_title
                 body = bs_body
@@ -430,10 +389,10 @@ class ArticleExtractorStage:
             # meta.date is deliberately ignored: trafilatura returns the most
             # recent date it finds (often dateModified), and publication date
             # is only ever taken from datePublished sources (_find_publication).
-            return title, body, author, None
+            return title, body, author
         except Exception as exc:
             logger.debug("s06_trafilatura_failed", url=url[:80], error=str(exc))
-            return None, None, None, None
+            return None, None, None
 
     def _extract_bs4(self, url: str, html: str, config: dict | None):
         try:
@@ -454,19 +413,6 @@ class ArticleExtractorStage:
         a_meta = soup.find("meta", attrs={"name": "author"})
         if a_meta and a_meta.get("content"):
             author = a_meta["content"]
-
-        pub_date: date | None = None
-        for attr in [
-            {"property": "article:published_time"},
-            {"name": "publish_date"},
-            {"name": "dc.date"},
-            {"itemprop": "datePublished"},
-        ]:
-            meta = soup.find("meta", attrs=attr)
-            if meta and meta.get("content"):
-                pub_date = _parse_date(meta["content"])
-                if pub_date:
-                    break
 
         for tag in soup.find_all(
             ["nav", "header", "footer", "aside", "script", "style", "noscript"]
@@ -525,7 +471,7 @@ class ArticleExtractorStage:
                 if len(p.get_text(strip=True)) > 40
             ]
             body = "\n".join(paras)
-        return title, body or None, author, pub_date
+        return title, body or None, author
 
 
 def _iter_ld_items(data):
@@ -541,26 +487,3 @@ def _iter_ld_items(data):
             if graph:
                 stack.append(graph)
 
-
-def _parse_date(raw: str | None) -> date | None:
-    if not raw:
-        return None
-    raw = raw.strip()
-    raw = raw.translate(_BANGLA_TO_ARABIC)
-    for bn, en in _BANGLA_MONTHS.items():
-        raw = raw.replace(bn, en)
-
-    raw_norm = raw.replace("Z", "+00:00")
-
-    try:
-        return datetime.fromisoformat(raw_norm[:19]).date()
-    except (ValueError, TypeError):
-        pass
-
-    for fmt in _DATE_FORMATS:
-        try:
-            return datetime.strptime(raw[: len(fmt) + 5], fmt).date()
-        except (ValueError, TypeError):
-            continue
-
-    return None

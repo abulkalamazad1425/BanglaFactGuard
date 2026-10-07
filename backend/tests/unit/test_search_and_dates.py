@@ -190,7 +190,7 @@ async def test_final_redirected_host_must_belong_to_the_claimed_source():
     client = httpx.AsyncClient(transport=httpx.MockTransport(h), follow_redirects=True)
     stage = EvidenceRetrievalStage(client)
     out = await stage.execute(ctx)
-    assert list(out._raw_html_cache) == ["https://www.prothomalo.com/ok/2"]
+    assert list(out.fetched_html) == ["https://www.prothomalo.com/ok/2"]
     assert out.search_redirect_rejected == 1
     assert out.fetch_attempted == 1 and out.fetch_errors == 0  # a rejected redirect is not a fetch failure
     await client.aclose()

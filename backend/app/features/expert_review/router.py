@@ -182,17 +182,6 @@ async def get_stats(
 )
 async def get_credibility(
     current_user: User = Depends(_EXPERT_OR_ADMIN),
-    session: AsyncSession = Depends(get_async_session),
+    svc: ExpertReviewService = Depends(_get_service),
 ) -> CredibilityScoreResponse:
-    repo = ExpertProfileRepository(session)
-    profile = await repo.get_or_create(
-        current_user.id,
-    )
-    config = await VotingConfigRepository(session).get_or_create()
-    return CredibilityScoreResponse(
-        user_id=str(profile.user_id),
-        score=(profile.correct_votes / profile.total_votes if profile.total_votes and profile.total_votes >= config.activation_threshold_votes else None),
-        total_votes=profile.total_votes,
-        correct_votes=profile.correct_votes,
-        updated_at=profile.updated_at,
-    )
+    return await svc.get_credibility(current_user.id)

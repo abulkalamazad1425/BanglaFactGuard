@@ -1,6 +1,4 @@
 """
-app/features/verification/pipeline/factory.py
-================================================
 The one place that assembles the verification pipeline's stage list.
 `VerificationService` (POST /verify) and `PhotoCardService` both drive this
 same pipeline, so a photo-card result is defensible on the same terms as a

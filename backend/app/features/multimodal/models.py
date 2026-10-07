@@ -18,9 +18,8 @@ if TYPE_CHECKING:
 class MultimodalAnalysis(UUIDMixin, TimestampMixin, ReprMixin, Base):
     """DatabaseDescription.pdf Table 4.9 — multimodal_analysis.
 
-    Live storage target for the `/multimodal/predict` endpoint (replacing
-    `MultimodalPrediction` above, which is now frozen/legacy), tied 1:1 to a
-    `Submission` row per the thesis ER diagram.
+    Storage target for multimodal predictions, tied 1:1 to a `Submission`
+    row per the thesis ER diagram.
     """
 
     __tablename__ = "multimodal_analysis"

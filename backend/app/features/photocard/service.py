@@ -27,14 +27,19 @@ import uuid
 import httpx
 import structlog
 
-from app.core.constants import ClaimScope, SubmissionStatus, SubmissionType
+from app.core.constants import ClaimScope, JobPhase, SubmissionStatus, SubmissionType
 from app.core.exceptions import ImageStorageUnavailableError, PermanentJobError
 from app.features.cache.cache_service import CacheService
 from app.features.nlp.embedding_service import EmbeddingService
 from app.features.nlp.ner_service import NERService
 from app.features.nlp.nli_service import NLIService
-from app.features.notifications.service import notify_once
-from app.features.photocard.claim_extraction import CardExtraction, PhotocardClaimExtractor
+from app.features.notifications.service import notify_preliminary_result
+from app.features.photocard.claim_extraction import (
+    STATUS_PENDING,
+    STATUS_SUCCEEDED,
+    CardExtraction,
+    PhotocardClaimExtractor,
+)
 from app.features.photocard.schemas import PhotoCardAcceptedResponse, PhotoCardResultResponse
 from app.features.photocard.storage_service import PhotoCardStorageService
 from app.features.photocard.verification_stages import build_photocard_stages, compute_photocard_hash
@@ -120,11 +125,11 @@ class PhotoCardService:
                 # real claim identity. Replaced after extraction.
                 content_hash=f"pending:{submission_id.hex}",
                 status=SubmissionStatus.PENDING,
-                processing_phase="QUEUED",
+                processing_phase=JobPhase.QUEUED.value,
             )
         )
         await self.extraction_repo.create(
-            PhotocardExtraction(submission_id=submission.id, image_object_key=object_key, status="PENDING")
+            PhotocardExtraction(submission_id=submission.id, image_object_key=object_key, status=STATUS_PENDING)
         )
         if enqueue:
             await VerificationJobRepository(self.submission_repo.session).enqueue(submission.id, "PHOTO_CARD")
@@ -176,11 +181,11 @@ class PhotoCardService:
 
         log = logger.bind(submission_id=str(submission_id))
         await self.submission_repo.mark_processing(submission_id)
-        await self.submission_repo.set_phase(submission_id, "EXTRACTING")
+        await self.submission_repo.set_phase(submission_id, JobPhase.EXTRACTING.value)
         await session.commit()
 
         preprocessing_ms: dict[str, int] = {}
-        if record.status == "SUCCEEDED" and submission.headline and submission.claimed_source_id:
+        if record.status == STATUS_SUCCEEDED and submission.headline and submission.claimed_source_id:
             # A retry after a crash past extraction: never call Gemini twice.
             canonical = submission.claimed_source_text or ""
         else:
@@ -216,7 +221,7 @@ class PhotoCardService:
         submission.content_hash = compute_photocard_hash(
             submission.headline, canonical, published_date=submission.published_date
         )
-        await self.submission_repo.set_phase(submission_id, "VERIFYING")
+        await self.submission_repo.set_phase(submission_id, JobPhase.VERIFYING.value)
         await session.commit()
 
         context = build_context(
@@ -238,17 +243,11 @@ class PhotoCardService:
             if source_result is not None and source_sub.id != submission.id:
                 await self.reuse.materialize(source=source_sub, source_result=source_result, target=submission)
                 if submission.submitter_id:
-                    await notify_once(
+                    await notify_preliminary_result(
                         session,
                         user_id=submission.submitter_id,
-                        notification_type="VERIFICATION_COMPLETE",
-                        link_url=f"/verify/{submission.id}",
+                        submission_id=submission.id,
                         headline=submission.headline,
-                        title="Automated check complete (previous result reused)",
-                        body=(
-                            f'Your photo card "{(submission.headline or "")[:80]}" matches a claim '
-                            "already checked; its preliminary automated result is shown."
-                        ),
                     )
         await self.result_repo.record_timings(
             submission.id, stage_ms=context.stage_timings,

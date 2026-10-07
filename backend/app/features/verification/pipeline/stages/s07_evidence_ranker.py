@@ -62,7 +62,6 @@ class EvidenceRankerStage:
                 article=article,
                 claim_headline=claim_headline,
                 claim_keywords=claim_keywords,
-                claim_date=context.published_date,
                 context=context,
             )
             scored.append((score, article))
@@ -109,7 +108,6 @@ class EvidenceRankerStage:
         article: RankedArticleSchema,
         claim_headline: str,
         claim_keywords: list[str],
-        claim_date,
         context: PipelineContext,
     ) -> float:
 

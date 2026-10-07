@@ -10,11 +10,11 @@ import torch
 import torch.nn.functional as F
 import structlog
 from PIL import Image
-from torchvision import transforms
 
 from app.core.config import get_settings
 from app.core.exceptions import InferenceError
 from app.features.multimodal.pipeline.model_loader import MultimodalModelLoader
+from app.features.multimodal.pipeline.preprocessing import build_eval_transform
 
 logger = structlog.get_logger(__name__)
 _SETTINGS = get_settings()
@@ -28,8 +28,6 @@ _INFER_POOL = ThreadPoolExecutor(
 
 _LABEL_MAP = {0: "NON_FAKE", 1: "FAKE"}
 
-_IMG_MEAN = [0.485, 0.456, 0.406]
-_IMG_STD = [0.229, 0.224, 0.225]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -46,25 +44,32 @@ class MultimodalInferenceEngine:
     def __init__(self, loader: MultimodalModelLoader) -> None:
         self._loader = loader
         self._cfg = _SETTINGS.multimodal
-        self._eval_transform = transforms.Compose(
-            [
-                transforms.Resize((self._cfg.img_size, self._cfg.img_size)),
-                transforms.ToTensor(),
-                transforms.Normalize(mean=_IMG_MEAN, std=_IMG_STD),
-            ]
-        )
+        self._eval_transform = build_eval_transform(self._cfg.img_size)
 
     async def predict(
         self,
         body_text: str,
         image_bytes: bytes,
     ) -> PredictionResult:
+        """Full forward pass from raw inputs (both backbones + classifier)."""
+        return await self._run(lambda: self._forward_pass_sync(body_text, image_bytes))
+
+    async def predict_from_features(
+        self,
+        text_features: np.ndarray,
+        image_features: np.ndarray,
+    ) -> PredictionResult:
+        """Classifier only, on the backbone outputs already computed by
+        `MultimodalEmbeddingExtractor` (raw [CLS] text features and pooled
+        image features - NOT the normalised combined vector). Same tokenizer,
+        transform and eval-mode backbones as `predict`, so the backbones need
+        not run a second time."""
+        return await self._run(lambda: self._classify_features_sync(text_features, image_features))
+
+    async def _run(self, forward) -> PredictionResult:
         loop = asyncio.get_event_loop()
         try:
-            result: PredictionResult = await loop.run_in_executor(
-                _INFER_POOL,
-                lambda: self._forward_pass_sync(body_text, image_bytes),
-            )
+            result: PredictionResult = await loop.run_in_executor(_INFER_POOL, forward)
         except InferenceError:
             raise
         except Exception as exc:
@@ -112,8 +117,21 @@ class MultimodalInferenceEngine:
         with torch.no_grad():
             img_feats: torch.Tensor = loader.img_backbone(img_tensor)
             text_feats: torch.Tensor = loader.text_backbone(input_ids, attn_mask)
-            logits: torch.Tensor = loader.classifier(img_feats, text_feats)
-            probs: torch.Tensor = F.softmax(logits, dim=1).squeeze(0)
+            return self._classify(img_feats, text_feats)
+
+    def _classify_features_sync(
+        self, text_features: np.ndarray, image_features: np.ndarray
+    ) -> PredictionResult:
+        device = self._loader.device
+        img_feats = torch.from_numpy(np.asarray(image_features, dtype=np.float32)).unsqueeze(0).to(device)
+        text_feats = torch.from_numpy(np.asarray(text_features, dtype=np.float32)).unsqueeze(0).to(device)
+        with torch.no_grad():
+            return self._classify(img_feats, text_feats)
+
+    def _classify(self, img_feats: torch.Tensor, text_feats: torch.Tensor) -> PredictionResult:
+        """Classifier + softmax for one example; caller holds `torch.no_grad()`."""
+        logits: torch.Tensor = self._loader.classifier(img_feats, text_feats)
+        probs: torch.Tensor = F.softmax(logits, dim=1).squeeze(0)
 
         probs_np = probs.cpu().numpy()
         pred_idx = int(np.argmax(probs_np))

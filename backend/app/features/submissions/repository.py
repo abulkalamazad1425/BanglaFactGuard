@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.constants import (
     ContentStatus,
     DateStatus,
+    JobPhase,
     OverallVerdict,
     SourceStatus,
     SubmissionStatus,
@@ -18,7 +19,6 @@ from app.core.constants import (
 from app.features.submissions.models import (
     PhotocardExtraction,
     RetrievedArticle,
-    SourceEvidenceQuery,
     Submission,
 )
 from app.shared.base_repository import BaseRepository
@@ -51,13 +51,6 @@ class SubmissionRepository(BaseRepository[Submission]):
             raise RecordNotFoundError(model="Submission", identifier=str(submission_id))
         return row
 
-    async def get_by_content_hash(self, content_hash: str) -> Submission | None:
-        stmt = (
-            select(Submission).where(Submission.content_hash == content_hash).limit(1)
-        )
-        result = await self.session.execute(stmt)
-        return result.scalar_one_or_none()
-
     async def get_reusable_candidates(
         self, content_hash: str, *, limit: int = 5
     ) -> list[Submission]:
@@ -77,22 +70,6 @@ class SubmissionRepository(BaseRepository[Submission]):
             .limit(limit)
         )
         return list((await self.session.execute(stmt)).scalars().all())
-
-    async def get_verified_by_content_hash(
-        self, content_hash: str
-    ) -> Submission | None:
-        stmt = (
-            select(Submission)
-            .where(
-                and_(
-                    Submission.content_hash == content_hash,
-                    Submission.status.in_(_VERIFIED_STATUSES),
-                )
-            )
-            .limit(1)
-        )
-        result = await self.session.execute(stmt)
-        return result.scalar_one_or_none()
 
     async def get_in_flight_by_content_hash(
         self, content_hash: str
@@ -137,7 +114,7 @@ class SubmissionRepository(BaseRepository[Submission]):
             .where(Submission.id == submission_id)
             .values(
                 status=SubmissionStatus.EXPERT_REVIEW,
-                processing_phase="DONE",
+                processing_phase=JobPhase.DONE.value,
                 failure_reason=None,
             )
         )
@@ -177,7 +154,7 @@ class SubmissionRepository(BaseRepository[Submission]):
             )
             .values(
                 status=SubmissionStatus.FAILED,
-                processing_phase="FAILED",
+                processing_phase=JobPhase.FAILED.value,
                 failure_reason=(reason or "Verification could not be completed.")[:2000],
             )
         )
@@ -192,50 +169,6 @@ class SubmissionRepository(BaseRepository[Submission]):
             update(Submission).where(Submission.id == submission_id).values(processing_phase=phase)
         )
         await self.session.flush()
-
-    async def get_recent(
-        self,
-        *,
-        status: SubmissionStatus | None = SubmissionStatus.EXPERT_REVIEW,
-        submission_type: SubmissionType | None = None,
-        limit: int = 20,
-        include_duplicates: bool = False,
-    ) -> list[Submission]:
-        stmt = select(Submission)
-        if not include_duplicates:
-            # A duplicate is a requester's own copy of an already-reviewed
-            # claim; experts review (and the explorer lists) the original.
-            stmt = stmt.where(Submission.duplicate_of_submission_id.is_(None))
-        if status is not None:
-            stmt = stmt.where(Submission.status == status)
-        if submission_type is not None:
-            stmt = stmt.where(Submission.submission_type == submission_type)
-        stmt = stmt.order_by(Submission.created_at.desc()).limit(limit)
-        result = await self.session.execute(stmt)
-        return list(result.scalars().all())
-
-    async def get_by_date_range(
-        self,
-        start_date: date,
-        end_date: date,
-        *,
-        limit: int = 50,
-        offset: int = 0,
-    ) -> list[Submission]:
-        stmt = (
-            select(Submission)
-            .where(
-                and_(
-                    Submission.published_date >= start_date,
-                    Submission.published_date <= end_date,
-                )
-            )
-            .order_by(Submission.published_date.desc())
-            .offset(offset)
-            .limit(limit)
-        )
-        result = await self.session.execute(stmt)
-        return list(result.scalars().all())
 
     async def search(
         self,
@@ -366,23 +299,6 @@ class SubmissionRepository(BaseRepository[Submission]):
         return {'total': total, 'finalized': finalized, 'review': total - finalized}
 
 
-class SourceEvidenceQueryRepository(BaseRepository[SourceEvidenceQuery]):
-
-    model_class = SourceEvidenceQuery
-
-    def __init__(self, session: AsyncSession) -> None:
-        super().__init__(session)
-
-    async def get_for_submission(
-        self, submission_id: uuid.UUID
-    ) -> list[SourceEvidenceQuery]:
-        stmt = select(SourceEvidenceQuery).where(
-            SourceEvidenceQuery.submission_id == submission_id
-        )
-        result = await self.session.execute(stmt)
-        return list(result.scalars().all())
-
-
 class RetrievedArticleRepository(BaseRepository[RetrievedArticle]):
 
     model_class = RetrievedArticle
@@ -424,53 +340,6 @@ class RetrievedArticleRepository(BaseRepository[RetrievedArticle]):
         stmt = stmt.limit(limit)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
-
-    async def get_top_ranked(
-        self, submission_id: uuid.UUID
-    ) -> RetrievedArticle | None:
-        stmt = (
-            select(RetrievedArticle)
-            .where(
-                and_(
-                    RetrievedArticle.submission_id == submission_id,
-                    RetrievedArticle.extraction_success.is_(True),
-                )
-            )
-            .order_by(RetrievedArticle.rank_score.desc().nullslast())
-            .limit(1)
-        )
-        result = await self.session.execute(stmt)
-        return result.scalar_one_or_none()
-
-    async def count_for_submission(
-        self, submission_id: uuid.UUID, *, successful_only: bool = False
-    ) -> int:
-        from sqlalchemy import func
-
-        conditions = [RetrievedArticle.submission_id == submission_id]
-        if successful_only:
-            conditions.append(RetrievedArticle.extraction_success.is_(True))
-        stmt = (
-            select(func.count())
-            .select_from(RetrievedArticle)
-            .where(and_(*conditions))
-        )
-        result = await self.session.execute(stmt)
-        return result.scalar_one()
-
-    async def update_rank_score(
-        self, article_id: uuid.UUID, rank_score: float
-    ) -> None:
-        from sqlalchemy import update
-
-        stmt = (
-            update(RetrievedArticle)
-            .where(RetrievedArticle.id == article_id)
-            .values(rank_score=rank_score)
-        )
-        await self.session.execute(stmt)
-        await self.session.flush()
-
 
 class PhotocardExtractionRepository(BaseRepository[PhotocardExtraction]):
 

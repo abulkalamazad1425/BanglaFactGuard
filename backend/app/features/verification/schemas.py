@@ -30,12 +30,6 @@ class NLIScoresSchema(BaseModel):
     )
     neutral: float = Field(..., ge=0.0, le=1.0, description="NLI neutral probability")
 
-    model_config = {
-        "json_schema_extra": {
-            "example": {"entailment": 0.87, "contradiction": 0.05, "neutral": 0.08}
-        }
-    }
-
 
 class MetricDetail(BaseModel):
     """A source-correspondence measurement plus the state that explains it.
@@ -364,21 +358,6 @@ class VerificationResponse(BaseModel):
             }
         }
     }
-
-
-class VerificationResultSummary(BaseModel):
-
-    submission_id: uuid.UUID
-    headline: str = Field(..., max_length=200)
-    source_status: SourceStatus
-    content_status: ContentStatus | None = None
-    date_status: DateStatus | None = None
-    confidence: float = Field(..., ge=0.0, le=1.0)
-    claimed_source_text: str
-    normalized_source: str | None = None
-    created_at: datetime
-
-    model_config = {"from_attributes": True}
 
 
 class VerificationQueuedResponse(BaseModel):

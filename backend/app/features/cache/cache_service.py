@@ -7,15 +7,14 @@ import redis.asyncio as aioredis
 import structlog
 
 from app.core.config import get_settings
+from app.core.constants import REDIS_KEY_PREFIX
 
 logger = structlog.get_logger(__name__)
 _SETTINGS = get_settings()
 
 
-_KEY_CLAIM = "bgf:claim"
-_KEY_SEARCH = "bgf:search"
-_KEY_ARTICLE = "bgf:article"
-_KEY_EMBEDDING = "bgf:emb"
+_KEY_CLAIM = f"{REDIS_KEY_PREFIX}:claim"
+_KEY_SEARCH = f"{REDIS_KEY_PREFIX}:search"
 
 
 class CacheService:
@@ -24,7 +23,6 @@ class CacheService:
         self._redis = redis_client
         self._claim_ttl = _SETTINGS.redis.ttl_claim_result
         self._search_ttl = _SETTINGS.redis.ttl_search_result
-        self._article_ttl = _SETTINGS.redis.ttl_article_content
 
     async def get_claim_result(self, claim_hash: str) -> bytes | None:
         try:
@@ -76,25 +74,6 @@ class CacheService:
                 f"{_KEY_SEARCH}:{provider}:{query_hash}",
                 json.dumps(urls),
                 ex=self._search_ttl,
-            )
-        except Exception:
-            pass
-
-    async def get_article(self, url_hash: str) -> dict | None:
-        try:
-            raw = await self._redis.get(f"{_KEY_ARTICLE}:{url_hash}")
-            if raw:
-                return json.loads(raw)
-            return None
-        except Exception:
-            return None
-
-    async def set_article(self, url_hash: str, content: dict) -> None:
-        try:
-            await self._redis.set(
-                f"{_KEY_ARTICLE}:{url_hash}",
-                json.dumps(content, ensure_ascii=False),
-                ex=self._article_ttl,
             )
         except Exception:
             pass

@@ -49,10 +49,19 @@ async def effective_expert_row(
     A reused copy reads the original's review outcome live instead of
     snapshotting it, so finalization of the original shows up on every copy.
     """
+    original = None
     if result.reused_from_submission_id:
         original = await result_repo.get_by_submission_id(result.reused_from_submission_id)
-        if original is not None and original.overall_verdict is not None:
-            return original
+    return pick_expert_row(result, original)
+
+
+def pick_expert_row(
+    result: VerificationResult, original: VerificationResult | None
+) -> VerificationResult:
+    """`original` is the result of `result.reused_from_submission_id` (or None).
+    The original's review outcome applies once it has a final verdict."""
+    if result.reused_from_submission_id and original is not None and original.overall_verdict is not None:
+        return original
     return result
 
 

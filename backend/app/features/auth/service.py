@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import hashlib
 import secrets
-import uuid
 from datetime import datetime, timedelta, timezone
 
 import structlog
@@ -31,21 +29,18 @@ from app.features.auth.security import (
     verify_password,
 )
 from app.shared.email_service import EmailService
+from app.shared.utils.hashing import sha256_hex
 
 logger = structlog.get_logger(__name__)
 _SETTINGS = get_settings()
 _AUTH = _SETTINGS.auth
 
 
-def _sha256(value: str) -> str:
-    return hashlib.sha256(value.encode()).hexdigest()
-
-
 def _generate_otp(length: int) -> str:
     return "".join(str(secrets.randbelow(10)) for _ in range(length))
 
 
-def _validate_password_strength(password: str) -> None:
+def validate_password_strength(password: str) -> None:
     if len(password) < 8:
         raise WeakPasswordError("Must be at least 8 characters long.")
     if not any(c.isdigit() for c in password):
@@ -75,7 +70,7 @@ class AuthService:
         full_name: str | None = None,
         role: str = "user",
     ) -> tuple[UserMeResponse, TokenResponse]:
-        _validate_password_strength(password)
+        validate_password_strength(password)
 
         if await self._users.email_exists(email):
             raise DuplicateRecordError(
@@ -96,7 +91,7 @@ class AuthService:
         logger.info("user_registered", user_id=str(user.id), role=role)
 
         tokens = await self._issue_token_pair(user)
-        return _to_me_response(user), tokens
+        return to_me_response(user), tokens
 
     async def login(
         self, email: str, password: str
@@ -115,7 +110,7 @@ class AuthService:
 
         logger.info("user_login", user_id=str(user.id))
         tokens = await self._issue_token_pair(user)
-        return _to_me_response(user), tokens
+        return to_me_response(user), tokens
 
     async def refresh(self, raw_refresh_token: str) -> TokenResponse:
         old_token = await self._tokens.get_valid_by_raw_token(raw_refresh_token)
@@ -149,10 +144,6 @@ class AuthService:
         if not revoked:
             logger.debug("logout_token_not_found_or_already_revoked")
 
-    async def get_me(self, user_id: uuid.UUID) -> UserMeResponse:
-        user = await self._users.get_by_id(user_id)
-        return _to_me_response(user)
-
     async def request_password_reset(self, email: str) -> str | None:
         """
         Issue a numeric OTP and email it to the user (req. 1.4: OTP through
@@ -176,7 +167,7 @@ class AuthService:
         token_hash: str = ""
         for _ in range(5):
             candidate = _generate_otp(otp_settings.otp_length)
-            candidate_hash = _sha256(candidate)
+            candidate_hash = sha256_hex(candidate)
             if not await self._reset_tokens.hash_in_use(candidate_hash):
                 raw_otp = candidate
                 token_hash = candidate_hash
@@ -203,7 +194,7 @@ class AuthService:
     async def confirm_password_reset(
         self, email: str, otp: str, new_password: str
     ) -> None:
-        _validate_password_strength(new_password)
+        validate_password_strength(new_password)
 
         user = await self._users.get_by_email(email)
         if user is None:
@@ -230,7 +221,7 @@ class AuthService:
         if not verify_password(current_password, user.hashed_password or ""):
             raise InvalidCredentialsError()
 
-        _validate_password_strength(new_password)
+        validate_password_strength(new_password)
         user.hashed_password = hash_password(new_password)
         self._users.session.add(user)
 
@@ -259,7 +250,7 @@ class AuthService:
         )
 
 
-def _to_me_response(user: User) -> UserMeResponse:
+def to_me_response(user: User) -> UserMeResponse:
     return UserMeResponse(
         id=str(user.id),
         email=user.email,

@@ -1,26 +1,16 @@
 """
-app/shared/utils/article_url_heuristics.py
-============================================
 Shared heuristics for deciding whether a discovered URL is *probably* a
 news article, as opposed to a nav/category/tag/listing page.
 
 ## Why this exists
 
 Both `SourceSearchStage` (S04) and `InternalSiteSearchClient` filter search
-results down to "probable articles" before they're fetched. Historically
-that filter was an all-or-nothing check against each source's hand-curated
-`article_url_patterns` regex list: if a source had patterns configured and
-none matched, the URL was rejected outright — even if it was a perfectly
-good article link.
-
-Bangla news sites redesign their URL schemes far more often than anyone
-updates `verified_sources.article_url_patterns` for them. When that
-happens, every candidate URL from every search provider gets filtered out,
-the pipeline finds zero evidence, and the claim is wrongly resolved as
-NOT_FOUND_IN_CLAIMED_SOURCE regardless of whether the story was actually
-published. This module provides a structural fallback used when the
-configured patterns don't match, so a stale pattern degrades matching
-precision instead of breaking discovery entirely.
+results down to "probable articles" before they're fetched. Bangla news sites
+redesign their URL schemes more often than `verified_sources.article_url_patterns`
+is updated; an all-or-nothing pattern check would then filter out every
+candidate and wrongly report the source as NOT_FOUND. So a structural fallback
+is used when the configured patterns don't match: a stale pattern degrades
+precision instead of breaking discovery.
 """
 
 from __future__ import annotations

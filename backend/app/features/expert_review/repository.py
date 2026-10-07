@@ -76,28 +76,6 @@ class ExpertReviewRepository(BaseRepository[ExpertReview]):
 
     model_class = ExpertReview
 
-    async def get_queue_for_expert(
-        self,
-        expert_id: uuid.UUID,
-        *,
-        limit: int = 20,
-        offset: int = 0,
-    ) -> list[ExpertReview]:
-        already_voted_sub = (
-            select(ExpertReview.submission_id)
-            .where(ExpertReview.reviewer_id == expert_id)
-            .scalar_subquery()
-        )
-        stmt = (
-            select(ExpertReview)
-            .where(ExpertReview.submission_id.not_in(already_voted_sub))
-            .order_by(ExpertReview.created_at.desc())
-            .offset(offset)
-            .limit(limit)
-        )
-        result = await self.session.execute(stmt)
-        return list(result.scalars().all())
-
     async def get_by_submission_and_reviewer(
         self, submission_id: uuid.UUID, reviewer_id: uuid.UUID
     ) -> ExpertReview | None:
@@ -154,16 +132,6 @@ class ExpertReviewRepository(BaseRepository[ExpertReview]):
             stmt = stmt.join(Submission, Submission.id == ExpertReview.submission_id).where(or_(Submission.headline.ilike(f"%{term}%", escape="\\"), Submission.claimed_source_text.ilike(f"%{term}%", escape="\\")))
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
-
-    async def count_by_expert(self, expert_id: uuid.UUID) -> int:
-        stmt = (
-            select(func.count())
-            .select_from(ExpertReview)
-            .where(ExpertReview.reviewer_id == expert_id)
-        )
-        result = await self.session.execute(stmt)
-        return result.scalar_one()
-
 
 class VotingConfigRepository(BaseRepository[VotingConfig]):
     """Single-row admin-configurable voting parameters — the oldest row is

@@ -53,23 +53,6 @@ class ResultRepository(BaseRepository[VerificationResult]):
         result.avg_verification_time_ms = pipeline_ms
         await self.session.flush()
 
-    async def get_results_by_source_status(
-        self,
-        source_status: SourceStatus,
-        *,
-        limit: int = 50,
-        offset: int = 0,
-    ) -> list[VerificationResult]:
-        stmt = (
-            select(VerificationResult)
-            .where(VerificationResult.source_status == source_status)
-            .order_by(VerificationResult.created_at.desc())
-            .offset(offset)
-            .limit(limit)
-        )
-        result = await self.session.execute(stmt)
-        return list(result.scalars().all())
-
     async def upsert_result(
         self,
         submission_id: uuid.UUID,

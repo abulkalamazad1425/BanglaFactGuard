@@ -163,7 +163,7 @@ class EvidenceRetrievalStage:
         )
 
         if not candidates:
-            context._raw_html_cache = {}
+            context.fetched_html = {}
             return context
 
         urls = [c.url for c in candidates]
@@ -207,7 +207,7 @@ class EvidenceRetrievalStage:
                 else:
                     context.failed_extraction_urls.append(url)
 
-        context._raw_html_cache = raw_html_cache
+        context.fetched_html = raw_html_cache
         context.search_redirect_rejected += rejected
         context.fetch_attempted += len(urls) - rejected
         context.fetch_errors += len(context.failed_extraction_urls)

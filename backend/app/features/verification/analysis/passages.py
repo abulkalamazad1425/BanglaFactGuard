@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.features.verification.analysis.keywords import extract_claim_units, _evidence_keys
+from app.features.verification.analysis.keywords import extract_claim_units, evidence_keys
 from app.features.verification.analysis.text import light_stem, split_sentences
 
 
@@ -21,16 +21,6 @@ class Passage:
     first_sentence: int   # index of first sentence (inclusive) incl. context
     last_sentence: int    # index of last sentence (inclusive) incl. context
     location: str = "body"
-
-    def to_dict(self) -> dict:
-        return {
-            "text": self.text,
-            "score": round(self.score, 4),
-            "first_sentence": self.first_sentence,
-            "last_sentence": self.last_sentence,
-            "location": self.location,
-        }
-
 
 def select_relevant_passages(
     claim_text: str,
@@ -53,7 +43,7 @@ def select_relevant_passages(
 
     scored: list[tuple[float, int]] = []
     for idx, sent in enumerate(sentences):
-        keys = _evidence_keys(sent)
+        keys = evidence_keys(sent)
         w = sum(u.weight for u in units if ({u.text, light_stem(u.text)} & keys))
         scored.append((w / total_w, idx))
 

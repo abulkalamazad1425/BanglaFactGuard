@@ -1,23 +1,10 @@
 """Display helper for the expert queue's "AI said" column.
 
-History: this module used to also hold ``derive_expert_verdict``, which
-projected the automated (source, content) result onto the legacy single-
-category TRUE / FALSE / PARTIALLY_TRUE / NOT_FOUND_IN_CLAIMED_SOURCE enum so
-the automated system could cast a vote of its own in the expert-consensus
-mechanism (stored as ``verification_results.ai_consensus_label``). That
-projection was removed on purpose:
-
-* The automated system verifies Source, Content and Date ONLY. Fake / Real /
-  Misleading / Altered is an exclusively expert-finalized assessment, so the
-  automation must not derive or store any overall truth label — least of all
-  by collapsing INCOMPLETE or NOT_FOUND states into TRUE/FALSE/PARTIALLY_TRUE.
-* Nothing in expert review, credibility scoring or escalation ever read
-  ``ai_consensus_label`` (they use the structured source/content/date values
-  and the experts' own votes), so removing the writer changes no review,
-  locking, audit, credibility or escalation behaviour.
-
-The column remains in the database (historical rows are preserved, not
-erased) but is no longer written.
+The automated system only produces Source, Headline and Date findings; it must
+never derive an overall Fake/Real label (that is an expert-only decision).
+`verification_results.ai_consensus_label`, written by an earlier projection of
+the automated result onto TRUE/FALSE/..., is kept for historical rows but is
+no longer written.
 """
 
 from __future__ import annotations

@@ -184,6 +184,8 @@ class SourceResponseSchema(BaseModel):
                 "base_url": "https://www.prothomalo.com",
                 "rss_url": "https://www.prothomalo.com/feed",
                 "language": "bn",
+                "search_language": "bn",
+                "js_rendered": False,
                 "is_active": True,
                 "description": "Leading Bangla daily newspaper published since 1998.",
                 "created_at": "2024-01-15T10:30:00Z",

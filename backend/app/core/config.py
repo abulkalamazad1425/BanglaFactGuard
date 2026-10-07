@@ -55,13 +55,10 @@ class RedisSettings(BaseSettings):
     port: int = Field(default=6379)
     db: int = Field(default=0)
     password: str | None = Field(default=None)
-    decode_responses: bool = Field(
-        default=False, description="Keep bytes for msgpack support"
-    )
     max_connections: int = Field(default=50)
 
     ttl_claim_result: int = Field(
-        default=86_400, description="24 h — full VerificationResponse"
+        default=86_400, description="24 h — Redis pointer to the submission holding a complete result"
     )
     ttl_not_found_result: int = Field(
         default=3_600,
@@ -75,16 +72,6 @@ class RedisSettings(BaseSettings):
     ttl_search_result: int = Field(
         default=21_600, description="6 h — raw search URL lists"
     )
-    ttl_article_content: int = Field(
-        default=43_200, description="12 h — extracted article body"
-    )
-    ttl_embedding: int = Field(
-        default=172_800, description="48 h — LaBSE embedding vectors"
-    )
-    ttl_nli_output: int = Field(default=172_800, description="48 h — NLI score triples")
-    ttl_source_lookup: int = Field(
-        default=604_800, description="7 d — resolved canonical domain"
-    )
 
     @property
     def url(self) -> str:
@@ -97,8 +84,12 @@ class MLSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="ML_")
 
     embedding_model_name: str = Field(
-        default="paraphrase-multilingual-mpnet-base-v2",
-        description="HuggingFace model name for semantic similarity",
+        default="sentence-transformers/LaBSE",
+        description=(
+            "Sentence-embedding model (similarity, ranking, body scores). The "
+            "legacy value 'paraphrase-multilingual-mpnet-base-v2' is read as "
+            "LaBSE, which always ran; see app/features/nlp/model_identity.py."
+        ),
     )
     embedding_batch_size: int = Field(default=32)
     embedding_max_seq_length: int = Field(default=512)
@@ -143,20 +134,6 @@ class MLSettings(BaseSettings):
         description="Minimum composite rank score required to keep an article",
     )
 
-    device: str = Field(
-        default="cpu",
-        description="Compute device: 'cpu', 'cuda', or 'cuda:0'",
-    )
-    use_fp16: bool = Field(
-        default=False, description="Use float16 inference (GPU only)"
-    )
-
-    cache_dir: str = Field(
-        default=os.path.join(
-            os.path.expanduser("~"), ".cache", "bangla_fact_guard", "models"
-        ),
-        description="Local directory for downloaded HuggingFace models",
-    )
     load_models_on_startup: bool = Field(
         default=True,
         description="Whether to load ML models into memory on application startup",
@@ -277,7 +254,6 @@ class SearchSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="SEARCH_")
 
-    pygooglenews_timeout_seconds: int = Field(default=15)
     pygooglenews_max_results: int = Field(default=10)
 
     top_k_candidates: int = Field(
@@ -341,8 +317,13 @@ class AuthSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="AUTH_")
 
     secret_key: str = Field(
-        default="CHANGE_ME_IN_PRODUCTION_USE_STRONG_RANDOM_SECRET_32CHARS",
-        description="HS256 signing key for JWT tokens. Must be at least 32 characters in production.",
+        ...,
+        min_length=32,
+        description=(
+            "HS256 signing key for JWT tokens (env AUTH_SECRET_KEY). Required: "
+            "the app refuses to start without one rather than signing with a "
+            "publicly known default."
+        ),
     )
     algorithm: str = Field(default="HS256", description="JWT signing algorithm")
     access_token_ttl_seconds: int = Field(
@@ -370,14 +351,6 @@ class AuthSettings(BaseSettings):
     bcrypt_rounds: int = Field(
         default=12,
         description="bcrypt work factor (cost). Higher = slower but more secure.",
-    )
-    initial_expert_credibility: float = Field(
-        default=0.5,
-        description="Deprecated compatibility setting; new expert credibility is uncalculated until activation",
-    )
-    min_expert_votes_to_finalize: int = Field(
-        default=3,
-        description="Minimum expert votes required before a claim can be finalized",
     )
 
 
@@ -540,17 +513,10 @@ class AppSettings(BaseSettings):
         default="development",
         description="Deployment environment",
     )
-    debug: bool = Field(default=False)
     api_v1_prefix: str = Field(default="/api/v1")
     cors_origins: list[str] = Field(
         default=["*"],
         description="List of origins allowed to make CORS requests",
-    )
-
-    api_key_header: str = Field(default="X-API-Key")
-    secret_key: str = Field(
-        default="CHANGE_ME_IN_PRODUCTION_USE_STRONG_RANDOM_SECRET",
-        description="Used for signing tokens (future auth)",
     )
 
     log_level: str = Field(default="INFO", description="Root log level")
@@ -558,10 +524,6 @@ class AppSettings(BaseSettings):
         default="json",
         description="'json' for production, 'console' for local dev",
     )
-
-    request_timeout_seconds: int = Field(default=120)
-    max_headline_length: int = Field(default=2000)
-    max_body_length: int = Field(default=50_000)
 
     db: DatabaseSettings = Field(default_factory=DatabaseSettings)
     redis: RedisSettings = Field(default_factory=RedisSettings)

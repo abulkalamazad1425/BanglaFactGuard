@@ -1,6 +1,4 @@
 ﻿"""
-app/features/nlp/nli_service.py
-================================
 Natural Language Inference (NLI) service used by the Headline Alteration
 semantic assessment (S09: source title vs claim headline).
 
@@ -11,26 +9,13 @@ semantic assessment (S09: source title vs claim headline).
 built on a 100-language multilingual vocabulary. Outputs entailment/
 contradiction/neutral probabilities.
 
-Previously hardcoded to `cross-encoder/nli-deberta-v3-small`, a DeBERTa-v3
-cross-encoder fine-tuned on MNLI/SNLI/FEVER — all English-only datasets, on
-an English-only vocabulary. Directly verified: that tokenizer splits a
-71-character Bangla sentence into 71 tokens, almost entirely single Unicode
-code points, because its SentencePiece vocabulary has essentially no Bangla
-subword units. A model cannot represent semantics it cannot tokenize, so its
-contradiction/entailment scores on Bangla input were not meaningful signal —
-whatever confidence the pipeline displayed was not a reliable detection of
-anything happening in the Bangla text itself. The replacement model's
-tokenizer was verified on the same sentence to produce 27 well-formed
-subword tokens with zero `[UNK]`s (e.g. "প্রধানমন্ত্রী" as one token). This is
-a tokenization-coverage check, not a measured accuracy benchmark — Bengali is
-not among the 15 XNLI languages this checkpoint was fine-tuned/evaluated on;
-it is covered only via the base model's multilingual pretraining and
-cross-lingual transfer from the fine-tuned languages, which is the standard,
-well-documented mechanism this family of models relies on for languages
-outside its evaluation set, but is not independently validated here. A
-genuine Bangla NLI accuracy evaluation (labeled Bangla NLI pairs) should
-still happen separately before this score is trusted for high-stakes
-decisions.
+Why multilingual: an English-only NLI checkpoint (e.g. the earlier
+`cross-encoder/nli-deberta-v3-small`) tokenizes a Bangla sentence into
+near-single code points, so its scores carry no Bangla meaning. This model's
+tokenizer produces well-formed Bangla subwords. That is a tokenization check,
+not an accuracy benchmark: Bengali is covered only through multilingual
+pretraining and cross-lingual transfer, so the score should be validated on
+labelled Bangla NLI pairs before it is trusted for high-stakes decisions.
 
 ## Why a cross-encoder (not bi-encoder)?
 
@@ -40,8 +25,8 @@ numerical or entity-level contradictions that bi-encoders (like LaBSE) miss.
 
 ## Input truncation
 
-DeBERTa input limit: 512 tokens. Combined premise+hypothesis is truncated to
-~1500 characters (≈350 tokens per text, safely within limits).
+DeBERTa input limit: 512 tokens. The premise is truncated to 1200 characters
+and the hypothesis to 300 (at sentence boundaries where possible).
 
 ## Async wrapping
 

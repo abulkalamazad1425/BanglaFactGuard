@@ -20,11 +20,6 @@ class BanglaFactGuardError(Exception):
         return f"{self.__class__.__name__}(message={self.message!r}, details={self.details!r})"
 
 
-class ConfigurationError(BanglaFactGuardError):
-
-    http_status_code = 500
-
-
 class DomainValidationError(BanglaFactGuardError):
 
     http_status_code = 422
@@ -40,11 +35,6 @@ class SourceNotFoundError(BanglaFactGuardError):
             details={"claimed_source": claimed_source},
         )
         self.claimed_source = claimed_source
-
-
-class SourceNormalizationError(BanglaFactGuardError):
-
-    http_status_code = 422
 
 
 class ImageStorageUnavailableError(BanglaFactGuardError):
@@ -93,34 +83,7 @@ class NormalizationError(StageError):
     pass
 
 
-class CacheError(StageError):
-    pass
-
-
 class QueryGenerationError(StageError):
-    pass
-
-
-class SearchError(StageError):
-
-    def __init__(self, message: str, details: dict[str, Any] | None = None) -> None:
-        # Raised by search clients that don't
-        # carry a stage_id of their own — StageError requires one, so it's
-        # hardcoded to the only stage that constructs this error.
-        super().__init__(
-            stage_id="s04_source_search", message=message, details=details
-        )
-
-
-class ExtractionError(StageError):
-    pass
-
-
-class SimilarityError(StageError):
-    pass
-
-
-class NLIError(StageError):
     pass
 
 
@@ -161,11 +124,6 @@ class DuplicateRecordError(RepositoryError):
         )
 
 
-class CacheBackendError(BanglaFactGuardError):
-
-    http_status_code = 503
-
-
 class ExternalAPIError(BanglaFactGuardError):
 
     http_status_code = 502
@@ -183,26 +141,6 @@ class ExternalAPIError(BanglaFactGuardError):
         self.details["provider"] = provider
         if status_code is not None:
             self.details["upstream_status_code"] = status_code
-
-
-class SearXNGError(ExternalAPIError):
-
-    def __init__(self, message: str, status_code: int | None = None) -> None:
-        super().__init__(provider="searxng", message=message, status_code=status_code)
-
-
-class BraveAPIError(ExternalAPIError):
-
-    def __init__(self, message: str, status_code: int | None = None) -> None:
-        super().__init__(provider="brave", message=message, status_code=status_code)
-
-
-class GoogleRSSError(ExternalAPIError):
-
-    def __init__(self, message: str, status_code: int | None = None) -> None:
-        super().__init__(
-            provider="google_rss", message=message, status_code=status_code
-        )
 
 
 class PyGoogleNewsError(ExternalAPIError):

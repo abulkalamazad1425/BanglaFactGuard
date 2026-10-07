@@ -16,6 +16,7 @@ from fastapi import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.constants import JobPhase
 from app.core.config import get_settings
 from app.core.exceptions import (
     BanglaFactGuardError,
@@ -68,7 +69,7 @@ async def predict_async(
     worker = getattr(request.app.state, "job_worker", None)
     if worker is not None:
         worker.wake()
-    return {"submission_id": str(submission.id), "status": submission.status, "phase": "QUEUED"}
+    return {"submission_id": str(submission.id), "status": submission.status, "phase": JobPhase.QUEUED.value}
 
 
 _MAX_IMAGE_BYTES = 10 * 1024 * 1024

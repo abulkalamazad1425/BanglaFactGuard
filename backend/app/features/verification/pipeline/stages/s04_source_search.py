@@ -139,14 +139,10 @@ class SourceSearchStage:
         for query_text, query_type in context.search_queries:
             for provider_enum, client in providers_with_clients:
 
-                if not self._should_dispatch(
-                    provider_enum, query_type, query_text, domain
-                ):
+                if not self._should_dispatch(provider_enum, domain):
                     continue
 
-                adapted = self._adapt_query(
-                    provider_enum, query_text, domain, query_type
-                )
+                adapted = self._adapt_query(provider_enum, query_text, domain)
                 if not adapted.strip():
                     continue
 
@@ -276,8 +272,6 @@ class SourceSearchStage:
     def _should_dispatch(
         self,
         provider: SearchProvider,
-        query_type: str,
-        query_text: str,
         domain: str | None,
     ) -> bool:
         if not domain:
@@ -292,7 +286,6 @@ class SourceSearchStage:
         provider: SearchProvider,
         query: str,
         domain: str | None,
-        query_type: str = "",
     ) -> str:
         if not domain:
             return ""

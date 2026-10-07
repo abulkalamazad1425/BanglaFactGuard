@@ -1,4 +1,4 @@
-
+"""Escalation of undecided claims to admin review: admin notification and the periodic review-limit sweep."""
 
 from __future__ import annotations
 
@@ -114,8 +114,7 @@ async def sweep_review_limits(
     svc = _service(session)
     changed = 0
     for submission_id in ids:
-        submission = await svc._submissions.get_by_id_locked(submission_id)
-        if await svc._finalize_or_escalate(submission, now=now):
+        if await svc.reevaluate(submission_id, now=now):
             changed += 1
     return changed
 

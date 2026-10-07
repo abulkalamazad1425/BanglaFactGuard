@@ -5,13 +5,13 @@ import uuid
 import httpx
 import structlog
 
-from app.core.constants import ClaimScope, SubmissionStatus, SubmissionType
+from app.core.constants import ClaimScope, JobPhase, SubmissionStatus, SubmissionType
 from app.core.exceptions import PipelineError, SourceNotFoundError
 from app.features.cache.cache_service import CacheService
 from app.features.nlp.embedding_service import EmbeddingService
 from app.features.nlp.ner_service import NERService
 from app.features.nlp.nli_service import NLIService
-from app.features.notifications.service import notify_once
+from app.features.notifications.service import notify_preliminary_result
 from app.features.sources.repository import SourceRepository
 from app.features.sources.resolution import resolve_claimed_source
 from app.features.submissions.models import Submission
@@ -165,17 +165,11 @@ class VerificationService:
         if target.id != source.id and source_result is not None:
             await self.reuse.materialize(source=source, source_result=source_result, target=target)
             if target.submitter_id:
-                await notify_once(
+                await notify_preliminary_result(
                     self.submission_repo.session,
                     user_id=target.submitter_id,
-                    notification_type="VERIFICATION_COMPLETE",
-                    link_url=f"/verify/{target.id}",
+                    submission_id=target.id,
                     headline=target.headline,
-                    title="Automated check complete (previous result reused)",
-                    body=(
-                        f'Your claim "{(target.headline or "")[:80]}" matches one already '
-                        "checked; its preliminary automated result is shown."
-                    ),
                 )
         return target
 
@@ -223,17 +217,11 @@ class VerificationService:
             own = await self._create_submission(request, submitter_id, content_hash, SubmissionStatus.PROCESSING)
             await self.reuse.materialize(source=source, source_result=source_result, target=own)
             if own.submitter_id:
-                await notify_once(
+                await notify_preliminary_result(
                     self.submission_repo.session,
                     user_id=own.submitter_id,
-                    notification_type="VERIFICATION_COMPLETE",
-                    link_url=f"/verify/{own.id}",
+                    submission_id=own.id,
                     headline=own.headline,
-                    title="Automated check complete (previous result reused)",
-                    body=(
-                        f'Your claim "{request.headline[:80]}" matches one already checked; '
-                        "its preliminary automated result is shown."
-                    ),
                 )
             await self.submission_repo.session.commit()
             return own.id, SubmissionStatus.EXPERT_REVIEW, True
@@ -246,7 +234,7 @@ class VerificationService:
         submission = await self._create_submission(
             request, submitter_id, content_hash, SubmissionStatus.PENDING
         )
-        submission.processing_phase = "QUEUED"
+        submission.processing_phase = JobPhase.QUEUED.value
         await VerificationJobRepository(self.submission_repo.session).enqueue(
             submission.id, "SOURCE_BASED"
         )

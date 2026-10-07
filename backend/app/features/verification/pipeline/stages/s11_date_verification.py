@@ -2,8 +2,9 @@
 
 Compared as calendar days in Asia/Dhaka, only once the source is CONFIRMED.
 No claimed date -> not applicable (None); the report's date unknown ->
-INCOMPLETE (never MISMATCHED). A date printed on a photo card is never used
-here - only the date the user supplied. Independent of the headline verdict.
+INCOMPLETE (never MISMATCHED). The claimed date is the submission's
+`published_date`: typed by the user for a text claim, or read from the card
+by Gemini for a photo card. Independent of the headline verdict.
 """
 
 from __future__ import annotations

@@ -29,6 +29,7 @@ from app.features.expert_review.repository import (
     VotingConfigRepository,
 )
 from app.features.expert_review.schemas import (
+    CredibilityScoreResponse,
     ExpertHistoryItemResponse,
     ExpertQueueItemResponse,
     ExpertReviewResponse,
@@ -655,6 +656,26 @@ class ExpertReviewService:
             current_credibility=(round(profile.correct_votes / profile.total_votes, 4) if profile.total_votes and profile.total_votes >= config.activation_threshold_votes else None),
             activation_threshold=config.activation_threshold_votes,
         )
+
+    async def get_credibility(self, expert_id: uuid.UUID) -> CredibilityScoreResponse:
+        """Current score (unrounded); None until the expert has cast the
+        configured activation number of votes."""
+        profile = await self._profiles.get_or_create(expert_id)
+        config = await self._voting_config.get_or_create()
+        return CredibilityScoreResponse(
+            user_id=str(profile.user_id),
+            score=(profile.correct_votes / profile.total_votes if profile.total_votes and profile.total_votes >= config.activation_threshold_votes else None),
+            total_votes=profile.total_votes,
+            correct_votes=profile.correct_votes,
+            updated_at=profile.updated_at,
+        )
+
+    async def reevaluate(self, submission_id: uuid.UUID, *, now: datetime | None = None) -> bool:
+        """Row-lock the submission and finalize or escalate it if its votes or
+        review limits now require it (used by the escalation sweep). Returns
+        True when the status changed. Caller commits."""
+        submission = await self._submissions.get_by_id_locked(submission_id)
+        return await self._finalize_or_escalate(submission, now=now)
 
     async def _finalize_or_escalate(self, submission: Submission, *, now: datetime | None = None) -> bool:
         """Re-evaluates an EXPERT_REVIEW claim after a vote, an edit or a

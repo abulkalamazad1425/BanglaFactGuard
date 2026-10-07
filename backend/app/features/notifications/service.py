@@ -29,6 +29,28 @@ def final_notification_text(headline: str | None, verdict_label: str | None) -> 
     return title, headline_preview(headline) or "Your submitted claim"
 
 
+async def notify_preliminary_result(
+    session: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    submission_id: uuid.UUID,
+    headline: str | None,
+) -> bool:
+    """The "preliminary result ready" notification for a submission (fresh,
+    reused, photo-card or multimodal alike). Same identity and wording as
+    every other VERIFICATION_COMPLETE notification, so it is written once."""
+    title, body = preliminary_notification_text(headline)
+    return await notify_once(
+        session,
+        user_id=user_id,
+        notification_type="VERIFICATION_COMPLETE",
+        link_url=f"/verify/{submission_id}",
+        title=title,
+        body=body,
+        headline=headline,
+    )
+
+
 async def notify_once(
     session: AsyncSession,
     *,

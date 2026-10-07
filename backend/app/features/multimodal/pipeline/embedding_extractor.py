@@ -8,10 +8,10 @@ import numpy as np
 import torch
 import structlog
 from PIL import Image
-from torchvision import transforms
 
 from app.core.config import get_settings
 from app.features.multimodal.pipeline.model_loader import MultimodalModelLoader
+from app.features.multimodal.pipeline.preprocessing import build_eval_transform
 
 logger = structlog.get_logger(__name__)
 _SETTINGS = get_settings()
@@ -23,26 +23,12 @@ _ENCODE_POOL = ThreadPoolExecutor(
 )
 
 
-_IMG_MEAN = [0.485, 0.456, 0.406]
-_IMG_STD = [0.229, 0.224, 0.225]
-
-
-def _build_eval_transform(img_size: int) -> transforms.Compose:
-    return transforms.Compose(
-        [
-            transforms.Resize((img_size, img_size)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=_IMG_MEAN, std=_IMG_STD),
-        ]
-    )
-
-
 class MultimodalEmbeddingExtractor:
 
     def __init__(self, loader: MultimodalModelLoader) -> None:
         self._loader = loader
         self._cfg = _SETTINGS.multimodal
-        self._eval_transform = _build_eval_transform(self._cfg.img_size)
+        self._eval_transform = build_eval_transform(self._cfg.img_size)
 
     async def extract_text_embedding(self, body_text: str) -> np.ndarray:
         loop = asyncio.get_event_loop()

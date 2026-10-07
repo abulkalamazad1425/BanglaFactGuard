@@ -59,7 +59,7 @@ class InputNormalizerStage:
             # rather than just the claimed outlet. The service layer already
             # pre-checks this before the pipeline even starts (see
             # VerificationService.register_claim/verify and
-            # PhotoCardService.verify) — reaching here unresolved means that
+            # PhotoCardService.process_submission) — reaching here unresolved means that
             # guard was bypassed, so this is a backstop, not the primary path.
             raise NormalizationError(
                 stage_id=self.stage_id.value,

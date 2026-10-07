@@ -76,6 +76,8 @@ class PipelineContext:
     extraction_attempted: int = 0
     extraction_errors: int = 0
 
+    # S05 -> S06 hand-off: raw HTML of each successfully fetched candidate URL.
+    fetched_html: dict[str, str] = field(default_factory=dict)
     extracted_articles: list[RankedArticleSchema] = field(default_factory=list)
     failed_extraction_urls: list[str] = field(default_factory=list)
     ranked_articles: list[RankedArticleSchema] = field(default_factory=list)

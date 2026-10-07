@@ -1,17 +1,13 @@
 from __future__ import annotations
 
-import hashlib
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.features.auth.models import PasswordResetToken, RefreshToken, User
 from app.shared.base_repository import BaseRepository
-
-
-def _sha256(value: str) -> str:
-    return hashlib.sha256(value.encode()).hexdigest()
+from app.shared.utils.hashing import sha256_hex
 
 
 class UserRepository(BaseRepository[User]):
@@ -23,15 +19,15 @@ class UserRepository(BaseRepository[User]):
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def increment_submission_count(self, user_id: uuid.UUID) -> None:
+        """`users.total_submissions` is a cached counter, bumped atomically."""
+        await self.session.execute(
+            update(User).where(User.id == user_id).values(total_submissions=User.total_submissions + 1)
+        )
+        await self.session.flush()
+
     async def email_exists(self, email: str) -> bool:
         return await self.get_by_email(email) is not None
-
-    async def get_active_by_email(self, email: str) -> User | None:
-        stmt = (
-            select(User).where(User.email == email, User.is_active.is_(True)).limit(1)
-        )
-        result = await self.session.execute(stmt)
-        return result.scalar_one_or_none()
 
     async def list_by_role(
         self, role: str, *, limit: int = 50, offset: int = 0
@@ -59,7 +55,7 @@ class RefreshTokenRepository(BaseRepository[RefreshToken]):
     model_class = RefreshToken
 
     async def get_valid_by_raw_token(self, raw_token: str) -> RefreshToken | None:
-        token_hash = _sha256(raw_token)
+        token_hash = sha256_hex(raw_token)
         now = datetime.now(timezone.utc)
         stmt = (
             select(RefreshToken)
@@ -74,7 +70,7 @@ class RefreshTokenRepository(BaseRepository[RefreshToken]):
         return result.scalar_one_or_none()
 
     async def revoke_by_raw_token(self, raw_token: str) -> bool:
-        token_hash = _sha256(raw_token)
+        token_hash = sha256_hex(raw_token)
         stmt = (
             select(RefreshToken)
             .where(
@@ -119,7 +115,7 @@ class PasswordResetTokenRepository(BaseRepository[PasswordResetToken]):
     model_class = PasswordResetToken
 
     async def get_valid_by_raw_token(self, raw_token: str) -> PasswordResetToken | None:
-        token_hash = _sha256(raw_token)
+        token_hash = sha256_hex(raw_token)
         now = datetime.now(timezone.utc)
         stmt = (
             select(PasswordResetToken)

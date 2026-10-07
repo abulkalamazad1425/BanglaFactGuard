@@ -5,7 +5,6 @@ import sys
 from typing import Any
 
 import structlog
-from structlog.types import FilteringBoundLogger
 
 from app.core.config import AppSettings, get_settings
 
@@ -64,24 +63,6 @@ def setup_logging(settings: AppSettings | None = None) -> None:
     )
 
 
-def get_logger(name: str | None = None) -> FilteringBoundLogger:
-    return structlog.get_logger(name)
-
-
-def bind_request_context(
-    request_id: str,
-    *,
-    endpoint: str | None = None,
-    client_ip: str | None = None,
-) -> None:
-    ctx: dict[str, Any] = {"request_id": request_id}
-    if endpoint:
-        ctx["endpoint"] = endpoint
-    if client_ip:
-        ctx["client_ip"] = client_ip
-    structlog.contextvars.bind_contextvars(**ctx)
-
-
 def bind_pipeline_context(
     claim_id: str,
     *,
@@ -95,6 +76,3 @@ def bind_pipeline_context(
         ctx["normalized_source"] = normalized_source
     structlog.contextvars.bind_contextvars(**ctx)
 
-
-def clear_context() -> None:
-    structlog.contextvars.clear_contextvars()

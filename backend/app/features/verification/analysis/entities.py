@@ -53,10 +53,6 @@ class EntityMention:
     def key(self) -> tuple[str, ...]:
         return entity_key(self.text)
 
-    def to_dict(self) -> dict:
-        return {"text": self.text, "type": self.type}
-
-
 @dataclass
 class EntityMatch:
     claimed: str
@@ -67,15 +63,6 @@ class EntityMatch:
     @property
     def matched(self) -> bool:
         return self.status in {"exact", "alias", "span", "text"}
-
-    def to_dict(self) -> dict:
-        return {
-            "claimed": self.claimed,
-            "type": self.type,
-            "status": self.status,
-            "matched_to": self.matched_to,
-        }
-
 
 def _contains(seq: tuple[str, ...], sub: tuple[str, ...]) -> bool:
     if not sub or len(sub) > len(seq):
