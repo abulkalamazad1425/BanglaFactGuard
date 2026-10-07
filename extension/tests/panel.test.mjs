@@ -58,7 +58,7 @@ test('English side panel supports independent headline/body selection, persisten
     // image only: no outlet or date inputs; the active outlets are listed in a collapsible section
     assert.equal(document.querySelector('#field-claimed_source_text'),null);assert.equal(document.querySelector('#field-published_date'),null);
     const list=document.querySelector('details.source-list');
-    assert.ok(list && !list.open);assert.match(list.querySelector('summary').textContent,/Recognised news outlets \(1\)/);
+    assert.ok(list && !list.open);assert.match(list.querySelector('summary').textContent,/Verified news sources \(1\)/);
     assert.match(list.textContent,/প্রথম আলো — Prothom Alo/);
     button('Text & image').click();await tick();assert.equal(document.querySelectorAll('textarea')[1].required,true);
     button('Account').click();await tick();

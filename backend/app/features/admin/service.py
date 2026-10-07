@@ -76,7 +76,6 @@ class AdminService:
             full_name=req.full_name,
             role="expert",
             is_active=True,
-            is_verified=True,
         )
         user = await self._users.create(user)
 

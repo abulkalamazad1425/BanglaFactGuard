@@ -10,7 +10,6 @@ export interface ExpertResponse {
   email: string;
   full_name: string | null;
   is_active: boolean;
-  is_verified: boolean;
   role: string;
   expertise_area?: string | null;
   credibility_score?: number | null;

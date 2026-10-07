@@ -69,20 +69,12 @@ class ProfileResponse(BaseModel):
     email: str
     role: str
     is_active: bool
-    is_verified: bool
-    is_email_verified: bool
-    avatar_url: str | None
-    phone: str | None
     total_submissions: int
-    bio: str | None
-    verification_count: int
+    member_since: datetime
 
 
 class UpdateProfileRequest(BaseModel):
     full_name: str | None = Field(default=None, max_length=255)
-    bio: str | None = Field(default=None, max_length=1000)
-    avatar_url: str | None = Field(default=None, max_length=512)
-    phone: str | None = Field(default=None, max_length=20)
 
 
 @router.get("/me/submissions", response_model=list[SubmissionSummary])
@@ -237,26 +229,14 @@ async def get_my_profile(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_async_session),
 ) -> ProfileResponse:
-    from app.features.users.models import UserProfile
-
-    profile = (
-        await session.execute(
-            select(UserProfile).where(UserProfile.user_id == current_user.id).limit(1)
-        )
-    ).scalar_one_or_none()
     return ProfileResponse(
         id=str(current_user.id),
         full_name=current_user.full_name,
         email=current_user.email,
         role=current_user.role,
         is_active=current_user.is_active,
-        is_verified=current_user.is_verified,
-        is_email_verified=current_user.is_email_verified,
-        avatar_url=current_user.avatar_url,
-        phone=current_user.phone,
         total_submissions=current_user.total_submissions,
-        bio=profile.bio if profile else None,
-        verification_count=profile.verification_count if profile else 0,
+        member_since=current_user.created_at,
     )
 
 
@@ -266,8 +246,6 @@ async def update_my_profile(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_async_session),
 ) -> ProfileResponse:
-    from app.features.users.models import UserProfile
-
     if current_user.role == "expert":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -280,19 +258,6 @@ async def update_my_profile(
 
     if body.full_name is not None:
         current_user.full_name = body.full_name
-    if body.avatar_url is not None:
-        current_user.avatar_url = body.avatar_url
-    if body.phone is not None:
-        current_user.phone = body.phone
     session.add(current_user)
-
-    profile = (
-        await session.execute(
-            select(UserProfile).where(UserProfile.user_id == current_user.id).limit(1)
-        )
-    ).scalar_one_or_none()
-    if profile and body.bio is not None:
-        profile.bio = body.bio
-        session.add(profile)
     await session.flush()
     return await get_my_profile(current_user, session)

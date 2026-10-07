@@ -25,11 +25,12 @@ export const APP_ROUTES: Routes = [
       // Public
       { path: '',          loadComponent: () => import('../features/home/home').then(m => m.HomeComponent) },
       { path: 'dashboard', loadComponent: () => import('../features/dashboard/public-dashboard/public-dashboard').then(m => m.PublicDashboardComponent) },
-      { path: 'verify',    loadComponent: () => import('../features/verification/verify-claim/verify-claim').then(m => m.VerifyClaimComponent) },
+      { path: 'verify',    loadComponent: () => import('../features/verification/verify-facts/verify-facts').then(m => m.VerifyFactsComponent) },
       { path: 'verify/:id',loadComponent: () => import('../features/verification/verify-result/verify-result').then(m => m.VerifyResultComponent) },
-      { path: 'multimodal',loadComponent: () => import('../features/multimodal/multimodal').then(m => m.MultimodalComponent) },
-      { path: 'photo-card',loadComponent: () => import('../features/photocard/photocard').then(m => m.PhotoCardComponent) },
+      { path: 'multimodal', redirectTo: () => '/verify?method=image', pathMatch: 'full' },
+      { path: 'photo-card', redirectTo: () => '/verify?method=photocard', pathMatch: 'full' },
       { path: 'faq',       loadComponent: () => import('../features/faq/faq').then(m => m.FaqComponent) },
+      { path: 'about',     loadComponent: () => import('../features/about/about').then(m => m.AboutComponent) },
 
       // Authenticated
       {
@@ -57,7 +58,7 @@ export const APP_ROUTES: Routes = [
           { path: 'queue',   loadComponent: () => import('../features/expert/expert-queue/expert-queue').then(m => m.ExpertQueueComponent) },
           { path: 'queue/:id', loadComponent: () => import('../features/expert/expert-review-detail/expert-review-detail').then(m => m.ExpertReviewDetailComponent) },
           { path: 'history', loadComponent: () => import('../features/expert/expert-history/expert-history').then(m => m.ExpertHistoryComponent) },
-          { path: 'stats',   loadComponent: () => import('../features/expert/expert-stats/expert-stats').then(m => m.ExpertStatsComponent) },
+          { path: 'stats',   redirectTo: '/settings', pathMatch: 'full' },
         ],
       },
 

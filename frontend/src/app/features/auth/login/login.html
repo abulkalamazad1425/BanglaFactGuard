@@ -10,7 +10,7 @@
           <input id="login-email" type="email" formControlName="email"
                  class="form-control"
                  [class.is-invalid]="emailInvalid"
-                 placeholder="you@example.com"
+                 placeholder="Enter your email"
                  autocomplete="email" />
           @if (emailInvalid) {
             <span class="form-error">Please enter a valid email address</span>
@@ -24,7 +24,7 @@
                    formControlName="password"
                    class="form-control"
                    [class.is-invalid]="passwordInvalid"
-                   placeholder="Your password"
+                   placeholder="Enter your password"
                    autocomplete="current-password" />
             <button type="button" class="password-toggle" [attr.aria-label]="showPassword ? 'Hide password' : 'Show password'" (click)="showPassword = !showPassword">
               {{ showPassword ? '🙈' : '👁️' }}

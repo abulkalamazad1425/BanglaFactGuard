@@ -118,29 +118,29 @@
 
         <div class="form-group" [class.has-error]="form.get('canonical_name')?.invalid && form.get('canonical_name')?.touched">
           <label for="source-management.component-canonical_name">Canonical Domain <span class="required">*</span></label>
-          <input id="source-management.component-canonical_name" type="text" class="form-input" formControlName="canonical_name" placeholder="e.g. prothomalo.com">
+          <input id="source-management.component-canonical_name" type="text" class="form-input" formControlName="canonical_name" placeholder="Enter the domain">
           <small *ngIf="form.get('canonical_name')?.hasError('pattern') && form.get('canonical_name')?.touched" class="error-msg">Must be a valid domain (e.g. prothomalo.com)</small>
         </div>
 
         <div class="form-row">
           <div class="form-group" [class.has-error]="form.get('display_name')?.invalid && form.get('display_name')?.touched">
             <label for="source-management.component-display_name">Display Name (Bangla) <span class="required">*</span></label>
-            <input id="source-management.component-display_name" type="text" class="form-input" formControlName="display_name" placeholder="e.g. প্রথম আলো">
+            <input id="source-management.component-display_name" type="text" class="form-input" formControlName="display_name" placeholder="Enter the Bangla name">
           </div>
           <div class="form-group">
             <label for="source-management.component-display_name_en">Display Name (English)</label>
-            <input id="source-management.component-display_name_en" type="text" class="form-input" formControlName="display_name_en" placeholder="e.g. Prothom Alo">
+            <input id="source-management.component-display_name_en" type="text" class="form-input" formControlName="display_name_en" placeholder="Enter the English name">
           </div>
         </div>
 
         <div class="form-group" [class.has-error]="form.get('base_url')?.invalid && form.get('base_url')?.touched">
           <label for="source-management.component-base_url">Base URL <span class="required">*</span></label>
-          <input id="source-management.component-base_url" type="url" class="form-input" formControlName="base_url" placeholder="e.g. https://www.prothomalo.com">
+          <input id="source-management.component-base_url" type="url" class="form-input" formControlName="base_url" placeholder="Enter the website URL">
         </div>
 
         <div class="form-group">
           <label for="source-management.component-description">Description</label>
-          <textarea id="source-management.component-description" class="form-input" formControlName="description" rows="2" placeholder="Brief description of this outlet"></textarea>
+          <textarea id="source-management.component-description" class="form-input" formControlName="description" rows="2" placeholder="Enter a short description"></textarea>
         </div>
 
         <div class="form-row">
@@ -180,12 +180,12 @@
 
         <div class="form-group">
           <label for="source-management.component-internal_search_url">Internal Search URL</label>
-          <input id="source-management.component-internal_search_url" type="text" class="form-input" formControlName="internal_search_url" placeholder="https://...search?q={{ '{query}' }}">
+          <input id="source-management.component-internal_search_url" type="text" class="form-input" formControlName="internal_search_url" placeholder="Enter the search URL template">
         </div>
 
         <div class="form-group">
           <label for="source-management.component-rss_url">RSS Feed URL</label>
-          <input id="source-management.component-rss_url" type="url" class="form-input" formControlName="rss_url" placeholder="https://...feed">
+          <input id="source-management.component-rss_url" type="url" class="form-input" formControlName="rss_url" placeholder="Enter the RSS feed URL">
         </div>
 
         <div class="form-group">
@@ -195,7 +195,7 @@
           </div>
           <div formArrayName="aliases" class="array-list">
             <div *ngFor="let c of aliases.controls; let i = index" class="array-item">
-              <input type="text" class="form-input" [formControlName]="i" placeholder="Alias name">
+              <input type="text" class="form-input" [formControlName]="i" placeholder="Enter an alias">
               <button type="button" class="remove-btn" (click)="removeArrayItem('aliases', i)">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
@@ -220,7 +220,7 @@
             </div>
             <div formArrayName="body_selectors" class="array-list">
               <div *ngFor="let c of bodySelectors.controls; let i = index" class="array-item">
-                <input type="text" class="form-input mono" [formControlName]="i" placeholder=".article p">
+                <input type="text" class="form-input mono" [formControlName]="i" placeholder="Enter the article body selector">
                 <button type="button" class="remove-btn" (click)="removeArrayItem('body_selectors', i)">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
@@ -236,7 +236,7 @@
             </div>
             <div formArrayName="title_selectors" class="array-list">
               <div *ngFor="let c of titleSelectors.controls; let i = index" class="array-item">
-                <input type="text" class="form-input mono" [formControlName]="i" placeholder="h1.title">
+                <input type="text" class="form-input mono" [formControlName]="i" placeholder="Enter the headline selector">
                 <button type="button" class="remove-btn" (click)="removeArrayItem('title_selectors', i)">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
@@ -252,7 +252,7 @@
             </div>
             <div formArrayName="date_selectors" class="array-list">
               <div *ngFor="let c of dateSelectors.controls; let i = index" class="array-item">
-                <input type="text" class="form-input mono" [formControlName]="i" placeholder="time[datetime]">
+                <input type="text" class="form-input mono" [formControlName]="i" placeholder="Enter the date selector">
                 <button type="button" class="remove-btn" (click)="removeArrayItem('date_selectors', i)">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
@@ -269,7 +269,7 @@
           </div>
           <div formArrayName="article_url_patterns" class="array-list">
             <div *ngFor="let c of articleUrlPatterns.controls; let i = index" class="array-item">
-              <input type="text" class="form-input mono" [formControlName]="i" placeholder="prothomalo\.com/.*/article/[a-z0-9-]+">
+              <input type="text" class="form-input mono" [formControlName]="i" placeholder="Enter the article URL pattern">
               <button type="button" class="remove-btn" (click)="removeArrayItem('article_url_patterns', i)">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>

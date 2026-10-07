@@ -30,7 +30,6 @@ from app.features.auth.security import (
     hash_password,
     verify_password,
 )
-from app.features.users.models import UserProfile
 from app.shared.email_service import EmailService
 
 logger = structlog.get_logger(__name__)
@@ -91,13 +90,8 @@ class AuthService:
             full_name=full_name,
             role=role,
             is_active=True,
-            is_verified=False,
         )
         user = await self._users.create(user)
-
-        profile = UserProfile(user_id=user.id)
-        self._users.session.add(profile)
-        await self._users.session.flush()
 
         logger.info("user_registered", user_id=str(user.id), role=role)
 
@@ -272,5 +266,4 @@ def _to_me_response(user: User) -> UserMeResponse:
         full_name=user.full_name,
         role=user.role,
         is_active=user.is_active,
-        is_verified=user.is_verified,
     )

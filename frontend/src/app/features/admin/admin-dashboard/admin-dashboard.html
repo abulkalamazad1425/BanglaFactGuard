@@ -40,7 +40,7 @@
         }
       </section>
 
-      <section class="kpi-grid" aria-label="Key numbers">
+      <section class="kpi-grid"  aria-label="Key numbers">
         <a class="kpi card" routerLink="/admin/review-queue" [queryParams]="{ state: 'review' }"><span class="kpi-num">{{ d.pending_review_count }}</span><span class="kpi-lbl">Claims in expert review</span></a>
         <a class="kpi card" routerLink="/admin/review-queue" [queryParams]="{ state: 'escalated' }"><span class="kpi-num">{{ d.escalated_count }}</span><span class="kpi-lbl">Escalated to admin</span></a>
         <div class="kpi card"><span class="kpi-num">{{ d.submissions_last_7_days }}</span><span class="kpi-lbl">Submissions, last 7 days</span></div>

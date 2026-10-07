@@ -1,24 +1,108 @@
 <div class="settings-page container">
-  <header class="page-header"><h1>Account settings</h1></header>
-  <div class="settings-layout">
-    <aside class="card account-summary"><div class="avatar-lg">{{ initial() }}</div><h2>{{ auth.user()?.full_name || 'Your account' }}</h2><p>{{ auth.user()?.email }}</p><span class="badge badge-primary">{{ auth.user()?.role === 'admin' ? 'Administrator' : isExpertOnly() ? 'Expert reviewer' : 'Registered user' }}</span>
-      <nav aria-label="Account shortcuts"><a routerLink="/history">My Submissions →</a><a routerLink="/notifications">Notifications →</a>@if (isExpertOnly()) {<a routerLink="/expert/queue">Review queue →</a><a routerLink="/expert/history">My Review History →</a><a routerLink="/expert/stats">Credibility →</a>}@if (auth.isAdmin()) {<a routerLink="/admin">Admin workspace →</a>}</nav>
-    </aside>
-    <div class="settings-sections">
-      @if (profileError()) {<div class="service-notice" role="alert"><p>Could not load your profile.</p><button class="btn btn-secondary" (click)="ngOnInit()">Try again</button></div>}
-      <section class="card settings-card"><h2>Profile</h2>@if (isExpertOnly()) {<p class="readonly-notice">Contact an administrator to update your profile.</p>}
-        <form [formGroup]="profileForm" (ngSubmit)="saveProfile()">
-          <div class="form-group"><label for="settings-name" class="form-label">Full name</label><input id="settings-name" class="form-control" formControlName="full_name" autocomplete="name" maxlength="255"></div>
-          <div class="form-group"><label for="settings-bio" class="form-label">Bio <span class="text-muted">(optional)</span></label><textarea id="settings-bio" class="form-control" formControlName="bio" maxlength="1000" rows="2"></textarea></div>
-          <details><summary>Additional profile details</summary><div class="form-group"><label for="settings-phone" class="form-label">Phone</label><input id="settings-phone" class="form-control" type="tel" formControlName="phone" autocomplete="tel" maxlength="20"></div><div class="form-group"><label for="settings-avatar" class="form-label">Avatar URL</label><input id="settings-avatar" class="form-control" type="url" formControlName="avatar_url" maxlength="512"></div></details>
-          @if (!isExpertOnly()) {<button class="btn btn-primary" type="submit" [disabled]="savingProfile() || !profile()">{{ savingProfile() ? 'Saving…' : 'Save profile' }}</button>}
-        </form>
-      </section>
-      <section class="card settings-card"><h2>Security</h2><form [formGroup]="pwForm" (ngSubmit)="changePassword()">
-        <div class="form-group"><label for="settings-current-password" class="form-label">Current password</label><input id="settings-current-password" type="password" class="form-control" formControlName="current_password" autocomplete="current-password"></div>
-        <div class="form-group"><label for="settings-new-password" class="form-label">New password</label><input id="settings-new-password" type="password" class="form-control" formControlName="new_password" autocomplete="new-password" aria-describedby="password-help"><p id="password-help" class="text-muted text-sm">At least 8 characters, including an uppercase letter and a number.</p>@if (pwForm.get('new_password')?.invalid && pwForm.get('new_password')?.touched) {<p class="form-error">Enter a password that meets these requirements.</p>}</div>
-        <button class="btn btn-secondary" type="submit" [disabled]="changingPw()">{{ changingPw() ? 'Updating…' : 'Change password' }}</button>
-      </form></section>
+  <h1 class="page-title">Account settings</h1>
+
+  @if (profileError()) {
+    <div class="service-notice" role="alert"><p>Could not load your profile.</p><button class="btn btn-secondary" (click)="loadProfile()">Try again</button></div>
+  }
+
+  <section class="card profile-hero">
+    <div class="avatar">{{ initial() }}</div>
+    <div class="identity">
+      <h2>{{ displayName() }}</h2>
+      <p class="email">{{ profile()?.email || auth.user()?.email }}</p>
+      <span class="role-chip" [attr.data-role]="auth.user()?.role">{{ roleLabel() }}</span>
     </div>
+    <dl class="hero-meta">
+      @if (profile()?.member_since) {
+        <div><dt>Member since</dt><dd>{{ profile()!.member_since | date:'MMM y' }}</dd></div>
+      }
+      @if (!isExpertOnly() && profile()) {
+        <div><dt>Submissions</dt><dd>{{ profile()!.total_submissions }}</dd></div>
+      }
+    </dl>
+  </section>
+
+  @if (isExpertOnly()) {
+    <section class="card perf-card" aria-labelledby="perf-heading">
+      <h2 id="perf-heading">Reviewer performance</h2>
+      @if (statsError()) {
+        <div class="service-notice" role="alert"><p>Could not load your review statistics.</p><button class="btn btn-secondary" (click)="loadStats()">Try again</button></div>
+      } @else if (!stats()) {
+        <div class="perf-loading"><div class="spinner"></div></div>
+      } @else {
+        <div class="perf-grid">
+          <div class="ring-block" [attr.data-tone]="scoreTone()">
+            <svg class="ring" viewBox="0 0 120 120" role="img"
+                 [attr.aria-label]="credibilityActive() ? 'Credibility score ' + (stats()!.current_credibility! * 100).toFixed(1) + '%' : stats()!.total_votes + ' of ' + stats()!.activation_threshold + ' reviews completed'">
+              <circle class="ring-track" cx="60" cy="60" [attr.r]="ringRadius" />
+              <circle class="ring-fill" cx="60" cy="60" [attr.r]="ringRadius"
+                      [attr.stroke-dasharray]="ringCircumference"
+                      [attr.stroke-dashoffset]="ringCircumference * (1 - ringFraction())" />
+            </svg>
+            <div class="ring-center">
+              @if (credibilityActive()) {
+                <span class="ring-value">{{ (stats()!.current_credibility! * 100).toFixed(1) }}<small>%</small></span>
+                <span class="ring-label">Credibility</span>
+              } @else {
+                <span class="ring-value">{{ stats()!.total_votes }}<small>/{{ stats()!.activation_threshold }}</small></span>
+                <span class="ring-label">Reviews</span>
+              }
+            </div>
+            @if (!credibilityActive()) {
+              <p class="ring-note">Credibility weight activates after {{ reviewsToActivate() }} more {{ reviewsToActivate() === 1 ? 'review' : 'reviews' }}. Until then each vote counts with weight 1.</p>
+            }
+          </div>
+
+          <div class="stat-tiles">
+            <div class="stat-tile">
+              <span class="stat-label">Total votes</span>
+              <span class="stat-value">{{ stats()!.total_votes }}</span>
+            </div>
+            <div class="stat-tile">
+              <span class="stat-label">Matched final verdict</span>
+              <span class="stat-value tone-good">{{ stats()!.correct_votes }}</span>
+            </div>
+            <div class="stat-tile stat-tile--wide">
+              <div class="stat-row">
+                <span class="stat-label">Accuracy</span>
+                <span class="stat-value">{{ stats()!.accuracy_pct != null ? stats()!.accuracy_pct + '%' : '—' }}</span>
+              </div>
+              <div class="bar" aria-hidden="true"><div class="bar-fill" [style.width.%]="stats()!.accuracy_pct ?? 0"></div></div>
+              @if (stats()!.accuracy_pct == null) {
+                <span class="stat-hint">Shown after activation</span>
+              }
+            </div>
+          </div>
+        </div>
+      }
+    </section>
+  }
+
+  <div class="settings-grid">
+    <section class="card settings-card">
+      <h2>Profile</h2>
+      @if (isExpertOnly()) {
+        <dl class="readonly-list">
+          <div><dt>Full name</dt><dd>{{ profile()?.full_name || '—' }}</dd></div>
+          <div><dt>Email</dt><dd>{{ profile()?.email || auth.user()?.email }}</dd></div>
+        </dl>
+        <p class="readonly-notice">Contact an administrator to update your profile.</p>
+      } @else {
+        <form [formGroup]="profileForm" (ngSubmit)="saveProfile()">
+          <div class="form-group"><label for="settings-name" class="form-label">Full name</label><input id="settings-name" class="form-control" formControlName="full_name" autocomplete="name" maxlength="255" placeholder="Enter your full name"></div>
+          <div class="form-group"><label for="settings-email" class="form-label">Email</label><input id="settings-email" class="form-control" [value]="profile()?.email || auth.user()?.email || ''" disabled></div>
+          <button class="btn btn-primary" type="submit" [disabled]="savingProfile() || !profile() || profileForm.pristine">{{ savingProfile() ? 'Saving…' : 'Save changes' }}</button>
+        </form>
+      }
+    </section>
+
+    <section class="card settings-card">
+      <h2>Password</h2>
+      <form [formGroup]="pwForm" (ngSubmit)="changePassword()">
+        <div class="form-group"><label for="settings-current-password" class="form-label">Current password</label><input id="settings-current-password" type="password" class="form-control" formControlName="current_password" autocomplete="current-password" placeholder="Enter your current password"></div>
+        <div class="form-group"><label for="settings-new-password" class="form-label">New password</label><input id="settings-new-password" type="password" class="form-control" formControlName="new_password" autocomplete="new-password" aria-describedby="password-help" placeholder="Enter a new password"><p id="password-help" class="hint">At least 8 characters, including an uppercase letter and a number.</p>@if (pwForm.get('new_password')?.invalid && pwForm.get('new_password')?.touched) {<p class="form-error">Enter a password that meets these requirements.</p>}</div>
+        <button class="btn btn-secondary" type="submit" [disabled]="changingPw()">{{ changingPw() ? 'Updating…' : 'Change password' }}</button>
+      </form>
+    </section>
   </div>
 </div>

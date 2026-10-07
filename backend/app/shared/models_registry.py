@@ -14,9 +14,6 @@ from app.features.auth.models import (
 )
 
 
-from app.features.users.models import UserProfile
-
-
 from app.features.expert_review.models import CredibilityWeightTier, ExpertProfile, ExpertReview, VotingConfig
 
 
@@ -41,7 +38,6 @@ __all__ = [
     "User",
     "RefreshToken",
     "PasswordResetToken",
-    "UserProfile",
     "CredibilityWeightTier",
     "ExpertProfile",
     "ExpertReview",

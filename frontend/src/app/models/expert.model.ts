@@ -121,16 +121,13 @@ export interface ExpertHistoryItem {
 
 // ── Stats from GET /expert/stats ─────────────────────────────────────
 export interface ExpertStats {
-  total_reviews: number;
-  correct_reviews: number;
-  accuracy_rate: number;
-  pending_reviews: number;
-  // Additional fields used by expert-stats component
-  total_votes?: number;
-  correct_votes?: number;
-  accuracy_pct?: number | null;
+  user_id: string;
+  full_name: string | null;
+  total_votes: number;
+  correct_votes: number;
+  accuracy_pct: number | null;
   current_credibility: number | null;
-  activation_threshold?: number;
+  activation_threshold: number;
 }
 
 // ── Credibility from GET /expert/credibility ─────────────────────────

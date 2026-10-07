@@ -63,7 +63,7 @@ export class VerifyResultComponent implements OnInit, OnDestroy {
   copied = false;
   copyFailed = false;
   imageFailed = false;
-  readonly inputRoute = computed(() => this.kind() === 'PHOTO_CARD' ? '/photo-card' : this.kind() === 'MULTIMODAL' ? '/multimodal' : '/verify');
+  readonly inputMethod = computed(() => this.kind() === 'PHOTO_CARD' ? 'photocard' : this.kind() === 'MULTIMODAL' ? 'image' : 'source');
   readonly methodLabel = computed(() => this.kind() === 'PHOTO_CARD' ? 'Photo card' : this.kind() === 'MULTIMODAL' ? 'Text & image' : 'Text & source');
   submissionId: string | null = null;
 

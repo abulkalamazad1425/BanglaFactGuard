@@ -1,0 +1,64 @@
+<div class="about container">
+  <section class="about-hero">
+    <span class="eyebrow">ABOUT BANGLAFACTGUARD</span>
+    <h1>Fact checking for Bangla news.</h1>
+    <p>BanglaFactGuard helps readers check Bangla news stories, images and photocards before sharing them. Automated checks give a quick first result, and expert reviewers decide the final verdict.</p>
+    <div class="hero-actions">
+      <a routerLink="/verify" class="btn btn-primary btn-lg">Verify facts ↗</a>
+      <a routerLink="/dashboard" class="btn btn-secondary btn-lg">Fact Explorer</a>
+    </div>
+  </section>
+
+  <section class="about-section">
+    <h2>What you can check</h2>
+    <div class="card-grid">
+      @for (opt of options; track opt.key) {
+        <a routerLink="/verify" [queryParams]="{ method: opt.key }" class="card info-card">
+          <span class="info-icon" aria-hidden="true">{{ opt.icon }}</span>
+          <h3>{{ opt.title }}</h3>
+          <p>{{ opt.description }}</p>
+        </a>
+      }
+    </div>
+  </section>
+
+  <section class="about-section">
+    <h2>How it works</h2>
+    <ol class="steps">
+      @for (step of steps; track step.title; let i = $index) {
+        <li class="card">
+          <span class="step-num">{{ i + 1 }}</span>
+          <h3>{{ step.title }}</h3>
+          <p>{{ step.text }}</p>
+        </li>
+      }
+    </ol>
+  </section>
+
+  <section class="about-section split">
+    <div>
+      <h2>Final verdicts</h2>
+      <ul class="verdicts">
+        @for (v of verdicts; track v.label) {
+          <li><span [class]="'badge ' + v.cls">{{ v.label }}</span><span>{{ v.text }}</span></li>
+        }
+      </ul>
+    </div>
+    <div>
+      <h2>Our principles</h2>
+      <ul class="principles">
+        @for (p of principles; track p.title) {
+          <li><strong>{{ p.title }}</strong><p>{{ p.text }}</p></li>
+        }
+      </ul>
+    </div>
+  </section>
+
+  <section class="card about-cta">
+    <div>
+      <h2>Seen something doubtful?</h2>
+      <p>Check it before you share it.</p>
+    </div>
+    <a routerLink="/verify" class="btn btn-primary">Verify facts ↗</a>
+  </section>
+</div>

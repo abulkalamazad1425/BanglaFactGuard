@@ -71,7 +71,7 @@
       <label for="expert-review-detail-justification" class="form-label">Justification <span class="req-mark" aria-hidden="true">*</span><span class="sr-only">(required)</span> <span class="optional">at least 50 characters, shown publicly after the final decision</span></label>
       <textarea id="expert-review-detail-justification" formControlName="justification" class="form-control"
                 [class.is-invalid]="justInvalid" [attr.aria-invalid]="justInvalid" aria-describedby="justification-count justification-error"
-                rows="6" placeholder="Explain what the evidence shows, cite the relevant source, and describe any uncertainty."></textarea>
+                rows="6" placeholder="Enter your reasoning"></textarea>
       <div id="justification-count" class="char-count" [class.valid]="charCount >= 50">{{ charCount }} / 50 characters minimum</div>
       @if (justInvalid) {<span id="justification-error" class="form-error" role="alert">Write at least 50 characters explaining your vote.</span>}
     </div>

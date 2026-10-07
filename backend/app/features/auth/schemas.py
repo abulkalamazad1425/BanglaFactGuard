@@ -46,7 +46,6 @@ class UserMeResponse(BaseModel):
     full_name: str | None
     role: str
     is_active: bool
-    is_verified: bool
 
     access_token: str | None = None
     refresh_token: str | None = None

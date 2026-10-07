@@ -1,6 +1,6 @@
 <div class="history-page"><div class="container history-container">
   <header class="page-header"><div><h1>My Review History</h1></div></header>
-  <form class="search-toolbar" (submit)="$event.preventDefault(); search(searchInput.value)"><label for="history-search">Search reviews</label><div class="search-row"><input #searchInput id="history-search" class="form-control" type="search" maxlength="200" placeholder="Headline or source"><button class="btn btn-primary" [disabled]="loading()">Search</button></div></form>
+  <form class="search-toolbar" (submit)="$event.preventDefault(); search(searchInput.value)"><label for="history-search">Search reviews</label><div class="search-row"><input #searchInput id="history-search" class="form-control" type="search" maxlength="200" placeholder="Search by headline or source"><button class="btn btn-primary" [disabled]="loading()">Search</button></div></form>
   @if (loadError()) {<div role="alert" class="service-notice"><p>Could not load your reviews.</p><button class="btn btn-secondary" (click)="load()">Try again</button></div>}
   @if (loading()) {<div class="loading-overlay" role="status" aria-label="Loading reviews"><div class="spinner"></div></div>}
   @if (!loading() && !loadError() && !history().length) {<div class="empty-state card"><h2>No reviews found</h2><p>Try another search or return to the review queue.</p></div>}

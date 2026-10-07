@@ -1,61 +1,48 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { signal } from '@angular/core';
-import { of } from 'rxjs';
 import { NavbarComponent } from './navbar/navbar.component';
 import { FooterComponent } from './footer/footer.component';
 import { AuthService } from '../../services/auth.service';
 import { NotificationService } from '../../services/notification.service';
-import { PhotoCardComponent } from '../../features/photocard/photocard';
-import { PhotoCardService } from '../../services/photocard.service';
-import { PendingVerificationsService } from '../../services/pending-verifications.service';
-import { SourceService } from '../../services/source.service';
-import { ToastService } from '../services/toast.service';
+import { VerifyFactsComponent } from '../../features/verification/verify-facts/verify-facts';
 
-/** Every place listing the three input modes uses the same order. */
-const ORDER = ['Text & source', 'Photo card', 'Text & image'];
-const MODE_ROUTES: Record<string, string> = { '/verify': ORDER[0], '/photo-card': ORDER[1], '/multimodal': ORDER[2] };
+/** Every place listing the three verification options uses the same order. */
+const ORDER = ['News story against an image', 'News story against claimed source', 'Photocard against claimed source'];
 
-function modeLabels(root: HTMLElement, selector = 'a'): string[] {
-  return Array.from(root.querySelectorAll<HTMLAnchorElement>(selector))
-    .filter((a) => MODE_ROUTES[a.getAttribute('href') ?? ''])
-    .map((a) => a.textContent!.trim());
-}
+const texts = (root: HTMLElement, selector: string) =>
+  Array.from(root.querySelectorAll<HTMLElement>(selector)).map((el) => el.textContent!.trim());
 
-describe('input mode order', () => {
+describe('verification option order', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
       providers: [
         provideRouter([]),
         { provide: AuthService, useValue: { isLoggedIn: signal(false), isAdmin: signal(false), isExpert: signal(false), user: signal(null), logout: () => undefined } },
         { provide: NotificationService, useValue: { unreadCount: signal(0) } },
-        { provide: PhotoCardService, useValue: {} },
-        { provide: PendingVerificationsService, useValue: {} },
-        { provide: ToastService, useValue: {} },
-        { provide: SourceService, useValue: { listSources: () => of({ items: [] }) } },
       ],
     });
   });
 
-  it('navbar (desktop and mobile)', () => {
+  it('navbar shows a single Verify facts link (desktop and mobile)', () => {
     const fixture = TestBed.createComponent(NavbarComponent);
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
-    expect(modeLabels(el, '.navbar-links a')).toEqual(ORDER);
+    expect(texts(el, '.navbar-links a[href="/verify"]')).toEqual(['Verify facts']);
     fixture.componentInstance.mobileOpen = true;
     fixture.detectChanges();
-    expect(modeLabels(el, '.mobile-menu a')).toEqual(ORDER);
+    expect(texts(el, '.mobile-menu a[href="/verify"]')).toEqual(['Verify facts']);
   });
 
   it('footer', () => {
     const fixture = TestBed.createComponent(FooterComponent);
     fixture.detectChanges();
-    expect(modeLabels(fixture.nativeElement)).toEqual(ORDER);
+    expect(texts(fixture.nativeElement, 'nav[aria-label="Verify facts"] a')).toEqual(ORDER);
   });
 
-  it('method tabs on the input pages', () => {
-    const fixture = TestBed.createComponent(PhotoCardComponent);
+  it('verify facts options', () => {
+    const fixture = TestBed.createComponent(VerifyFactsComponent);
     fixture.detectChanges();
-    expect(modeLabels(fixture.nativeElement, '.method-nav a')).toEqual(ORDER);
+    expect(texts(fixture.nativeElement, '.option-title')).toEqual(ORDER);
   });
 });

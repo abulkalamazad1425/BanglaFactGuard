@@ -20,7 +20,7 @@
 
       <form [formGroup]="filterForm" (ngSubmit)="search()" class="search-panel">
         <div class="primary-filters">
-          <label class="search-field" for="archive-keyword"><span>Search claims</span><input id="archive-keyword" formControlName="keyword" class="form-control" maxlength="255" placeholder="Search a Bengali headline or keyword…" type="search"></label>
+          <label class="search-field" for="archive-keyword"><span>Search claims</span><input id="archive-keyword" formControlName="keyword" class="form-control" maxlength="255" placeholder="Search by headline or keyword" type="search"></label>
           @if (reviewState() === 'finalized') {
             <label for="archive-verdict"><span>Decision</span><select id="archive-verdict" formControlName="overall_verdict" class="form-control"><option value="">All decisions</option><option value="REAL">Real</option><option value="FAKE">Fake</option><option value="MISLEADING">Misleading</option><option value="ALTERED">Altered</option></select></label>
           }

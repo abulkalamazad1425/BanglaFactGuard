@@ -11,25 +11,25 @@
         <div class="form-group">
           <label for="create-expert-full_name" class="form-label">Full Name <span style="color:var(--error)">*</span></label>
           <input id="create-expert-full_name" type="text" formControlName="full_name" class="form-control"
-                 [class.is-invalid]="nameInvalid" placeholder="Dr. Example Name" />
+                 [class.is-invalid]="nameInvalid" placeholder="Enter the expert's full name" />
           @if (nameInvalid) { <span class="form-error">Full name is required</span> }
         </div>
         <div class="form-group">
           <label for="create-expert-email" class="form-label">Email Address <span style="color:var(--error)">*</span></label>
           <input id="create-expert-email" type="email" formControlName="email" class="form-control"
-                 [class.is-invalid]="emailInvalid" placeholder="expert@institution.edu" />
+                 [class.is-invalid]="emailInvalid" placeholder="Enter the expert's email" />
           @if (emailInvalid) { <span class="form-error">Valid email is required</span> }
         </div>
         <div class="form-group">
           <label for="create-expert-password" class="form-label">Password <span style="color:var(--error)">*</span></label>
           <input id="create-expert-password" type="password" formControlName="password" class="form-control"
-                 [class.is-invalid]="pwInvalid" placeholder="Min 8 chars, 1 uppercase, 1 digit" />
+                 [class.is-invalid]="pwInvalid" placeholder="Enter a password" />
           @if (pwInvalid) { <span class="form-error">Strong password required (8+ chars, 1 uppercase, 1 digit)</span> }
         </div>
         <div class="form-group">
           <label for="create-expert-expertise_area" class="form-label">Expertise Area <span style="color:var(--error)">*</span></label>
           <input id="create-expert-expertise_area" type="text" formControlName="expertise_area" class="form-control"
-                 [class.is-invalid]="areaInvalid" placeholder="e.g., Political Journalism, Health & Science" />
+                 [class.is-invalid]="areaInvalid" placeholder="Enter the area of expertise" />
           @if (areaInvalid) { <span class="form-error">Expertise area is required</span> }
         </div>
 

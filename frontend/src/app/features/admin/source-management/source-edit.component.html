@@ -18,28 +18,28 @@
       
       <div class="form-group mt-3">
         <label for="source-edit.component-canonical_name">Canonical Name <span class="text-danger">*</span></label>
-        <input id="source-edit.component-canonical_name" type="text" class="form-control" formControlName="canonical_name" placeholder="e.g. prothomalo.com" [readonly]="isEditMode()">
+        <input id="source-edit.component-canonical_name" type="text" class="form-control" formControlName="canonical_name" placeholder="Enter the domain" [readonly]="isEditMode()">
         <small class="text-muted">Unique identifier for this source. Cannot be changed after creation.</small>
       </div>
 
       <div class="form-group">
         <label for="source-edit.component-display_name">Display Name <span class="text-danger">*</span></label>
-        <input id="source-edit.component-display_name" type="text" class="form-control" formControlName="display_name" placeholder="e.g. প্রথম আলো">
+        <input id="source-edit.component-display_name" type="text" class="form-control" formControlName="display_name" placeholder="Enter the Bangla name">
       </div>
 
       <div class="form-group">
         <label for="source-edit.component-display_name_en">Display Name (English)</label>
-        <input id="source-edit.component-display_name_en" type="text" class="form-control" formControlName="display_name_en" placeholder="e.g. Prothom Alo">
+        <input id="source-edit.component-display_name_en" type="text" class="form-control" formControlName="display_name_en" placeholder="Enter the English name">
       </div>
 
       <div class="form-group">
         <label for="source-edit.component-base_url">Base URL <span class="text-danger">*</span></label>
-        <input id="source-edit.component-base_url" type="url" class="form-control" formControlName="base_url" placeholder="e.g. https://www.prothomalo.com">
+        <input id="source-edit.component-base_url" type="url" class="form-control" formControlName="base_url" placeholder="Enter the website URL">
       </div>
 
       <div class="form-group">
         <label for="source-edit.component-description">Description</label>
-        <textarea id="source-edit.component-description" class="form-control" formControlName="description" rows="3" placeholder="Brief description of the source"></textarea>
+        <textarea id="source-edit.component-description" class="form-control" formControlName="description" rows="3" placeholder="Enter a short description"></textarea>
       </div>
 
       <div class="form-row mt-3">
@@ -73,13 +73,13 @@
       
       <div class="form-group mt-3">
         <label for="source-edit.component-internal_search_url">Internal Search URL</label>
-        <input id="source-edit.component-internal_search_url" type="text" class="form-control" formControlName="internal_search_url" placeholder="e.g. https://www.prothomalo.com/search?q={{ '{query}' }}">
+        <input id="source-edit.component-internal_search_url" type="text" class="form-control" formControlName="internal_search_url" placeholder="Enter the search URL template">
         <small class="text-muted">Use <code>{{ '{query}' }}</code> as the placeholder for the search term.</small>
       </div>
 
       <div class="form-group">
         <label for="source-edit.component-rss_url">RSS Feed URL</label>
-        <input id="source-edit.component-rss_url" type="url" class="form-control" formControlName="rss_url" placeholder="e.g. https://www.prothomalo.com/feed">
+        <input id="source-edit.component-rss_url" type="url" class="form-control" formControlName="rss_url" placeholder="Enter the RSS feed URL">
       </div>
 
       <div class="form-group mt-4">
@@ -89,7 +89,7 @@
         </label>
         <div formArrayName="aliases" class="array-container">
           <div *ngFor="let control of aliases.controls; let i = index" class="array-item">
-            <input type="text" class="form-control" [formControlName]="i" placeholder="Alternative name">
+            <input type="text" class="form-control" [formControlName]="i" placeholder="Enter an alias">
             <button type="button" class="btn btn-sm btn-outline-danger" (click)="removeArrayItem('aliases', i)">✕</button>
           </div>
           <div *ngIf="aliases.length === 0" class="text-muted text-sm fst-italic">No aliases defined.</div>
@@ -110,7 +110,7 @@
           </label>
           <div formArrayName="body_selectors" class="array-container">
             <div *ngFor="let control of bodySelectors.controls; let i = index" class="array-item">
-              <input type="text" class="form-control" [formControlName]="i" placeholder="e.g. article p">
+              <input type="text" class="form-control" [formControlName]="i" placeholder="Enter the article body selector">
               <button type="button" class="btn btn-sm btn-outline-danger" (click)="removeArrayItem('body_selectors', i)">✕</button>
             </div>
           </div>
@@ -124,7 +124,7 @@
           </label>
           <div formArrayName="title_selectors" class="array-container">
             <div *ngFor="let control of titleSelectors.controls; let i = index" class="array-item">
-              <input type="text" class="form-control" [formControlName]="i" placeholder="e.g. h1.title">
+              <input type="text" class="form-control" [formControlName]="i" placeholder="Enter the headline selector">
               <button type="button" class="btn btn-sm btn-outline-danger" (click)="removeArrayItem('title_selectors', i)">✕</button>
             </div>
           </div>
@@ -138,7 +138,7 @@
           </label>
           <div formArrayName="date_selectors" class="array-container">
             <div *ngFor="let control of dateSelectors.controls; let i = index" class="array-item">
-              <input type="text" class="form-control" [formControlName]="i" placeholder="e.g. time[datetime]">
+              <input type="text" class="form-control" [formControlName]="i" placeholder="Enter the date selector">
               <button type="button" class="btn btn-sm btn-outline-danger" (click)="removeArrayItem('date_selectors', i)">✕</button>
             </div>
           </div>
@@ -155,7 +155,7 @@
         <small class="text-muted d-block mb-2">Used to identify valid article URLs to scrape during search.</small>
         <div formArrayName="article_url_patterns" class="array-container">
           <div *ngFor="let control of articleUrlPatterns.controls; let i = index" class="array-item">
-            <input type="text" class="form-control" [formControlName]="i" placeholder="e.g. prothomalo\.com/[^/]+/[^/]*/article/[a-zA-Z0-9_-]+">
+            <input type="text" class="form-control" [formControlName]="i" placeholder="Enter the article URL pattern">
             <button type="button" class="btn btn-sm btn-outline-danger" (click)="removeArrayItem('article_url_patterns', i)">✕</button>
           </div>
         </div>

@@ -1,6 +1,7 @@
 import { Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { CommonModule } from '@angular/common';
+import { VERIFY_OPTIONS } from '../verification/verify-facts/verify-options';
 
 @Component({
   selector: 'app-home',
@@ -10,7 +11,7 @@ import { CommonModule } from '@angular/common';
   styleUrls: ['./home.scss']
 })
 export class HomeComponent {
-
+  readonly options = VERIFY_OPTIONS;
 
   readonly verdicts = [
     { label: 'Real', cls: 'badge-true', desc: 'Experts found the claim accurate.' },

@@ -19,7 +19,7 @@
 
     <form class="search-toolbar" role="search" (submit)="$event.preventDefault(); search(searchInput.value)">
       <label for="queue-search">Search claims</label>
-      <div class="search-row"><input #searchInput id="queue-search" class="form-control" type="search" maxlength="200" placeholder="Headline, article text or source"><button type="submit" class="btn btn-primary" [disabled]="loading()">Search</button></div>
+      <div class="search-row"><input #searchInput id="queue-search" class="form-control" type="search" maxlength="200" placeholder="Search by headline, text or source"><button type="submit" class="btn btn-primary" [disabled]="loading()">Search</button></div>
     </form>
     @if (loadError()) {<div class="service-notice" role="alert"><p>This list could not be loaded. Please try again.</p><button type="button" class="btn btn-secondary" (click)="load()">Try again</button></div>}
     @if (loading()) { <div class="loading-overlay" role="status"><div class="spinner"></div><span class="sr-only">Loading claims</span></div> }

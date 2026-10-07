@@ -8,7 +8,7 @@
         <div class="form-group">
           <label for="register-full_name" class="form-label">Full Name</label>
           <input id="register-full_name" type="text" formControlName="full_name" class="form-control"
-                 placeholder="Your full name" autocomplete="name" />
+                 placeholder="Enter your full name" autocomplete="name" />
         </div>
 
         <div class="form-group">
@@ -16,7 +16,7 @@
           <input id="register-email" type="email" formControlName="email"
                  class="form-control"
                  [class.is-invalid]="emailInvalid"
-                 placeholder="you@example.com" />
+                 placeholder="Enter your email" />
           @if (emailInvalid) {
             <span class="form-error">Valid email is required</span>
           }
@@ -27,7 +27,7 @@
           <input id="register-password" type="password" formControlName="password"
                  class="form-control"
                  [class.is-invalid]="pwInvalid"
-                 placeholder="Min 8 chars, 1 uppercase, 1 digit" />
+                 placeholder="Enter a password" />
           @if (pwError) {
             <span class="form-error">{{ pwError }}</span>
           }
@@ -38,7 +38,7 @@
           <input id="register-confirm" type="password" formControlName="confirm"
                  class="form-control"
                  [class.is-invalid]="confirmInvalid"
-                 placeholder="Repeat your password" />
+                 placeholder="Re-enter your password" />
           @if (confirmInvalid) {
             <span class="form-error">Passwords do not match</span>
           }

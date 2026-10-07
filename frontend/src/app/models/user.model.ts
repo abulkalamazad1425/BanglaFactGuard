@@ -10,7 +10,6 @@ export interface User {
   full_name: string | null;
   role: UserRole;
   is_active: boolean;
-  is_verified: boolean;
   // Auth tokens (only present after login/register)
   access_token?: string;
   refresh_token?: string;
@@ -47,18 +46,10 @@ export interface UserProfile {
   email: string;
   role: UserRole;
   is_active: boolean;
-  is_verified: boolean;
-  is_email_verified: boolean;
-  avatar_url: string | null;
-  phone: string | null;
   total_submissions: number;
-  bio: string | null;
-  verification_count: number;
+  member_since: string;
 }
 
 export interface UpdateProfileRequest {
   full_name?: string;
-  bio?: string;
-  avatar_url?: string;
-  phone?: string;
 }
