@@ -1,3 +1,5 @@
+import { signal } from '@angular/core';
+import { AuthService } from '../../../services/auth.service';
 import {
   ComponentFixture,
   TestBed,
@@ -65,6 +67,7 @@ describe('VerifyResultComponent (photo card, returning later)', () => {
       imports: [VerifyResultComponent],
       providers: [
         provideRouter([]),
+        { provide: AuthService, useValue: { isLoggedIn: signal(false) } },
         { provide: ActivatedRoute, useValue: { snapshot: { paramMap: { get: () => 'p1' } } } },
         { provide: SubmissionsService, useValue: { getLookup: lookupSpy } },
         { provide: PhotoCardService, useValue: photocard },
@@ -175,6 +178,7 @@ describe('VerifyResultComponent (photo card extraction preview)', () => {
       imports: [VerifyResultComponent],
       providers: [
         provideRouter([]),
+        { provide: AuthService, useValue: { isLoggedIn: signal(false) } },
         { provide: ActivatedRoute, useValue: { snapshot: { paramMap: { get: () => 'p1' } } } },
         {
           provide: SubmissionsService,

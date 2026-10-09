@@ -62,5 +62,12 @@
         }
       </div>
     }
+    <app-pagination
+      label="Notification pages"
+      [page]="page()"
+      [hasNext]="hasNext()"
+      [disabled]="loading()"
+      (pageChange)="goToPage($event)"
+    />
   </div>
 </div>

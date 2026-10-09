@@ -22,6 +22,7 @@ from app.features.submissions.models import (
     Submission,
 )
 from app.shared.base_repository import BaseRepository
+from app.shared.utils.keyword_search import KeywordSearch
 
 _VERIFIED_STATUSES = (SubmissionStatus.EXPERT_REVIEW, SubmissionStatus.FINALIZED)
 _IN_FLIGHT_STATUSES = (SubmissionStatus.PENDING, SubmissionStatus.PROCESSING)
@@ -204,11 +205,13 @@ class SubmissionRepository(BaseRepository[Submission]):
             Submission.duplicate_of_submission_id.is_(None),
         ]
 
-        if keyword:
-            like = f"%{keyword}%"
-            conditions.append(
-                or_(Submission.headline.ilike(like), Submission.body_text.ilike(like))
-            )
+        # Keyword search: any keyword matches (OR); ranked by how many distinct
+        # keywords matched, then phrase/headline matches (see keyword_search).
+        search = KeywordSearch(
+            keyword, [Submission.headline, Submission.body_text], headline_column=Submission.headline
+        )
+        if search.active:
+            conditions.append(search.condition)
         if method is not None:
             conditions.append(Submission.submission_type == method)
         if date_from is not None:
@@ -269,7 +272,7 @@ class SubmissionRepository(BaseRepository[Submission]):
 
         stmt = (
             base.where(and_(*conditions))
-            .order_by(Submission.created_at.desc(), Submission.id.desc())
+            .order_by(*search.order_by(), Submission.created_at.desc(), Submission.id.desc())
             .offset(offset)
             .limit(limit)
         )

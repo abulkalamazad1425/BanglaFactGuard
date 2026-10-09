@@ -264,6 +264,22 @@ class SearchSettings(BaseSettings):
         default=100,
         description="Minimum extracted body length to consider an article valid",
     )
+    verified_source_fallback_enabled: bool = Field(
+        default=True,
+        description="Verify claims with no (or an unrecognised/inactive) source against the active verified sources. When false, such claims are rejected as before.",
+    )
+    fallback_domain_group_size: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Verified-source domains combined into one Google query (site:a OR site:b ...).",
+    )
+    fallback_max_queries: int = Field(
+        default=3,
+        ge=1,
+        le=6,
+        description="Search phrasings used in verified-sources mode (each runs once per domain group).",
+    )
 
 
 class ClassificationThresholds(BaseSettings):

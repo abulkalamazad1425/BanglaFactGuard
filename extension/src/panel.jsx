@@ -294,7 +294,11 @@ function App() {
       setTab('activity');
       setNotice(
         'Claim received. Verification may take a few minutes. You can continue ' +
-          'browsing; results will appear in Activity.',
+          'browsing; results will appear in Activity.' +
+          (state.user
+            ? ' You will also be notified, and the claim is listed in My Submissions on the website.'
+            : ' You are not signed in, so the claim is kept only in this browser and it will be available in the Fact Explorer.' +
+              ' Sign in to have your claims listed in My Submissions.'),
       );
       await refresh();
     });
@@ -560,22 +564,18 @@ function App() {
               {draft.type === 'SOURCE_BASED' && (
                 <>
                   <div class="field">
-                    <label for="field-claimed_source_text">
-                      Claimed news outlet
-                      <Req />
-                    </label>
+                    <label for="field-claimed_source_text">Claimed source (optional)</label>
                     <input
                       id="field-claimed_source_text"
                       value={draft.claimed_source_text}
                       onInput={(e) => change('claimed_source_text', e.currentTarget.value)}
                       list="sources"
-                      required
                       maxLength={255}
                       aria-invalid={invalid('claimed_source_text')}
                       aria-describedby={
                         invalid('claimed_source_text') ? 'error-claimed_source_text' : 'source-help'
                       }
-                      placeholder="Enter the news outlet name"
+                      placeholder="Leave empty to search verified sources"
                     />
                     <datalist id="sources">
                       {sources.map((s) => (
@@ -583,7 +583,9 @@ function App() {
                       ))}
                     </datalist>
                     <small id="source-help">
-                      The publisher named in the claim, not necessarily this website.
+                      The publisher named in the claim, not necessarily this website. If no
+                      source is given, related reports are looked for in the active verified news
+                      sources.
                     </small>
                     <FieldErr field="claimed_source_text" />
                   </div>

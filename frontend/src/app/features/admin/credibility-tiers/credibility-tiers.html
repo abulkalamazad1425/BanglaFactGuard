@@ -76,7 +76,12 @@
             min="0"
             formControlName="activation_threshold_votes"
             class="form-control"
+            aria-describedby="credibility-tiers-activation-hint"
           />
+          <small id="credibility-tiers-activation-hint" class="field-hint"
+            >Counts only an expert's votes on claims whose final decision is complete. Weight then
+            follows accuracy: correct ÷ finalized votes.</small
+          >
         </div>
         <div class="form-group">
           <label for="credibility-tiers-max_review_votes" class="form-label"

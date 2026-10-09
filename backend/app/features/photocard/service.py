@@ -55,6 +55,7 @@ from app.features.verification.pipeline.context import build_context
 from app.features.verification.pipeline.orchestrator import PipelineOrchestrator
 from app.features.verification.presenter import effective_status, load_verification_response
 from app.features.verification.repository import ResultRepository
+from app.features.verification import source_policy
 from app.features.verification.reuse import ResultReuseService
 
 logger = structlog.get_logger(__name__)
@@ -151,6 +152,10 @@ class PhotoCardService:
                 "Your card was received. You can leave this page - the headline, news "
                 "outlet and date are read and verified on the server; find the result "
                 "in My Submissions."
+                if submission.submitter_id is not None
+                else "Your card was received. You can leave this page - the headline, "
+                "news outlet and date are read and verified on the server. You are not "
+                "signed in, so keep the result link to come back to it."
             ),
             queued_at=submission.created_at,
         )
@@ -185,9 +190,17 @@ class PhotoCardService:
         await session.commit()
 
         preprocessing_ms: dict[str, int] = {}
-        if record.status == STATUS_SUCCEEDED and submission.headline and submission.claimed_source_id:
+        source_reason: str | None = None
+        if record.status == STATUS_SUCCEEDED and submission.headline:
             # A retry after a crash past extraction: never call Gemini twice.
-            canonical = submission.claimed_source_text or ""
+            # A card without a recognised outlet resumes in verified-sources
+            # mode (its claimed source stays empty).
+            if submission.claimed_source_id:
+                canonical = submission.claimed_source_text or ""
+                source_reason = source_policy.REASON_DETECTED
+            else:
+                canonical = ""
+                source_reason = (record.extraction_details or {}).get("source_reason") or source_policy.REASON_NOT_DETECTED
         else:
             started = time.perf_counter()
             image_bytes = await self.storage.download(record.image_object_key)
@@ -213,13 +226,28 @@ class PhotoCardService:
             # The extracted values ARE the claim - one representation, used
             # exactly as a typed claim's headline / outlet / date are.
             source = extraction.source
-            canonical = source.canonical_name
             submission.headline = extraction.headline[:2000]
-            submission.claimed_source_id = source.id
-            submission.claimed_source_text = canonical[:255]
             submission.published_date = extraction.published_date
+            if source is not None:
+                canonical = source.canonical_name
+                source_reason = source_policy.REASON_DETECTED
+                submission.claimed_source_id = source.id
+                submission.claimed_source_text = canonical[:255]
+            else:
+                # No usable outlet: verified-sources mode. The raw outlet text
+                # stays in the extraction record as provenance only.
+                canonical = ""
+                source_reason = extraction.source_reason
+                submission.claimed_source_id = None
+                submission.claimed_source_text = None
+        if canonical:
+            identity_source = canonical
+        else:
+            identity_source = source_policy.verified_identity_key(
+                await source_policy.load_verified_scope(self.source_repo)
+            )
         submission.content_hash = compute_photocard_hash(
-            submission.headline, canonical, published_date=submission.published_date
+            submission.headline, identity_source, published_date=submission.published_date
         )
         await self.submission_repo.set_phase(submission_id, JobPhase.VERIFYING.value)
         await session.commit()
@@ -231,6 +259,7 @@ class PhotoCardService:
             submission_id=submission_id,
             submitter_id=submission.submitter_id,
             claim_scope=ClaimScope.HEADLINE_ONLY,
+            source_resolution_reason=source_reason,
         )
         orchestrator = PipelineOrchestrator(stages=self._build_stages(), submission_repo=self.submission_repo)
         context = await orchestrator.run(context)
@@ -311,6 +340,7 @@ class PhotoCardService:
             headline=submission.headline,
             claimed_source_text=submission.claimed_source_text,
             claimed_source_name=source_name,
+            detected_source_text=_detected_source_text(record.extraction_details if record else None),
             published_date=submission.published_date,
             extraction_status=record.status if record else None,
             extraction_attempts=record.attempts if record else None,
@@ -350,3 +380,10 @@ def extraction_failures(details: dict | None) -> list[str]:
             out.append(f"Image reading attempt {attempt.get('attempt')} "
                        f"{_ATTEMPT_MESSAGES.get(attempt.get('outcome'), 'failed')}.")
     return out
+
+
+def _detected_source_text(details: dict | None) -> str | None:
+    """The outlet text Gemini saw on the card (provenance only)."""
+    response = (details or {}).get("response") or {}
+    value = response.get("source_evidence") if isinstance(response, dict) else None
+    return value.strip()[:255] if isinstance(value, str) and value.strip() else None

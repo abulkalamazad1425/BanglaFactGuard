@@ -137,14 +137,17 @@
 @if (accepted) {
   <section class="surface state-card" role="status"
     ><span class="eyebrow">CLAIM RECEIVED</span><h2>Verification in progress</h2
-    ><p
-      >Verification may take a few minutes. You can continue browsing. Find preliminary and final
-      results in Fact Explorer or, if signed in, My Submissions.</p
+    ><p>{{ followUp(signedIn()) }}</p
     ><div class="actions"
       ><a class="btn btn-primary" [routerLink]="['/verify', accepted.submission_id]"
         >View progress</a
-      ><a class="btn btn-secondary" routerLink="/history">My Submissions</a
-      ><button class="btn btn-ghost" (click)="accepted = null">Submit another claim</button></div
+      >
+      @if (signedIn()) {
+        <a class="btn btn-secondary" routerLink="/history">My Submissions</a>
+      } @else {
+        <a class="btn btn-secondary" routerLink="/dashboard">Fact Explorer</a>
+      }
+      <button class="btn btn-ghost" (click)="accepted = null">Submit another claim</button></div
     ></section
   >
 }

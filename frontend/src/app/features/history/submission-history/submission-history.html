@@ -65,16 +65,11 @@
         </article>
       }
     </div>
-    <nav class="pagination" aria-label="Submission pages"
-      ><button class="btn btn-ghost" [disabled]="offset() === 0 || loading()" (click)="prev()"
-        >← Previous</button
-      ><span>Page {{ page() }}</span
-      ><button
-        class="btn btn-ghost"
-        [disabled]="submissions().length < limit || loading()"
-        (click)="next()"
-        >Next →</button
-      ></nav
-    >
-  </div></div
->
+    <app-pagination
+      label="Submission pages"
+      [page]="page()"
+      [hasNext]="hasNext()"
+      [disabled]="loading()"
+      (pageChange)="goToPage($event)"
+    /> </div
+></div>

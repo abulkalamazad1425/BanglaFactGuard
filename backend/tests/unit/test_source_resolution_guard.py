@@ -31,6 +31,7 @@ from app.features.sources.resolution import resolve_claimed_source
 from app.features.verification.pipeline.context import build_context
 from app.features.verification.pipeline.stages.s01_normalizer import InputNormalizerStage
 from app.features.verification.schemas import VerificationRequest
+from app.features.verification import source_policy
 from app.features.verification.service import VerificationService
 
 
@@ -91,7 +92,8 @@ def _request(source: str = "কোনো অজানা পত্রিকা")
 
 
 @pytest.mark.asyncio
-async def test_verify_raises_source_not_found_before_building_any_context():
+async def test_verify_raises_source_not_found_before_building_any_context(monkeypatch):
+    monkeypatch.setattr(source_policy, "fallback_enabled", lambda: False)
     svc = VerificationService.__new__(VerificationService)
     svc.source_repo = AsyncMock()
     svc.source_repo.resolve_source.return_value = None
@@ -102,7 +104,8 @@ async def test_verify_raises_source_not_found_before_building_any_context():
 
 
 @pytest.mark.asyncio
-async def test_register_claim_raises_source_not_found_before_creating_a_submission():
+async def test_register_claim_raises_source_not_found_before_creating_a_submission(monkeypatch):
+    monkeypatch.setattr(source_policy, "fallback_enabled", lambda: False)
     svc = VerificationService.__new__(VerificationService)
     svc.source_repo = AsyncMock()
     svc.source_repo.resolve_source.return_value = None
@@ -139,7 +142,8 @@ async def test_register_claim_proceeds_normally_when_source_resolves():
 
 
 @pytest.mark.asyncio
-async def test_s01_raises_rather_than_silently_disabling_the_domain_filter():
+async def test_s01_raises_rather_than_silently_disabling_the_domain_filter(monkeypatch):
+    monkeypatch.setattr(source_policy, "fallback_enabled", lambda: False)
     """If an unresolved source somehow reaches S01 anyway (the pre-checks
     above bypassed), it must fail the stage rather than leave
     normalized_source=None — which would have disabled S04's `if domain:`

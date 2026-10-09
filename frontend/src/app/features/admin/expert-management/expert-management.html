@@ -113,6 +113,13 @@
           </table>
         </div>
       </div>
+      <app-pagination
+        label="Expert pages"
+        [page]="page()"
+        [hasNext]="hasNext()"
+        [disabled]="loading()"
+        (pageChange)="goToPage($event)"
+      />
     }
 
     @if (editTarget()) {

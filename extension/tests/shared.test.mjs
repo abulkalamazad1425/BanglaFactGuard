@@ -144,9 +144,9 @@ test('required fields per submission type, with the failing field named', () => 
     }
   };
   assert.equal(
-    fieldOf({ type: 'SOURCE_BASED', headline: 'Short', claimed_source_text: '' }),
-    'claimed_source_text',
-  );
+    fieldOf({ type: 'SOURCE_BASED', headline: 'Valid headline', claimed_source_text: '' }),
+    null,
+  ); // outlet optional: verified sources are searched instead
   assert.equal(
     fieldOf({ type: 'SOURCE_BASED', headline: 'abc', claimed_source_text: 'x' }),
     'headline',

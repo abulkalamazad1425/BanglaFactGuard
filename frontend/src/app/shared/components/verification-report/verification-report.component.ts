@@ -17,10 +17,17 @@ import {
   DATE_EXPLANATIONS,
   DATE_LABELS,
   NOT_FOUND_IN_CLAIMED_SOURCE,
+  NOT_FOUND_IN_VERIFIED_SOURCES,
   SOURCE_EXPLANATIONS,
   SOURCE_LABELS,
   SOURCE_QUESTION,
+  SOURCE_RESOLUTION_NOTES,
+  VERIFIED_SOURCE_EXPLANATIONS,
+  VERIFIED_SOURCES_QUESTION,
 } from '../../utils/status-labels';
+
+/** At most this many evidence articles are shown (primary first). */
+export const MAX_EVIDENCE_ARTICLES = 3;
 import { VerdictBadgeComponent } from '../verdict-badge/verdict-badge.component';
 import { VotingDetailsComponent } from '../voting-details/voting-details.component';
 
@@ -53,7 +60,6 @@ export class VerificationReportComponent {
   readonly differenceLabel = differenceLabel;
   readonly formatPercent = formatPercent;
   readonly SOURCE_QUESTION = SOURCE_QUESTION;
-  readonly NOT_FOUND_IN_CLAIMED_SOURCE = NOT_FOUND_IN_CLAIMED_SOURCE;
   @Input({ required: true }) r!: VerificationResponse;
   @Input() reviewer = false;
   /** Fallback when an older response lacks claimed_published_date. */
@@ -80,8 +86,63 @@ export class VerificationReportComponent {
     return SOURCE_LABELS[this.r.source_status];
   }
 
+  /** No usable claimed outlet: the active verified sources were searched. */
+  get verifiedMode(): boolean {
+    return this.r.verification_mode === 'VERIFIED_SOURCES';
+  }
+
+  get sourceQuestion(): string {
+    return this.verifiedMode ? VERIFIED_SOURCES_QUESTION : SOURCE_QUESTION;
+  }
+
+  get notFoundText(): string {
+    return this.verifiedMode ? NOT_FOUND_IN_VERIFIED_SOURCES : NOT_FOUND_IN_CLAIMED_SOURCE;
+  }
+
   get sourceExplanation(): string {
-    return SOURCE_EXPLANATIONS[this.r.source_status];
+    return this.verifiedMode
+      ? VERIFIED_SOURCE_EXPLANATIONS[this.r.source_status]
+      : SOURCE_EXPLANATIONS[this.r.source_status];
+  }
+
+  /** Why the verified sources were searched instead of one outlet. */
+  get resolutionNote(): string | null {
+    if (!this.verifiedMode) return null;
+    const reason = this.r.source_resolution_reason ?? '';
+    return (
+      SOURCE_RESOLUTION_NOTES[reason] ??
+      'No usable claimed outlet was available, so the active verified news sources were searched.'
+    );
+  }
+
+  get incompleteReason(): string | null {
+    return this.r.source_status === 'INCOMPLETE'
+      ? (this.r.analysis?.source_scope?.incomplete_reason ?? null)
+      : null;
+  }
+
+  /** At most three unique articles, the compared (primary) one first. */
+  get evidence() {
+    const seen = new Set<string>();
+    const out = [];
+    const sorted = [...this.r.matched_articles].sort(
+      (a, b) => Number(!!b.is_primary) - Number(!!a.is_primary),
+    );
+    for (const art of sorted) {
+      const key = art.url.replace(/\/+$/, '').toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(art);
+      if (out.length >= MAX_EVIDENCE_ARTICLES) break;
+    }
+    return out;
+  }
+
+  get evidenceHeading(): string {
+    if (!this.articleFound) return 'What the source search returned';
+    return this.verifiedMode
+      ? 'Relevant articles from verified sources'
+      : 'Relevant article from claimed source';
   }
 
   get claimedPublishedDate(): string | null {

@@ -46,7 +46,9 @@ class HeadlineAlterationStage:
         if context.source_status == SourceStatus.NOT_FOUND:
             self._no_comparison(
                 context, claim_headline, HeadlineCheckStatus.SOURCE_NOT_FOUND,
-                "No corresponding report was found in the claimed source, so there is no title to compare with.",
+                "No corresponding report was found in the verified sources searched, so there is no title to compare with."
+                if context.is_verified_sources_mode
+                else "No corresponding report was found in the claimed source, so there is no title to compare with.",
             )
             return context
         if not context.source_confirmed:
@@ -78,7 +80,7 @@ class HeadlineAlterationStage:
             basis=comparison.basis,
             claim_headline=claim_headline,
             source_title=article.title or None,
-            source_publisher=context.normalized_source,
+            source_publisher=context.publisher_for_url(article.url),
             source_url=article.url,
             differences=[
                 HeadlineDifference(kind=d.kind, detail=d.detail, claim_text=d.claim_text, source_text=d.source_text)

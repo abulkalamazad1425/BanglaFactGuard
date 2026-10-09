@@ -594,3 +594,41 @@ async def test_pending_or_failed_submissions_are_visible_only_to_their_owner(db)
     assert viewer_can_see(anon_sub, None)  # anonymous submissions keep id-only access
     sub.status = SubmissionStatus.EXPERT_REVIEW  # published results follow the public policy
     assert viewer_can_see(sub, None)
+
+
+# ── a card without a recognised outlet: verified-sources verification ────
+
+
+async def test_card_without_source_is_verified_against_verified_sources(db):
+    async def no_source(source_repo):
+        return _extraction(None, source_reason="SOURCE_NOT_DETECTED", raw_source_text=None,
+                           details={"model": "gemini-test", "attempts": [], "source_reason": "SOURCE_NOT_DETECTED"})
+
+    FakeExtractor.result = no_source
+    async with db() as s:
+        svc, sub = await _accept(s)
+        await svc.process_submission(sub.id)
+        await s.commit()
+    ctx = FakeOrchestrator.captured["context"]
+    assert ctx.raw_claimed_source == "" and ctx.source_resolution_reason == "SOURCE_NOT_DETECTED"
+    async with db() as s2:
+        row = await SubmissionRepository(s2).get_by_id(sub.id)
+        assert row.status == SubmissionStatus.EXPERT_REVIEW  # accepted, not rejected
+        assert row.headline == HEADLINE and row.claimed_source_id is None and row.claimed_source_text is None
+
+
+async def test_sourceless_card_resumes_after_a_crash_without_calling_gemini_again(db):
+    from app.features.photocard.claim_extraction import STATUS_SUCCEEDED as OK
+
+    async with db() as s:
+        svc, sub = await _accept(s)
+        row = await SubmissionRepository(s).get_by_id(sub.id)
+        row.headline = HEADLINE
+        rec = await PhotocardExtractionRepository(s).get_by_submission_id(sub.id)
+        rec.status = OK
+        rec.extraction_details = {"source_reason": "SOURCE_UNRECOGNIZED"}
+        await s.commit()
+        await svc.process_submission(sub.id)
+        await s.commit()
+    assert FakeExtractor.calls == 0
+    assert FakeOrchestrator.captured["context"].source_resolution_reason == "SOURCE_UNRECOGNIZED"

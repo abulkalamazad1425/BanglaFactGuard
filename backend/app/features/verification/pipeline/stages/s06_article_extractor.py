@@ -51,6 +51,14 @@ class ArticleExtractorStage:
         normalized_source = getattr(context, "normalized_source", None)
         source_config = getattr(context, "source_config", None)
 
+        def outlet_for(url: str) -> tuple[str | None, dict | None]:
+            # Verified-sources mode: each article is extracted with ITS
+            # publisher's selectors, not one claimed-source configuration.
+            if context.is_verified_sources_mode and context.verified_scope is not None:
+                pub = context.verified_scope.publisher_for_url(url)
+                return (pub.domains[0], pub.config) if pub and pub.domains else (None, None)
+            return normalized_source, source_config
+
         loop = asyncio.get_event_loop()
         tasks = [
             loop.run_in_executor(
@@ -59,8 +67,7 @@ class ArticleExtractorStage:
                 url,
                 html,
                 url_to_candidate,
-                normalized_source,
-                source_config,
+                *outlet_for(url),
             )
             for url, html in raw_html_cache.items()
         ]
@@ -338,9 +345,11 @@ class ArticleExtractorStage:
         ):
             title = candidate.title_snippet
 
+        title = clean_title(title)
         return RankedArticleSchema(
             url=url,
-            title=clean_title(title),
+            title=title,
+            title_variants=_headline_variants(soup, title),
             body=(
                 clean_extracted_text(body, min_length=self._min_body_length)
                 if body
@@ -381,7 +390,7 @@ class ArticleExtractorStage:
                 favor_recall=True,
                 deduplicate=True,
             )
-            meta = trafilatura.extract_metadata(html, url=url)
+            meta = trafilatura.extract_metadata(html, default_url=url)
             title = author = None
             if meta:
                 title = meta.title or None
@@ -487,3 +496,34 @@ def _iter_ld_items(data):
             if graph:
                 stack.append(graph)
 
+
+_KICKER_TAGS = ("h2", "h3", "h4")
+_KICKER_MAX_CHARS = 200
+
+
+def _headline_variants(soup: BeautifulSoup, title: str | None) -> list[str]:
+    """Headline lines printed next to the title: a kicker/shoulder heading
+    immediately before or after the page's <h1> (e.g. Manab Zamin shows
+    "প্রধানমন্ত্রীর সঙ্গে আবরার ফাহাদের পরিবারের সাক্ষাৎ" above the <h1>
+    "রায় দ্রুত কার্যকরের দাবি", and its homepage shows only the former).
+    Returns each such line alone and joined to the title."""
+    if not title:
+        return []
+    h1 = None
+    for el in soup.find_all("h1"):
+        if el.get_text(" ", strip=True) == title:
+            h1 = el
+            break
+    h1 = h1 or soup.find("h1")
+    if h1 is None:
+        return []
+    variants: list[str] = []
+    for sib, before in ((h1.find_previous_sibling(), True), (h1.find_next_sibling(), False)):
+        if sib is None or sib.name not in _KICKER_TAGS or sib.find("a"):
+            continue
+        line = clean_title(sib.get_text(" ", strip=True)) or ""
+        if not (8 <= len(line) <= _KICKER_MAX_CHARS) or line == title:
+            continue
+        variants.append(line)
+        variants.append(f"{line} {title}" if before else f"{title} {line}")
+    return variants

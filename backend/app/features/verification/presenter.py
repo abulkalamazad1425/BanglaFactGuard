@@ -26,6 +26,28 @@ from app.features.verification.repository import ResultRepository
 from app.features.verification.schemas import AnalysisDetails, VerificationResponse
 
 
+MAX_EVIDENCE_ARTICLES = 3
+_ARTICLE_FETCH_LIMIT = 20
+
+
+def _publisher_of(url: str, scope, submission: Submission) -> str | None:
+    """The publisher an evidence article belongs to: the matching eligible
+    verified publisher (verified-sources mode) or its host."""
+    from urllib.parse import urlparse
+
+    from app.shared.utils.domains import is_allowed_host
+
+    try:
+        host = (urlparse(url).hostname or "").lower()
+    except ValueError:
+        return None
+    if scope is not None:
+        for canonical in scope.eligible_publishers or ([scope.claimed_source] if scope.claimed_source else []):
+            if is_allowed_host(host, [canonical]):
+                return canonical
+    return host[4:] if host.startswith("www.") else (host or None)
+
+
 def resolve_scope(submission: Submission, result: VerificationResult) -> ClaimScope:
     """Photo cards are ALWAYS headline-only, whatever an old row says."""
     if submission.submission_type == SubmissionType.PHOTO_CARD:
@@ -151,15 +173,33 @@ async def load_verification_response(
     decided_by_admin = is_finalized and await _decided_by_admin(result_repo, expert.submission_id)
 
     origin_id = result.reused_from_submission_id or submission.id
+    # Fetch the whole (bounded) ranked set BEFORE limiting: the article S08
+    # selected must be shown first even when it is not in the top three by
+    # rank. Then at most three unique articles, in relevance order.
     articles = await article_repo.get_for_submission(
-        origin_id, successful_only=True, order_by_rank=True, limit=3
+        origin_id, successful_only=False, order_by_rank=True, limit=_ARTICLE_FETCH_LIMIT
     )
-    # The source S08 selected comes first even when it was not rank #1.
-    articles = sorted(articles, key=lambda a: a.id != result.top_article_id)
+    articles = sorted(
+        (a for a in articles if a.extraction_success or a.id == result.top_article_id),
+        key=lambda a: a.id != result.top_article_id,
+    )
+    unique: list = []
+    seen_urls: set[str] = set()
+    for a in articles:
+        key = (a.url or "").strip().rstrip("/").lower()
+        if key in seen_urls:
+            continue
+        seen_urls.add(key)
+        unique.append(a)
+        if len(unique) >= MAX_EVIDENCE_ARTICLES:
+            break
+    articles = unique
 
     analysis = parse_analysis(result.analysis_details)
     if analysis is not None and not current:
         analysis.headline_alteration = None
+    source_scope = analysis.source_scope if analysis is not None else None
+    mode = source_scope.verification_mode if source_scope is not None else "CLAIMED_SOURCE"
 
     return VerificationResponse(
         submission_id=submission.id,
@@ -190,6 +230,8 @@ async def load_verification_response(
                 rank_score=a.rank_score or 0.0,
                 search_provider=SearchProvider.INTERNAL_SITE,
                 extraction_method=a.extraction_method,
+                publisher=_publisher_of(a.url, source_scope, submission),
+                is_primary=result.top_article_id is not None and a.id == result.top_article_id,
             )
             for a in articles
         ],
@@ -201,4 +243,6 @@ async def load_verification_response(
         pipeline_version=result.pipeline_version,
         legacy_result=not current,
         analysis=analysis,
+        verification_mode=mode,
+        source_resolution_reason=source_scope.resolution_reason if source_scope is not None else None,
     )

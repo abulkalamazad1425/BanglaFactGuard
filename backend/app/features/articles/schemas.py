@@ -25,6 +25,15 @@ class RankedArticleSchema(BaseModel):
 
     url: str = Field(..., description="Source URL of the article")
     title: str | None = Field(default=None)
+    # Pipeline-internal (S06 -> S07/S08): never part of an API response.
+    title_variants: list[str] = Field(
+        default_factory=list,
+        exclude=True,
+        description=(
+            "Other headline lines printed with the title (e.g. a kicker above it), "
+            "alone and joined to the title. A claim may quote any of them."
+        ),
+    )
     body: str | None = Field(default=None)
     author: str | None = Field(default=None)
     published_date: date | None = Field(default=None)
@@ -39,6 +48,12 @@ class RankedArticleSchema(BaseModel):
     published_tz_assumed: bool = Field(
         default=False,
         description="True when the page's timestamp had no UTC offset and Asia/Dhaka was assumed.",
+    )
+    publisher: str | None = Field(
+        default=None, description="Canonical name of the verified publisher this article belongs to."
+    )
+    is_primary: bool = Field(
+        default=False, description="True for the article the headline/date/body comparisons used."
     )
     rank_score: float = Field(
         default=0.0,

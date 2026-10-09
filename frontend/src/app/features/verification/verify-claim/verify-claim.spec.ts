@@ -1,3 +1,5 @@
+import { signal } from '@angular/core';
+import { AuthService } from '../../../services/auth.service';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
@@ -18,6 +20,7 @@ describe('News submission recovery', () => {
       imports: [VerifyClaimComponent],
       providers: [
         provideRouter([]),
+        { provide: AuthService, useValue: { isLoggedIn: signal(false) } },
         { provide: VerificationService, useValue: service },
         { provide: SourceService, useValue: { listSources: () => of({ items: [] }) } },
         { provide: PendingVerificationsService, useValue: {} },
@@ -32,5 +35,28 @@ describe('News submission recovery', () => {
     expect(fixture.nativeElement.textContent).toContain('Result temporarily unavailable');
     expect(fixture.nativeElement.querySelector('a[href="/verify/s1"]')).not.toBeNull();
     expect(c.form.value.headline).toBe('খবরের সম্পূর্ণ শিরোনাম');
+  });
+
+  it('accepts a claim without a source and sends no claimed_source_text', () => {
+    const service = jasmine.createSpyObj('VerificationService', ['submitAsync', 'getResult']);
+    service.submitAsync.and.returnValue(throwError(() => ({ status: 503 })));
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      imports: [VerifyClaimComponent],
+      providers: [
+        provideRouter([]),
+        { provide: AuthService, useValue: { isLoggedIn: signal(false) } },
+        { provide: VerificationService, useValue: service },
+        { provide: SourceService, useValue: { listSources: () => of({ items: [] }) } },
+        { provide: PendingVerificationsService, useValue: {} },
+        { provide: ToastService, useValue: { error: () => {} } },
+      ],
+    });
+    const fixture = TestBed.createComponent(VerifyClaimComponent);
+    const c = fixture.componentInstance;
+    c.form.patchValue({ headline: 'খবরের সম্পূর্ণ শিরোনাম', claimed_source_text: '' });
+    expect(c.form.valid).toBeTrue();
+    c.onSubmit();
+    expect(service.submitAsync).toHaveBeenCalledWith({ headline: 'খবরের সম্পূর্ণ শিরোনাম' });
   });
 });

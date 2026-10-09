@@ -181,7 +181,7 @@ class ResultPersistenceStage:
             submission_type=SubmissionType.SOURCE_BASED,
             headline=context.raw_headline[:2000],
             body_text=(context.raw_news_body or None),
-            claimed_source_text=context.raw_claimed_source[:255],
+            claimed_source_text=(context.raw_claimed_source or "")[:255] or None,
             published_date=context.published_date,
             submitter_id=context.submitter_id,
             content_hash=context.content_hash,

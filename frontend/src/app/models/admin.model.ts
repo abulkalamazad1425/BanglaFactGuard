@@ -216,7 +216,7 @@ export interface VotingConfig {
   id: string;
   /** M — minimum votes before a claim can finalize */
   min_expert_votes: number;
-  /** N — lifetime votes an expert needs before their tier weight applies */
+  /** N — votes on FINALIZED claims an expert needs before their tier weight applies */
   activation_threshold_votes: number;
   /** T — weighted score the leading verdict must reach */
   verified_threshold: number;

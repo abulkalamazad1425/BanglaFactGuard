@@ -23,6 +23,8 @@ class QueryGeneratorStage:
     stage_id = PipelineStageID.S03_QUERY_GENERATOR
 
     async def execute(self, context: PipelineContext) -> PipelineContext:
+        if context.is_verified_sources_mode:
+            return self._verified_sources_queries(context)
         domain = context.normalized_source
         headline = context.normalized_headline.strip()
         if not domain or not headline:
@@ -65,5 +67,50 @@ class QueryGeneratorStage:
             count=len(queries),
             domain=domain,
             types=[kind for _, kind in queries],
+        )
+        return context
+
+    def _verified_sources_queries(self, context: PipelineContext) -> PipelineContext:
+        """Bounded phrasings without a site operator: S04 runs each one once
+        per group of verified domains (``site:a OR site:b ...``), never once
+        per source."""
+        from app.core.config import get_settings
+
+        headline = re.sub(r"\bsite:\S+", "", context.normalized_headline.strip(), flags=re.IGNORECASE).strip()
+        if not headline:
+            raise QueryGenerationError(
+                stage_id=self.stage_id.value, message="A normalized headline is required for search."
+            )
+        scope = context.verified_scope
+        if scope is None or scope.empty:
+            # No active verified source: nothing may be searched (never an
+            # unrestricted web search). The result is INCOMPLETE.
+            context.claim_keywords = extract_headline_keywords(headline, top_n=8)
+            context.search_queries = []
+            raise QueryGenerationError(
+                stage_id=self.stage_id.value, message="No active verified sources are available to search."
+            )
+        limit = get_settings().search.fallback_max_queries
+        keywords = extract_headline_keywords(headline, top_n=8)
+        context.claim_keywords = keywords
+        queries: list[tuple[str, str]] = []
+        seen: set[str] = set()
+
+        def add(text: str, kind: QueryType) -> None:
+            text = re.sub(r"\s+", " ", text).strip()
+            key = text.casefold()
+            if text and key not in seen and len(queries) < limit:
+                seen.add(key)
+                queries.append((text, kind.value))
+
+        add(headline, QueryType.HEADLINE)
+        add(" ".join(keywords), QueryType.KEYWORDS)
+        if len(keywords) >= 4:
+            add(" ".join(keywords[:4]), QueryType.KEYWORDS)
+        context.search_queries = queries
+        logger.info(
+            "s03_verified_sources_queries_generated",
+            count=len(queries),
+            publishers=len(scope.publishers),
         )
         return context

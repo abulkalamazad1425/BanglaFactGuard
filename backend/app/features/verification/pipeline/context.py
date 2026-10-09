@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from app.core.constants import (
     ClaimScope,
@@ -45,6 +45,13 @@ class PipelineContext:
     normalized_source: str | None = None
     source_config: dict | None = None
     content_hash: str | None = None
+
+    # Verification mode (see verification/source_policy.py). CLAIMED_SOURCE
+    # is the original single-outlet path; VERIFIED_SOURCES searches only the
+    # active verified publishers in `verified_scope` (Google only).
+    verification_mode: str = "CLAIMED_SOURCE"
+    source_resolution_reason: str | None = None
+    verified_scope: Any = None  # source_policy.VerifiedScope
 
     cache_hit: bool = False
     # The earlier submission whose automated result is being reused (S02).
@@ -102,6 +109,19 @@ class PipelineContext:
     fatal_error: str | None = None
 
     @property
+    def is_verified_sources_mode(self) -> bool:
+        return self.verification_mode == "VERIFIED_SOURCES"
+
+    def publisher_for_url(self, url: str | None) -> str | None:
+        """Canonical name of the publisher an evidence URL belongs to."""
+        if not url:
+            return None
+        if self.is_verified_sources_mode:
+            pub = self.verified_scope.publisher_for_url(url) if self.verified_scope else None
+            return pub.canonical if pub else None
+        return self.normalized_source
+
+    @property
     def has_body(self) -> bool:
         return bool(self.normalized_body and self.normalized_body.strip())
 
@@ -153,13 +173,14 @@ class PipelineStage(Protocol):
 
 def build_context(
     headline: str,
-    claimed_source: str,
+    claimed_source: str | None,
     *,
     news_body: str | None = None,
     published_date: date | None = None,
     submission_id: uuid.UUID | None = None,
     submitter_id: uuid.UUID | None = None,
     claim_scope: ClaimScope | None = None,
+    source_resolution_reason: str | None = None,
 ) -> PipelineContext:
     """Build the pipeline's starting state for one verification run.
 
@@ -180,7 +201,8 @@ def build_context(
         submitter_id=submitter_id,
         raw_headline=headline,
         raw_news_body=news_body if resolved_scope == ClaimScope.HEADLINE_WITH_BODY else None,
-        raw_claimed_source=claimed_source,
+        raw_claimed_source=claimed_source or "",
+        source_resolution_reason=source_resolution_reason,
         published_date=published_date,
         claim_scope=resolved_scope,
         pipeline_start_time=datetime.utcnow(),

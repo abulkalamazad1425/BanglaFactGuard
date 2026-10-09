@@ -56,6 +56,10 @@ import { NotificationService } from '../../../services/notification.service';
             <a routerLink="/history" routerLinkActive="active" class="nav-link">My Submissions</a>
             <a routerLink="/about" routerLinkActive="active" class="nav-link">About</a>
           }
+          @if (!isLoggedIn()) {
+            <a routerLink="/about" routerLinkActive="active" class="nav-link">About</a>
+            <a routerLink="/faq" routerLinkActive="active" class="nav-link">FAQ</a>
+          }
           @if (isExpert() && !isAdmin()) {
             <a
               routerLink="/expert/queue"
@@ -260,6 +264,8 @@ import { NotificationService } from '../../../services/notification.service';
             }
             <button class="mobile-link mobile-link--danger" (click)="logout()">Logout</button>
           } @else {
+            <a routerLink="/about" class="mobile-link" (click)="closeMobileMenu()">About</a>
+            <a routerLink="/faq" class="mobile-link" (click)="closeMobileMenu()">FAQ</a>
             <a routerLink="/auth/login" class="mobile-link" (click)="closeMobileMenu()">Login</a>
             <a
               routerLink="/auth/register"

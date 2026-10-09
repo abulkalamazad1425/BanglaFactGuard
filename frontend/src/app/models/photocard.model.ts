@@ -51,6 +51,8 @@ export interface PhotoCardResultResponse {
   claimed_source_text?: string | null;
   /** Display name of that outlet. */
   claimed_source_name?: string | null;
+  /** Outlet text seen on the card when it is not an active verified source (provenance only). */
+  detected_source_text?: string | null;
   /** Publication date printed on the card — the claimed date; null when the card shows none. */
   published_date?: string | null;
 

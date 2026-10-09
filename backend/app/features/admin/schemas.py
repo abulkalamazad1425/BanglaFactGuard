@@ -89,7 +89,10 @@ class VotingConfigUpdateRequest(BaseModel):
         default=None,
         ge=0,
         le=1000,
-        description="N — lifetime votes an expert needs before their tier weight applies",
+        description=(
+            "N — votes on claims whose final decision is complete that an expert "
+            "needs before their accuracy-based tier weight applies"
+        ),
     )
     verified_threshold: float | None = Field(
         default=None, gt=0, description="T — weighted score the leading verdict must reach"

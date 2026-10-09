@@ -6,6 +6,7 @@ from typing import Callable, TypeVar
 
 import structlog
 
+from app.shared.utils.keyword_search import KeywordSearch
 from app.core.constants import (
     ContentStatus,
     DateStatus,
@@ -321,10 +322,16 @@ class ExpertReviewService:
                 or_(Submission.submitter_id.is_(None), Submission.submitter_id != expert_id),
             )
             order = (Submission.created_at.desc(), Submission.id.desc())
-        if q.strip():
-            term = q.strip().replace("%", r"\%").replace("_", r"\_")
-            stmt = stmt.where(or_(*[c.ilike(f"%{term}%", escape="\\") for c in (Submission.headline, Submission.body_text, Submission.claimed_source_text)]))
-        rows = (await self._session.execute(stmt.order_by(*order).offset(offset).limit(limit))).scalars().all()
+        search = KeywordSearch(
+            q,
+            [Submission.headline, Submission.body_text, Submission.claimed_source_text],
+            headline_column=Submission.headline,
+        )
+        if search.active:
+            stmt = stmt.where(search.condition)
+        rows = (
+            await self._session.execute(stmt.order_by(*search.order_by(), *order).offset(offset).limit(limit))
+        ).scalars().all()
         return [
             await self._build_queue_item(row, full_body=False, viewer_id=expert_id, viewer_role=viewer_role)
             for row in rows
@@ -517,7 +524,7 @@ class ExpertReviewService:
         by the expert's current accuracy% — replaces the old hardcoded
         ±0.05/-0.03 credibility deltas (PDF §2.2: "administrator-defined rules...
         without changing system code"). Below config.activation_threshold_votes
-        (N) lifetime completed reviews, every vote counts as weight 1.0
+        (N) votes on claims whose final decision is complete, every vote counts as weight 1.0
         regardless of tier — this is `weight_applied`, snapshotted onto the
         vote row so later tier/config changes never retroactively alter it."""
         if not profile.total_votes or profile.total_votes < config.activation_threshold_votes:
@@ -736,7 +743,7 @@ class ExpertReviewService:
         submission.status = SubmissionStatus.FINALIZED
         for review in expert_reviews:
             await self._reviews.update(review, status="finalized")
-        await self._update_expert_profiles(expert_reviews, final_overall)
+        await self._update_expert_profiles(expert_reviews)
 
     async def _maybe_escalate(
         self,
@@ -759,32 +766,24 @@ class ExpertReviewService:
         await notify_admins_of_escalation(self._session, submission)
         return True
 
-    async def _update_expert_profiles(
-        self,
-        reviews: list[ExpertReview],
-        final_overall: OverallVerdict,
-    ) -> None:
+    async def _update_expert_profiles(self, reviews: list[ExpertReview]) -> None:
         """Correctness is judged on the Overall verdict uniformly across all
         submission types — the one dimension every expert votes on, and the
         headline judgment call the platform ultimately publishes. An admin's
-        own decision row is never scored."""
+        own decision row is never scored.
+
+        A vote counts towards N (activation_threshold_votes) and accuracy only
+        once its claim's final decision is complete. The counters are re-derived
+        from the finalized claims rather than incremented, so they cannot drift
+        (an incremented counter kept counting votes on claims later deleted)."""
         config = await self._voting_config.get_or_create()
+        await self._session.flush()
         for review in sorted(reviews, key=lambda r: str(r.reviewer_id)):
             if review.reviewer_id is None or review.is_admin_decision:
                 continue
-            is_correct = review.vote_overall_verdict == final_overall
             profile = await self._profiles.get_or_create(review.reviewer_id)
             await self._session.refresh(profile, with_for_update=True)
-            new_total = profile.total_votes + 1
-            new_correct = profile.correct_votes + (1 if is_correct else 0)
-            new_score = round(new_correct / new_total, 4) if new_total >= config.activation_threshold_votes else None
-            await self._profiles.update(
-                profile,
-                total_votes=new_total,
-                correct_votes=new_correct,
-                credibility_score=new_score,
-                completed_reviews_count=new_total,
-            )
+            await self._profiles.refresh_stats(profile, config.activation_threshold_votes)
 
 
 def _ai_label_structured(result: VerificationResult | None, submission: Submission | None = None) -> str | None:

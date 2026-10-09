@@ -4,6 +4,8 @@ import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { ToastService } from '../../shared/services/toast.service';
+import { AuthService } from '../../services/auth.service';
+import { verificationFollowUp } from '../../shared/utils/status-labels';
 import { MultimodalService } from '../../services/verification.service';
 import { MultimodalPredictionResult } from '../../models/verification.model';
 
@@ -28,6 +30,9 @@ export class MultimodalComponent {
   }
   private readonly svc = inject(MultimodalService);
   private readonly toast = inject(ToastService);
+  /** Signed-in and anonymous users are told different next steps. */
+  readonly signedIn = inject(AuthService).isLoggedIn;
+  readonly followUp = verificationFollowUp;
 
   headline = '';
   bodyText = '';

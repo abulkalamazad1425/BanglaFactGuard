@@ -25,17 +25,6 @@ async def test_new_profile_has_no_score_even_if_legacy_initial_score_is_passed()
     await engine.dispose()
 
 
-@pytest.mark.parametrize('completed,expected', [(0, None), (8, None), (9, .8), (10, 9/11)])
-async def test_score_is_calculated_only_at_activation(completed, expected):
-    ctx = _make_service()
-    ctx['voting_config'].get_or_create.return_value = _config(N=10)
-    profile = SimpleNamespace(total_votes=completed, correct_votes=max(0, completed-2))
-    ctx['profiles'].get_or_create.return_value = profile
-    await ctx['svc']._update_expert_profiles([_review(OverallVerdict.REAL, 1)], OverallVerdict.REAL)
-    score = ctx['profiles'].update.call_args.kwargs['credibility_score']
-    assert score == (round(expected, 4) if expected is not None else None)
-
-
 async def test_zero_completed_votes_have_neutral_weight_even_when_N_is_zero():
     ctx = _make_service()
     weight, tier = await ctx['svc']._resolve_weight(SimpleNamespace(total_votes=0, correct_votes=0), _config(N=0))
@@ -59,7 +48,10 @@ async def test_queue_search_is_before_pagination_and_not_limited_to_latest_100()
         ctx = _make_service()
         ctx['svc']._session = session
         ctx['svc']._build_queue_item = AsyncMock(side_effect=lambda row, **kw: row.headline)
-        assert await ctx['svc'].get_queue(user.id, q='Claim 0', limit=20) == ['Claim 0']
+        # Keyword search (OR): partial matches are included, the exact phrase ranks first.
+        found = await ctx['svc'].get_queue(user.id, q='Claim 0', limit=20)
+        assert found[0] == 'Claim 0' and len(found) == 20
+        assert await ctx['svc'].get_queue(user.id, q='Claim 104', limit=1) == ['Claim 104']
         assert len(await ctx['svc'].get_queue(user.id, offset=100, limit=20)) == 5
         assert await ctx['svc'].get_queue(user.id, q='not present') == []
     await engine.dispose()

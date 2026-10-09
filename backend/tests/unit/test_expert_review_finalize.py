@@ -66,6 +66,7 @@ def _make_service():
     voting_config_repo = AsyncMock()
     review_repo.session = MagicMock()
     review_repo.session.refresh = AsyncMock()
+    review_repo.session.flush = AsyncMock()
     # Admin lookup for escalation notifications: no admins in these unit tests.
     admin_rows = MagicMock()
     admin_rows.scalars.return_value.all.return_value = []
@@ -525,19 +526,19 @@ async def test_submit_vote_locks_the_submission_row():
 
 
 @pytest.mark.asyncio
-async def test_update_expert_profiles_scores_on_overall_match():
+async def test_update_expert_profiles_rederives_every_voting_experts_stats():
+    """Counters are re-derived from finalized claims (see
+    ExpertProfileRepository.finalized_vote_counts), never incremented; an
+    administrator's own decision row is never scored."""
     ctx = _make_service()
     correct = _review(OverallVerdict.ALTERED, 1.0)
     wrong = _review(OverallVerdict.REAL, 1.0)
+    admin = _review(OverallVerdict.ALTERED, 1.0)
+    admin.is_admin_decision = True
+    ctx["voting_config"].get_or_create.return_value = _config(N=10)
 
-    profiles = {
-        correct.reviewer_id: SimpleNamespace(total_votes=0, correct_votes=0),
-        wrong.reviewer_id: SimpleNamespace(total_votes=0, correct_votes=0),
-    }
-    ctx["profiles"].get_or_create.side_effect = lambda reviewer_id, **_: profiles[reviewer_id]
+    await ctx["svc"]._update_expert_profiles([correct, wrong, admin])
 
-    await ctx["svc"]._update_expert_profiles([correct, wrong], final_overall=OverallVerdict.ALTERED)
-
-    calls = {id(c.args[0]): c.kwargs for c in ctx["profiles"].update.call_args_list}
-    assert calls[id(profiles[correct.reviewer_id])]["correct_votes"] == 1
-    assert calls[id(profiles[wrong.reviewer_id])]["correct_votes"] == 0
+    refreshed = [c.args for c in ctx["profiles"].refresh_stats.await_args_list]
+    assert len(refreshed) == 2 and all(n == 10 for _, n in refreshed)
+    ctx["profiles"].update.assert_not_called()

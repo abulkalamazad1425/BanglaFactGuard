@@ -13,6 +13,7 @@ from app.features.nlp.model_identity import embedding_identity_tag
 from app.features.verification.analysis.headline_comparison import METHOD
 from app.features.verification.pipeline.factory import build_verification_stages
 from app.features.verification.pipeline.stages.s01_normalizer import InputNormalizerStage
+from app.features.verification.source_policy import verified_identity_key
 from app.shared.utils.hashing import compute_claim_hash
 
 
@@ -33,8 +34,13 @@ class PhotocardNormalizerStage(InputNormalizerStage):
         if context.claim_scope != ClaimScope.HEADLINE_ONLY or context.raw_news_body:
             raise ValueError("A photo card is verified on its headline only")
         context = await super().execute(context)
+        identity_source = (
+            verified_identity_key(context.verified_scope)
+            if context.is_verified_sources_mode
+            else context.normalized_source
+        )
         context.content_hash = compute_photocard_hash(
-            context.normalized_headline, context.normalized_source,
+            context.normalized_headline, identity_source,
             published_date=context.published_date,
         )
         return context

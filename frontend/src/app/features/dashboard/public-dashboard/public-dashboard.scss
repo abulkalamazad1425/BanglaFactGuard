@@ -310,17 +310,6 @@
   margin-top: 18px;
   padding: 4px 0;
 }
-.pagination {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 24px;
-  margin-top: 28px;
-  span {
-    font-size: 13px;
-    color: var(--text-secondary);
-  }
-}
 .result-state {
   display: flex;
   flex-direction: column;
@@ -462,17 +451,6 @@
   }
   .report-content h3 {
     font-size: 20px;
-  }
-  .pagination {
-    gap: 10px;
-    justify-content: space-between;
-    .btn {
-      padding: 10px;
-      font-size: 12px;
-    }
-    span {
-      font-size: 11px;
-    }
   }
   .reading-guide {
     grid-template-columns: 1fr;

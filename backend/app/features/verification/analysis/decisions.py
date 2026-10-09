@@ -96,18 +96,34 @@ def decide_source(
     search_adequate: bool | None,
     retrieval_failed: bool,
     correspondence: Correspondence | None,
+    blocked_match: str | None = None,
 ) -> tuple[SourceStatus, list[str]]:
     """CONFIRMED needs a corresponding report; NOT_FOUND needs an ADEQUATE
     search that came up without one; everything else is INCOMPLETE (a
-    failed search is never reported as a confident NOT_FOUND)."""
+    failed search is never reported as a confident NOT_FOUND).
+
+    `blocked_match` names a search result whose title corresponds to the
+    claim better than anything that was read, but whose page could not be
+    fetched (typically an anti-bot wall). The likely report was never read,
+    so neither absence nor a weaker stand-in is reported: INCOMPLETE."""
+    blocked = (
+        [f"a search result matching the claim ({blocked_match}) could not be retrieved - "
+         "the site blocked automated access"]
+        if blocked_match
+        else []
+    )
     if not has_evidence:
         if retrieval_failed:
-            return SourceStatus.INCOMPLETE, ["candidate pages could not be fetched or extracted"]
+            return SourceStatus.INCOMPLETE, ["candidate pages could not be fetched or extracted"] + blocked
+        if blocked:
+            return SourceStatus.INCOMPLETE, blocked
         if search_adequate:
             return SourceStatus.NOT_FOUND, ["an adequate search completed and returned no article from the claimed source"]
         return SourceStatus.INCOMPLETE, ["the search did not complete adequately (provider failures or too few completed calls)"]
 
     assert correspondence is not None
+    if blocked:
+        return SourceStatus.INCOMPLETE, correspondence.basis + blocked
     if correspondence.level in {"STRONG", "PLAUSIBLE"}:
         return SourceStatus.CONFIRMED, correspondence.basis
     if correspondence.level == "UNKNOWN":

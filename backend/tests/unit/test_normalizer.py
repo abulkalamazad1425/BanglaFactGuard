@@ -106,9 +106,13 @@ async def test_resolve_source_via_db(db_session, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_unresolved_source_fails_closed():
-    """S01 no longer lets an unresolved source through (that would search the
-    whole web instead of the claimed outlet): it raises NormalizationError."""
+async def test_unresolved_source_fails_closed(monkeypatch):
+    """With the verified-sources fallback disabled, S01 never lets an
+    unresolved source through (that would search the whole web instead of the
+    claimed outlet): it raises NormalizationError."""
+    from app.features.verification import source_policy
+
+    monkeypatch.setattr(source_policy, "fallback_enabled", lambda: False)
     context = build_context(
         headline="কিছু খবর",
         claimed_source="অপরিচিত উৎস",

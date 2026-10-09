@@ -242,7 +242,8 @@ async function submit(draft) {
         body: {
           headline: draft.headline.trim(),
           body_text: draft.body_text.trim() || null,
-          claimed_source_text: draft.claimed_source_text.trim(),
+          // Optional: without an outlet the server searches the verified sources.
+          claimed_source_text: draft.claimed_source_text.trim() || null,
           published_date: draft.published_date || null,
         },
       });

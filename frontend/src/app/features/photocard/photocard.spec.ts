@@ -1,3 +1,5 @@
+import { signal } from '@angular/core';
+import { AuthService } from '../../services/auth.service';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
@@ -29,6 +31,7 @@ describe('PhotoCardComponent (background submission)', () => {
       imports: [PhotoCardComponent],
       providers: [
         provideRouter([]),
+        { provide: AuthService, useValue: { isLoggedIn: signal(false) } },
         { provide: PhotoCardService, useValue: svc },
         { provide: PendingVerificationsService, useValue: pending },
         { provide: ToastService, useValue: toast },
@@ -60,6 +63,7 @@ describe('PhotoCardComponent (background submission)', () => {
       imports: [PhotoCardComponent],
       providers: [
         provideRouter([]),
+        { provide: AuthService, useValue: { isLoggedIn: signal(false) } },
         {
           provide: PhotoCardService,
           useValue: jasmine.createSpyObj('PhotoCardService', ['submitAsync']),

@@ -58,11 +58,7 @@
           ><p>{{ phaseText() }}. This page updates automatically as the check progresses.</p
           ><div class="note"
             ><strong>You can leave this page.</strong
-            ><p
-              >Verification may take a few minutes. You can continue browsing. Find preliminary and
-              final results in Fact Explorer or, if signed in, My Submissions. Keep this link or
-              open <a routerLink="/history">My Submissions</a> if you are signed in.</p
-            ></div
+            ><p>{{ followUp(signedIn(), 'progress-page') }}</p></div
           ></section
         >
       }
@@ -198,7 +194,13 @@
                   ><dd lang="bn">{{
                     p.claimed_source_name ||
                       p.claimed_source_text ||
-                      (p.status === 'FAILED' ? 'Not identified' : 'Not read yet')
+                      (p.extraction_status === 'SUCCEEDED'
+                        ? (p.detected_source_text
+                            ? p.detected_source_text + ' (not an active verified source)'
+                            : 'Not identified on the card') + ' — checked against verified sources'
+                        : p.status === 'FAILED'
+                          ? 'Not identified'
+                          : 'Not read yet')
                   }}</dd></div
                 ><div
                   ><dt>Claimed publication date</dt

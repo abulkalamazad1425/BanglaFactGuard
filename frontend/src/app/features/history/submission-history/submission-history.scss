@@ -71,13 +71,6 @@
     color: var(--text-secondary);
   }
 }
-.pagination {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 16px;
-  margin-block: 24px;
-}
 .empty-state {
   padding: 32px;
   margin-top: 24px;

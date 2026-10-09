@@ -5,16 +5,19 @@ import { FormBuilder, FormGroup, FormArray, Validators, ReactiveFormsModule } fr
 import { SourceService } from '../../../services/source.service';
 import { SourceResponse } from '../../../models/source.model';
 import { ToastService } from '../../../shared/services/toast.service';
+import {
+  PAGE_SIZE,
+  PaginationComponent,
+} from '../../../shared/components/pagination/pagination.component';
 
 @Component({
   selector: 'app-source-management',
   standalone: true,
-  imports: [CommonModule, RouterModule, ReactiveFormsModule],
+  imports: [CommonModule, RouterModule, ReactiveFormsModule, PaginationComponent],
   templateUrl: './source-management.component.html',
   styleUrls: ['./source-management.component.scss'],
 })
 export class SourceManagementComponent implements OnInit {
-  protected readonly Math = Math;
   private readonly sourceService = inject(SourceService);
   private readonly toast = inject(ToastService);
   private readonly fb = inject(FormBuilder);
@@ -22,7 +25,7 @@ export class SourceManagementComponent implements OnInit {
   sources = signal<SourceResponse[]>([]);
   total = signal(0);
   page = signal(1);
-  size = 20;
+  size = PAGE_SIZE;
 
   // Drawer state
   drawerOpen = signal(false);
@@ -188,15 +191,8 @@ export class SourceManagementComponent implements OnInit {
     }
   }
 
-  nextPage() {
-    this.page.update((p) => p + 1);
+  goToPage(page: number) {
+    this.page.set(page);
     this.loadSources();
-  }
-
-  prevPage() {
-    if (this.page() > 1) {
-      this.page.update((p) => p - 1);
-      this.loadSources();
-    }
   }
 }

@@ -6,8 +6,8 @@ from app.core.constants import PipelineStageID
 from app.core.exceptions import NormalizationError
 from app.features.verification.pipeline.context import PipelineContext
 from app.features.sources.repository import SourceRepository
-from app.features.sources.resolution import resolve_claimed_source
-from app.shared.utils.bangla_normalizer import extract_canonical_domain, normalize_bangla_text
+from app.features.verification import source_policy
+from app.shared.utils.bangla_normalizer import normalize_bangla_text
 from app.shared.utils.hashing import compute_claim_hash
 
 logger = structlog.get_logger(__name__)
@@ -49,46 +49,51 @@ class InputNormalizerStage:
         else:
             context.normalized_body = None
 
-        context.normalized_source = await self._resolve_source(
-            context.raw_claimed_source, log
-        )
-        if context.normalized_source is None:
-            # Fail closed, not silently unrestricted: s04_source_search.py's
-            # domain filter only applies when a domain is known, so letting
-            # an unresolved source through here would search the whole web
-            # rather than just the claimed outlet. The service layer already
-            # pre-checks this before the pipeline even starts (see
-            # VerificationService.register_claim/verify and
-            # PhotoCardService.process_submission) — reaching here unresolved means that
-            # guard was bypassed, so this is a backstop, not the primary path.
-            raise NormalizationError(
-                stage_id=self.stage_id.value,
-                message=f"Claimed source could not be resolved: {context.raw_claimed_source!r}",
-                details={"claimed_source": context.raw_claimed_source},
+        resolution = await source_policy.resolve_source(context.raw_claimed_source, self.source_repo)
+        if resolution.is_fallback and context.source_resolution_reason and not context.raw_claimed_source.strip():
+            # The caller knows why there is no source (e.g. a photo card where
+            # none was detected) - keep that more specific reason.
+            resolution = source_policy.SourceResolution(
+                resolution.mode, None, context.source_resolution_reason, None
             )
+        context.source_resolution_reason = context.source_resolution_reason or resolution.reason
+
+        if resolution.is_fallback:
+            if not source_policy.fallback_enabled():
+                # Fallback disabled: the original fail-closed behaviour.
+                raise NormalizationError(
+                    stage_id=self.stage_id.value,
+                    message=f"Claimed source could not be resolved: {context.raw_claimed_source!r}",
+                    details={"claimed_source": context.raw_claimed_source},
+                )
+            context.verification_mode = source_policy.VERIFIED_SOURCES
+            context.source_resolution_reason = resolution.reason
+            context.normalized_source = None
+            context.source_config = None
+            context.verified_scope = await source_policy.load_verified_scope(self.source_repo)
+            log.info(
+                "verification_mode_verified_sources",
+                reason=resolution.reason,
+                publishers=len(context.verified_scope.publishers),
+            )
+            context.content_hash = compute_claim_hash(
+                context.normalized_headline,
+                source_policy.verified_identity_key(context.verified_scope),
+                context.claim_scope,
+                body=context.normalized_body,
+                published_date=context.published_date,
+            )
+            return context
+
+        context.verification_mode = source_policy.CLAIMED_SOURCE
+        context.normalized_source = resolution.canonical
+        log.debug("source_resolved", canonical=resolution.canonical)
 
         source_record = await self.source_repo.get_by_canonical_name(
             context.normalized_source
         )
         if source_record:
-            context.source_config = {
-                "name": source_record.display_name,
-                "body_selectors": source_record.body_selectors or [],
-                "title_selectors": source_record.title_selectors or [],
-                "date_selectors": source_record.date_selectors or [],
-                "internal_search_url": source_record.internal_search_url,
-                "article_url_patterns": source_record.article_url_patterns or [],
-                # Registered channels for this outlet: S04 filters candidate
-                # hosts and S05 validates FINAL redirected hosts against them.
-                "allowed_domains": [
-                    d
-                    for d in (
-                        extract_canonical_domain(source_record.base_url or ""),
-                        *(extract_canonical_domain(str(a)) for a in (source_record.aliases or [])),
-                    )
-                    if d
-                ],
-            }
+            context.source_config = source_policy.source_config_for(source_record)
 
         # The single identity function (shared with registration, S02, S12 and
         # the photo-card flow): headline, body (only if the scope has one),
@@ -108,15 +113,3 @@ class InputNormalizerStage:
         )
 
         return context
-
-    async def _resolve_source(
-        self,
-        raw_source: str,
-        log: structlog.BoundLogger,
-    ) -> str | None:
-        canonical = await resolve_claimed_source(raw_source, self.source_repo)
-        if canonical:
-            log.debug("source_resolved", canonical=canonical)
-        else:
-            log.warning("source_unresolved", raw_source=raw_source)
-        return canonical

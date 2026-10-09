@@ -30,6 +30,7 @@
       <div class="search-row"
         ><input
           #searchInput
+          (input)="onSearchInput(searchInput.value)"
           id="queue-search"
           class="form-control"
           type="search"
@@ -126,22 +127,12 @@
         }
       </ul>
     }
-    <nav class="pagination" aria-label="Queue pages">
-      <button
-        type="button"
-        class="btn btn-secondary btn-sm"
-        [disabled]="offset() === 0 || loading()"
-        (click)="prev()"
-        >← Previous</button
-      >
-      <span class="meta">Page {{ page() }}</span>
-      <button
-        type="button"
-        class="btn btn-secondary btn-sm"
-        [disabled]="queue().length < limit || loading()"
-        (click)="next()"
-        >Next →</button
-      >
-    </nav>
+    <app-pagination
+      label="Queue pages"
+      [page]="page()"
+      [hasNext]="hasNext()"
+      [disabled]="loading()"
+      (pageChange)="goToPage($event)"
+    />
   </div>
 </div>

@@ -4,6 +4,10 @@ import { RouterLink } from '@angular/router';
 import { VerificationService } from '../../../services/verification.service';
 import { SubmissionSummary, SubmissionStats } from '../../../models/verification.model';
 import { VerdictBadgeComponent } from '../../../shared/components/verdict-badge/verdict-badge.component';
+import {
+  PAGE_SIZE,
+  PaginationComponent,
+} from '../../../shared/components/pagination/pagination.component';
 
 /**
  * My Submissions. Rows exist from the moment a submission is accepted —
@@ -18,7 +22,7 @@ import { VerdictBadgeComponent } from '../../../shared/components/verdict-badge/
 @Component({
   selector: 'app-submission-history',
   standalone: true,
-  imports: [CommonModule, RouterLink, VerdictBadgeComponent],
+  imports: [CommonModule, RouterLink, VerdictBadgeComponent, PaginationComponent],
   templateUrl: './submission-history.html',
   styleUrls: ['./submission-history.scss'],
 })
@@ -30,7 +34,8 @@ export class SubmissionHistoryComponent implements OnInit, OnDestroy {
   readonly submissions = signal<SubmissionSummary[]>([]);
   readonly stats = signal<SubmissionStats | null>(null);
   readonly offset = signal(0);
-  readonly limit = 20;
+  readonly limit = PAGE_SIZE;
+  readonly hasNext = signal(false);
 
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -54,8 +59,11 @@ export class SubmissionHistoryComponent implements OnInit, OnDestroy {
 
   load(silent = false): void {
     if (!silent) this.loading.set(true);
-    this.verificationSvc.getMySubmissions(this.limit, this.offset()).subscribe({
-      next: (s) => {
+    // One extra row tells whether another page exists.
+    this.verificationSvc.getMySubmissions(this.limit + 1, this.offset()).subscribe({
+      next: (rows) => {
+        const s = rows.slice(0, this.limit);
+        this.hasNext.set(rows.length > this.limit);
         this.submissions.set(s);
         this.loading.set(false);
         this.loadError.set(false);
@@ -84,12 +92,8 @@ export class SubmissionHistoryComponent implements OnInit, OnDestroy {
     this.refreshTimer = null;
   }
 
-  prev(): void {
-    this.offset.update((o) => Math.max(0, o - this.limit));
-    this.load();
-  }
-  next(): void {
-    this.offset.update((o) => o + this.limit);
+  goToPage(page: number): void {
+    this.offset.set((page - 1) * this.limit);
     this.load();
   }
 

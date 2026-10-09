@@ -24,6 +24,7 @@ from app.core.constants import (
 from app.core.exceptions import ClassificationError
 from app.features.verification.analysis.decisions import correspondence_strength
 from app.features.verification.pipeline.context import PipelineContext
+from app.features.verification.schemas import SourceScopeDetails
 
 logger = structlog.get_logger(__name__)
 
@@ -53,6 +54,7 @@ class ResultAssemblyStage:
             context.analysis.pipeline_version = VERIFICATION_PIPELINE_VERSION
             context.analysis.claim_scope = context.claim_scope
             context.analysis.stage_errors = dict(context.stage_errors)
+            context.analysis.source_scope = self._source_scope(context)
             context.confidence = self._strength(context)
             context.reasoning = self._reasoning(context)
             logger.info(
@@ -87,7 +89,42 @@ class ResultAssemblyStage:
         return 0.0
 
     @staticmethod
+    def _source_scope(context: PipelineContext) -> SourceScopeDetails:
+        verified = context.is_verified_sources_mode
+        scope = context.verified_scope if verified else None
+        confirmed = context.source_status == SourceStatus.CONFIRMED and context.top_article is not None
+        evidence: list[str] = []
+        for art in context.ranked_articles:
+            pub = context.publisher_for_url(art.url)
+            if pub and pub not in evidence:
+                evidence.append(pub)
+        incomplete_reason = None
+        if context.source_status == SourceStatus.INCOMPLETE:
+            if verified and (scope is None or scope.empty):
+                incomplete_reason = "No active verified sources were available to search."
+            elif context.search_attempted and context.search_errors >= context.search_attempted:
+                incomplete_reason = "The news search failed."
+            elif context.retrieval_failed:
+                incomplete_reason = "The candidate articles could not be retrieved."
+            else:
+                incomplete_reason = "The search did not complete adequately."
+        return SourceScopeDetails(
+            verification_mode=context.verification_mode,
+            resolution_reason=context.source_resolution_reason,
+            raw_source_text=(context.raw_claimed_source or None),
+            claimed_source=None if verified else context.normalized_source,
+            scope_fingerprint=scope.fingerprint if scope else None,
+            eligible_publishers=[p.canonical for p in scope.publishers] if scope else [],
+            evidence_publishers=evidence,
+            primary_article_url=context.top_article.url if confirmed else None,
+            primary_publisher=context.publisher_for_url(context.top_article.url) if confirmed else None,
+            incomplete_reason=incomplete_reason,
+        )
+
+    @staticmethod
     def _reasoning(context: PipelineContext) -> str:
+        if context.is_verified_sources_mode:
+            return ResultAssemblyStage._verified_reasoning(context)
         source = context.normalized_source or context.raw_claimed_source or "the claimed source"
         parts: list[str] = []
         s = context.analysis.search
@@ -135,5 +172,55 @@ class ResultAssemblyStage:
             parts.append(
                 f"Search: {s.success + s.cached} call(s) returned results, {s.success_empty} completed with no "
                 f"results, {s.failed} failed, {s.skipped} skipped."
+            )
+        return " ".join(p.strip() for p in parts if p and p.strip())
+
+    @staticmethod
+    def _verified_reasoning(context: PipelineContext) -> str:
+        """VERIFIED_SOURCES mode: never implies the claimed/original outlet
+        published anything - the comparison is with a verified-source article."""
+        parts: list[str] = []
+        if context.source_status == SourceStatus.NOT_FOUND:
+            parts.append(
+                "No matching report was found in the verified sources searched. "
+                "This does not establish that the claim is false. The headline and date were not compared."
+            )
+        elif context.source_status == SourceStatus.INCOMPLETE:
+            reason = context.analysis.source_scope.incomplete_reason if context.analysis.source_scope else None
+            parts.append(
+                "Verification could not be completed" + (f": {reason}" if reason else ".")
+                + " No conclusion is drawn about whether a verified source carried this report."
+            )
+        else:
+            art = context.top_article
+            pub = context.publisher_for_url(art.url) if art else None
+            parts.append(
+                "Related reports found in verified sources. The claim was compared with the selected "
+                f"verified-source article" + (f" from {pub}" if pub else "") + (f": {art.title}." if art and art.title else ".")
+            )
+            ha = context.analysis.headline_alteration
+            label = {ContentStatus.MATCHED: "matched", ContentStatus.ALTERED: "altered"}.get(context.content_status)
+            parts.append(f"Headline Alteration: {label or 'no verdict'}. " + (ha.reason if ha else ""))
+            if context.date_status == DateStatus.MATCHED:
+                parts.append("The claimed publication date matches the article's date.")
+            elif context.date_status == DateStatus.MISMATCHED and context.analysis.date:
+                d = context.analysis.date
+                parts.append(
+                    f"The claimed publication date ({d.claimed_date}) differs from the article's published date "
+                    f"({d.article_date}, Asia/Dhaka). A date mismatch alone is not a false-news verdict."
+                )
+            elif context.date_status == DateStatus.INCOMPLETE:
+                parts.append("The article's own publication date could not be determined, so the claimed date could not be checked.")
+        body = context.analysis.body_similarity
+        if body is not None and body.status == BodyComparisonStatus.COMPUTED:
+            parts.append(
+                "Body similarity scores were measured separately; they describe wording/meaning overlap only "
+                "and are not part of any verdict."
+            )
+        s = context.analysis.search
+        if s and context.source_status != SourceStatus.CONFIRMED:
+            parts.append(
+                f"Search: {s.success + s.cached} call(s) returned results, {s.success_empty} completed with no "
+                f"results, {s.failed} failed."
             )
         return " ".join(p.strip() for p in parts if p and p.strip())

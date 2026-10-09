@@ -24,6 +24,34 @@ import {
 export const SOURCE_QUESTION = 'Relevant article from claimed source';
 export const NOT_FOUND_IN_CLAIMED_SOURCE = 'Not found in claimed source';
 
+export const VERIFIED_SOURCES_QUESTION = 'Relevant articles from verified sources';
+export const NOT_FOUND_IN_VERIFIED_SOURCES =
+  'No matching report was found in the verified sources searched';
+
+export const VERIFIED_SOURCE_EXPLANATIONS: Record<SourceStatus, string> = {
+  CONFIRMED:
+    'Related reports found in verified sources. This alone does not make the claim true, and it ' +
+    'does not show which outlet originally published it.',
+  NOT_FOUND:
+    'No matching report was found in the verified sources searched. This alone does not prove ' +
+    'the news is false.',
+  INCOMPLETE:
+    'Verification could not be completed. No conclusion can be drawn about whether a verified ' +
+    'source carried this report.',
+};
+
+/** Why a claim was checked against the verified sources instead of one outlet. */
+export const SOURCE_RESOLUTION_NOTES: Record<string, string> = {
+  SOURCE_NOT_SUPPLIED:
+    'No claimed outlet was selected, so the active verified news sources were searched.',
+  SOURCE_NOT_DETECTED:
+    'No news outlet could be identified on the photo card, so the active verified news sources were searched.',
+  SOURCE_UNRECOGNIZED:
+    'The named outlet is not one of the verified sources, so the active verified news sources were searched instead.',
+  SOURCE_INACTIVE:
+    'The named outlet is not currently an active verified source, so the active verified news sources were searched instead.',
+};
+
 export const SOURCE_LABELS: Record<SourceStatus, string> = {
   CONFIRMED: 'Found',
   NOT_FOUND: 'Not Found',
@@ -125,4 +153,25 @@ export function preliminaryChips(f: {
     });
   }
   return chips;
+}
+
+/** What happens after a claim is accepted — told differently to a signed-in
+ *  user (notified, listed in My Submissions) and an anonymous one (nothing is
+ *  saved to an account, so the progress link is the way back). */
+export function verificationFollowUp(
+  signedIn: boolean,
+  where: 'accepted' | 'progress-page' = 'accepted',
+): string {
+  const keep =
+    where === 'progress-page' ? 'keep this page’s link' : 'keep the “View progress” link';
+  return signedIn
+    ? 'Verification may take a few minutes. You can continue browsing — you will be ' +
+        'notified when the preliminary result is ready and again when experts reach a ' +
+        'final verdict. Follow this claim in My Submissions; both results also appear in ' +
+        'Fact Explorer.'
+    : 'Verification may take a few minutes. You can continue browsing. You are not ' +
+        'signed in, so this claim is not saved to an account and you will not be ' +
+        `notified — ${keep} to come back to it. Preliminary and ` +
+        'final results also appear in Fact Explorer. Sign in before submitting to have ' +
+        'your claims listed in My Submissions.';
 }

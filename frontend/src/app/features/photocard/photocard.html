@@ -79,7 +79,9 @@
       ><section class="surface source-panel" aria-labelledby="photocard-sources-heading"
         ><h2 id="photocard-sources-heading">Verified news sources</h2
         ><p class="field-hint"
-          >The system recognizes the following sources as verified Bangla news sources</p
+          >The system recognizes the following sources as verified Bangla news sources. If the card
+          shows no outlet, or one that is not listed, its headline is checked against these sources
+          instead.</p
         >
         @if (sourcesLoading) {
           <p class="field-hint">Loading the current list…</p>
@@ -114,23 +116,24 @@
 @if (step === 'accepted' && accepted) {
   <section class="surface state-card"
     ><span class="eyebrow">UPLOAD COMPLETE</span><div class="state-mark" aria-hidden="true">✓</div
-    ><h2>Your photo card was received</h2
-    ><p
-      >Verification may take a few minutes. You can continue browsing. Find preliminary and final
-      results in Fact Explorer or, if signed in, My Submissions.</p
-    >
+    ><h2>Your photo card was received</h2><p>{{ followUp(signedIn()) }}</p>
     @if (previewUrl) {
       <img [src]="previewUrl" class="preview-image" alt="Submitted photocard" />
     }
     <dl class="meta-grid"
-      ><div><dt>Read from the card</dt><dd>Headline, news outlet and date</dd></div
+      ><div><dt>Read from the card</dt><dd>Headline, news outlet (if shown) and date</dd></div
       ><div><dt>Scope</dt><dd>Headline only</dd></div></dl
-    ><div class="note">Keep this result link to return later.</div
-    ><div class="actions"
+    >
+    <div class="actions"
       ><a class="btn btn-primary" [routerLink]="['/verify', accepted.submission_id]"
         >View progress</a
-      ><a class="btn btn-secondary" routerLink="/history">My Submissions</a
-      ><button class="btn btn-ghost" (click)="reset()">Verify another card</button></div
+      >
+      @if (signedIn()) {
+        <a class="btn btn-secondary" routerLink="/history">My Submissions</a>
+      } @else {
+        <a class="btn btn-secondary" routerLink="/dashboard">Fact Explorer</a>
+      }
+      <button class="btn btn-ghost" (click)="reset()">Verify another card</button></div
     ></section
   >
 }

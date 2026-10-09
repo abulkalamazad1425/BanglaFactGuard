@@ -5,11 +5,15 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { AdminService } from '../../../services/admin.service';
 import { ToastService } from '../../../shared/services/toast.service';
 import { ExpertResponse, UpdateExpertRequest } from '../../../models/admin.model';
+import {
+  PAGE_SIZE,
+  PaginationComponent,
+} from '../../../shared/components/pagination/pagination.component';
 
 @Component({
   selector: 'app-expert-management',
   standalone: true,
-  imports: [CommonModule, RouterLink, ReactiveFormsModule],
+  imports: [CommonModule, RouterLink, ReactiveFormsModule, PaginationComponent],
   templateUrl: './expert-management.html',
   styleUrls: ['./expert-management.scss'],
 })
@@ -22,6 +26,9 @@ export class ExpertManagementComponent implements OnInit {
   readonly loadError = signal(false);
   readonly busyId = signal<string | null>(null);
   readonly experts = signal<ExpertResponse[]>([]);
+  readonly page = signal(1);
+  readonly hasNext = signal(false);
+  readonly limit = PAGE_SIZE;
   readonly resetTarget = signal<ExpertResponse | null>(null);
   readonly resetting = signal(false);
   readonly editTarget = signal<ExpertResponse | null>(null);
@@ -42,9 +49,11 @@ export class ExpertManagementComponent implements OnInit {
   load(): void {
     this.loading.set(true);
     this.loadError.set(false);
-    this.adminSvc.listExperts().subscribe({
-      next: (e) => {
-        this.experts.set(e);
+    // One extra row tells whether another page exists.
+    this.adminSvc.listExperts(this.limit + 1, (this.page() - 1) * this.limit).subscribe({
+      next: (rows) => {
+        this.hasNext.set(rows.length > this.limit);
+        this.experts.set(rows.slice(0, this.limit));
         this.loading.set(false);
       },
       error: () => {
@@ -52,6 +61,11 @@ export class ExpertManagementComponent implements OnInit {
         this.loadError.set(true);
       },
     });
+  }
+
+  goToPage(page: number): void {
+    this.page.set(page);
+    this.load();
   }
 
   /** Merge the server's answer into the existing row so a partial response

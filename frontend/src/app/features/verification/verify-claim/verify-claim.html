@@ -29,22 +29,16 @@
 
           <div class="form-group">
             <label for="verify-claim-claimed_source_text" class="form-label"
-              >Claimed news outlet <span class="req-mark" aria-hidden="true">*</span
-              ><span class="sr-only">(required)</span></label
+              >Claimed source <span class="optional">optional</span></label
             >
             <select
               id="verify-claim-claimed_source_text"
               formControlName="claimed_source_text"
               class="form-control"
-              [class.is-invalid]="sourceInvalid"
-              [attr.aria-invalid]="!!sourceInvalid"
-              aria-describedby="verify-source-hint verify-source-error"
-              required
+              aria-describedby="verify-source-hint"
             >
-              <option value="" disabled>
-                {{
-                  sourcesLoading ? 'Loading verified sources…' : 'Select the claimed news outlet'
-                }}
+              <option value="">
+                {{ sourcesLoading ? 'Loading verified sources…' : 'Search verified sources' }}
               </option>
               @for (src of sources; track src.canonical_name) {
                 <option [value]="src.canonical_name">
@@ -77,13 +71,9 @@
                 <line x1="12" y1="16" x2="12" y2="12" />
                 <line x1="12" y1="8" x2="12.01" y2="8" />
               </svg>
-              Choose the outlet the claim says published this news.
+              If no source is selected, we will look for related reports from active verified news
+              sources.
             </span>
-            @if (sourceInvalid) {
-              <span id="verify-source-error" class="form-error" role="alert"
-                >Select the news outlet the claim names.</span
-              >
-            }
           </div>
 
           <div class="form-group">
@@ -162,7 +152,7 @@
         ><dl class="meta-grid"
           ><div
             ><dt>Claimed outlet</dt
-            ><dd>{{ form.value.claimed_source_text || 'Not selected' }}</dd></div
+            ><dd>{{ form.value.claimed_source_text || 'None — search verified sources' }}</dd></div
           ><div
             ><dt>Comparison scope</dt
             ><dd>{{
@@ -184,15 +174,16 @@
   <section class="surface state-card" role="status"
     ><span class="eyebrow">CLAIM RECEIVED</span><div class="spinner"></div
     ><h2>Verification in progress</h2><p class="claim-preview">{{ pendingHeadline }}</p
-    ><p
-      >Verification may take a few minutes. You can continue browsing. Find preliminary and final
-      results in Fact Explorer or, if signed in, My Submissions.</p
-    ><div class="note"
-      ><strong>You can leave this page.</strong><p>Keep this result link to return later.</p></div
+    ><p>{{ followUp(signedIn()) }}</p
+    ><div class="note"><strong>You can leave this page.</strong></div
     ><div class="actions"
-      ><a class="btn btn-primary" [routerLink]="['/verify', pendingSubmissionId]">View progress</a
-      ><a routerLink="/history" class="btn btn-secondary">My Submissions</a></div
-    ></section
+      ><a class="btn btn-primary" [routerLink]="['/verify', pendingSubmissionId]">View progress</a>
+      @if (signedIn()) {
+        <a class="btn btn-secondary" routerLink="/history">My Submissions</a>
+      } @else {
+        <a class="btn btn-secondary" routerLink="/dashboard">Fact Explorer</a>
+      }
+    </div></section
   >
 }
 @if (result && !error) {
@@ -209,10 +200,7 @@
       ><h2 class="claim-preview">{{ pendingHeadline || form.value.headline }}</h2></section
     >
     @if (servedFromCache) {
-      <div class="note"
-        >This claim was checked before, so its saved result is shown instead of running the check
-        again.</div
-      >
+      <div class="note">This claim was already verified. Showing the saved result.</div>
     }
     <app-verification-report [r]="result"
   /></section>
