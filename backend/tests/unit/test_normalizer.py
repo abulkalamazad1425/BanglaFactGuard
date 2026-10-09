@@ -70,8 +70,19 @@ async def test_resolve_source_via_static_alias():
 
 
 @pytest.mark.asyncio
-async def test_resolve_source_via_db(db_session):
+async def test_resolve_source_via_db(db_session, monkeypatch):
     source_repo = SourceRepository(db_session)
+
+    # `get_by_alias` uses the Postgres JSONB containment operator (`@>`), which
+    # SQLite cannot execute. Same semantics (exact alias of an active source),
+    # evaluated in Python, so the rest of the DB-backed path is still real.
+    async def sqlite_get_by_alias(alias):
+        from sqlalchemy import select
+
+        rows = (await db_session.execute(select(VerifiedSource))).scalars().all()
+        return next((s for s in rows if s.is_active and alias in (s.aliases or [])), None)
+
+    monkeypatch.setattr(source_repo, "get_by_alias", sqlite_get_by_alias)
 
     custom_source = VerifiedSource(
         canonical_name="customportal.com",
@@ -95,9 +106,13 @@ async def test_resolve_source_via_db(db_session):
 
 
 @pytest.mark.asyncio
-async def test_unresolved_source_fails_closed():
-    """S01 no longer lets an unresolved source through (that would search the
-    whole web instead of the claimed outlet): it raises NormalizationError."""
+async def test_unresolved_source_fails_closed(monkeypatch):
+    """With the verified-sources fallback disabled, S01 never lets an
+    unresolved source through (that would search the whole web instead of the
+    claimed outlet): it raises NormalizationError."""
+    from app.features.verification import source_policy
+
+    monkeypatch.setattr(source_policy, "fallback_enabled", lambda: False)
     context = build_context(
         headline="কিছু খবর",
         claimed_source="অপরিচিত উৎস",

@@ -39,36 +39,20 @@ class CrossEncoderReranker:
     def model(self) -> CrossEncoder | None:
         return self._get_model()
 
-    async def rerank(
-        self, claim_headline: str, articles: List[RankedArticleSchema], top_k: int = 3
-    ) -> List[RankedArticleSchema]:
-        """Re-order candidates with a cross-encoder.
-
-        Awaitable because the forward pass is CPU-bound: run inline it froze
-        the whole API for the duration, so a queued verification could delay
-        unrelated requests by seconds. It runs on a worker thread instead.
-        """
-        if not articles or len(articles) <= 3:
-            return articles
-
+    async def scores(self, claim_headline: str, articles: List[RankedArticleSchema]) -> List[float] | None:
+        """Cross-encoder relevance of each article to the claim, or None when
+        the model is unavailable or fails."""
+        if not articles:
+            return []
         model = self._get_model()
         if model is None:
-            return articles
-
-        pairs = []
-        for article in articles:
-            title = article.title or ""
-            body_preview = (article.body or "")[:500]
-            article_text = f"{title} {body_preview}".strip()
-            pairs.append((claim_headline, article_text))
-
+            return None
+        pairs = [
+            (claim_headline, f"{a.title or ''} {(a.body or '')[:500]}".strip())
+            for a in articles
+        ]
         try:
-            scores = await asyncio.to_thread(model.predict, pairs)
-
-            scored_articles = list(zip(scores, articles))
-            scored_articles.sort(key=lambda x: x[0], reverse=True)
-
-            return [article for score, article in scored_articles[:top_k]]
+            return [float(s) for s in await asyncio.to_thread(model.predict, pairs)]
         except Exception as exc:
             logger.warning("cross_encoder_predict_failed", error=str(exc))
-            return articles
+            return None

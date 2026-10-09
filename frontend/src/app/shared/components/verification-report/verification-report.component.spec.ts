@@ -321,4 +321,45 @@ describe('VerificationReportComponent', () => {
       'https://prothomalo.com/a/b',
     );
   });
+
+  it('verified-sources mode: says so, shows up to three articles, primary first and marked', () => {
+    const art = (n: number, primary = false) => ({
+      url: `https://www.jugantor.com/national/${n}`,
+      title: `Article ${n}`,
+      publisher: 'jugantor.com',
+      is_primary: primary,
+    });
+    const el = render(
+      base({
+        verification_mode: 'VERIFIED_SOURCES',
+        source_resolution_reason: 'SOURCE_NOT_SUPPLIED',
+        matched_articles: [art(1), art(2), art(3), art(4, true)],
+      }),
+    );
+    const text = el.textContent ?? '';
+    expect(text).toContain('Relevant articles from verified sources');
+    expect(text).toContain('Related reports found in verified sources');
+    expect(text).toContain('No claimed outlet was selected');
+    expect(text).toContain('Compared with the selected verified-source article');
+    expect(text).not.toContain('Relevant article from claimed source');
+    const cards = el.querySelectorAll('.article-card');
+    expect(cards.length).toBe(3);
+    expect(cards[0].textContent).toContain('Article 4');
+    expect(cards[0].querySelector('.primary-marker')).not.toBeNull();
+    expect(cards[1].querySelector('.primary-marker')).toBeNull();
+  });
+
+  it('verified-sources NOT_FOUND never says "claimed source"', () => {
+    const el = render(
+      base({
+        verification_mode: 'VERIFIED_SOURCES',
+        source_status: 'NOT_FOUND',
+        content_status: null,
+        headline_check_status: 'SOURCE_NOT_FOUND',
+      }),
+    );
+    const text = el.textContent ?? '';
+    expect(text).toContain('No matching report was found in the verified sources searched');
+    expect(text).not.toContain('Not found in claimed source');
+  });
 });

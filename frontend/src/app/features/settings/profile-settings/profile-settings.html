@@ -52,7 +52,7 @@
                   : stats()!.total_votes +
                     ' of ' +
                     stats()!.activation_threshold +
-                    ' reviews completed'
+                    ' votes on finalized claims'
               "
             >
               <circle class="ring-track" cx="60" cy="60" [attr.r]="ringRadius" />
@@ -76,21 +76,21 @@
                   >{{ stats()!.total_votes
                   }}<small>/{{ stats()!.activation_threshold }}</small></span
                 >
-                <span class="ring-label">Reviews</span>
+                <span class="ring-label">Finalized votes</span>
               }
             </div>
             @if (!credibilityActive()) {
               <p class="ring-note"
                 >Credibility weight activates after {{ reviewsToActivate() }} more
-                {{ reviewsToActivate() === 1 ? 'review' : 'reviews' }}. Until then each vote counts
-                with weight 1.</p
+                {{ reviewsToActivate() === 1 ? 'vote' : 'votes' }} on claims whose final decision is
+                complete. Until then each vote counts with weight 1.</p
               >
             }
           </div>
 
           <div class="stat-tiles">
             <div class="stat-tile">
-              <span class="stat-label">Total votes</span>
+              <span class="stat-label">Votes on finalized claims</span>
               <span class="stat-value">{{ stats()!.total_votes }}</span>
             </div>
             <div class="stat-tile">

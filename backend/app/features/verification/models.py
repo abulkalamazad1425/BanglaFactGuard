@@ -91,6 +91,8 @@ class VerificationResult(UUIDMixin, TimestampMixin, ReprMixin, Base):
         ),
     )
 
+    # Legacy: final_source/content/date_status are no longer written (the
+    # experts' Overall vote is the only final decision); kept for historical rows.
     final_source_status: Mapped[SourceStatus | None] = mapped_column(
         Enum(SourceStatus, name="source_status_enum", create_type=False),
         nullable=True,

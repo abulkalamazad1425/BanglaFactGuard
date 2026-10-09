@@ -29,12 +29,12 @@ import os
 import socket
 import uuid
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any, Awaitable, Callable
 
 import httpx
 import structlog
 
-from app.core.constants import SubmissionStatus
+from app.core.constants import JobPhase, SubmissionStatus
 from app.core.exceptions import PermanentJobError, SourceNotFoundError
 from app.db.engine import AsyncSessionLocal
 from app.features.cache.cache_service import CacheService
@@ -105,54 +105,20 @@ async def execute_job(
         ):
             return  # idempotent: already processed
 
-        result_repo = ResultRepository(session)
-        article_repo = RetrievedArticleRepository(session)
-        source_repo = SourceRepository(session)
+        ctx = _JobContext(
+            session=session,
+            submission_id=submission_id,
+            submission=submission,
+            payload=payload,
+            deps=deps,
+            submission_repo=submission_repo,
+            result_repo=ResultRepository(session),
+            article_repo=RetrievedArticleRepository(session),
+            source_repo=SourceRepository(session),
+        )
+        handler = _HANDLERS.get(kind, _run_source_based)
         try:
-            if kind == "MULTIMODAL":
-                from app.features.multimodal.service import MultimodalPredictionService
-                if deps.multimodal_loader is None or not deps.multimodal_loader.is_loaded:
-                    raise PermanentJobError("The multimodal model is unavailable. Please try again later.")
-                if deps.multimodal_storage is None:
-                    raise PermanentJobError("Image storage is unavailable.")
-                await submission_repo.mark_processing(submission_id)
-                await submission_repo.set_phase(submission_id, "VERIFYING")
-                await session.commit()
-                await MultimodalPredictionService(
-                    db=session, loader=deps.multimodal_loader, storage=deps.multimodal_storage,
-                ).process_queued(submission, payload)
-            elif kind == "PHOTO_CARD":
-                service = PhotoCardService(
-                    storage=deps.photocard_storage or PhotoCardStorageService(),
-                    submission_repo=submission_repo,
-                    extraction_repo=PhotocardExtractionRepository(session),
-                    result_repo=result_repo,
-                    article_repo=article_repo,
-                    source_repo=source_repo,
-                    cache_service=deps.cache_service,
-                    embedding_service=deps.embedding_service,
-                    ner_service=deps.ner_service,
-                    nli_service=deps.nli_service,
-                    http_client=deps.http_client,
-                )
-                await service.process_submission(submission_id)
-            else:
-                service = VerificationService(
-                    submission_repo=submission_repo,
-                    result_repo=result_repo,
-                    article_repo=article_repo,
-                    source_repo=source_repo,
-                    cache_service=deps.cache_service,
-                    embedding_service=deps.embedding_service,
-                    ner_service=deps.ner_service,
-                    nli_service=deps.nli_service,
-                    http_client=deps.http_client,
-                )
-                # Visible PROCESSING/VERIFYING before the slow part starts.
-                await submission_repo.mark_processing(submission_id)
-                await submission_repo.set_phase(submission_id, "VERIFYING")
-                await session.commit()
-                await service.run_for_submission(submission_id)
+            await handler(ctx)
             await session.commit()
         except SourceNotFoundError as exc:
             await session.rollback()
@@ -162,6 +128,85 @@ async def execute_job(
         except Exception:
             await session.rollback()
             raise
+
+
+@dataclass
+class _JobContext:
+    """What one job handler works with: the job's own session, the loaded
+    submission and the repositories bound to that session."""
+
+    session: Any
+    submission_id: uuid.UUID
+    submission: Any
+    payload: dict
+    deps: JobDeps
+    submission_repo: SubmissionRepository
+    result_repo: ResultRepository
+    article_repo: RetrievedArticleRepository
+    source_repo: SourceRepository
+
+
+async def _mark_verifying(ctx: _JobContext) -> None:
+    """Visible PROCESSING/VERIFYING before the slow part starts."""
+    await ctx.submission_repo.mark_processing(ctx.submission_id)
+    await ctx.submission_repo.set_phase(ctx.submission_id, JobPhase.VERIFYING.value)
+    await ctx.session.commit()
+
+
+async def _run_multimodal(ctx: _JobContext) -> None:
+    from app.features.multimodal.service import MultimodalPredictionService
+    deps = ctx.deps
+    if deps.multimodal_loader is None or not deps.multimodal_loader.is_loaded:
+        raise PermanentJobError("The multimodal model is unavailable. Please try again later.")
+    if deps.multimodal_storage is None:
+        raise PermanentJobError("Image storage is unavailable.")
+    await _mark_verifying(ctx)
+    await MultimodalPredictionService(
+        db=ctx.session, loader=deps.multimodal_loader, storage=deps.multimodal_storage,
+    ).process_queued(ctx.submission, ctx.payload)
+
+
+async def _run_photocard(ctx: _JobContext) -> None:
+    deps = ctx.deps
+    service = PhotoCardService(
+        storage=deps.photocard_storage or PhotoCardStorageService(),
+        submission_repo=ctx.submission_repo,
+        extraction_repo=PhotocardExtractionRepository(ctx.session),
+        result_repo=ctx.result_repo,
+        article_repo=ctx.article_repo,
+        source_repo=ctx.source_repo,
+        cache_service=deps.cache_service,
+        embedding_service=deps.embedding_service,
+        ner_service=deps.ner_service,
+        nli_service=deps.nli_service,
+        http_client=deps.http_client,
+    )
+    # Photo cards set their own phases (extraction comes before verification).
+    await service.process_submission(ctx.submission_id)
+
+
+async def _run_source_based(ctx: _JobContext) -> None:
+    deps = ctx.deps
+    service = VerificationService(
+        submission_repo=ctx.submission_repo,
+        result_repo=ctx.result_repo,
+        article_repo=ctx.article_repo,
+        source_repo=ctx.source_repo,
+        cache_service=deps.cache_service,
+        embedding_service=deps.embedding_service,
+        ner_service=deps.ner_service,
+        nli_service=deps.nli_service,
+        http_client=deps.http_client,
+    )
+    await _mark_verifying(ctx)
+    await service.run_for_submission(ctx.submission_id)
+
+
+# Job kind -> handler. Any other kind (SOURCE_BASED) runs the text pipeline.
+_HANDLERS: dict[str, Callable[[_JobContext], Awaitable[None]]] = {
+    "MULTIMODAL": _run_multimodal,
+    "PHOTO_CARD": _run_photocard,
+}
 
 
 PHOTO_CARD_KINDS = ("PHOTO_CARD",)
@@ -354,7 +399,7 @@ class VerificationJobWorker:
                             body=reason,
                         )
                 else:
-                    await SubmissionRepository(session).set_phase(job["submission_id"], "QUEUED")
+                    await SubmissionRepository(session).set_phase(job["submission_id"], JobPhase.QUEUED.value)
                 await session.commit()
         except Exception as exc:  # noqa: BLE001
             logger.error("job_fail_handling_error", error=str(exc)[:200])

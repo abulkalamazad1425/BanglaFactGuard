@@ -33,7 +33,7 @@ def create_app() -> FastAPI:
         summary="Multimodal Bangla Source-Based Fact Verification API",
         description=(
             "Given a news article and a claimed source, BanglaFactGuard determines "
-            "whether that source actually published the article using a 12-stage "
+            "whether that source actually published the article using a 13-stage "
             "verification pipeline combining search, NLU, NER, and NLI."
         ),
         version="1.0.0",
@@ -46,7 +46,9 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=_SETTINGS.cors_origins,
-        allow_credentials=True,
+        # Clients authenticate with an `Authorization: Bearer` header, never
+        # cookies, so credentialed CORS is not needed (and is invalid with "*").
+        allow_credentials=False,
         allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allow_headers=["*"],
     )

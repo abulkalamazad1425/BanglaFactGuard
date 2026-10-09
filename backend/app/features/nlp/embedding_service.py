@@ -9,16 +9,21 @@ import structlog
 from sentence_transformers import SentenceTransformer
 
 from app.core.config import get_settings
+from app.core.constants import REDIS_KEY_PREFIX
 from app.features.cache.cache_service import CacheService
+from app.features.nlp.model_identity import (
+    LEGACY_EMBEDDING_SETTING,
+    embedding_cache_prefix,
+    runtime_embedding_model,
+)
 from app.shared.utils.hashing import compute_text_hash
 from app.shared.utils.text_cleaner import truncate_for_nli
 
 logger = structlog.get_logger(__name__)
 _SETTINGS = get_settings()
 
-_MODEL_NAME = "sentence-transformers/LaBSE"
-_EMBEDDING_DIM = 768
-_CACHE_KEY_PREFIX = "bgf:emb"
+_MODEL_NAME = runtime_embedding_model(_SETTINGS.ml.embedding_model_name)
+_CACHE_KEY_PREFIX = embedding_cache_prefix(_SETTINGS.ml.embedding_model_name, f"{REDIS_KEY_PREFIX}:emb")
 _CACHE_TTL_SECONDS = 86_400
 
 
@@ -40,6 +45,13 @@ class EmbeddingService:
         if EmbeddingService._loaded:
             return
         loop = asyncio.get_event_loop()
+        if _SETTINGS.ml.embedding_model_name.strip() == LEGACY_EMBEDDING_SETTING:
+            logger.warning(
+                "embedding_model_setting_deprecated",
+                configured=LEGACY_EMBEDDING_SETTING,
+                loading=_MODEL_NAME,
+                hint="Set ML_EMBEDDING_MODEL_NAME=sentence-transformers/LaBSE (the model that has always run).",
+            )
         logger.info("loading_labse_model", model=_MODEL_NAME)
 
         def _load() -> SentenceTransformer:

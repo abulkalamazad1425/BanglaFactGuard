@@ -522,3 +522,19 @@ details {
     padding: 20px;
   }
 }
+
+.primary-marker {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: rgba(31, 127, 78, 0.12);
+  color: var(--primary-light);
+}
+
+.article-card + .article-card {
+  margin-top: 12px;
+}

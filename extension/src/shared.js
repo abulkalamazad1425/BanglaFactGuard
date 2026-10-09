@@ -49,6 +49,8 @@ export const withoutDateWarnings = (warnings) =>
 // Same words as the website (frontend/src/app/shared/utils/status-labels.ts)
 // and backend (app/shared/status_labels.py). Stored API values never change.
 export const NOT_FOUND_IN_CLAIMED_SOURCE = 'Not found in claimed source';
+/** A claim without a usable outlet is checked against the verified sources. */
+export const NOT_FOUND_IN_VERIFIED_SOURCES = 'Not found in verified sources';
 export const HEADLINE_LABELS = {
   EXACT_MATCHED: 'Exact Matched',
   MEANING_PRESERVED: 'Meaning Preserved',
@@ -103,7 +105,12 @@ export function summarize(type, data, lookup = {}) {
   const final = result?.overall_verdict || result?.expert_overall_verdict;
   const lines = [];
   if (result && type !== 'MULTIMODAL') {
-    if (result.source_status === 'NOT_FOUND') lines.push(NOT_FOUND_IN_CLAIMED_SOURCE);
+    if (result.source_status === 'NOT_FOUND')
+      lines.push(
+        result.verification_mode === 'VERIFIED_SOURCES'
+          ? NOT_FOUND_IN_VERIFIED_SOURCES
+          : NOT_FOUND_IN_CLAIMED_SOURCE,
+      );
     else if (result.source_status === 'INCOMPLETE') lines.push('Source check incomplete');
     else if (result.source_status === 'CONFIRMED') {
       const hs = headlineStatus(result);
@@ -179,8 +186,6 @@ export function validateDraft(d, image) {
       !['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(image.type))
   )
     throw new FieldError('image', 'Image must be a PNG, JPEG, WebP or GIF up to 10 MB.');
-  if (d.type === 'SOURCE_BASED' && !d.claimed_source_text.trim())
-    throw new FieldError('claimed_source_text', 'Enter the claimed news outlet.');
 }
 export function cropRect(rect, view, bitmap) {
   const x = Math.max(0, Math.min(rect.x, view.width));

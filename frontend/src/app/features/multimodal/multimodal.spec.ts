@@ -1,3 +1,5 @@
+import { signal } from '@angular/core';
+import { AuthService } from '../../services/auth.service';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { Subject, of } from 'rxjs';
@@ -21,6 +23,7 @@ describe('Text and image redesigned flow', () => {
       imports: [MultimodalComponent],
       providers: [
         provideRouter([]),
+        { provide: AuthService, useValue: { isLoggedIn: signal(false) } },
         { provide: MultimodalService, useValue: service },
         { provide: ToastService, useValue: { error: () => {} } },
       ],

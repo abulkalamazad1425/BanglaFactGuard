@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+import threading
 import time
 from collections import defaultdict
 from urllib.parse import urlparse
@@ -69,6 +70,33 @@ _BOT_WALL_WAIT_MS = 3000
 # Pages open in one shared browser context; a handful at a time keeps the
 # challenge wait overlapping without starving each page of CPU.
 _PLAYWRIGHT_CONCURRENCY = 4
+
+# A host whose challenge did not clear is left alone for a while. Re-opening
+# its pages in a browser, each reloaded several times, is exactly the traffic
+# that makes Cloudflare escalate from a passive check to a hard block for this
+# IP; backing off lets the IP's reputation recover. Process-wide; the browser
+# runs in its own thread on Windows, hence the lock.
+_WALL_COOLDOWN_S = 600.0
+_walled_until: dict[str, float] = {}
+_walled_lock = threading.Lock()
+
+
+def _host_cooling_down(url: str) -> bool:
+    host = (urlparse(url).hostname or "").lower()
+    with _walled_lock:
+        until = _walled_until.get(host)
+        if until is None:
+            return False
+        if until <= time.monotonic():
+            del _walled_until[host]
+            return False
+        return True
+
+
+def _mark_walled(url: str) -> None:
+    host = (urlparse(url).hostname or "").lower()
+    with _walled_lock:
+        _walled_until[host] = time.monotonic() + _WALL_COOLDOWN_S
 
 
 _SCRIPT_STYLE_RE = re.compile(
@@ -158,12 +186,22 @@ class EvidenceRetrievalStage:
 
         candidates = candidates[: self._top_k]
 
-        self._allowed = allowed_domains_for(
-            context.normalized_source, getattr(context, "source_config", None)
-        )
+        if context.is_verified_sources_mode:
+            scope = context.verified_scope
+            self._allowed = scope.all_domains if scope is not None else []
+            # An empty allowlist would mean "unrestricted" below - in this mode
+            # it means nothing is eligible, so nothing is fetched.
+            candidates = [
+                c for c in candidates
+                if self._allowed and is_allowed_host(urlparse(c.url).hostname or "", self._allowed)
+            ]
+        else:
+            self._allowed = allowed_domains_for(
+                context.normalized_source, getattr(context, "source_config", None)
+            )
 
         if not candidates:
-            context._raw_html_cache = {}
+            context.fetched_html = {}
             return context
 
         urls = [c.url for c in candidates]
@@ -207,7 +245,7 @@ class EvidenceRetrievalStage:
                 else:
                     context.failed_extraction_urls.append(url)
 
-        context._raw_html_cache = raw_html_cache
+        context.fetched_html = raw_html_cache
         context.search_redirect_rejected += rejected
         context.fetch_attempted += len(urls) - rejected
         context.fetch_errors += len(context.failed_extraction_urls)
@@ -318,6 +356,9 @@ class EvidenceRetrievalStage:
 
             async def fetch_one(url: str) -> tuple[str, str | None]:
                 async with semaphore:
+                    if _host_cooling_down(url):
+                        logger.info("s05_host_cooling_down", url=url[:80])
+                        return url, None
                     page = await context_pw.new_page()
                     try:
                         await page.goto(
@@ -343,6 +384,7 @@ class EvidenceRetrievalStage:
                                     break
                             else:
                                 logger.warning("s05_bot_wall_unresolved", url=url[:80])
+                                _mark_walled(url)
                                 return url, None
 
                         logger.debug("s05_playwright_success", url=url[:80])

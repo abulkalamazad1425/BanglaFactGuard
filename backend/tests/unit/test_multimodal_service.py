@@ -87,6 +87,7 @@ class TestMultimodalPredictionService:
         )
         service._engine = AsyncMock()
         service._engine.predict = AsyncMock(return_value=infer_result)
+        service._engine.predict_from_features = AsyncMock(return_value=infer_result)
 
         return service, fresh_record, duplicate_record
 
@@ -101,7 +102,12 @@ class TestMultimodalPredictionService:
             original_filename="test.jpg",
         )
 
-        service._engine.predict.assert_called_once()
+        # The backbones run once (in the extractor); the classifier reuses
+        # exactly those features.
+        service._engine.predict.assert_not_called()
+        service._engine.predict_from_features.assert_called_once()
+        text_arg, img_arg = service._engine.predict_from_features.call_args.args
+        assert text_arg.shape == (768,) and img_arg.shape == (1792,)
         assert response.is_cached is False
         assert response.prediction == fresh_record.prediction
 
@@ -120,6 +126,7 @@ class TestMultimodalPredictionService:
         )
 
         service._engine.predict.assert_not_called()
+        service._engine.predict_from_features.assert_not_called()
         assert response.is_cached is True
         assert response.original_id == str(duplicate.id)
 

@@ -20,7 +20,7 @@ from app.features.auth.schemas import (
     UserMeResponse,
 )
 from app.features.auth.security import get_current_user
-from app.features.auth.service import AuthService
+from app.features.auth.service import AuthService, to_me_response
 from app.shared.dependencies import get_async_session
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -107,9 +107,7 @@ async def logout(
 async def me(
     current_user: User = Depends(get_current_user),
 ) -> UserMeResponse:
-    from app.features.auth.service import _to_me_response
-
-    return _to_me_response(current_user)
+    return to_me_response(current_user)
 
 
 @router.post(

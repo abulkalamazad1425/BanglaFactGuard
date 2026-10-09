@@ -30,12 +30,6 @@ class NLIScoresSchema(BaseModel):
     )
     neutral: float = Field(..., ge=0.0, le=1.0, description="NLI neutral probability")
 
-    model_config = {
-        "json_schema_extra": {
-            "example": {"entailment": 0.87, "contradiction": 0.05, "neutral": 0.08}
-        }
-    }
-
 
 class MetricDetail(BaseModel):
     """A source-correspondence measurement plus the state that explains it.
@@ -169,6 +163,27 @@ class ExecutionTimings(BaseModel):
     cache_hit: bool = False
 
 
+class SourceScopeDetails(BaseModel):
+    """How the evidence scope was chosen (absent on older results, which are
+    claimed-source results)."""
+
+    verification_mode: str = Field(description="CLAIMED_SOURCE | VERIFIED_SOURCES")
+    resolution_reason: str | None = Field(
+        default=None,
+        description="SOURCE_SELECTED | SOURCE_DETECTED | SOURCE_NOT_SUPPLIED | SOURCE_NOT_DETECTED | SOURCE_UNRECOGNIZED | SOURCE_INACTIVE",
+    )
+    raw_source_text: str | None = Field(
+        default=None, description="The source text as given/detected - provenance only, never an evidence scope."
+    )
+    claimed_source: str | None = None
+    scope_fingerprint: str | None = None
+    eligible_publishers: list[str] = Field(default_factory=list)
+    evidence_publishers: list[str] = Field(default_factory=list)
+    primary_article_url: str | None = None
+    primary_publisher: str | None = None
+    incomplete_reason: str | None = None
+
+
 class AnalysisDetails(BaseModel):
     """Everything needed to explain and reproduce a result after Redis expiry."""
 
@@ -184,6 +199,7 @@ class AnalysisDetails(BaseModel):
     date: DateAnalysis | None = None
     stage_errors: dict[str, str] = Field(default_factory=dict)
     timings: ExecutionTimings | None = None
+    source_scope: SourceScopeDetails | None = None
 
 
 class VerificationRequest(BaseModel):
@@ -196,7 +212,14 @@ class VerificationRequest(BaseModel):
         examples=["বাংলাদেশে নতুন ডিজিটাল নিরাপত্তা আইন পাস হয়েছে"],
     )
     body_text: str | None = Field(default=None, max_length=50_000)
-    claimed_source_text: str = Field(..., min_length=1, max_length=255)
+    claimed_source_text: str | None = Field(
+        default=None,
+        max_length=255,
+        description=(
+            "The outlet the claim names. Optional: when missing, blank, unrecognised or "
+            "inactive, the claim is checked against the active verified sources instead."
+        ),
+    )
     published_date: date | None = Field(default=None, examples=["2024-03-15"])
 
     @field_validator("headline")
@@ -209,11 +232,11 @@ class VerificationRequest(BaseModel):
 
     @field_validator("claimed_source_text")
     @classmethod
-    def _strip_claimed_source(cls, v: str) -> str:
+    def _strip_claimed_source(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
         stripped = v.strip()
-        if not stripped:
-            raise ValueError("claimed_source_text must not be blank")
-        return stripped
+        return stripped or None
 
     @field_validator("body_text")
     @classmethod
@@ -342,6 +365,16 @@ class VerificationResponse(BaseModel):
         ),
     )
     analysis: AnalysisDetails | None = None
+    verification_mode: str = Field(
+        default="CLAIMED_SOURCE",
+        description=(
+            "CLAIMED_SOURCE: searched only the claimed outlet. VERIFIED_SOURCES: no usable "
+            "claimed outlet, so the active verified sources were searched; CONFIRMED then "
+            "means a corresponding report was found in a verified source, not that the "
+            "claimed outlet published it."
+        ),
+    )
+    source_resolution_reason: str | None = None
 
     model_config = {
         "json_schema_extra": {
@@ -364,21 +397,6 @@ class VerificationResponse(BaseModel):
             }
         }
     }
-
-
-class VerificationResultSummary(BaseModel):
-
-    submission_id: uuid.UUID
-    headline: str = Field(..., max_length=200)
-    source_status: SourceStatus
-    content_status: ContentStatus | None = None
-    date_status: DateStatus | None = None
-    confidence: float = Field(..., ge=0.0, le=1.0)
-    claimed_source_text: str
-    normalized_source: str | None = None
-    created_at: datetime
-
-    model_config = {"from_attributes": True}
 
 
 class VerificationQueuedResponse(BaseModel):

@@ -54,7 +54,9 @@ export type ProcessingPhase = 'QUEUED' | 'EXTRACTING' | 'VERIFYING' | 'DONE' | '
 // ── Request ──────────────────────────────────────────────────────────
 export interface VerificationRequest {
   headline: string;
-  claimed_source_text: string;
+  /** Optional: without a (recognised, active) outlet the claim is checked
+   *  against the active verified sources. */
+  claimed_source_text?: string | null;
   body_text?: string | null;
   published_date?: string | null; // YYYY-MM-DD
 }
@@ -163,6 +165,22 @@ export interface AnalysisDetails {
   body_similarity?: BodySimilarityReport | null;
   date?: DateAnalysis | null;
   stage_errors?: Record<string, string>;
+  /** How the evidence scope was chosen (absent on older results). */
+  source_scope?: SourceScopeDetails | null;
+}
+
+export type VerificationMode = 'CLAIMED_SOURCE' | 'VERIFIED_SOURCES';
+
+export interface SourceScopeDetails {
+  verification_mode: VerificationMode;
+  resolution_reason?: string | null;
+  raw_source_text?: string | null;
+  claimed_source?: string | null;
+  eligible_publishers?: string[];
+  evidence_publishers?: string[];
+  primary_article_url?: string | null;
+  primary_publisher?: string | null;
+  incomplete_reason?: string | null;
 }
 
 export interface MatchedArticle {
@@ -172,6 +190,10 @@ export interface MatchedArticle {
   published_date?: string | null;
   body?: string | null;
   rank_score?: number | null;
+  /** Verified publisher this article belongs to. */
+  publisher?: string | null;
+  /** The article the headline/date/body comparisons used. */
+  is_primary?: boolean;
 }
 
 // ── Acknowledgement from POST /verify/async ─────────────────────────
@@ -226,6 +248,10 @@ export interface VerificationResponse {
   reasoning: string;
   matched_articles: MatchedArticle[];
   normalized_source?: string | null;
+  /** CLAIMED_SOURCE (only the claimed outlet was searched) or
+   *  VERIFIED_SOURCES (no usable outlet: the active verified sources were). */
+  verification_mode?: VerificationMode;
+  source_resolution_reason?: string | null;
   cached: boolean;
   processing_time_ms?: number | null;
   created_at: string;

@@ -16,6 +16,8 @@ export function trimmedMinLength(min: number) {
 import { Router, RouterLink } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { ToastService } from '../../../shared/services/toast.service';
+import { AuthService } from '../../../services/auth.service';
+import { verificationFollowUp } from '../../../shared/utils/status-labels';
 import { VerificationService } from '../../../services/verification.service';
 import { PendingVerificationsService } from '../../../services/pending-verifications.service';
 import {
@@ -42,6 +44,9 @@ export class VerifyClaimComponent implements OnInit, OnDestroy {
   private readonly svc = inject(VerificationService);
   private readonly sourceSvc = inject(SourceService);
   readonly pending = inject(PendingVerificationsService);
+  /** Signed-in and anonymous users are told different next steps. */
+  readonly signedIn = inject(AuthService).isLoggedIn;
+  readonly followUp = verificationFollowUp;
 
   loading = false;
   error: string | null = null;
@@ -64,9 +69,10 @@ export class VerifyClaimComponent implements OnInit, OnDestroy {
 
   form = this.fb.group({
     // Same rules as the API (VerificationRequest): headline >= 5 non-blank
-    // characters, claimed outlet required; article text and date optional.
+    // characters; claimed outlet, article text and date optional. Without an
+    // outlet the claim is checked against the active verified sources.
     headline: ['', [Validators.required, trimmedMinLength(5), Validators.maxLength(2000)]],
-    claimed_source_text: ['', [Validators.required, trimmedMinLength(1)]],
+    claimed_source_text: [''],
     body_text: [''],
     published_date: [''],
   });
@@ -106,13 +112,7 @@ export class VerifyClaimComponent implements OnInit, OnDestroy {
   onSubmit(): void {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
-      document
-        .getElementById(
-          this.form.get('headline')?.invalid
-            ? 'verify-claim-headline'
-            : 'verify-claim-claimed_source_text',
-        )
-        ?.focus();
+      document.getElementById('verify-claim-headline')?.focus();
       return;
     }
 
@@ -123,10 +123,8 @@ export class VerifyClaimComponent implements OnInit, OnDestroy {
     this.resultLoadError = false;
 
     const v = this.form.value;
-    const payload: any = {
-      headline: v.headline,
-      claimed_source_text: v.claimed_source_text,
-    };
+    const payload: any = { headline: v.headline };
+    if (v.claimed_source_text?.trim()) payload.claimed_source_text = v.claimed_source_text;
     if (v.body_text?.trim()) payload.body_text = v.body_text;
     if (v.published_date) payload.published_date = v.published_date;
 

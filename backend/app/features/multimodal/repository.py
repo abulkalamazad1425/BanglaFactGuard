@@ -5,7 +5,7 @@ from typing import Sequence
 
 import numpy as np
 import structlog
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -101,6 +101,10 @@ class MultimodalAnalysisRepository:
             .offset(offset)
         )
         return result.scalars().all()
+
+    async def count_all(self) -> int:
+        result = await self._db.execute(select(func.count()).select_from(MultimodalAnalysis))
+        return result.scalar_one()
 
     async def find_similar_candidates(
         self,

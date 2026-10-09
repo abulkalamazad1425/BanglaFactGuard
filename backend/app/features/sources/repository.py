@@ -112,10 +112,3 @@ class SourceRepository(BaseRepository[VerifiedSource]):
         stmt = select(func.count()).select_from(VerifiedSource)
         result = await self.session.execute(stmt)
         return result.scalar_one()
-
-    async def add_alias(self, source: VerifiedSource, alias: str) -> VerifiedSource:
-        current: list[str] = source.aliases or []
-        if alias not in current:
-            updated = current + [alias]
-            return await self.update(source, aliases=updated)
-        return source

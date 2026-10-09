@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
 
-from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -14,7 +12,6 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.core.config import get_settings
-from app.core.exceptions import ConfigurationError
 
 logger = logging.getLogger(__name__)
 
@@ -63,36 +60,6 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
         except Exception:
             await session.rollback()
             raise
-
-
-@asynccontextmanager
-async def get_db_context() -> AsyncGenerator[AsyncSession, None]:
-    async with AsyncSessionLocal() as session:
-        try:
-            yield session
-            await session.commit()
-        except SQLAlchemyError as exc:
-            await session.rollback()
-            logger.error(
-                "Database context manager error — rolled back",
-                exc_info=exc,
-            )
-            raise
-        except Exception:
-            await session.rollback()
-            raise
-
-
-async def check_db_connection() -> None:
-    try:
-        async with _async_engine.connect() as conn:
-            await conn.execute(text("SELECT 1"))
-        logger.info("Database connection verified successfully.")
-    except Exception as exc:
-        raise ConfigurationError(
-            message="Cannot connect to PostgreSQL. Check DB_* environment variables.",
-            details={"error": str(exc), "url": _settings.db.async_url},
-        ) from exc
 
 
 async def close_engine() -> None:

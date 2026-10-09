@@ -5,9 +5,10 @@ Kept separate from the multimodal storage service so photo-card images land
 under their own ``photocard/`` prefix and can be retained, expired or audited
 independently of multimodal submission images.
 
-Upload failures are reported to the caller rather than raised, because OCR
-works from the bytes already in memory: a MinIO outage should degrade the
-image preview, not block verification.
+Failures are reported to the caller (False / None) rather than raised. The
+caller decides what they mean: an image that cannot be stored is not accepted
+(`ImageStorageUnavailableError`, 503), because the background job reads the
+card back from storage; a missing preview URL only hides the thumbnail.
 """
 
 from __future__ import annotations

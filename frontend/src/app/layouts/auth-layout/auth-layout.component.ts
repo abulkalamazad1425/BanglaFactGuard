@@ -2,13 +2,19 @@ import { Component } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { ToastComponent } from '../../shared/components/toast/toast.component';
 import { RouterLink } from '@angular/router';
+import { NavbarComponent } from '../../shared/components/navbar/navbar.component';
+import { FooterComponent } from '../../shared/components/footer/footer.component';
 
 @Component({
   selector: 'app-auth-layout',
   standalone: true,
-  imports: [RouterOutlet, ToastComponent, RouterLink],
+  imports: [RouterOutlet, ToastComponent, RouterLink, NavbarComponent, FooterComponent],
+  // Same outer shell as the main layout (skip link, navbar, footer, one
+  // toast host) around the centred auth card.
   template: `
-    <div class="auth-shell">
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <app-navbar />
+    <main class="auth-shell" id="main-content" tabindex="-1">
       <!-- Background decoration -->
       <div class="auth-bg">
         <div class="bg-blob bg-blob-1"></div>
@@ -33,18 +39,25 @@ import { RouterLink } from '@angular/router';
         </a>
         <router-outlet />
       </div>
-
-      <app-toast />
-    </div>
+    </main>
+    <app-footer />
+    <app-toast />
   `,
   styles: [
     `
-      .auth-shell {
+      :host {
+        display: flex;
+        flex-direction: column;
         min-height: 100vh;
+      }
+      .auth-shell {
+        flex: 1;
+        min-height: calc(100vh - 64px);
         display: flex;
         align-items: center;
         justify-content: center;
-        padding: 24px;
+        /* the fixed navbar is 64px tall */
+        padding: calc(64px + 24px) 24px 24px;
         position: relative;
         overflow: hidden;
         background: var(--bg-base);

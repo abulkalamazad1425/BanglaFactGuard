@@ -5,15 +5,15 @@ import uuid
 import httpx
 import structlog
 
-from app.core.constants import ClaimScope, SubmissionStatus, SubmissionType
+from app.core.constants import ClaimScope, JobPhase, SubmissionStatus, SubmissionType
 from app.core.exceptions import PipelineError, SourceNotFoundError
 from app.features.cache.cache_service import CacheService
 from app.features.nlp.embedding_service import EmbeddingService
 from app.features.nlp.ner_service import NERService
 from app.features.nlp.nli_service import NLIService
-from app.features.notifications.service import notify_once
+from app.features.notifications.service import notify_preliminary_result
 from app.features.sources.repository import SourceRepository
-from app.features.sources.resolution import resolve_claimed_source
+from app.features.verification import source_policy
 from app.features.submissions.models import Submission
 from app.features.submissions.repository import (
     RetrievedArticleRepository,
@@ -76,14 +76,16 @@ class VerificationService:
     ) -> VerificationResponse:
         log = logger.bind(claimed_source_text=request.claimed_source_text)
 
-        # Fail fast and explicitly: an unresolved source must not silently
-        # fall through to an unrestricted, domain-unfiltered search.
-        if await resolve_claimed_source(request.claimed_source_text, self.source_repo) is None:
-            raise SourceNotFoundError(request.claimed_source_text)
+        # An unusable source never becomes an unrestricted search: it is
+        # either verified against the active verified sources (Google only,
+        # domain-restricted) or, with the fallback disabled, rejected.
+        resolution = await source_policy.resolve_source(request.claimed_source_text, self.source_repo)
+        if resolution.is_fallback and not source_policy.fallback_enabled():
+            raise SourceNotFoundError(request.claimed_source_text or "")
 
         context = build_context(
             headline=request.headline,
-            claimed_source=request.claimed_source_text,
+            claimed_source=request.claimed_source_text or "",
             news_body=request.body_text,
             published_date=request.published_date,
             submitter_id=submitter_id,
@@ -125,7 +127,7 @@ class VerificationService:
         request = VerificationRequest(
             headline=submission.headline or "",
             body_text=submission.body_text,
-            claimed_source_text=submission.claimed_source_text or "",
+            claimed_source_text=submission.claimed_source_text or None,
             published_date=submission.published_date,
         )
         return await self.verify(
@@ -155,7 +157,7 @@ class VerificationService:
                     submission_type=SubmissionType.SOURCE_BASED,
                     headline=request.headline[:2000],
                     body_text=request.body_text or None,
-                    claimed_source_text=request.claimed_source_text[:255],
+                    claimed_source_text=(request.claimed_source_text or "")[:255] or None,
                     published_date=request.published_date,
                     submitter_id=submitter_id,
                     content_hash=context.content_hash,
@@ -165,17 +167,11 @@ class VerificationService:
         if target.id != source.id and source_result is not None:
             await self.reuse.materialize(source=source, source_result=source_result, target=target)
             if target.submitter_id:
-                await notify_once(
+                await notify_preliminary_result(
                     self.submission_repo.session,
                     user_id=target.submitter_id,
-                    notification_type="VERIFICATION_COMPLETE",
-                    link_url=f"/verify/{target.id}",
+                    submission_id=target.id,
                     headline=target.headline,
-                    title="Automated check complete (previous result reused)",
-                    body=(
-                        f'Your claim "{(target.headline or "")[:80]}" matches one already '
-                        "checked; its preliminary automated result is shown."
-                    ),
                 )
         return target
 
@@ -201,18 +197,30 @@ class VerificationService:
         in-flight claim is handed back. A deleted submission/result is gone
         from the database and therefore never reused.
         """
-        canonical = await resolve_claimed_source(request.claimed_source_text, self.source_repo)
-        if canonical is None:
-            raise SourceNotFoundError(request.claimed_source_text)
+        resolution = await source_policy.resolve_source(request.claimed_source_text, self.source_repo)
+        if resolution.is_fallback and not source_policy.fallback_enabled():
+            raise SourceNotFoundError(request.claimed_source_text or "")
 
         scope = claim_scope_for(request.body_text)
+        if resolution.is_fallback:
+            # Mode + verified-source scope are part of the identity, so this
+            # never shares a result with a claimed-source check.
+            identity_source = source_policy.verified_identity_key(
+                await source_policy.load_verified_scope(self.source_repo)
+            )
+        else:
+            identity_source = resolution.canonical
         content_hash = compute_claim_hash(
             request.headline,
-            canonical,
+            identity_source,
             scope,
             body=request.body_text,
             published_date=request.published_date,
         )
+        # Serialise concurrent registrations of the same identity so two
+        # identical requests cannot both miss the lookups below and both
+        # enqueue a verification.
+        await self._lock_identity(content_hash)
 
         found = await self.reuse.find_reusable(content_hash)
         if found is not None:
@@ -223,17 +231,11 @@ class VerificationService:
             own = await self._create_submission(request, submitter_id, content_hash, SubmissionStatus.PROCESSING)
             await self.reuse.materialize(source=source, source_result=source_result, target=own)
             if own.submitter_id:
-                await notify_once(
+                await notify_preliminary_result(
                     self.submission_repo.session,
                     user_id=own.submitter_id,
-                    notification_type="VERIFICATION_COMPLETE",
-                    link_url=f"/verify/{own.id}",
+                    submission_id=own.id,
                     headline=own.headline,
-                    title="Automated check complete (previous result reused)",
-                    body=(
-                        f'Your claim "{request.headline[:80]}" matches one already checked; '
-                        "its preliminary automated result is shown."
-                    ),
                 )
             await self.submission_repo.session.commit()
             return own.id, SubmissionStatus.EXPERT_REVIEW, True
@@ -246,7 +248,7 @@ class VerificationService:
         submission = await self._create_submission(
             request, submitter_id, content_hash, SubmissionStatus.PENDING
         )
-        submission.processing_phase = "QUEUED"
+        submission.processing_phase = JobPhase.QUEUED.value
         await VerificationJobRepository(self.submission_repo.session).enqueue(
             submission.id, "SOURCE_BASED"
         )
@@ -255,6 +257,18 @@ class VerificationService:
         await self.submission_repo.session.commit()
         logger.info("claim_queued_for_verification", submission_id=str(submission.id))
         return submission.id, SubmissionStatus.PENDING, False
+
+    async def _lock_identity(self, content_hash: str) -> None:
+        session = self.submission_repo.session
+        bind = getattr(session, "bind", None)
+        dialect = getattr(getattr(bind, "dialect", None), "name", None)
+        if dialect != "postgresql":
+            return
+        from sqlalchemy import text
+
+        await session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"), {"key": content_hash}
+        )
 
     async def _create_submission(
         self,
@@ -268,7 +282,7 @@ class VerificationService:
                 submission_type=SubmissionType.SOURCE_BASED,
                 headline=request.headline[:2000],
                 body_text=request.body_text or None,
-                claimed_source_text=request.claimed_source_text[:255],
+                claimed_source_text=(request.claimed_source_text or "")[:255] or None,
                 published_date=request.published_date,
                 submitter_id=submitter_id,
                 content_hash=content_hash,

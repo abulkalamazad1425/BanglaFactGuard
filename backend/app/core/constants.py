@@ -151,14 +151,6 @@ class ExpertVerdict(str, Enum):
     NOT_FOUND_IN_CLAIMED_SOURCE = "NOT_FOUND_IN_CLAIMED_SOURCE"
 
 
-class ClaimStatus(str, Enum):
-
-    PENDING = "pending"
-    PROCESSING = "processing"
-    COMPLETED = "completed"
-    FAILED = "failed"
-
-
 class SearchProvider(str, Enum):
 
     INTERNAL_SITE = "internal_site"
@@ -190,13 +182,6 @@ class ExtractionMethod(str, Enum):
     TRAFILATURA = "trafilatura"
     READABILITY = "readability"
     BEAUTIFULSOUP = "beautifulsoup"
-
-
-class LogLevel(str, Enum):
-
-    INFO = "INFO"
-    WARNING = "WARNING"
-    ERROR = "ERROR"
 
 
 class SubmissionType(str, Enum):
@@ -360,15 +345,6 @@ KNOWN_SOURCE_ALIASES: dict[str, str] = {
 
 
 MAX_SEARCH_QUERIES: int = 6
-
-
-MAX_CONCURRENT_FETCHES: int = 10
-
-
-MAX_EVIDENCE_CANDIDATES: int = 5
-
-
-MIN_KEYWORD_OVERLAP: float = 0.10
 
 
 REDIS_KEY_PREFIX: str = "bgf"

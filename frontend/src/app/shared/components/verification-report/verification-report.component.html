@@ -45,16 +45,21 @@
     </div>
     <div class="findings-grid" [class.single]="!articleFound">
       <section [ngClass]="articleFound ? 'tone-matched' : 'tone-none'">
-        <span class="finding-number">01 / {{ SOURCE_QUESTION.toUpperCase() }}</span>
+        <span class="finding-number">01 / {{ sourceQuestion.toUpperCase() }}</span>
         <h3
-          ><span class="finding-label">{{ SOURCE_QUESTION }}:</span> {{ sourceLabel }}</h3
+          ><span class="finding-label">{{ sourceQuestion }}:</span> {{ sourceLabel }}</h3
         >
         <p>{{ sourceExplanation }}</p>
+        @if (incompleteReason) {
+          <p class="finding-detail">Reason: {{ incompleteReason }}</p>
+        }
         @if (r.source_status === 'NOT_FOUND') {
           <p class="finding-detail strong"
-            >{{ NOT_FOUND_IN_CLAIMED_SOURCE }}. Headline, date and body comparisons need a relevant
-            article, so they are not shown.</p
+            >{{ notFoundText }}.</p
           >
+        }
+        @if (resolutionNote) {
+          <span class="finding-detail">{{ resolutionNote }}</span>
         }
         @if (r.normalized_source) {
           <span class="finding-detail">Claimed outlet: {{ r.normalized_source }}</span>
@@ -101,17 +106,23 @@
 
 <section class="evidence-section report-section">
   <div class="section-heading"
-    ><h2>{{ articleFound ? 'Read the relevant article' : 'What the source search returned' }}</h2
+    ><h2>{{ evidenceHeading }}</h2
     ><p>{{
       articleFound
         ? 'Open the original publication and compare its wording with the submitted claim.'
-        : 'A retrieved candidate is not a relevant article from the claimed source. Do not treat it as proof of this claim.'
+        : verifiedMode
+          ? 'A retrieved candidate is not a matching report from the verified sources. Do not treat it as proof of this claim.'
+          : 'A retrieved candidate is not a relevant article from the claimed source. Do not treat it as proof of this claim.'
     }}</p></div
   >
-  @if (r.matched_articles.length) {
-    @for (art of r.matched_articles.slice(0, 1); track art.url) {
-      <article class="article-card"
-        ><span class="source-domain">{{ host(art.url) }}</span
+  @if (evidence.length) {
+    @for (art of evidence; track art.url) {
+      <article class="article-card" [class.primary-article]="art.is_primary && articleFound"
+        ><span class="source-domain"
+          >{{ art.publisher || host(art.url) }}
+          @if (art.is_primary && articleFound) {
+            <span class="primary-marker">Compared article</span>
+          }</span
         ><h3
           ><a [href]="art.url" target="_blank" rel="noopener noreferrer" class="article-title"
             >{{ art.title || 'View source article' }} <span aria-hidden="true">↗</span
@@ -168,7 +179,7 @@
         ><strong lang="bn">{{ headlineDetail?.claim_headline || '—' }}</strong></div
       >
       <div
-        ><span>Source title</span
+        ><span>{{ verifiedMode ? 'Verified-source article title' : 'Source title' }}</span
         ><strong lang="bn">{{ headlineDetail?.source_title || 'Unavailable' }}</strong></div
       >
       @if (headlineDetail?.source_publisher || r.normalized_source) {
@@ -178,6 +189,12 @@
         >
       }
     </div>
+    @if (verifiedMode) {
+      <p class="section-sub"
+        >Compared with the selected verified-source article. This does not confirm which outlet
+        originally published the claim.</p
+      >
+    }
     <div class="headline-verdict" [ngClass]="'tone-' + headline.tone" role="status">
       <strong>Headline: {{ headline.title }}</strong>
       @if (headlineDetail?.reason) {

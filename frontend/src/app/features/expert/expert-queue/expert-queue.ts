@@ -2,10 +2,15 @@ import { Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Subscription } from 'rxjs';
 import { ExpertService } from '../../../services/expert.service';
 import { ExpertQueueItem } from '../../../models/expert.model';
 import { VerdictBadgeComponent } from '../../../shared/components/verdict-badge/verdict-badge.component';
 import { AuthService } from '../../../services/auth.service';
+import {
+  PAGE_SIZE,
+  PaginationComponent,
+} from '../../../shared/components/pagination/pagination.component';
 
 type QueueState = 'all' | 'escalated' | 'review';
 
@@ -17,7 +22,7 @@ type QueueState = 'all' | 'escalated' | 'review';
 @Component({
   selector: 'app-expert-queue',
   standalone: true,
-  imports: [CommonModule, RouterLink, VerdictBadgeComponent],
+  imports: [CommonModule, RouterLink, VerdictBadgeComponent, PaginationComponent],
   templateUrl: './expert-queue.html',
   styleUrls: ['./expert-queue.scss'],
 })
@@ -40,7 +45,8 @@ export class ExpertQueueComponent implements OnInit {
   ];
   query = '';
   readonly offset = signal(0);
-  readonly limit = 20;
+  readonly limit = PAGE_SIZE;
+  readonly hasNext = signal(false);
   readonly page = () => Math.floor(this.offset() / this.limit) + 1;
 
   ngOnInit(): void {
@@ -53,9 +59,20 @@ export class ExpertQueueComponent implements OnInit {
   }
 
   search(value: string): void {
+    if (this.searchTimer) clearTimeout(this.searchTimer);
     this.query = value.trim();
     this.offset.set(0);
     this.load();
+  }
+
+  /** Search as you type: ~300 ms after the last keystroke, first page. */
+  private searchTimer: ReturnType<typeof setTimeout> | null = null;
+  onSearchInput(value: string): void {
+    if (this.searchTimer) clearTimeout(this.searchTimer);
+    this.searchTimer = setTimeout(() => {
+      this.searchTimer = null;
+      if (value.trim() !== this.query) this.search(value);
+    }, 300);
   }
 
   selectState(state: QueueState): void {
@@ -65,13 +82,19 @@ export class ExpertQueueComponent implements OnInit {
     });
   }
 
+  private request?: Subscription;
+
   load(): void {
+    // A newer search supersedes any request still in flight.
+    this.request?.unsubscribe();
     this.loading.set(true);
-    this.expertSvc
-      .getQueue(this.limit, this.offset(), this.query, this.isAdmin() ? this.state() : 'all')
+    this.request = this.expertSvc
+      // One extra row tells whether another page exists.
+      .getQueue(this.limit + 1, this.offset(), this.query, this.isAdmin() ? this.state() : 'all')
       .subscribe({
-        next: (q) => {
-          this.queue.set(q);
+        next: (rows) => {
+          this.hasNext.set(rows.length > this.limit);
+          this.queue.set(rows.slice(0, this.limit));
           this.loading.set(false);
           this.loadError.set(false);
         },
@@ -82,12 +105,8 @@ export class ExpertQueueComponent implements OnInit {
       });
   }
 
-  prev(): void {
-    this.offset.update((o) => Math.max(0, o - this.limit));
-    this.load();
-  }
-  next(): void {
-    this.offset.update((o) => o + this.limit);
+  goToPage(page: number): void {
+    this.offset.set((page - 1) * this.limit);
     this.load();
   }
 

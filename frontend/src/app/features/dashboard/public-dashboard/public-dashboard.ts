@@ -1,3 +1,4 @@
+import { debounceTime, distinctUntilChanged } from 'rxjs';
 import { Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -13,6 +14,10 @@ import {
 } from '../../../models/admin.model';
 import { SourceResponse } from '../../../models/source.model';
 import { VerdictBadgeComponent } from '../../../shared/components/verdict-badge/verdict-badge.component';
+import {
+  PAGE_SIZE,
+  PaginationComponent,
+} from '../../../shared/components/pagination/pagination.component';
 import {
   FindingChip,
   aiDecisionLabel,
@@ -32,7 +37,13 @@ type FilterKey = keyof typeof EMPTY;
 @Component({
   selector: 'app-public-dashboard',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterLink, VerdictBadgeComponent],
+  imports: [
+    CommonModule,
+    ReactiveFormsModule,
+    RouterLink,
+    VerdictBadgeComponent,
+    PaginationComponent,
+  ],
   templateUrl: './public-dashboard.html',
   styleUrls: ['./public-dashboard.scss'],
 })
@@ -57,7 +68,7 @@ export class PublicDashboardComponent implements OnInit {
   readonly failedImages = signal(new Set<string>());
   readonly activeFilters = signal<{ key: FilterKey; label: string }[]>([]);
   readonly page = signal(1);
-  readonly limit = 10;
+  readonly limit = PAGE_SIZE;
   readonly pageCount = () => Math.max(1, Math.ceil(this.total() / this.limit));
   readonly first = () => (this.page() - 1) * this.limit + 1;
   readonly last = () => Math.min(this.page() * this.limit, this.total());
@@ -80,6 +91,14 @@ export class PublicDashboardComponent implements OnInit {
       if (values.source_id || values.date_from || values.date_to) this.advanced.set(true);
       this.runSearch();
     });
+    // Search as you type (~300 ms): goes to the first page; a newer search
+    // cancels the request still in flight (runSearch unsubscribes it).
+    this.filterForm.controls.keyword.valueChanges
+      .pipe(debounceTime(300), distinctUntilChanged(), takeUntilDestroyed(this.destroyRef))
+      .subscribe((value) => {
+        const current = this.route.snapshot.queryParamMap.get('keyword') ?? '';
+        if ((value ?? '').trim() !== current) this.search();
+      });
     this.destroyRef.onDestroy(() => this.request?.unsubscribe());
   }
 

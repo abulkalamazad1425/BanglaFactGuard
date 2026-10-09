@@ -34,8 +34,8 @@ function desktopLinks(role: Role): string[] {
 describe('NavbarComponent links by role', () => {
   const base = ['Home', 'Verify facts', 'Fact Explorer'];
 
-  it('shows only the public links to visitors', () => {
-    expect(desktopLinks(null)).toEqual(base);
+  it('shows the public links plus About and FAQ to visitors', () => {
+    expect(desktopLinks(null)).toEqual([...base, 'About', 'FAQ']);
   });
 
   it('adds My Submissions and About for registered users', () => {

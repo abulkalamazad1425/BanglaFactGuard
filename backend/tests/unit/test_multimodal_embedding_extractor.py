@@ -142,6 +142,10 @@ class TestIsDuplicate:
         assert scores["text_similarity"] == pytest.approx(1.0, abs=1e-5)
 
     def test_different_image_breaks_cache_hit(self):
+        from app.features.multimodal.pipeline.embedding_extractor import (
+            MultimodalEmbeddingExtractor,
+        )
+
         extractor = self._make_extractor()
         text_emb = np.ones(768, dtype=np.float32)
 
@@ -156,10 +160,6 @@ class TestIsDuplicate:
         )
         combined_c = MultimodalEmbeddingExtractor._build_combined_embedding(
             text_emb, img_c
-        )
-
-        from app.features.multimodal.pipeline.embedding_extractor import (
-            MultimodalEmbeddingExtractor,
         )
 
         is_dup, scores = extractor.is_duplicate(

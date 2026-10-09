@@ -20,23 +20,20 @@ logger = structlog.get_logger(__name__)
 
 
 class CacheLookupStage:
-    """Looks for an earlier, identical, complete verification to reuse.
+    """S02: reuse an earlier identical, complete verification.
 
-    Identity is `context.content_hash` (headline, body-if-scoped, canonical
-    source, claimed date, scope, pipeline version — see
-    `hashing.compute_claim_hash`). Redis holds only a *pointer* to the
-    submission that produced the last complete result; the database row is
-    authoritative and is re-validated on every hit: the pointed-to submission
-    and its result must still exist (a deleted submission is never served from
-    a leftover pointer) and the result must be reusable (current pipeline
-    version, no incomplete dimension or missing headline verdict, an original
-    computation rather than a copy). The same rules apply to the database
-    fallback as to Redis. A claim already checked is never re-verified to look
-    for newer evidence.
+    Invariants:
+    * Redis stores only a pointer to the submission holding the result; the
+      database row is authoritative and is re-validated on every hit
+      (`reuse.result_is_reusable`), so a deleted or non-reusable result is
+      never served from a leftover pointer. The DB fallback applies the same
+      rules.
+    * A hit never changes `context.submission_id`: the caller's own submission
+      (owner, photo-card image, extraction record) stays the target and the
+      service layer copies the result onto it (`ResultReuseService`).
+    * A claim already checked is not re-run to look for newer evidence.
 
-    A hit never repoints `context.submission_id`: the caller's own submission
-    (owner, photo-card image, OCR record) stays the target and the service
-    layer copies the automated result onto it (`ResultReuseService`).
+    Identity = `context.content_hash` (`hashing.compute_claim_hash`).
     """
 
     stage_id = PipelineStageID.S02_CACHE_LOOKUP

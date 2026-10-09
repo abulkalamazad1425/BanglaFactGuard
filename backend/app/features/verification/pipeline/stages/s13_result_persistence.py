@@ -9,7 +9,7 @@ Responsibilities carried over from the former persistence stage:
   * hand-off to expert review (every automated result enters the queue) and
     the DONE phase;
   * the Redis claim pointer, only for a reusable (complete, current) result;
-  * the submitter notification (`notify_once`, never duplicated).
+  * the submitter notification (`notify_preliminary_result`, never duplicated).
 All writes share the caller's session/transaction; the job commits it.
 """
 
@@ -19,22 +19,19 @@ import uuid
 from collections import Counter
 
 import structlog
-from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.constants import (
     VERIFICATION_PIPELINE_VERSION,
-    ContentStatus,
-    DateStatus,
+    JobPhase,
     PipelineStageID,
     SearchProvider,
-    SourceStatus,
     SubmissionStatus,
     SubmissionType,
 )
 from app.core.exceptions import PersistenceError
 from app.features.cache.cache_service import CacheService
-from app.features.notifications.service import notify_once
+from app.features.notifications.service import notify_preliminary_result
 from app.features.submissions.models import RetrievedArticle, SourceEvidenceQuery, Submission
 from app.features.submissions.repository import RetrievedArticleRepository, SubmissionRepository
 from app.features.verification.pipeline.context import PipelineContext
@@ -44,23 +41,6 @@ from app.features.verification.reuse import result_is_reusable
 from app.shared.utils.hashing import compute_url_hash
 
 logger = structlog.get_logger(__name__)
-
-
-def notification_summary(context: PipelineContext) -> str:
-    """One-line, verdict-neutral summary for the submitter notification."""
-    if context.source_status == SourceStatus.INCOMPLETE:
-        return "Source check incomplete"
-    if context.source_status == SourceStatus.NOT_FOUND:
-        return "Source not found"
-    headline = {
-        ContentStatus.MATCHED: "Headline matched",
-        ContentStatus.ALTERED: "Headline altered",
-    }.get(context.content_status, "Headline: no verdict")
-    if context.date_status == DateStatus.MISMATCHED:
-        return f"{headline} · Date mismatch"
-    if context.date_status == DateStatus.INCOMPLETE:
-        return f"{headline} · Date check incomplete"
-    return headline
 
 
 class ResultPersistenceStage:
@@ -136,7 +116,7 @@ class ResultPersistenceStage:
             # Every automated result enters expert review. No automated
             # overall verdict is derived or stored.
             await self.submission_repo.mark_ai_done(submission.id)
-            await self.submission_repo.set_phase(submission.id, "DONE")
+            await self.submission_repo.set_phase(submission.id, JobPhase.DONE.value)
 
             await self._write_cache_pointer(context, submission.id, result)
             await self._notify(submission, context)
@@ -172,20 +152,11 @@ class ResultPersistenceStage:
     async def _notify(self, submission: Submission, context: PipelineContext) -> None:
         if not submission.submitter_id or not context.source_status:
             return
-        preview = (context.raw_headline or submission.headline or "")[:80]
-        if len(context.raw_headline or "") > 80:
-            preview += "…"
-        await notify_once(
+        await notify_preliminary_result(
             self.session,
             user_id=submission.submitter_id,
-            notification_type="VERIFICATION_COMPLETE",
-            link_url=f"/verify/{submission.id}",
+            submission_id=submission.id,
             headline=context.raw_headline or submission.headline,
-            title=f"Automated check complete: {notification_summary(context)}",
-            body=(
-                f'Your claim "{preview}" has a preliminary automated result '
-                "and is now with our experts for review."
-            ),
         )
 
     async def _upsert_submission(self, context: PipelineContext) -> tuple[Submission, bool]:
@@ -210,7 +181,7 @@ class ResultPersistenceStage:
             submission_type=SubmissionType.SOURCE_BASED,
             headline=context.raw_headline[:2000],
             body_text=(context.raw_news_body or None),
-            claimed_source_text=context.raw_claimed_source[:255],
+            claimed_source_text=(context.raw_claimed_source or "")[:255] or None,
             published_date=context.published_date,
             submitter_id=context.submitter_id,
             content_hash=context.content_hash,
@@ -224,12 +195,9 @@ class ResultPersistenceStage:
     async def _increment_submitter_total_submissions(self, submitter_id: uuid.UUID) -> None:
         """users.total_submissions cached counter - best effort only."""
         try:
-            from app.features.auth.models import User
+            from app.features.auth.repository import UserRepository
 
-            await self.session.execute(
-                update(User).where(User.id == submitter_id).values(total_submissions=User.total_submissions + 1)
-            )
-            await self.session.flush()
+            await UserRepository(self.session).increment_submission_count(submitter_id)
         except Exception as exc:  # noqa: BLE001
             logger.warning("s13_total_submissions_increment_failed", error=str(exc))
 

@@ -146,10 +146,10 @@ async def test_durable_worker_dispatch_uses_original_submission_and_retry_is_noo
         deps = JobDeps(*(MagicMock() for _ in range(5)), multimodal_loader=loader, multimodal_storage=storage)
         with patch("app.features.multimodal.service.MultimodalEmbeddingExtractor") as extractor, patch("app.features.multimodal.service.MultimodalInferenceEngine") as inference:
             extractor.return_value.extract_all_embeddings = AsyncMock(return_value=(np.array([1.0]), np.array([1.0]), np.array([1.0])))
-            inference.return_value.predict = AsyncMock(return_value=PredictionResult(prediction="FAKE", confidence_fake=0.8, confidence_real=0.2, raw_logits=(1.0, 0.0)))
+            inference.return_value.predict_from_features = AsyncMock(return_value=PredictionResult(prediction="FAKE", confidence_fake=0.8, confidence_real=0.2, raw_logits=(1.0, 0.0)))
             await execute_job(kind="MULTIMODAL", submission_id=sid, payload=payload, deps=deps, session_factory=factory)
             await execute_job(kind="MULTIMODAL", submission_id=sid, payload=payload, deps=deps, session_factory=factory)
-            inference.return_value.predict.assert_awaited_once()
+            inference.return_value.predict_from_features.assert_awaited_once()
         async with factory() as session:
             assert (await session.get(Submission, sid)).status == SubmissionStatus.EXPERT_REVIEW
             assert await session.scalar(select(func.count()).select_from(Submission)) == 1

@@ -160,6 +160,10 @@ async def test_missing_date_is_not_a_failure_and_never_defaulted(monkeypatch):
      "headline_and_source_missing"),
 ])
 async def test_card_without_headline_or_verified_source_is_rejected_without_retry(monkeypatch, fields, code):
+    from app.features.verification import source_policy
+
+    # The original contract (fallback disabled): no verified source -> rejected.
+    monkeypatch.setattr(source_policy, "fallback_enabled", lambda: False)
     gemini = Gemini(gemini_body(**fields), gemini_body())
     result = await extractor(gemini, monkeypatch).extract(IMAGE)
     assert result.status == STATUS_INVALID_CONTENT and result.failure_code == code
@@ -169,6 +173,9 @@ async def test_card_without_headline_or_verified_source_is_rejected_without_retr
 
 
 async def test_source_deactivated_meanwhile_is_not_accepted(monkeypatch):
+    from app.features.verification import source_policy
+
+    monkeypatch.setattr(source_policy, "fallback_enabled", lambda: False)
     src = _source()
     repo = source_repo(src)
     repo.get_by_canonical_name = AsyncMock(return_value=_source(active=False))
@@ -366,3 +373,36 @@ async def test_when_every_key_is_out_of_daily_quota_it_stops_and_later_cards_mak
     later = Gemini(gemini_body())
     result = await extractor(later, monkeypatch, settings=MULTI).extract(IMAGE)
     assert later.requests == [] and result.status == STATUS_API_FAILED and result.details["skipped_reason"]
+
+
+# ── verified-sources fallback: a readable headline is enough ──────────────
+
+
+@pytest.mark.parametrize("fields, reason", [
+    ({"source": None, "source_status": "NOT_VISIBLE"}, "SOURCE_NOT_DETECTED"),
+    ({"source": None, "source_status": "NOT_RECOGNIZED", "source_evidence": "Somoy TV"}, "SOURCE_UNRECOGNIZED"),
+    ({"source": "prothomalo.com", "source_status": "UNCLEAR"}, "SOURCE_UNRECOGNIZED"),
+])
+async def test_headline_without_verified_source_is_accepted_for_verified_sources(monkeypatch, fields, reason):
+    gemini = Gemini(gemini_body(**fields), gemini_body())
+    result = await extractor(gemini, monkeypatch).extract(IMAGE)
+    assert result.status == STATUS_SUCCEEDED and result.source is None
+    assert result.headline and result.source_reason == reason
+    assert len(gemini.requests) == 1
+    if fields.get("source_evidence"):
+        assert result.raw_source_text == fields["source_evidence"]  # provenance only
+
+
+async def test_deactivated_source_falls_back_with_inactive_reason(monkeypatch):
+    repo = source_repo(_source())
+    repo.get_by_canonical_name = AsyncMock(return_value=_source(active=False))
+    result = await extractor(Gemini(gemini_body()), monkeypatch, repo=repo).extract(IMAGE)
+    assert result.status == STATUS_SUCCEEDED and result.source is None
+    assert result.source_reason == "SOURCE_INACTIVE"
+
+
+async def test_missing_headline_is_still_rejected_with_the_fallback(monkeypatch):
+    gemini = Gemini(gemini_body(headline=None, headline_status="MISSING", source=None, source_status="NOT_VISIBLE"))
+    result = await extractor(gemini, monkeypatch).extract(IMAGE)
+    assert result.status == STATUS_INVALID_CONTENT
+    assert "headline" in result.failure_message

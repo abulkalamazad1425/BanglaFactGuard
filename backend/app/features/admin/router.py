@@ -185,10 +185,10 @@ async def list_credibility_tiers(
 )
 async def create_credibility_tier(
     body: CredibilityWeightTierRequest,
-    current_user: User = Depends(_ADMIN_ONLY),
+    _: User = Depends(_ADMIN_ONLY),
     svc: AdminService = Depends(_get_service),
 ) -> CredibilityWeightTierResponse:
-    return await svc.create_credibility_tier(body, admin_id=current_user.id)
+    return await svc.create_credibility_tier(body)
 
 
 @router.put(
@@ -199,10 +199,10 @@ async def create_credibility_tier(
 async def update_credibility_tier(
     tier_id: uuid.UUID,
     body: CredibilityWeightTierUpdateRequest,
-    current_user: User = Depends(_ADMIN_ONLY),
+    _: User = Depends(_ADMIN_ONLY),
     svc: AdminService = Depends(_get_service),
 ) -> CredibilityWeightTierResponse:
-    return await svc.update_credibility_tier(tier_id, body, admin_id=current_user.id)
+    return await svc.update_credibility_tier(tier_id, body)
 
 
 @router.delete(
@@ -212,10 +212,10 @@ async def update_credibility_tier(
 )
 async def delete_credibility_tier(
     tier_id: uuid.UUID,
-    current_user: User = Depends(_ADMIN_ONLY),
+    _: User = Depends(_ADMIN_ONLY),
     svc: AdminService = Depends(_get_service),
 ) -> None:
-    await svc.delete_credibility_tier(tier_id, admin_id=current_user.id)
+    await svc.delete_credibility_tier(tier_id)
 
 
 @router.get(
@@ -241,7 +241,7 @@ async def get_voting_config(
 )
 async def update_voting_config(
     body: VotingConfigUpdateRequest,
-    current_user: User = Depends(_ADMIN_ONLY),
+    _: User = Depends(_ADMIN_ONLY),
     svc: AdminService = Depends(_get_service),
 ) -> VotingConfigResponse:
-    return await svc.update_voting_config(body, admin_id=current_user.id)
+    return await svc.update_voting_config(body)

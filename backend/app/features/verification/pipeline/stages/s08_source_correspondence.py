@@ -13,11 +13,21 @@ Measurements (claim headline vs each ranked candidate, best rank first):
   passage_keyword_coverage   share of the claim's keywords in the title plus
                              the source passages that discuss them
 
-The first STRONG candidate (else the first PLAUSIBLE one, else rank #1) becomes
-`top_article`. A failed or inadequate search is INCOMPLETE - never NOT_FOUND.
+Every ranked candidate is measured, against each of its headline lines (the
+title and any kicker printed with it). The best correspondence level wins,
+ties going to the higher headline/title similarity, and that article - with
+the headline line the claim matched - becomes `top_article`. (Taking the
+first STRONG candidate in rank order let a re-worded copy of the story beat
+the article whose headline is the claim.)
+
+A failed or inadequate search is INCOMPLETE - never NOT_FOUND - and so is a
+search whose matching result could not be fetched (`_blocked_match`).
 """
 
 from __future__ import annotations
+
+import re
+from urllib.parse import urlparse
 
 import structlog
 
@@ -54,33 +64,37 @@ class SourceCorrespondenceStage:
         self._record_search(context)
         thresholds = get_settings().classification
 
-        best: tuple[Correspondence, RankedArticleSchema, dict[str, MetricDetail]] | None = None
+        best: tuple[tuple[int, float], Correspondence, RankedArticleSchema, dict[str, MetricDetail]] | None = None
         for article in context.ranked_articles:
-            metrics = await self._measure(context, article)
-            corr = assess_correspondence(
-                CorrespondenceInputs(
-                    headline_title_similarity=_metric(metrics["headline_title_similarity"]),
-                    title_keyword_coverage=_metric(metrics["title_keyword_coverage"]),
-                    passage_keyword_coverage=_metric(metrics["passage_keyword_coverage"]),
-                ),
-                thresholds,
-            )
-            if best is None or _LEVEL_RANK[corr.level] < _LEVEL_RANK[best[0].level]:
-                best = (corr, article, metrics)
-            if corr.level == "STRONG":
-                break
+            for title in dict.fromkeys([article.title, *article.title_variants]):
+                metrics = await self._measure(context, article, title)
+                corr = assess_correspondence(_inputs(metrics), thresholds)
+                sim = metrics["headline_title_similarity"].value or 0.0
+                key = (_LEVEL_RANK[corr.level], -sim)
+                if best is None or key < best[0]:
+                    chosen = article if title == article.title else article.model_copy(update={"title": title})
+                    best = (key, corr, chosen, metrics)
 
-        correspondence = best[0] if best else None
+        correspondence = best[1] if best else None
         if best is not None:
-            context.top_article = best[1]
-            context.analysis.metrics = best[2]
+            context.top_article = best[2]
+            context.analysis.metrics = best[3]
+
+        blocked_match = None
+        if correspondence is None or correspondence.level != "STRONG":
+            blocked_match = await self._blocked_match(
+                context, thresholds, better_than=correspondence.level if correspondence else None
+            )
 
         status, basis = decide_source(
             has_evidence=context.has_evidence,
             search_adequate=context.search_adequate,
             retrieval_failed=context.retrieval_failed,
             correspondence=correspondence,
+            blocked_match=blocked_match,
         )
+        if context.is_verified_sources_mode:
+            basis = [b.replace("the claimed source", "the verified sources searched") for b in basis]
         context.source_status = status
         context.analysis.source_basis = basis
         logger.info(
@@ -93,9 +107,39 @@ class SourceCorrespondenceStage:
         )
         return context
 
-    async def _measure(self, context: PipelineContext, article: RankedArticleSchema) -> dict[str, MetricDetail]:
+    async def _blocked_match(
+        self, context: PipelineContext, thresholds, *, better_than: str | None
+    ) -> str | None:
+        """A search result whose page was never read (fetch blocked or
+        extraction failed) but whose title corresponds to the claim better
+        than the best article that WAS read (`better_than`, None = nothing
+        read corresponds). Judged on the search title with the same rules as
+        a fetched article. Without this, a blocked exact report lost to a
+        weaker stand-in (false ALTERED) or to nothing (false NOT_FOUND)."""
+        floor = _LEVEL_RANK.get(better_than, _LEVEL_RANK["NONE"]) if better_than else _LEVEL_RANK["NONE"]
+        failed = {_strip_amp(u) for u in context.failed_extraction_urls}
+        if not failed:
+            return None
+        for cand in context.candidate_urls:
+            if _strip_amp(cand.url) not in failed or not cand.title_snippet:
+                continue
+            title = _search_title(cand.title_snippet)
+            if not title:
+                continue
+            metrics = await self._measure(context, None, title)
+            level = assess_correspondence(_inputs(metrics), thresholds).level
+            if level in {"STRONG", "PLAUSIBLE"} and _LEVEL_RANK[level] < floor:
+                logger.info("s08_matching_result_not_retrieved", url=cand.url[:100], title=title[:80])
+                return context.publisher_for_url(cand.url) or urlparse(cand.url).hostname or cand.url
+        return None
+
+    async def _measure(
+        self, context: PipelineContext, article: RankedArticleSchema | None, title: str | None
+    ) -> dict[str, MetricDetail]:
+        """Measure the claim against `title` (and, with an article, the body
+        passages that discuss the claim)."""
         headline = context.normalized_headline
-        title = article.title or ""
+        title = title or ""
         metrics: dict[str, MetricDetail] = {}
 
         if title:
@@ -115,7 +159,8 @@ class SourceCorrespondenceStage:
                 state=MetricState.UNAVAILABLE, reason="source article has no title"
             )
 
-        passages = select_relevant_passages(headline, article.body or "", max_passages=_MAX_PASSAGES)
+        body = article.body if article is not None else ""
+        passages = select_relevant_passages(headline, body or "", max_passages=_MAX_PASSAGES)
         for name, evidence in (
             ("title_keyword_coverage", title),
             ("passage_keyword_coverage", " ".join([title] + [p.text for p in passages]).strip()),
@@ -144,3 +189,21 @@ class SourceCorrespondenceStage:
 
 def _metric(detail: MetricDetail) -> Metric:
     return Metric(detail.state, detail.value)
+
+
+def _inputs(metrics: dict[str, MetricDetail]) -> CorrespondenceInputs:
+    return CorrespondenceInputs(
+        headline_title_similarity=_metric(metrics["headline_title_similarity"]),
+        title_keyword_coverage=_metric(metrics["title_keyword_coverage"]),
+        passage_keyword_coverage=_metric(metrics["passage_keyword_coverage"]),
+    )
+
+
+def _search_title(snippet: str) -> str:
+    """Google News titles end with " - <publisher>"; drop that suffix."""
+    head, sep, _tail = snippet.rpartition(" - ")
+    return (head if sep and head.strip() else snippet).strip()
+
+
+def _strip_amp(url: str) -> str:
+    return re.sub(r"/amp(/|$)", "/", url).rstrip("/")

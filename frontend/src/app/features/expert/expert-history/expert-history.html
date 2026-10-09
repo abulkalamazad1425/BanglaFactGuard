@@ -8,6 +8,7 @@
       ><div class="search-row"
         ><input
           #searchInput
+          (input)="onSearchInput(searchInput.value)"
           id="history-search"
           class="form-control"
           type="search"
@@ -72,16 +73,11 @@
         </article>
       }
     </div>
-    <nav class="pagination" aria-label="Review pages"
-      ><button class="btn btn-ghost" [disabled]="offset() === 0 || loading()" (click)="prev()"
-        >← Previous</button
-      ><span>Page {{ page() }}</span
-      ><button
-        class="btn btn-ghost"
-        [disabled]="history().length < limit || loading()"
-        (click)="next()"
-        >Next →</button
-      ></nav
-    >
-  </div></div
->
+    <app-pagination
+      label="Review pages"
+      [page]="page()"
+      [hasNext]="hasNext()"
+      [disabled]="loading()"
+      (pageChange)="goToPage($event)"
+    /> </div
+></div>

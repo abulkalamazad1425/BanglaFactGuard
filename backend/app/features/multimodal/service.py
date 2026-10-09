@@ -6,7 +6,7 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.constants import SubmissionStatus, SubmissionType
+from app.core.constants import JobPhase, SubmissionStatus, SubmissionType
 from app.features.multimodal.models import MultimodalAnalysis
 from app.features.multimodal.pipeline.embedding_extractor import (
     MultimodalEmbeddingExtractor,
@@ -110,9 +110,10 @@ class MultimodalPredictionService:
             )
 
         log.info("multimodal_running_fresh_inference")
-        infer_result: PredictionResult = await self._engine.predict(
-            body_text=body_text,
-            image_bytes=image_bytes,
+        # The backbones already ran in the extractor above; reuse their
+        # features instead of running them a second time (identical output).
+        infer_result: PredictionResult = await self._engine.predict_from_features(
+            text_emb, img_emb
         )
         log.info(
             "multimodal_inference_done",
@@ -145,7 +146,7 @@ class MultimodalPredictionService:
             id=uuid.uuid4(), submission_type=SubmissionType.MULTIMODAL,
             headline=headline, body_text=body_text, submitter_id=submitter_id,
             content_hash=compute_text_hash(f"{headline}\n{body_text}"),
-            status=SubmissionStatus.PENDING, processing_phase="QUEUED",
+            status=SubmissionStatus.PENDING, processing_phase=JobPhase.QUEUED.value,
         )
         key = await self._storage.upload_image(
             image_bytes=image_bytes, original_filename=original_filename,
@@ -178,12 +179,10 @@ class MultimodalPredictionService:
             )
         await self._submissions.mark_ai_done(submission.id)
         if submission.submitter_id:
-            from app.features.notifications.service import notify_once
-            await notify_once(
+            from app.features.notifications.service import notify_preliminary_result
+            await notify_preliminary_result(
                 self._db, user_id=submission.submitter_id,
-                title="Analysis ready", body="Your preliminary multimodal result is ready.",
-                notification_type="VERIFICATION_COMPLETE", link_url=f"/verify/{submission.id}",
-                headline=submission.headline,
+                submission_id=submission.id, headline=submission.headline,
             )
 
     async def _create_submission(
@@ -216,17 +215,9 @@ class MultimodalPredictionService:
         self, submitter_id: uuid.UUID
     ) -> None:
         try:
-            from sqlalchemy import update
+            from app.features.auth.repository import UserRepository
 
-            from app.features.auth.models import User
-
-            stmt = (
-                update(User)
-                .where(User.id == submitter_id)
-                .values(total_submissions=User.total_submissions + 1)
-            )
-            await self._db.execute(stmt)
-            await self._db.flush()
+            await UserRepository(self._db).increment_submission_count(submitter_id)
         except Exception as exc:
             logger.warning("multimodal_total_submissions_increment_failed", error=str(exc))
 
@@ -242,7 +233,7 @@ class MultimodalPredictionService:
         self, *, limit: int = 20, offset: int = 0
     ) -> tuple[list[MultimodalAnalysis], int]:
         records = await self._repo.list_recent(limit=limit, offset=offset)
-        return list(records), len(records)
+        return list(records), await self._repo.count_all()
 
     async def _find_duplicate(
         self,

@@ -10,7 +10,23 @@ import uuid
 
 import numpy as np
 import pytest
+from sqlalchemy import ARRAY
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.compiler import compiles
+
+
+# The shared `test_engine` builds the full metadata on SQLite. Postgres-only
+# column types are rendered as JSON there, so the fixture works regardless of
+# which test modules happen to be imported first.
+@compiles(JSONB, "sqlite")
+def _jsonb_sqlite(type_, compiler, **kw):  # pragma: no cover - trivial shim
+    return "JSON"
+
+
+@compiles(ARRAY, "sqlite")
+def _array_sqlite(type_, compiler, **kw):  # pragma: no cover - trivial shim
+    return "JSON"
 
 os.environ["ENVIRONMENT"] = "development"
 os.environ["DB_HOST"] = "localhost"
@@ -20,6 +36,8 @@ os.environ["DB_USER"] = "postgres"
 os.environ["DB_PASSWORD"] = "postgres"
 os.environ["REDIS_HOST"] = "localhost"
 os.environ["REDIS_PORT"] = "6379"
+# Required setting; tests must not depend on (or use) the developer's real key.
+os.environ["AUTH_SECRET_KEY"] = "test-only-jwt-signing-key-not-a-secret-0123456789"
 
 from app.shared.dependencies import get_async_session
 from app.core.config import get_settings
@@ -167,5 +185,6 @@ async def app(
 async def client(app) -> AsyncGenerator[httpx.AsyncClient, None]:
     import httpx
 
-    async with httpx.AsyncClient(app=app, base_url="http://testserver") as async_client:
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as async_client:
         yield async_client

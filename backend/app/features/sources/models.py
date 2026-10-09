@@ -64,6 +64,8 @@ class VerifiedSource(UUIDMixin, TimestampMixin, ReprMixin, Base):
         comment="Language for search queries: 'bn' or 'en'",
     )
 
+    # Informational only: the pipeline does not read it. Any source falls back
+    # to a headless browser when a plain fetch is blocked or JS-only.
     js_rendered: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,

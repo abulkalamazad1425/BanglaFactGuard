@@ -32,10 +32,9 @@ import re
 from dataclasses import dataclass, field
 
 from app.features.verification.analysis.entities import EntityMention, match_entity, mentions_in_sentence
-from app.features.verification.analysis.keywords import _evidence_keys, extract_claim_units
+from app.features.verification.analysis.keywords import evidence_keys, extract_claim_units
 from app.features.verification.analysis.text import (
     QUALIFIER_GROUPS,
-    QUALIFIER_WORDS,
     STOPWORDS,
     light_stem,
     normalize_for_match,
@@ -79,7 +78,7 @@ def coverage(units, keys: set[str]) -> float:
 
 def unmatched_content(claim: str, source: str) -> list[str]:
     """Claim content words (stem-aware) that do not occur in the source."""
-    keys = _evidence_keys(source)
+    keys = evidence_keys(source)
     return [u.text for u in extract_claim_units(claim) if not ({u.text, light_stem(u.text)} & keys)]
 
 
@@ -194,7 +193,7 @@ def _clause_alignment(claim: str, source: str):
     (claim_clause, source_clause, ambiguous). `ambiguous` when equally
     aligned source clauses disagree in polarity or modality."""
     src = _clauses(source)
-    src_keys = [_evidence_keys(s) for s in src]
+    src_keys = [evidence_keys(s) for s in src]
     aligned = []
     for cc in _clauses(claim):
         units = content_units(cc)
@@ -454,7 +453,6 @@ def find_material_differences(
 
 __all__ = [
     "MaterialDifference",
-    "QUALIFIER_WORDS",
     "content_units",
     "coverage",
     "date_words",

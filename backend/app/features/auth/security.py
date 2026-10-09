@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -21,6 +20,7 @@ from app.core.exceptions import (
 )
 from app.db.engine import AsyncSessionLocal
 from app.features.auth.models import User
+from app.shared.utils.hashing import sha256_hex
 
 _SETTINGS = get_settings()
 _AUTH = _SETTINGS.auth
@@ -59,15 +59,11 @@ def create_access_token(user_id: uuid.UUID, role: str) -> tuple[str, int]:
 
 def create_refresh_token() -> tuple[str, str, datetime]:
     raw = secrets.token_urlsafe(64)
-    token_hash = _sha256(raw)
+    token_hash = sha256_hex(raw)
     expires_at = datetime.now(timezone.utc) + timedelta(
         seconds=_AUTH.refresh_token_ttl_seconds
     )
     return raw, token_hash, expires_at
-
-
-def _sha256(value: str) -> str:
-    return hashlib.sha256(value.encode()).hexdigest()
 
 
 def decode_access_token(token: str) -> dict[str, Any]:

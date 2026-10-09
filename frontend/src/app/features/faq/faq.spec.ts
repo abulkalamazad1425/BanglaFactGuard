@@ -58,7 +58,7 @@ describe('FaqComponent', () => {
     expect(text).not.toMatch(/\?\s*Source not found/);
   });
 
-  it('is linked from the footer, not the navigation bar', () => {
+  it('is linked from the footer and, for visitors, the navigation bar', () => {
     TestBed.configureTestingModule({
       imports: [NavbarComponent, FooterComponent],
       providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()],
@@ -71,6 +71,6 @@ describe('FaqComponent', () => {
       );
     };
     expect(links(FooterComponent)).toContain('/faq');
-    expect(links(NavbarComponent)).not.toContain('/faq');
+    expect(links(NavbarComponent)).toContain('/faq');
   });
 });

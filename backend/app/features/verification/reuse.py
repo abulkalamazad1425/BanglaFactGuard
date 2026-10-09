@@ -1,7 +1,7 @@
 """Reuse of an earlier identical verification — without sharing submissions.
 
 Verification *work* is reusable; a *submission* is not. A requester always
-keeps their own submission row (owner, type, photo-card image, OCR record,
+keeps their own submission row (owner, type, photo-card image, extraction record,
 metadata). When an identical, fresh, complete verification exists, its
 automated result is copied onto the requester's submission, which is linked to
 the original through `duplicate_of_submission_id` /
@@ -35,6 +35,7 @@ from app.core.constants import (
     BodyComparisonStatus,
     DateStatus,
     HeadlineCheckStatus,
+    JobPhase,
     SourceStatus,
     SubmissionStatus,
 )
@@ -133,7 +134,7 @@ class ResultReuseService:
         )
         target.duplicate_of_submission_id = source.id
         target.status = SubmissionStatus.EXPERT_REVIEW
-        target.processing_phase = "DONE"
+        target.processing_phase = JobPhase.DONE.value
         await self.submission_repo.session.flush()
         logger.info(
             "result_reused",

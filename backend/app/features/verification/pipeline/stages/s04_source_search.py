@@ -22,6 +22,7 @@ from app.features.search.internal_site_client import InternalSiteSearchClient
 from app.features.cache.cache_service import CacheService
 from app.shared.utils.hashing import compute_search_query_hash
 from app.shared.utils.article_url_heuristics import is_probable_article
+from app.features.verification.analysis.keywords import keyword_coverage
 
 logger = structlog.get_logger(__name__)
 
@@ -120,6 +121,9 @@ class SourceSearchStage:
             context.record_stage_error(self.stage_id, "No search queries available")
             return context
 
+        if context.is_verified_sources_mode:
+            return await self._search_verified_sources(context, log)
+
         domain = context.normalized_source
         if not domain:
             context.record_stage_error(self.stage_id, "A selected source is required for search")
@@ -139,14 +143,10 @@ class SourceSearchStage:
         for query_text, query_type in context.search_queries:
             for provider_enum, client in providers_with_clients:
 
-                if not self._should_dispatch(
-                    provider_enum, query_type, query_text, domain
-                ):
+                if not self._should_dispatch(provider_enum, domain):
                     continue
 
-                adapted = self._adapt_query(
-                    provider_enum, query_text, domain, query_type
-                )
+                adapted = self._adapt_query(provider_enum, query_text, domain)
                 if not adapted.strip():
                     continue
 
@@ -245,6 +245,107 @@ class SourceSearchStage:
         )
         return context
 
+    async def _search_verified_sources(
+        self, context: PipelineContext, log: structlog.BoundLogger
+    ) -> PipelineContext:
+        """VERIFIED_SOURCES mode: Google only (the internal-site provider is
+        never dispatched and its cached candidates never read), restricted to
+        the active verified publishers. Each phrasing runs once per bounded
+        group of domains, so the call count does not multiply per source."""
+        scope = context.verified_scope
+        if scope is None or scope.empty:
+            context.record_stage_error(self.stage_id, "No active verified sources are available to search")
+            return context
+
+        group_size = get_settings().search.fallback_domain_group_size
+        primary_domains = [p.domains[0] for p in scope.publishers if p.domains]
+        groups = [primary_domains[i : i + group_size] for i in range(0, len(primary_domains), group_size)]
+        provider_enum = SearchProvider.PY_GOOGLE_NEWS
+
+        tasks = []
+        for query_text, query_type in context.search_queries:
+            content = re.sub(r"\bsite:\S+\s*", "", query_text, flags=re.IGNORECASE).strip()
+            if not content:
+                continue
+            for group in groups:
+                site_clause = " OR ".join(f"site:{d}" for d in group)
+                tasks.append(
+                    self._call_provider(
+                        provider_enum=provider_enum,
+                        client=self.pygooglenews_client,
+                        query=f"{site_clause} {content}",
+                        query_type=query_type,
+                        domain=None,
+                        context=context,
+                        source_config=None,
+                        log=log,
+                        cache_namespace=f"{provider_enum.value}:verified",
+                    )
+                )
+        log.info("s04_verified_sources_search_start", total_tasks=len(tasks), groups=len(groups))
+        raw = await asyncio.gather(*tasks, return_exceptions=True)
+        results = [
+            item if isinstance(item, _CallResult)
+            else _CallResult(provider_enum, SearchCallOutcome.FAILED, error=str(item))
+            for item in raw
+        ]
+        self._record_outcomes(context, results)
+
+        allowed = scope.all_domains
+        canon_map: dict[str, CandidateArticleSchema] = {}
+        for call in results:
+            if call.outcome == SearchCallOutcome.FAILED:
+                log.warning("s04_provider_call_failed", provider=call.provider.value, error=(call.error or "")[:120])
+                continue
+            for candidate in call.candidates:
+                host = urlparse(candidate.url).hostname or ""
+                # Allowlist BEFORE any fetch: off-source or deceptive hosts
+                # (e.g. prothomalo.com.evil.net) never become evidence.
+                if not allowed or not is_allowed_host(host, allowed):
+                    continue
+                publisher = scope.publisher_for_host(host)
+                if publisher is None:
+                    continue
+                if not is_probable_article(candidate.url, publisher.config.get("article_url_patterns") or None):
+                    continue
+                canon = _canonicalise_url(candidate.url)
+                if canon not in canon_map:
+                    canon_map[canon] = candidate
+
+        # One query covers several outlets (site:a OR site:b ...), so it also
+        # returns unrelated and years-old stories that would use up S05's
+        # fetch cap. Rank by how well the search title matches the claim
+        # (position breaks ties) and drop results whose title shares none of
+        # the claim's keywords. Results without a title are kept, after the
+        # titled ones.
+        relevance = {
+            canon: _title_relevance(context.normalized_headline, c.title_snippet)
+            for canon, c in canon_map.items()
+        }
+        kept = [
+            (canon, c) for canon, c in canon_map.items()
+            if relevance[canon] is None or relevance[canon] > 0
+        ]
+        dropped = len(canon_map) - len(kept)
+        context.candidate_urls = [
+            c for canon, c in sorted(
+                kept,
+                key=lambda kc: (relevance[kc[0]] is None, -(relevance[kc[0]] or 0.0), kc[1].position),
+            )
+        ]
+        if dropped:
+            log.info("s04_verified_sources_irrelevant_dropped", dropped=dropped)
+        if context.candidate_urls:
+            context.search_provider_used = provider_enum
+        log.info(
+            "s04_verified_sources_search_completed",
+            total_candidates=len(context.candidate_urls),
+            attempted=context.search_attempted,
+            failed=context.search_errors,
+            adequate=context.search_adequate,
+        )
+        return context
+
     @staticmethod
     def _record_outcomes(context: PipelineContext, results: list[_CallResult]) -> None:
         for call in results:
@@ -276,8 +377,6 @@ class SourceSearchStage:
     def _should_dispatch(
         self,
         provider: SearchProvider,
-        query_type: str,
-        query_text: str,
         domain: str | None,
     ) -> bool:
         if not domain:
@@ -292,7 +391,6 @@ class SourceSearchStage:
         provider: SearchProvider,
         query: str,
         domain: str | None,
-        query_type: str = "",
     ) -> str:
         if not domain:
             return ""
@@ -314,8 +412,11 @@ class SourceSearchStage:
         context: PipelineContext,
         source_config: dict | None,
         log: structlog.BoundLogger,
+        cache_namespace: str | None = None,
     ) -> _CallResult:
-        provider_name = provider_enum.value
+        # The search-result cache is partitioned by mode: a verified-sources
+        # search never reuses claimed-source (or internal-site) results.
+        provider_name = cache_namespace or provider_enum.value
 
         # Retrieval is date-free unless this query is explicitly DATE_BOUND.
         # Applying the claimed date to every query would hide the right
@@ -332,22 +433,22 @@ class SourceSearchStage:
             # Not configured for this outlet: skipped, not a search that ran.
             return _CallResult(provider_enum, SearchCallOutcome.SKIPPED)
 
-        cached_urls = await self._get_cached_search(provider_name, query_hash)
+        cached = await self._get_cached_search(provider_name, query_hash)
 
-        if cached_urls is not None:
-            log.debug("s04_cache_hit", provider=provider_name, cached_count=len(cached_urls))
+        if cached is not None:
+            log.debug("s04_cache_hit", provider=provider_name, cached_count=len(cached))
             return _CallResult(
                 provider_enum,
                 SearchCallOutcome.CACHED,
                 [
                     CandidateArticleSchema(
                         url=u,
-                        title_snippet=None,
+                        title_snippet=t,
                         search_provider=provider_enum,
                         query_type=query_type,
                         position=idx + 1,
                     )
-                    for idx, u in enumerate(cached_urls)
+                    for idx, (u, t) in enumerate(_cached_entries(cached))
                 ],
             )
 
@@ -390,7 +491,11 @@ class SourceSearchStage:
         ]
         urls = [url for url, _ in entries]
         if urls:
-            await self._cache_search_result(provider_name, query_hash, urls)
+            # Titles are cached with the URLs: S04 ranks by them and S08 uses
+            # them to recognise a matching result whose page was blocked.
+            await self._cache_search_result(
+                provider_name, query_hash, [[url, title or None] for url, title in entries]
+            )
             log.debug(
                 "s04_provider_success",
                 provider=provider_name,
@@ -402,16 +507,38 @@ class SourceSearchStage:
 
     async def _get_cached_search(
         self, provider: str, query_hash: str
-    ) -> list[str] | None:
+    ) -> list | None:
         try:
             return await self.cache_service.get_search_result(provider, query_hash)
         except Exception:
             return None
 
     async def _cache_search_result(
-        self, provider: str, query_hash: str, urls: list[str]
+        self, provider: str, query_hash: str, urls: list
     ) -> None:
         try:
             await self.cache_service.set_search_result(provider, query_hash, urls)
         except Exception:
             pass
+
+
+def _cached_entries(cached: list) -> list[tuple[str, str | None]]:
+    """Cached search results: [url, title] pairs, or plain URLs (older entries)."""
+    out: list[tuple[str, str | None]] = []
+    for item in cached:
+        if isinstance(item, str):
+            out.append((item, None))
+        elif isinstance(item, (list, tuple)) and item and isinstance(item[0], str):
+            out.append((item[0], item[1] if len(item) > 1 and isinstance(item[1], str) else None))
+    return out
+
+
+def _title_relevance(claim_headline: str, title: str | None) -> float | None:
+    """Share of the claim's keywords (stemmed, compound-aware - the same
+    measure S08 uses) found in a search-result title, ignoring the
+    " - <publisher>" suffix Google adds. None without a title."""
+    if not title:
+        return None
+    head, sep, _ = title.rpartition(" - ")
+    cov = keyword_coverage(claim_headline, head if sep and head.strip() else title)
+    return cov.value if cov.value is not None else None

@@ -1,4 +1,4 @@
-
+"""The AI-implied Overall verdict for MULTIMODAL claims (FAKE/REAL only)."""
 
 from __future__ import annotations
 

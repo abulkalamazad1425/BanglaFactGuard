@@ -44,6 +44,48 @@ class ExpertProfileRepository(BaseRepository[ExpertProfile]):
         await self.session.refresh(record)
         return record
 
+    async def finalized_vote_counts(self, reviewer_id: uuid.UUID) -> tuple[int, int]:
+        """(votes, correct) for one expert, counted from the data itself: only
+        votes on claims whose final decision is complete (FINALIZED, by expert
+        consensus or an administrator), and correct when the vote equals that
+        final overall verdict. Votes on claims still in review or escalated do
+        not count yet, and a deleted claim's votes no longer count at all."""
+        from app.core.constants import SubmissionStatus
+        from app.features.multimodal.models import MultimodalAnalysis
+        from app.features.submissions.models import Submission
+        from app.features.verification.models import VerificationResult
+
+        final = func.coalesce(VerificationResult.overall_verdict, MultimodalAnalysis.expert_overall_verdict)
+        stmt = (
+            select(
+                func.count(ExpertReview.id),
+                func.count(ExpertReview.id).filter(ExpertReview.vote_overall_verdict == final),
+            )
+            .join(Submission, Submission.id == ExpertReview.submission_id)
+            .outerjoin(VerificationResult, VerificationResult.submission_id == Submission.id)
+            .outerjoin(MultimodalAnalysis, MultimodalAnalysis.submission_id == Submission.id)
+            .where(
+                ExpertReview.reviewer_id == reviewer_id,
+                ExpertReview.is_admin_decision.is_(False),
+                Submission.status == SubmissionStatus.FINALIZED,
+            )
+        )
+        total, correct = (await self.session.execute(stmt)).one()
+        return int(total or 0), int(correct or 0)
+
+    async def refresh_stats(self, profile: ExpertProfile, activation_threshold: int) -> ExpertProfile:
+        """Re-derive a profile's counters from `finalized_vote_counts`. The
+        accuracy score exists only once N (`activation_threshold`) finalized
+        votes are reached."""
+        total, correct = await self.finalized_vote_counts(profile.user_id)
+        return await self.update(
+            profile,
+            total_votes=total,
+            correct_votes=correct,
+            completed_reviews_count=total,
+            credibility_score=round(correct / total, 4) if total and total >= activation_threshold else None,
+        )
+
 
 class CredibilityWeightTierRepository(BaseRepository[CredibilityWeightTier]):
 
@@ -75,28 +117,6 @@ class CredibilityWeightTierRepository(BaseRepository[CredibilityWeightTier]):
 class ExpertReviewRepository(BaseRepository[ExpertReview]):
 
     model_class = ExpertReview
-
-    async def get_queue_for_expert(
-        self,
-        expert_id: uuid.UUID,
-        *,
-        limit: int = 20,
-        offset: int = 0,
-    ) -> list[ExpertReview]:
-        already_voted_sub = (
-            select(ExpertReview.submission_id)
-            .where(ExpertReview.reviewer_id == expert_id)
-            .scalar_subquery()
-        )
-        stmt = (
-            select(ExpertReview)
-            .where(ExpertReview.submission_id.not_in(already_voted_sub))
-            .order_by(ExpertReview.created_at.desc())
-            .offset(offset)
-            .limit(limit)
-        )
-        result = await self.session.execute(stmt)
-        return list(result.scalars().all())
 
     async def get_by_submission_and_reviewer(
         self, submission_id: uuid.UUID, reviewer_id: uuid.UUID
@@ -140,30 +160,22 @@ class ExpertReviewRepository(BaseRepository[ExpertReview]):
         offset: int = 0,
         q: str = "",
     ) -> list[ExpertReview]:
+        from app.features.submissions.models import Submission
+        from app.shared.utils.keyword_search import KeywordSearch
+
+        stmt = select(ExpertReview).where(ExpertReview.reviewer_id == expert_id)
+        search = KeywordSearch(
+            q, [Submission.headline, Submission.claimed_source_text], headline_column=Submission.headline
+        )
+        if search.active:
+            stmt = stmt.join(Submission, Submission.id == ExpertReview.submission_id).where(search.condition)
         stmt = (
-            select(ExpertReview)
-            .where(ExpertReview.reviewer_id == expert_id)
-            .order_by(ExpertReview.created_at.desc())
+            stmt.order_by(*search.order_by(), ExpertReview.created_at.desc(), ExpertReview.id.desc())
             .offset(offset)
             .limit(limit)
         )
-        if q.strip():
-            from sqlalchemy import or_
-            from app.features.submissions.models import Submission
-            term = q.strip().replace("%", r"\%").replace("_", r"\_")
-            stmt = stmt.join(Submission, Submission.id == ExpertReview.submission_id).where(or_(Submission.headline.ilike(f"%{term}%", escape="\\"), Submission.claimed_source_text.ilike(f"%{term}%", escape="\\")))
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
-
-    async def count_by_expert(self, expert_id: uuid.UUID) -> int:
-        stmt = (
-            select(func.count())
-            .select_from(ExpertReview)
-            .where(ExpertReview.reviewer_id == expert_id)
-        )
-        result = await self.session.execute(stmt)
-        return result.scalar_one()
-
 
 class VotingConfigRepository(BaseRepository[VotingConfig]):
     """Single-row admin-configurable voting parameters — the oldest row is

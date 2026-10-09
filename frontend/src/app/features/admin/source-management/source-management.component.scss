@@ -282,20 +282,6 @@
   }
 }
 
-// ─── Pagination ────────────────────────────────────────────────
-.pagination {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  margin-top: 32px;
-
-  .page-info {
-    font-size: 13px;
-    color: var(--text-muted);
-  }
-}
-
 // ─── Drawer Overlay ────────────────────────────────────────────
 .drawer-overlay {
   position: fixed;

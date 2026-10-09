@@ -1,15 +1,8 @@
 """Directional keyword coverage: do the CLAIM's keywords occur in the EVIDENCE?
 
-Root cause of the zero-overlap defect this replaces (verified against
-`app/shared/utils/keyword_extractor.py`): S08 compared two independently
-selected lists — the claim headline's top-6 YAKE *unigrams* versus the top-10
-YAKE *unigram+bigram* keywords of title+full-body — through
-`compute_weighted_keyword_overlap`, a symmetric weighted Jaccard over those
-lists. A headline keyword that YAKE ranked below position 10 of a long
-article (or that only appeared inside a bigram unit such as "প্রধান উপদেষ্টা")
-was simply absent from the article list, so a headline that matches its own
-article word-for-word could still score 0. Nothing ever checked whether the
-claimed words occur in the evidence text.
+Why not compare two keyword lists: independently extracted lists (e.g. YAKE
+top-N of the headline vs. of a long article) can miss each other entirely, so
+a headline that matches its own article word-for-word could score 0.
 
 This module instead takes every content word of the claim, applies the same
 normalisation/tokenisation/stemming to the evidence text, and checks
@@ -43,10 +36,6 @@ class KeywordUnit:
     weight: float
     kind: str  # content | number | negation | qualifier
 
-    def to_dict(self) -> dict:
-        return {"text": self.text, "weight": self.weight, "kind": self.kind}
-
-
 @dataclass
 class KeywordCoverage:
     state: MetricState
@@ -55,17 +44,6 @@ class KeywordCoverage:
     matched: list[str] = field(default_factory=list)
     unmatched: list[str] = field(default_factory=list)
     reason: str | None = None
-
-    def to_dict(self) -> dict:
-        return {
-            "state": self.state.value,
-            "value": self.value,
-            "matched": self.matched,
-            "unmatched": self.unmatched,
-            "units": [u.to_dict() for u in self.units],
-            "reason": self.reason,
-        }
-
 
 def extract_claim_units(text: str) -> list[KeywordUnit]:
     """Deterministic keyword units for a claim: every content word once."""
@@ -87,7 +65,7 @@ def extract_claim_units(text: str) -> list[KeywordUnit]:
     return units
 
 
-def _evidence_keys(evidence_text: str) -> set[str]:
+def evidence_keys(evidence_text: str) -> set[str]:
     toks = tokenize(evidence_text)
     keys: set[str] = set()
     for i, tok in enumerate(toks):
@@ -118,7 +96,7 @@ def keyword_coverage(claim_text: str, evidence_text: str) -> KeywordCoverage:
             return KeywordCoverage(
                 MetricState.UNAVAILABLE, None, units=units, reason="no evidence text"
             )
-        keys = _evidence_keys(evidence_text)
+        keys = evidence_keys(evidence_text)
         matched: list[str] = []
         unmatched: list[str] = []
         matched_w = 0.0

@@ -1,6 +1,4 @@
 """
-app/features/nlp/ner_service.py
-=================================
 Bangla named-entity recognition (PER/LOC/ORG) for similarity and statement-level content checking.
 
 ## Model and what is (not) known about it

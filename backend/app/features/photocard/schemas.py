@@ -43,6 +43,13 @@ class PhotoCardResultResponse(BaseModel):
         description="Canonical id of the active verified source identified on the card - the verification target.",
     )
     claimed_source_name: str | None = Field(default=None, description="Display name of that source.")
+    detected_source_text: str | None = Field(
+        default=None,
+        description=(
+            "Outlet text visible on the card as read by the extractor. Provenance only: when "
+            "it is not an active verified source the card is checked against the verified sources."
+        ),
+    )
     published_date: date | None = Field(
         default=None,
         description="Publication date printed on the card - the claimed date. Null when the card shows no complete date.",

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 import structlog
 
 from urllib.parse import urlparse
@@ -29,6 +31,13 @@ _SETTINGS = get_settings()
 _W_SEM = 0.55
 _W_KW = 0.25
 _W_DOMAIN = 0.20
+
+# The cross-encoder only breaks near-ties. On these Bangla headlines its scores
+# saturate (+10.7 .. +10.9 for every same-story article), so letting it reorder
+# the list outright promoted re-worded copies of a story - another outlet's
+# version, or a video page - over the article whose headline IS the claim, and
+# S09 then compared the claim against the wrong headline (false ALTERED).
+_CE_TIEBREAK = 0.03
 
 
 class EvidenceRankerStage:
@@ -62,10 +71,18 @@ class EvidenceRankerStage:
                 article=article,
                 claim_headline=claim_headline,
                 claim_keywords=claim_keywords,
-                claim_date=context.published_date,
                 context=context,
             )
             scored.append((score, article))
+
+        if len(scored) > 3:
+            ce = await self._reranker.scores(claim_headline, [a for _, a in scored])
+            if ce is not None:
+                logger.info("s07_cross_encoder_tiebreak", count=len(scored))
+                scored = [
+                    (score + _CE_TIEBREAK * _sigmoid(c), article)
+                    for (score, article), c in zip(scored, ce)
+                ]
 
         scored.sort(key=lambda x: x[0], reverse=True)
 
@@ -74,7 +91,7 @@ class EvidenceRankerStage:
             if score < self._min_score:
                 break
 
-            updated = article.model_copy(update={"rank_score": round(score, 4)})
+            updated = article.model_copy(update={"rank_score": round(min(1.0, score), 4)})
             ranked.append(updated)
             if len(ranked) >= self._max_ranked:
                 break
@@ -82,16 +99,8 @@ class EvidenceRankerStage:
         if not ranked and scored:
             best_score, best_article = scored[0]
             ranked = [
-                RankedArticleSchema(
-                    **{**best_article.model_dump(), "rank_score": round(best_score, 4)}
-                )
+                best_article.model_copy(update={"rank_score": round(min(1.0, best_score), 4)})
             ]
-
-        if len(ranked) > 3:
-            logger.info("s07_reranking_articles", count=len(ranked))
-            ranked = await self._reranker.rerank(
-                claim_headline, ranked, top_k=self._max_ranked
-            )
 
         context.ranked_articles = ranked
         context.top_article = ranked[0] if ranked else None
@@ -109,11 +118,27 @@ class EvidenceRankerStage:
         article: RankedArticleSchema,
         claim_headline: str,
         claim_keywords: list[str],
-        claim_date,
+        context: PipelineContext,
+    ) -> float:
+        """Best score over the page's headline variants (e.g. a kicker line
+        printed above the title): a claim may quote any of them."""
+        best = 0.0
+        for title in [article.title, *article.title_variants] or [None]:
+            best = max(best, await self._score_title(
+                article, title, claim_headline, claim_keywords, context
+            ))
+        return best
+
+    async def _score_title(
+        self,
+        article: RankedArticleSchema,
+        title: str | None,
+        claim_headline: str,
+        claim_keywords: list[str],
         context: PipelineContext,
     ) -> float:
 
-        article_title = article.title or ""
+        article_title = title or ""
         try:
             if article_title:
                 sem_sim = await self._embedder.compute_similarity(
@@ -132,7 +157,7 @@ class EvidenceRankerStage:
             logger.debug("s07_sem_similarity_failed", error=str(exc))
             sem_sim = 0.0
 
-        article_text = f"{article.title or ''} {(article.body or '')[:500]}"
+        article_text = f"{article_title} {(article.body or '')[:500]}"
         article_keywords = extract_headline_keywords(article_text, top_n=8)
         kw_overlap = compute_keyword_overlap(claim_keywords, article_keywords)
 
@@ -154,11 +179,17 @@ class EvidenceRankerStage:
             elif sim > 0.70:
                 composite += 0.08
 
-        return max(0.0, min(1.0, composite))
+        # Not capped at 1.0: a cap made the exact-headline article tie with
+        # near-duplicates, leaving the order to chance.
+        return max(0.0, composite)
 
     def _source_domain_bonus(
         self, context: PipelineContext, article: RankedArticleSchema
     ) -> float:
+        if context.is_verified_sources_mode:
+            # Every eligible verified publisher gets the same bonus, so having
+            # no claimed source never pushes a good article down the ranking.
+            return 1.0 if context.publisher_for_url(article.url) else 0.0
         if not context.normalized_source:
             return 0.0
 
@@ -176,3 +207,7 @@ class EvidenceRankerStage:
         if claim_domain == article_domain:
             return 1.0
         return 0.0
+
+
+def _sigmoid(x: float) -> float:
+    return 1.0 / (1.0 + math.exp(-max(-60.0, min(60.0, x))))

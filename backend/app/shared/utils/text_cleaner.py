@@ -107,14 +107,6 @@ def truncate_for_nli(
     return truncated.strip()
 
 
-def extract_first_n_sentences(text: str, n: int = 5) -> str:
-
-    sentence_end_re = re.compile(r"(?<=[।.!?])\s+")
-    sentences = sentence_end_re.split(text.strip())
-    selected = [s.strip() for s in sentences[:n] if s.strip()]
-    return " ".join(selected)
-
-
 def _remove_boilerplate(text: str) -> str:
 
     for pattern in _BOILERPLATE_PATTERNS:

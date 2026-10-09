@@ -1,4 +1,4 @@
-
+"""Public reviewer votes and justifications, shown only after a claim's final decision."""
 
 from __future__ import annotations
 

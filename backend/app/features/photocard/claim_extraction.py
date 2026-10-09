@@ -3,9 +3,12 @@
     original image + active verified sources (with aliases)
         -> Gemini (<= 9 requests in 3 batches of 3, 10 s pause between batches)
         -> every request failed               -> API_FAILED       (verification never runs)
-        -> success, but no headline or no
-           active verified source identified  -> INVALID_CONTENT  (no retry, verification never runs)
-        -> success with headline + source     -> SUCCEEDED
+        -> success, but no usable headline    -> INVALID_CONTENT  (no retry, verification never runs)
+        -> success with headline + source     -> SUCCEEDED (claimed-source verification)
+        -> success with headline, but the
+           outlet is missing, unrecognised
+           or inactive                        -> SUCCEEDED (verified-sources verification;
+                                                 the raw outlet text is kept as provenance only)
 
 On success the extracted values ARE the claim: the headline is the claimed
 text, the identified verified source is the claimed news outlet and the
@@ -31,6 +34,7 @@ from app.features.photocard.card_date import parse_card_date
 from app.features.photocard.gemini_image_extractor import SourceOption, extract_with_gemini
 from app.features.sources.models import VerifiedSource
 from app.features.sources.repository import SourceRepository
+from app.features.verification import source_policy
 
 logger = structlog.get_logger(__name__)
 
@@ -48,6 +52,10 @@ API_FAILURE_MESSAGE = (
     "Sorry for the temporary inconvenience. Information cannot be collected from the "
     "photo card right now. Please submit it again after a while."
 )
+INVALID_HEADLINE_MESSAGE = (
+    "A valid headline could not be identified on the photo card. Please submit a photo "
+    "card with a clear, readable headline."
+)
 INVALID_CONTENT_MESSAGE = (
     "A valid headline or a recognized news outlet could not be identified on the photo "
     "card. Please submit a photo card with a clear headline and the news outlet's name or logo."
@@ -59,6 +67,10 @@ class CardExtraction:
     status: str  # SUCCEEDED | API_FAILED | INVALID_CONTENT
     headline: str | None = None
     source: VerifiedSource | None = None
+    # Why there is no usable source (SOURCE_NOT_DETECTED / SOURCE_UNRECOGNIZED /
+    # SOURCE_INACTIVE) and the outlet text visible on the card, if any.
+    source_reason: str | None = None
+    raw_source_text: str | None = None
     published_date: date | None = None
     failure_code: str | None = None
     attempts: int = 0
@@ -75,6 +87,8 @@ class CardExtraction:
         if self.status == STATUS_API_FAILED:
             return API_FAILURE_MESSAGE
         if self.status == STATUS_INVALID_CONTENT:
+            if self.failure_code == "headline_missing" and source_policy.fallback_enabled():
+                return INVALID_HEADLINE_MESSAGE
             return INVALID_CONTENT_MESSAGE
         return None
 
@@ -142,10 +156,32 @@ class PhotocardClaimExtractor:
         canonical = f.identified_source()
         # Only a source that is still active right now is accepted.
         source = by_canonical.get(canonical) if canonical else None
+        source_reason = None
         if source is not None:
             fresh = await self.source_repo.get_by_canonical_name(source.canonical_name)
             if fresh is None or not fresh.is_active:
                 source = None
+                source_reason = source_policy.REASON_INACTIVE
+        if source is None and source_reason is None:
+            source_reason = (
+                source_policy.REASON_NOT_DETECTED
+                if f.source_status.value == "NOT_VISIBLE"
+                else source_policy.REASON_UNRECOGNIZED
+            )
+        raw_source_text = (f.source_evidence or "").strip()[:255] or None
+        details["source_reason"] = None if source is not None else source_reason
+
+        if headline is not None and source is None and source_policy.fallback_enabled():
+            # A readable headline is enough: the claim is checked against the
+            # active verified sources. Nothing is guessed about the outlet.
+            raw_date = f.present("date")
+            published = parse_card_date(raw_date)
+            details["date_parsed"] = published.isoformat() if published else None
+            logger.info("photocard_source_fallback", reason=source_reason)
+            return CardExtraction(
+                status=STATUS_SUCCEEDED, headline=headline, source=None, published_date=published,
+                source_reason=source_reason, raw_source_text=raw_source_text, **base,
+            )
 
         if headline is None or source is None:
             code = "headline_missing" if headline is None else "source_not_identified"
@@ -160,5 +196,6 @@ class PhotocardClaimExtractor:
         published = parse_card_date(raw_date)
         details["date_parsed"] = published.isoformat() if published else None
         return CardExtraction(
-            status=STATUS_SUCCEEDED, headline=headline, source=source, published_date=published, **base,
+            status=STATUS_SUCCEEDED, headline=headline, source=source, published_date=published,
+            raw_source_text=raw_source_text, **base,
         )

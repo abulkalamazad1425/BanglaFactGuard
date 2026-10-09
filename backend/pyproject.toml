@@ -29,6 +29,7 @@ dependencies = [
     "sqlalchemy[asyncio]>=2.0.30",
     "asyncpg>=0.29.0",
     "alembic>=1.13.1",
+    "psycopg2-binary>=2.9.9",       # sync driver used by Alembic (db.sync_url)
 
     # ── Cache ───────────────────────────────────────────────────────────
     "redis[hiredis]>=5.0.4",
@@ -40,6 +41,10 @@ dependencies = [
     "sentence-transformers>=3.0.0",
     "transformers>=4.41.0",
     "torch>=2.3.0",
+    "torchvision>=0.18.0",          # multimodal image transforms
+    "timm>=1.0.0",                  # EfficientNet-B4 backbone
+    "Pillow>=10.0.0",
+    "numpy>=1.26.0",
     "yake>=0.4.8",
 
     # ── Web scraping / extraction ───────────────────────────────────────
@@ -48,11 +53,17 @@ dependencies = [
     "lxml>=5.2.0",
     "readability-lxml>=0.8.1",
     "Levenshtein>=0.25.0",
-    "feedparser>=6.0.11",
+    "feedparser>=6.0.11",           # runtime dependency of pygooglenews
     "pygooglenews>=0.1.2",
+    "playwright>=1.40.0",           # browser fallback; run `playwright install chromium`
 
-    # ── Retry / resilience ──────────────────────────────────────────────
-    "tenacity>=8.3.0",
+    # ── Object storage ──────────────────────────────────────────────────
+    "minio>=7.2.0",
+
+    # ── Auth ────────────────────────────────────────────────────────────
+    "python-jose[cryptography]>=3.3.0",
+    "bcrypt>=4.1.0",
+    "email-validator>=2.0.0",       # pydantic EmailStr
 
     # ── Logging ─────────────────────────────────────────────────────────
     "structlog>=24.2.0",
@@ -71,6 +82,7 @@ dev = [
     "pytest-asyncio>=0.23.7",
     "pytest-cov>=5.0.0",
     "httpx>=0.27.0",          # AsyncClient in tests
+    "aiosqlite>=0.19.0",      # SQLite test database
     "factory-boy>=3.3.0",
     "faker>=25.4.0",
     "ruff>=0.4.7",
@@ -82,6 +94,7 @@ test = [
     "pytest-asyncio>=0.23.7",
     "pytest-cov>=5.0.0",
     "httpx>=0.27.0",
+    "aiosqlite>=0.19.0",
 ]
 
 [tool.hatch.build.targets.wheel]

@@ -17,6 +17,18 @@ logger = logging.getLogger(__name__)
 ModelT = TypeVar("ModelT", bound=Base)
 
 
+async def rows_by_submission(session: AsyncSession, model: type, submission_ids: list) -> dict:
+    """{submission_id: row} for a page of submissions, in one query. For
+    tables holding at most one row per submission (results, analyses,
+    extractions) - avoids one query per listed submission."""
+    if not submission_ids:
+        return {}
+    rows = (
+        await session.execute(select(model).where(model.submission_id.in_(submission_ids)))
+    ).scalars().all()
+    return {row.submission_id: row for row in rows}
+
+
 class BaseRepository(Generic[ModelT]):
 
     model_class: type[ModelT]
@@ -36,12 +48,6 @@ class BaseRepository(Generic[ModelT]):
     async def get_by_id_or_none(self, record_id: uuid.UUID) -> ModelT | None:
         return await self.session.get(self.model_class, record_id)
 
-    async def get_by_field(self, field_name: str, value: Any) -> ModelT | None:
-        column = getattr(self.model_class, field_name)
-        stmt = select(self.model_class).where(column == value).limit(1)
-        result = await self.session.execute(stmt)
-        return result.scalar_one_or_none()
-
     async def list_all(
         self,
         *,
@@ -60,12 +66,6 @@ class BaseRepository(Generic[ModelT]):
         stmt = select(func.count()).select_from(self.model_class)
         result = await self.session.execute(stmt)
         return result.scalar_one()
-
-    async def exists(self, record_id: uuid.UUID) -> bool:
-        pk_column = getattr(self.model_class, "id")
-        stmt = select(func.count()).where(pk_column == record_id).limit(1)
-        result = await self.session.execute(stmt)
-        return (result.scalar_one() or 0) > 0
 
     async def create(self, instance: ModelT) -> ModelT:
         try:

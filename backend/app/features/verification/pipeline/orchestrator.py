@@ -1,6 +1,4 @@
 ﻿"""
-app/features/verification/pipeline/orchestrator.py
-===================================================
 Pipeline orchestrator - runs the verification stages in order over one
 shared, observable, fault-tolerant `PipelineContext`.
 

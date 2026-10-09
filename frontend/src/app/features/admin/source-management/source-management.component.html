@@ -174,16 +174,13 @@
       </div>
     </div>
 
-    <!-- Pagination -->
-    <div class="pagination" *ngIf="total() > size">
-      <button class="btn btn-ghost btn-sm" [disabled]="page() === 1" (click)="prevPage()"
-        >← Previous</button
-      >
-      <span class="page-info">Page {{ page() }} of {{ Math.ceil(total() / size) }}</span>
-      <button class="btn btn-ghost btn-sm" [disabled]="sources().length < size" (click)="nextPage()"
-        >Next →</button
-      >
-    </div>
+    <app-pagination
+      label="Source pages"
+      [page]="page()"
+      [total]="total()"
+      [pageSize]="size"
+      (pageChange)="goToPage($event)"
+    />
   </div>
 </div>
 

@@ -1,0 +1,166 @@
+<mxfile host="app.diagrams.net" type="device">
+  <diagram id="verify-flow" name="Fig 30 - Verify flow states">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="850" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="start" value="" style="ellipse;fillColor=#333333;strokeColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="40" y="135" width="20" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="method" value="Method selection&lt;br&gt;&lt;i&gt;/verify&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="90" y="115" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="input" value="Input (form)&lt;br&gt;&lt;i&gt;/verify?method=...&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="400" y="115" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="submitting" value="Submitting&lt;br&gt;&lt;i&gt;fields locked&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="710" y="115" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="escalated" value="Escalated&lt;br&gt;&lt;i&gt;public view: Under review&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="90" y="315" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="prelim" value="Preliminary result&lt;br&gt;&lt;i&gt;AI finding, Under review&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="400" y="315" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="processing" value="Processing&lt;br&gt;&lt;i&gt;polled every 4 s&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="710" y="315" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="final" value="&lt;b&gt;Final result&lt;/b&gt;&lt;br&gt;&lt;i&gt;Real / Fake / Misleading / Altered&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="390" y="515" width="190" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="failed" value="Check incomplete&lt;br&gt;&lt;i&gt;input kept, not a verdict&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="710" y="515" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="e0" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="start" target="method">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" value="choose a method" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="method" target="input">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" value="Verify (valid form)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="input" target="submitting">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2b" value="Verify (invalid):&lt;br&gt;errors shown, focus to headline" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;labelBackgroundColor=#ffffff;exitX=0.25;exitY=1;entryX=0.75;entryY=1;" edge="1" parent="1" source="input" target="input">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="442" y="215" />
+              <mxPoint x="527" y="215" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e3" value="queued" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="submitting" target="processing">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" value="already checked: saved result" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;labelBackgroundColor=#ffffff;exitX=0.25;exitY=1;entryX=0.75;entryY=0;" edge="1" parent="1" source="submitting" target="prelim">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="752" y="250" />
+              <mxPoint x="527" y="250" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5" value="EXPERT_REVIEW" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="processing" target="prelim">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" value="FAILED" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="processing" target="failed">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" value="experts reach&lt;br&gt;weighted threshold" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="prelim" target="final">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" value="vote / time limit passed&lt;br&gt;without agreement" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="prelim" target="escalated">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" value="admin decides" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;entryX=0;entryY=0.5;" edge="1" parent="1" source="escalated" target="final">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" value="Try again" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0.5;entryY=0;" edge="1" parent="1" source="failed" target="input">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="960" y="545" />
+              <mxPoint x="960" y="70" />
+              <mxPoint x="485" y="70" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e11" value="Check another claim" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;entryX=0;entryY=0.5;" edge="1" parent="1" source="final" target="input">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="485" y="630" />
+              <mxPoint x="1000" y="630" />
+              <mxPoint x="1000" y="40" />
+              <mxPoint x="350" y="40" />
+              <mxPoint x="350" y="145" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="expert-review" name="Fig 30b - Expert review states">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="850" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="s" value="" style="ellipse;fillColor=#333333;strokeColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="40" y="215" width="20" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="queue" value="Review queue&lt;br&gt;&lt;i&gt;All / Escalated / In expert review&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="90" y="195" width="180" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="loading" value="Loading the review" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="380" y="195" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="unavailable" value="Review temporarily&lt;br&gt;unavailable" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="380" y="40" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="forbidden" value="This claim has been&lt;br&gt;escalated (expert)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="380" y="360" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="voteform" value="03 / Your vote&lt;br&gt;&lt;i&gt;verdict, findings, reasoning&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="680" y="120" width="180" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="viewonly" value="View-only access&lt;br&gt;&lt;i&gt;Observe / Voting not available&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="680" y="270" width="180" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="recorded" value="&lt;b&gt;Vote recorded&lt;/b&gt;&lt;br&gt;or &lt;b&gt;Final decision recorded&lt;/b&gt; (admin)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="930" y="120" width="190" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="a0" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="s" target="queue">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a1" value="open a claim" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="queue" target="loading">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a2" value="load error" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;labelBackgroundColor=#ffffff;exitX=0.3;exitY=0;entryX=0.3;entryY=1;" edge="1" parent="1" source="loading" target="unavailable">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a3" value="Try again" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;labelBackgroundColor=#ffffff;exitX=0.7;exitY=1;entryX=0.7;entryY=0;" edge="1" parent="1" source="unavailable" target="loading">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a4" value="claim escalated,&lt;br&gt;viewer is an expert" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="loading" target="forbidden">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a5" value="can vote&lt;br&gt;(expert, or admin on escalated)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;labelBackgroundColor=#ffffff;exitX=1;exitY=0.25;" edge="1" parent="1" source="loading" target="voteform">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a6" value="cannot vote&lt;br&gt;(admin observing, or not eligible)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;labelBackgroundColor=#ffffff;exitX=1;exitY=0.75;" edge="1" parent="1" source="loading" target="viewonly">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a7" value="Submit" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="voteform" target="recorded">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a8" value="already voted" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;labelBackgroundColor=#ffffff;exitX=0.5;exitY=0;entryX=0.5;entryY=0;" edge="1" parent="1" source="loading" target="recorded">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="465" y="150" />
+              <mxPoint x="620" y="150" />
+              <mxPoint x="620" y="80" />
+              <mxPoint x="1025" y="80" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

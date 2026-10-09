@@ -241,22 +241,12 @@
               </article>
             }
           </div>
-          <nav class="pagination" aria-label="Archive pages"
-            ><button
-              type="button"
-              class="btn btn-secondary"
-              [disabled]="page() === 1"
-              (click)="changePage(page() - 1)"
-              >← Previous</button
-            ><span>Page {{ page() }} of {{ pageCount() }}</span
-            ><button
-              type="button"
-              class="btn btn-secondary"
-              [disabled]="page() >= pageCount()"
-              (click)="changePage(page() + 1)"
-              >Next →</button
-            ></nav
-          >
+          <app-pagination
+            label="Archive pages"
+            [page]="page()"
+            [total]="total()"
+            (pageChange)="changePage($event)"
+          />
         }
       </div>
     </section>

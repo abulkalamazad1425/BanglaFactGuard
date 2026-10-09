@@ -4,6 +4,8 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { VerificationService, MultimodalService } from '../../../services/verification.service';
 import { SubmissionsService } from '../../../services/submissions.service';
+import { AuthService } from '../../../services/auth.service';
+import { verificationFollowUp } from '../../../shared/utils/status-labels';
 import { PhotoCardService } from '../../../services/photocard.service';
 import {
   MultimodalPredictionDetail,
@@ -64,6 +66,9 @@ export class VerifyResultComponent implements OnInit, OnDestroy {
   private readonly multimodalSvc = inject(MultimodalService);
   private readonly photocardSvc = inject(PhotoCardService);
   private readonly submissionsSvc = inject(SubmissionsService);
+  /** Signed-in and anonymous users are told different next steps. */
+  readonly signedIn = inject(AuthService).isLoggedIn;
+  readonly followUp = verificationFollowUp;
 
   readonly loading = signal(true);
   readonly lookup = signal<SubmissionLookup | null>(null);
@@ -247,7 +252,15 @@ export class VerifyResultComponent implements OnInit, OnDestroy {
   /** How the card was read, in plain words (no model names). */
   extractionSummary(p: PhotoCardResultResponse): string {
     const n = p.extraction_attempts ?? 1;
-    return `Headline, outlet and date were read directly from the image${n > 1 ? ` (succeeded on attempt ${n} of 9)` : ''}.`;
+    const attempt = n > 1 ? ` (succeeded on attempt ${n} of 9)` : '';
+    if (!p.claimed_source_text) {
+      return (
+        `The headline and date were read directly from the image${attempt}. No active verified ` +
+        'outlet was identified on the card, so related reports were looked for in the active ' +
+        'verified news sources.'
+      );
+    }
+    return `Headline, outlet and date were read directly from the image${attempt}.`;
   }
 
   /** Lifecycle states in which a saved automated result exists. */

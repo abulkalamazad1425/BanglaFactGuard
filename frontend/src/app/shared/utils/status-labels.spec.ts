@@ -1,4 +1,4 @@
-import { aiDecisionLabel, preliminaryChips } from './status-labels';
+import { aiDecisionLabel, preliminaryChips, verificationFollowUp } from './status-labels';
 
 describe('status labels', () => {
   it('never shows "Found" in a summary, only "Not found in claimed source"', () => {
@@ -39,5 +39,17 @@ describe('status labels', () => {
     expect(aiDecisionLabel('FAKE')).toBe('Likely Fake');
     expect(aiDecisionLabel('NON_FAKE')).toBe('Likely Real');
     expect(aiDecisionLabel(null)).toBeNull();
+  });
+
+  it('tells signed-in and anonymous submitters different next steps', () => {
+    const signedIn = verificationFollowUp(true);
+    expect(signedIn).toContain('notified');
+    expect(signedIn).toContain('My Submissions');
+    expect(signedIn).not.toContain('not signed in');
+
+    const anonymous = verificationFollowUp(false);
+    expect(anonymous).toContain('not signed in');
+    expect(anonymous).toContain('“View progress” link');
+    expect(verificationFollowUp(false, 'progress-page')).toContain('this page’s link');
   });
 });

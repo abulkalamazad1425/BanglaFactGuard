@@ -27,14 +27,16 @@ _LOAD_POOL = ThreadPoolExecutor(
 
 
 class MultimodalModelLoader:
-
-    _loaded: bool = False
-    _lock: asyncio.Lock | None = None
+    """Owns one set of loaded weights. "Loaded" is per instance: a new
+    loader (e.g. after an app restart in the same process) loads its own
+    weights instead of reporting another instance's state."""
 
     def __init__(self) -> None:
         cfg = _SETTINGS.multimodal
         self._cfg = cfg
         self._device = torch.device(cfg.device)
+        self._loaded = False
+        self._lock = asyncio.Lock()
 
         self._img_backbone: EfficientNetBackbone | None = None
         self._text_backbone: BanglaBERTBackbone | None = None
@@ -43,11 +45,8 @@ class MultimodalModelLoader:
 
     async def load(self) -> None:
 
-        if MultimodalModelLoader._lock is None:
-            MultimodalModelLoader._lock = asyncio.Lock()
-
-        async with MultimodalModelLoader._lock:
-            if MultimodalModelLoader._loaded:
+        async with self._lock:
+            if self._loaded:
                 return
 
             model_dir = self._cfg.model_dir
@@ -78,7 +77,7 @@ class MultimodalModelLoader:
                 self._classifier,
                 self._tokenizer,
             ) = result
-            MultimodalModelLoader._loaded = True
+            self._loaded = True
             logger.info(
                 "multimodal_model_loaded",
                 device=str(self._device),
@@ -154,7 +153,7 @@ class MultimodalModelLoader:
 
     @property
     def is_loaded(self) -> bool:
-        return MultimodalModelLoader._loaded
+        return self._loaded
 
     @property
     def img_backbone(self) -> EfficientNetBackbone:

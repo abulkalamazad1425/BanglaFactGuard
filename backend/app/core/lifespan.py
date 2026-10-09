@@ -10,6 +10,7 @@ from fastapi import FastAPI
 
 from app.core.config import get_settings
 from app.core.logging import setup_logging
+from app.db.engine import close_engine
 from app.features.cache.cache_service import CacheService
 from app.features.multimodal.pipeline.model_loader import MultimodalModelLoader
 from app.features.multimodal.storage_service import MultimodalStorageService
@@ -146,4 +147,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await app.state.escalation_worker.stop()
     await app.state.http_client.aclose()
     await redis_client.aclose()
+    # After every worker has stopped (they open sessions). The engine stays
+    # usable: a later startup in the same process gets a fresh pool. The
+    # module-level thread pools are deliberately not shut down - they are
+    # reused by a later startup and are joined at interpreter exit.
+    await close_engine()
     log.info("bangla_fact_guard_shutdown_complete")

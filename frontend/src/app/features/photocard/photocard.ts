@@ -3,6 +3,8 @@ import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { ToastService } from '../../shared/services/toast.service';
+import { AuthService } from '../../services/auth.service';
+import { verificationFollowUp } from '../../shared/utils/status-labels';
 import { PhotoCardService } from '../../services/photocard.service';
 import { PendingVerificationsService } from '../../services/pending-verifications.service';
 import { SourceService } from '../../services/source.service';
@@ -37,6 +39,9 @@ export class PhotoCardComponent implements OnInit {
   private readonly sourceSvc = inject(SourceService);
   private readonly toast = inject(ToastService);
   private readonly pending = inject(PendingVerificationsService);
+  /** Signed-in and anonymous users are told different next steps. */
+  readonly signedIn = inject(AuthService).isLoggedIn;
+  readonly followUp = verificationFollowUp;
 
   step: Step = 'upload';
 

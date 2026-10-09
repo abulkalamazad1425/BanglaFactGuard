@@ -11,6 +11,7 @@ python-multipart>=0.0.9
 sqlalchemy[asyncio]>=2.0.30
 asyncpg>=0.29.0
 alembic>=1.13.1
+psycopg2-binary>=2.9.9
 
 # ── Cache ────────────────────────────────────────────────────────────────
 redis[hiredis]>=5.0.4
@@ -36,12 +37,15 @@ readability-lxml>=0.8.1
 Levenshtein>=0.25.0
 feedparser>=6.0.11
 pygooglenews>=0.1.2
-
-# ── Retry / resilience ───────────────────────────────────────────────────
-tenacity>=8.3.0
+playwright>=1.40.0
 
 # ── Object storage ────────────────────────────────────────────────────────
 minio>=7.2.0
+
+# ── Auth ─────────────────────────────────────────────────────────────────
+python-jose[cryptography]>=3.3.0
+bcrypt>=4.1.0
+email-validator>=2.0.0
 
 # ── Logging ──────────────────────────────────────────────────────────────
 structlog>=24.2.0
