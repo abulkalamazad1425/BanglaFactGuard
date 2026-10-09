@@ -4,6 +4,42 @@
       ><div><h1>My Submissions</h1></div
       ><a routerLink="/verify" class="btn btn-primary">Submit a claim</a></header
     >
+    <form
+      class="search-toolbar"
+      role="search"
+      (submit)="$event.preventDefault(); search(searchInput.value)"
+    >
+      <label for="submission-search">Search your submissions</label>
+      <div class="search-row filter-row"
+        ><input
+          #searchInput
+          (input)="onSearchInput(searchInput.value)"
+          id="submission-search"
+          class="form-control"
+          type="search"
+          maxlength="200"
+          placeholder="Search by headline, text or source"
+        /><select
+          class="form-control"
+          aria-label="Filter by status"
+          [value]="state()"
+          (change)="setState($any($event.target).value)"
+        >
+          @for (o of states; track o.key) {
+            <option [value]="o.key">{{ o.label }}</option>
+          }</select
+        ><select
+          class="form-control"
+          aria-label="Filter by type"
+          [value]="type()"
+          (change)="setType($any($event.target).value)"
+        >
+          @for (o of types; track o.key) {
+            <option [value]="o.key">{{ o.label }}</option>
+          }</select
+        ><button type="submit" class="btn btn-primary" [disabled]="loading()">Search</button></div
+      >
+    </form>
     @if (loadError()) {
       <div class="service-notice" role="alert"
         ><p>Could not load your submissions.</p
@@ -16,10 +52,19 @@
       ></div>
     }
     @if (!loading() && !loadError() && !submissions().length) {
-      <div class="empty-state card"
-        ><h2>No submissions on this page</h2
-        ><p>Submit a claim or return to the previous page.</p></div
-      >
+      @if (filtered()) {
+        <div class="empty-state card"
+          ><h2>No submissions match</h2>
+          <button type="button" class="btn btn-secondary" (click)="clearFilters(searchInput)"
+            >Clear search and filters</button
+          ></div
+        >
+      } @else {
+        <div class="empty-state card"
+          ><h2>No submissions on this page</h2
+          ><p>Submit a claim or return to the previous page.</p></div
+        >
+      }
     }
     <div class="submission-list">
       @for (s of submissions(); track s.submission_id) {

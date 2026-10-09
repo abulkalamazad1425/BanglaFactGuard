@@ -18,10 +18,12 @@ export class SourceService {
     page: number = 1,
     size: number = 20,
     includeInactive: boolean = false,
+    q: string = '',
   ): Observable<SourceListResponse> {
     const params: any = { page, size };
     if (language) params.language = language;
     if (includeInactive) params.include_inactive = true;
+    if (q.trim()) params.q = q.trim();
     return this.api.get<SourceListResponse>(API_ENDPOINTS.SOURCES, params);
   }
 

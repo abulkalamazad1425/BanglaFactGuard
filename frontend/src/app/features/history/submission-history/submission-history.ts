@@ -1,8 +1,14 @@
 import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
+import { Subscription } from 'rxjs';
 import { VerificationService } from '../../../services/verification.service';
-import { SubmissionSummary, SubmissionStats } from '../../../models/verification.model';
+import {
+  MySubmissionState,
+  SubmissionStats,
+  SubmissionSummary,
+  SubmissionType,
+} from '../../../models/verification.model';
 import { VerdictBadgeComponent } from '../../../shared/components/verdict-badge/verdict-badge.component';
 import {
   PAGE_SIZE,
@@ -37,6 +43,27 @@ export class SubmissionHistoryComponent implements OnInit, OnDestroy {
   readonly limit = PAGE_SIZE;
   readonly hasNext = signal(false);
 
+  /* ─── Search & filters (applied on the server, before pagination) ─── */
+  query = '';
+  readonly state = signal<MySubmissionState | ''>('');
+  readonly type = signal<SubmissionType | ''>('');
+  readonly states: { key: MySubmissionState | ''; label: string }[] = [
+    { key: '', label: 'All statuses' },
+    { key: 'in_progress', label: 'In progress' },
+    { key: 'review', label: 'Under expert review' },
+    { key: 'final', label: 'Final decision' },
+    { key: 'failed', label: 'Check incomplete' },
+  ];
+  readonly types: { key: SubmissionType | ''; label: string }[] = [
+    { key: '', label: 'All types' },
+    { key: 'SOURCE_BASED', label: 'Text & source' },
+    { key: 'PHOTO_CARD', label: 'Photo card' },
+    { key: 'MULTIMODAL', label: 'Text & image' },
+  ];
+  readonly filtered = () => Boolean(this.query || this.state() || this.type());
+  private searchTimer: ReturnType<typeof setTimeout> | null = null;
+  private request?: Subscription;
+
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
 
   readonly page = () => Math.floor(this.offset() / this.limit) + 1;
@@ -47,6 +74,8 @@ export class SubmissionHistoryComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    if (this.searchTimer) clearTimeout(this.searchTimer);
+    this.request?.unsubscribe();
     this.stopRefresh();
   }
 
@@ -57,24 +86,69 @@ export class SubmissionHistoryComponent implements OnInit, OnDestroy {
     });
   }
 
+  search(value: string): void {
+    if (this.searchTimer) clearTimeout(this.searchTimer);
+    this.query = value.trim();
+    this.offset.set(0);
+    this.load();
+  }
+
+  /** Search as you type: ~300 ms after the last keystroke, first page. */
+  onSearchInput(value: string): void {
+    if (this.searchTimer) clearTimeout(this.searchTimer);
+    this.searchTimer = setTimeout(() => {
+      this.searchTimer = null;
+      if (value.trim() !== this.query) this.search(value);
+    }, 300);
+  }
+
+  setState(value: string): void {
+    this.state.set(value as MySubmissionState | '');
+    this.offset.set(0);
+    this.load();
+  }
+
+  setType(value: string): void {
+    this.type.set(value as SubmissionType | '');
+    this.offset.set(0);
+    this.load();
+  }
+
+  clearFilters(input: HTMLInputElement): void {
+    input.value = '';
+    this.query = '';
+    this.state.set('');
+    this.type.set('');
+    this.offset.set(0);
+    this.load();
+  }
+
   load(silent = false): void {
     if (!silent) this.loading.set(true);
+    // A newer search or filter supersedes any request still in flight.
+    this.request?.unsubscribe();
     // One extra row tells whether another page exists.
-    this.verificationSvc.getMySubmissions(this.limit + 1, this.offset()).subscribe({
-      next: (rows) => {
-        const s = rows.slice(0, this.limit);
-        this.hasNext.set(rows.length > this.limit);
-        this.submissions.set(s);
-        this.loading.set(false);
-        this.loadError.set(false);
-        if (s.some((x) => !x.is_finalized && !this.isFailed(x))) this.ensureRefresh();
-        else this.stopRefresh();
-      },
-      error: () => {
-        this.loading.set(false);
-        this.loadError.set(true);
-      },
-    });
+    this.request = this.verificationSvc
+      .getMySubmissions(this.limit + 1, this.offset(), {
+        q: this.query,
+        state: this.state(),
+        type: this.type(),
+      })
+      .subscribe({
+        next: (rows) => {
+          const s = rows.slice(0, this.limit);
+          this.hasNext.set(rows.length > this.limit);
+          this.submissions.set(s);
+          this.loading.set(false);
+          this.loadError.set(false);
+          if (s.some((x) => !x.is_finalized && !this.isFailed(x))) this.ensureRefresh();
+          else this.stopRefresh();
+        },
+        error: () => {
+          this.loading.set(false);
+          this.loadError.set(true);
+        },
+      });
   }
 
   private ensureRefresh(): void {

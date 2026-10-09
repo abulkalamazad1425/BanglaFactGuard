@@ -27,9 +27,11 @@ export class AdminService {
     return this.api.post<ExpertResponse>(API_ENDPOINTS.ADMIN_EXPERTS, body);
   }
 
-  /** GET /api/v1/admin/experts?limit=&offset= */
-  listExperts(limit = 50, offset = 0): Observable<ExpertResponse[]> {
-    return this.api.get<ExpertResponse[]>(API_ENDPOINTS.ADMIN_EXPERTS, { limit, offset });
+  /** GET /api/v1/admin/experts?limit=&offset=&q= (q: name, email or expertise) */
+  listExperts(limit = 50, offset = 0, q = ''): Observable<ExpertResponse[]> {
+    const params: Record<string, string | number> = { limit, offset };
+    if (q.trim()) params['q'] = q.trim();
+    return this.api.get<ExpertResponse[]>(API_ENDPOINTS.ADMIN_EXPERTS, params);
   }
 
   /** GET /api/v1/admin/experts/{id} */

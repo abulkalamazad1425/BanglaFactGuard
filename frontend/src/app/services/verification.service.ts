@@ -9,6 +9,7 @@ import {
   VerificationStatus,
   SubmissionSummary,
   SubmissionStats,
+  MySubmissionFilters,
 } from '../models/verification.model';
 import {
   MultimodalPredictionDetail,
@@ -45,9 +46,18 @@ export class VerificationService {
     return this.api.get<VerificationResponse>(`${API_ENDPOINTS.VERIFICATION}/${submissionId}`);
   }
 
-  /** GET /api/v1/users/me/submissions — submission history */
-  getMySubmissions(limit = 20, offset = 0): Observable<SubmissionSummary[]> {
-    return this.api.get<SubmissionSummary[]>(API_ENDPOINTS.USERS_SUBMISSIONS, { limit, offset });
+  /** GET /api/v1/users/me/submissions — submission history, optionally
+   *  searched (q) and filtered by state / type before pagination. */
+  getMySubmissions(
+    limit = 20,
+    offset = 0,
+    filters: MySubmissionFilters = {},
+  ): Observable<SubmissionSummary[]> {
+    const params: Record<string, string | number> = { limit, offset };
+    if (filters.q?.trim()) params['q'] = filters.q.trim();
+    if (filters.state) params['state'] = filters.state;
+    if (filters.type) params['type'] = filters.type;
+    return this.api.get<SubmissionSummary[]>(API_ENDPOINTS.USERS_SUBMISSIONS, params);
   }
 
   /** GET /api/v1/users/me/submissions/stats */

@@ -54,8 +54,23 @@ def escape_like(term: str) -> str:
     return term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
+# য় ড় ঢ় have precomposed code points (U+09DF, U+09DC, U+09DD) that are
+# Unicode composition exclusions: NFC always splits them into letter + nukta.
+# Stored text keeps whichever form was typed, so a term is matched in both.
+_NUKTA_PRECOMPOSED = {"য়": "য়", "ড়": "ড়", "ঢ়": "ঢ়"}
+
+
+def spellings(term: str) -> list[str]:
+    """The term as typed in NFC, plus its precomposed-nukta spelling if different."""
+    nfc = unicodedata.normalize("NFC", term)
+    composed = nfc
+    for split, joined in _NUKTA_PRECOMPOSED.items():
+        composed = composed.replace(split, joined)
+    return [nfc] if composed == nfc else [nfc, composed]
+
+
 def _contains(column, term: str) -> ColumnElement[bool]:
-    return column.ilike(f"%{escape_like(term)}%", escape="\\")
+    return or_(*[column.ilike(f"%{escape_like(t)}%", escape="\\") for t in spellings(term)])
 
 
 class KeywordSearch:

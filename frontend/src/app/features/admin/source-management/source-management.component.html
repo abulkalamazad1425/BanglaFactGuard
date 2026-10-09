@@ -8,7 +8,7 @@
       <div class="header-actions">
         <div class="stats-pill">
           <span class="stat-dot active-dot"></span>
-          {{ sources().length }} sources
+          {{ total() }} {{ query ? 'matching' : '' }} {{ total() === 1 ? 'source' : 'sources' }}
         </div>
         <button class="btn btn-primary register-btn" (click)="openRegisterDrawer()">
           <svg
@@ -27,9 +27,33 @@
       </div>
     </div>
 
+    <form
+      class="search-toolbar"
+      role="search"
+      (submit)="$event.preventDefault(); search(searchInput.value)"
+    >
+      <label for="source-search">Search verified sources</label>
+      <div class="search-row"
+        ><input
+          #searchInput
+          (input)="onSearchInput(searchInput.value)"
+          id="source-search"
+          class="form-control"
+          type="search"
+          maxlength="200"
+          placeholder="Search by name, domain or alias"
+        /><button type="submit" class="btn btn-primary">Search</button></div
+      >
+    </form>
+
     <!-- ══════════ Source Cards Grid ══════════ -->
     <div class="sources-grid">
-      <div *ngIf="sources().length === 0" class="empty-state">
+      <div *ngIf="sources().length === 0 && query" class="empty-state">
+        <div class="empty-icon">🔍</div>
+        <h3>No sources match “{{ query }}”</h3>
+        <p>Try a different name, domain or alias.</p>
+      </div>
+      <div *ngIf="sources().length === 0 && !query" class="empty-state">
         <div class="empty-icon">🌐</div>
         <h3>No Sources Registered</h3>
         <p>Register your first verified news source to get started with fact-checking.</p>

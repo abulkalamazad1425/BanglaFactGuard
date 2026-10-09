@@ -64,10 +64,11 @@ async def create_expert(
 async def list_experts(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    q: str | None = Query(default=None, max_length=200, description="Search name, email or expertise"),
     _: User = Depends(_ADMIN_ONLY),
     svc: AdminService = Depends(_get_service),
 ) -> list[ExpertResponse]:
-    return await svc.list_experts(limit=limit, offset=offset)
+    return await svc.list_experts(limit=limit, offset=offset, q=q)
 
 
 @router.get(

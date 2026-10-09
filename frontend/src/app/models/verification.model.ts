@@ -264,6 +264,17 @@ export interface VerificationResponse {
   analysis?: AnalysisDetails | null;
 }
 
+// ── My Submissions filters (GET /users/me/submissions?q=&state=&type=) ──
+/** in_progress: being checked · review: preliminary result, awaiting the
+ *  expert decision (incl. escalated) · final: final decision · failed: check
+ *  could not complete. */
+export type MySubmissionState = 'in_progress' | 'review' | 'final' | 'failed';
+export interface MySubmissionFilters {
+  q?: string;
+  state?: MySubmissionState | '';
+  type?: SubmissionType | '';
+}
+
 // ── Submission history item from GET /users/me/submissions ───────────
 export interface SubmissionSummary {
   prediction?: string | null;

@@ -85,3 +85,22 @@ async def test_empty_query_keeps_existing_order(repo_with_rows):
     repo, rows = repo_with_rows
     found, total = await repo.search(keyword="   ")
     assert total == 6 and found[0].id == rows["one"].id  # newest first, unchanged
+
+
+async def test_nukta_letters_match_whichever_form_was_stored(repo_with_rows):
+    """য় ড় ঢ় are composition exclusions: NFC splits the precomposed U+09DF etc.
+    into letter + nukta, so a precomposed headline must still be found."""
+    repo, rows = repo_with_rows
+    precomposed = "রিকনসিলি\u09dfেশন ছাড়া সমাজ বিভক্ত"
+    split_form = "নিরাপত্তা বা\u09af\u09bcুসেনা মোতা\u09af\u09bcেন"
+    for headline in (precomposed, split_form):
+        sub, _ = await add_completed_submission(repo.session, headline=headline, submitter_id=None)
+        rows[headline] = sub
+    await repo.session.flush()
+    for query, expected in (
+        ("রিকনসিলি\u09af\u09bcেশন", precomposed),  # typed split, stored precomposed
+        ("রিকনসিলি\u09dfেশন", precomposed),        # typed precomposed
+        ("মোতা\u09dfেন", split_form),             # typed precomposed, stored split
+    ):
+        found, total = await repo.search(keyword=query)
+        assert total == 1 and found[0].id == rows[expected].id, query

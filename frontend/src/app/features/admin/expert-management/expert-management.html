@@ -10,6 +10,25 @@
       </div>
     </header>
 
+    <form
+      class="search-toolbar"
+      role="search"
+      (submit)="$event.preventDefault(); search(searchInput.value)"
+    >
+      <label for="expert-search">Search experts</label>
+      <div class="search-row"
+        ><input
+          #searchInput
+          (input)="onSearchInput(searchInput.value)"
+          id="expert-search"
+          class="form-control"
+          type="search"
+          maxlength="200"
+          placeholder="Search by name, email or expertise"
+        /><button type="submit" class="btn btn-primary" [disabled]="loading()">Search</button></div
+      >
+    </form>
+
     @if (loading()) {
       <div class="loading-overlay" role="status"
         ><div class="spinner"></div><span class="sr-only">Loading experts</span></div
@@ -103,10 +122,14 @@
                 </tr>
               } @empty {
                 <tr
-                  ><td colspan="7" class="empty-cell"
-                    >No experts yet.
-                    <a routerLink="/admin/experts/new">Create the first expert account</a>.</td
-                  ></tr
+                  ><td colspan="7" class="empty-cell">
+                    @if (query) {
+                      No experts match “{{ query }}”.
+                    } @else {
+                      No experts yet.
+                      <a routerLink="/admin/experts/new">Create the first expert account</a>.
+                    }
+                  </td></tr
                 >
               }
             </tbody>

@@ -30,7 +30,7 @@ from app.features.auth.models import User
 from app.features.auth.repository import RefreshTokenRepository, UserRepository
 from app.features.auth.security import hash_password
 from app.features.auth.service import validate_password_strength
-from app.features.expert_review.models import CredibilityWeightTier, VotingConfig
+from app.features.expert_review.models import CredibilityWeightTier, ExpertProfile, VotingConfig
 from app.features.expert_review.repository import (
     CredibilityWeightTierRepository,
     ExpertProfileRepository,
@@ -38,6 +38,7 @@ from app.features.expert_review.repository import (
 )
 from app.features.submissions.models import Submission
 from app.features.verification.models import VerificationResult
+from app.shared.utils.keyword_search import KeywordSearch
 
 logger = structlog.get_logger(__name__)
 
@@ -84,9 +85,26 @@ class AdminService:
         )
 
     async def list_experts(
-        self, *, limit: int = 50, offset: int = 0
+        self, *, limit: int = 50, offset: int = 0, q: str | None = None
     ) -> list[ExpertResponse]:
-        users = await self._users.list_by_role("expert", limit=limit, offset=offset)
+        """Expert accounts, newest first. `q` searches name, email and
+        expertise area (best matches first) before pagination."""
+        search = KeywordSearch(
+            q, [User.full_name, User.email, ExpertProfile.area_of_expertise],
+            headline_column=User.full_name,
+        )
+        if search.active:
+            stmt = (
+                select(User)
+                .outerjoin(ExpertProfile, ExpertProfile.user_id == User.id)
+                .where(User.role == "expert", search.condition)
+                .order_by(*search.order_by(), User.created_at.desc(), User.id)
+                .offset(offset)
+                .limit(limit)
+            )
+            users = list((await self._session.execute(stmt)).scalars().all())
+        else:
+            users = await self._users.list_by_role("expert", limit=limit, offset=offset)
         results = []
         for u in users:
             profile = await self._profiles.get_by_user_id(u.id)

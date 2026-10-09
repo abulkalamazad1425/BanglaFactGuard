@@ -1,6 +1,7 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
+import { Subscription } from 'rxjs';
 import { FormBuilder, FormGroup, FormArray, Validators, ReactiveFormsModule } from '@angular/forms';
 import { SourceService } from '../../../services/source.service';
 import { SourceResponse } from '../../../models/source.model';
@@ -77,15 +78,40 @@ export class SourceManagementComponent implements OnInit {
     this.loadSources();
   }
 
+  /* ─── Search (name, domain, URL or alias; server-side, before pagination) ─── */
+  query = '';
+  private searchTimer: ReturnType<typeof setTimeout> | null = null;
+  private request?: Subscription;
+
+  search(value: string) {
+    if (this.searchTimer) clearTimeout(this.searchTimer);
+    this.query = value.trim();
+    this.page.set(1);
+    this.loadSources();
+  }
+
+  /** Search as you type: ~300 ms after the last keystroke, first page. */
+  onSearchInput(value: string) {
+    if (this.searchTimer) clearTimeout(this.searchTimer);
+    this.searchTimer = setTimeout(() => {
+      this.searchTimer = null;
+      if (value.trim() !== this.query) this.search(value);
+    }, 300);
+  }
+
   loadSources() {
     // Admins manage the full registry, including deactivated sources.
-    this.sourceService.listSources(undefined, this.page(), this.size, true).subscribe({
-      next: (res) => {
-        this.sources.set(res.items);
-        this.total.set(res.total);
-      },
-      error: () => this.toast.error('Failed to load sources'),
-    });
+    // A newer search supersedes any request still in flight.
+    this.request?.unsubscribe();
+    this.request = this.sourceService
+      .listSources(undefined, this.page(), this.size, true, this.query)
+      .subscribe({
+        next: (res) => {
+          this.sources.set(res.items);
+          this.total.set(res.total);
+        },
+        error: () => this.toast.error('Failed to load sources'),
+      });
   }
 
   openRegisterDrawer() {
