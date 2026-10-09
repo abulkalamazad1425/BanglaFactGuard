@@ -33,6 +33,14 @@ The multimodal model weights (`img_backbone.pt`, `text_backbone.pt`,
 .\.venv\Scripts\python.exe -m pytest -q --no-cov
 ```
 
-`tests/unit/test_identity_hash_golden.py` and
-`tests/unit/test_api_response_snapshots.py` pin persisted hashes and API
-responses; a refactor must not change them.
+Unit tests only. `tests/unit/` mirrors `app/features/` (plus `core/` and
+`shared/`): every service-logic module has its own `test_<module>.py`.
+Database-backed tests use an in-memory SQLite database
+(`tests/helpers/db.py`); ML models, search providers, Gemini, Playwright and
+MinIO are deterministic fakes (`tests/helpers/`), so no network, GPU or model
+weights are needed. `tests/conftest.py` blanks the SMTP and Gemini settings
+from `.env`, so a test can never send real email or spend API quota.
+
+`tests/unit/shared/test_hashing.py` and
+`tests/unit/photocard/test_photocard_verification_stages.py` pin persisted
+claim hashes; a refactor must not change them.

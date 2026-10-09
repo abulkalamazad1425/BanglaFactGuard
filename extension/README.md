@@ -113,7 +113,7 @@ Backend tests:
 
 ```powershell
 cd backend
-.\.venv\Scripts\python.exe -m pytest tests/unit/test_multimodal_background.py tests/unit/test_multimodal_service.py tests/integration/test_multimodal_router.py -q --no-cov
+.\.venv\Scripts\python.exe -m pytest tests/unit/multimodal tests/unit/verification/test_jobs.py -q --no-cov
 ```
 
 See [TESTING.md](TESTING.md) for verified behavior and the remaining installed-Chrome checklist.
