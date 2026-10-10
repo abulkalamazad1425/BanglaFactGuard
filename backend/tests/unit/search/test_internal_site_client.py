@@ -29,7 +29,9 @@ async def test_results_are_on_domain_articles_with_headline_text():
     html = """
       <div class="card"><a href="/bangladesh/abc12345xyz"><img></a>
         <h3><a href="/bangladesh/abc12345xyz">সরকার নতুন সেতু উদ্বোধন করেছে</a></h3></div>
-      <h2>সেতু উদ্বোধনে মন্ত্রী<a href="https://www.prothomalo.com/politics/def67890uvw"><img></a></h2>
+      <h2><a href="https://www.prothomalo.com/politics/def67890uvw">সেতু</a> উদ্বোধনে মন্ত্রী</h2>
+      <a class="title-link" href="/bangladesh/rigp7e6bkb"><span class="tilte-no-link-parent"><span
+         class="sub-title">মন্ত্রিসভার বৈঠক</span> সেতু উদ্বোধনের দিন ঠিক</span></a>
       <a href="https://evil.example/news/abc12345xyz">সরকার সেতু ভুয়া খবর</a>
       <a href="/tag/setu">সেতু ট্যাগ</a><a href="#top">উপরে</a>
     """
@@ -38,6 +40,8 @@ async def test_results_are_on_domain_articles_with_headline_text():
     assert results == [
         ("https://www.prothomalo.com/bangladesh/abc12345xyz", "সরকার নতুন সেতু উদ্বোধন করেছে"),
         ("https://www.prothomalo.com/politics/def67890uvw", "সেতু উদ্বোধনে মন্ত্রী"),  # text from the heading
+        # Prothom Alo's kicker span stays a separate word, never glued onto the headline
+        ("https://www.prothomalo.com/bangladesh/rigp7e6bkb", "মন্ত্রিসভার বৈঠক সেতু উদ্বোধনের দিন ঠিক"),
     ]
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 
 from pydantic import BaseModel, EmailStr, Field
@@ -57,6 +58,21 @@ class CredibilityWeightTierRequest(BaseModel):
     max_accuracy_pct: float = Field(..., ge=0.0, le=100.0)
     weight: float = Field(..., gt=0.0)
     is_active: bool = Field(default=True)
+
+
+class CredibilityWeightTierItem(CredibilityWeightTierRequest):
+    id: uuid.UUID | None = Field(
+        default=None, description="An existing tier to update; omit to create a new tier."
+    )
+
+
+class CredibilityWeightTierSetRequest(BaseModel):
+    """The complete tier configuration. Saved in one transaction: existing
+    tiers listed by id are updated, tiers without an id are created, tiers
+    left out are deleted. Only the final set is validated, so tiers can be
+    split, merged or re-bounded in one save."""
+
+    tiers: list[CredibilityWeightTierItem] = Field(..., max_length=50)
 
 
 class CredibilityWeightTierUpdateRequest(BaseModel):

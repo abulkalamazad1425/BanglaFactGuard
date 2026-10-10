@@ -19,6 +19,7 @@ from app.features.admin.schemas import (
     CreateExpertRequest,
     CredibilityWeightTierRequest,
     CredibilityWeightTierResponse,
+    CredibilityWeightTierSetRequest,
     CredibilityWeightTierUpdateRequest,
     ExpertResponse,
     ResetExpertPasswordRequest,
@@ -228,55 +229,17 @@ class AdminService:
         rows = (await self._session.execute(stmt)).scalars().all()
         return [_tier_to_response(t) for t in rows]
 
-    async def _validate_tier(
-        self,
-        *,
-        tier_id: uuid.UUID | None,
-        min_pct: float,
-        max_pct: float,
-        is_active: bool,
-    ) -> None:
-        if max_pct <= min_pct:
-            raise DomainValidationError(
-                message="max_accuracy_pct must be greater than min_accuracy_pct."
-            )
-
-        if not is_active:
-            return  # inactive tiers don't participate in the 0-100 tiling
-
+    async def _active_ranges(self, *, excluding: set[uuid.UUID] = frozenset()) -> list[tuple[float, float]]:
         stmt = select(CredibilityWeightTier).where(CredibilityWeightTier.is_active.is_(True))
-        if tier_id is not None:
-            stmt = stmt.where(CredibilityWeightTier.id != tier_id)
-        others = (await self._session.execute(stmt)).scalars().all()
-        ranges = sorted(
-            [(t.min_accuracy_pct, t.max_accuracy_pct) for t in others] + [(min_pct, max_pct)],
-            key=lambda r: r[0],
-        )
-        if ranges[0][0] != 0.0:
-            raise DomainValidationError(
-                message=f"Active tiers must start at 0% (currently starts at {ranges[0][0]}%)."
-            )
-        for (_, hi1), (lo2, _) in zip(ranges, ranges[1:]):
-            if hi1 > lo2:
-                raise DomainValidationError(message=f"Tier ranges overlap around {lo2}%.")
-            if hi1 < lo2:
-                raise DomainValidationError(
-                    message=f"Gap between tiers from {hi1}% to {lo2}% — every accuracy% must be covered."
-                )
-        if ranges[-1][1] != 100.0:
-            raise DomainValidationError(
-                message=f"Active tiers must end at 100% (currently ends at {ranges[-1][1]}%)."
-            )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return [(t.min_accuracy_pct, t.max_accuracy_pct) for t in rows if t.id not in excluding]
 
     async def create_credibility_tier(
         self, req: CredibilityWeightTierRequest
     ) -> CredibilityWeightTierResponse:
-        await self._validate_tier(
-            tier_id=None,
-            min_pct=req.min_accuracy_pct,
-            max_pct=req.max_accuracy_pct,
-            is_active=req.is_active,
-        )
+        _check_range(req.min_accuracy_pct, req.max_accuracy_pct)
+        if req.is_active:
+            _check_tiling(await self._active_ranges() + [(req.min_accuracy_pct, req.max_accuracy_pct)])
         tier = CredibilityWeightTier(
             label=req.label,
             min_accuracy_pct=req.min_accuracy_pct,
@@ -300,12 +263,16 @@ class AdminService:
             raise RecordNotFoundError(model="CredibilityWeightTier", identifier=str(tier_id))
 
         updates = req.model_dump(exclude_unset=True)
-        await self._validate_tier(
-            tier_id=tier_id,
-            min_pct=updates.get("min_accuracy_pct", tier.min_accuracy_pct),
-            max_pct=updates.get("max_accuracy_pct", tier.max_accuracy_pct),
-            is_active=updates.get("is_active", tier.is_active),
-        )
+        lo = updates.get("min_accuracy_pct", tier.min_accuracy_pct)
+        hi = updates.get("max_accuracy_pct", tier.max_accuracy_pct)
+        _check_range(lo, hi)
+        # Deactivating is checked too: the remaining active tiers must still
+        # cover every accuracy%.
+        final = await self._active_ranges(excluding={tier_id})
+        if updates.get("is_active", tier.is_active):
+            final.append((lo, hi))
+        if tier.is_active or updates.get("is_active", tier.is_active):
+            _check_tiling(final)
         for field, value in updates.items():
             setattr(tier, field, value)
         self._session.add(tier)
@@ -319,8 +286,42 @@ class AdminService:
         tier = await self._session.get(CredibilityWeightTier, tier_id)
         if tier is None:
             raise RecordNotFoundError(model="CredibilityWeightTier", identifier=str(tier_id))
+        if tier.is_active:
+            _check_tiling(await self._active_ranges(excluding={tier_id}))
         await self._session.delete(tier)
         await self._session.flush()
+
+    async def replace_credibility_tiers(
+        self, req: CredibilityWeightTierSetRequest
+    ) -> list[CredibilityWeightTierResponse]:
+        """Save the whole tier configuration at once. Only the final set is
+        validated, so tiers can be split, merged or re-bounded in one save;
+        nothing is written unless the final active tiers cover 0-100%."""
+        existing = {
+            t.id: t for t in (await self._session.execute(select(CredibilityWeightTier))).scalars().all()
+        }
+        ids = [item.id for item in req.tiers if item.id is not None]
+        if len(ids) != len(set(ids)):
+            raise DomainValidationError(message="A tier is listed more than once.")
+        for tier_id in ids:
+            if tier_id not in existing:
+                raise RecordNotFoundError(model="CredibilityWeightTier", identifier=str(tier_id))
+        for item in req.tiers:
+            _check_range(item.min_accuracy_pct, item.max_accuracy_pct)
+        _check_tiling([(i.min_accuracy_pct, i.max_accuracy_pct) for i in req.tiers if i.is_active])
+
+        for tier_id in set(existing) - set(ids):
+            await self._session.delete(existing[tier_id])
+        for item in req.tiers:
+            values = item.model_dump(exclude={"id"})
+            if item.id is None:
+                self._session.add(CredibilityWeightTier(**values))
+            else:
+                for field, value in values.items():
+                    setattr(existing[item.id], field, value)
+        await self._session.flush()
+        logger.info("credibility_tiers_replaced", count=len(req.tiers))
+        return await self.list_credibility_tiers()
 
     async def get_voting_config(self) -> VotingConfigResponse:
         row = await VotingConfigRepository(self._session).get_or_create()
@@ -344,6 +345,35 @@ class AdminService:
         logger.info("voting_config_updated", **updates)
         return _voting_config_to_response(row)
 
+
+
+def _check_range(min_pct: float, max_pct: float) -> None:
+    if max_pct <= min_pct:
+        raise DomainValidationError(
+            message="max_accuracy_pct must be greater than min_accuracy_pct."
+        )
+
+
+def _check_tiling(active: list[tuple[float, float]]) -> None:
+    """The active tiers must cover every accuracy% from 0 to 100 exactly once."""
+    if not active:
+        raise DomainValidationError(message="At least one active tier must cover 0% to 100%.")
+    ranges = sorted(active)
+    if ranges[0][0] != 0.0:
+        raise DomainValidationError(
+            message=f"Active tiers must start at 0% (currently starts at {ranges[0][0]}%)."
+        )
+    for (_, hi1), (lo2, _) in zip(ranges, ranges[1:], strict=False):
+        if hi1 > lo2:
+            raise DomainValidationError(message=f"Tier ranges overlap around {lo2}%.")
+        if hi1 < lo2:
+            raise DomainValidationError(
+                message=f"Gap between tiers from {hi1}% to {lo2}% — every accuracy% must be covered."
+            )
+    if ranges[-1][1] != 100.0:
+        raise DomainValidationError(
+            message=f"Active tiers must end at 100% (currently ends at {ranges[-1][1]}%)."
+        )
 
 
 def _voting_config_to_response(row: VotingConfig) -> VotingConfigResponse:

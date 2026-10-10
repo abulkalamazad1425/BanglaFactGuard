@@ -1,9 +1,9 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormArray, FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { AdminService } from '../../../services/admin.service';
-import { CredibilityWeightTier } from '../../../models/admin.model';
+import { CredibilityWeightTier, CredibilityWeightTierItem } from '../../../models/admin.model';
 import { ToastService } from '../../../shared/services/toast.service';
 
 @Component({
@@ -33,17 +33,9 @@ export class CredibilityTiersComponent implements OnInit {
     max_review_hours: [null as number | null, [Validators.min(1)]],
   });
 
-  drawerOpen = signal(false);
-  isEditMode = signal(false);
-  editingTierId: string | null = null;
-
-  form: FormGroup = this.fb.group({
-    label: ['', Validators.required],
-    min_accuracy_pct: [0, [Validators.required, Validators.min(0), Validators.max(100)]],
-    max_accuracy_pct: [100, [Validators.required, Validators.min(0), Validators.max(100)]],
-    weight: [1.0, [Validators.required, Validators.min(0.01)]],
-    is_active: [true],
-  });
+  /** The whole tier set, edited in place and saved together, so tiers can be
+   *  split, merged or re-bounded without passing through an invalid state. */
+  tiersForm: FormArray<FormGroup> = this.fb.array<FormGroup>([]);
 
   ngOnInit(): void {
     this.load();
@@ -81,7 +73,7 @@ export class CredibilityTiersComponent implements OnInit {
     this.loading.set(true);
     this.adminSvc.listCredibilityTiers().subscribe({
       next: (t) => {
-        this.tiers.set(t);
+        this.setTiers(t);
         this.loading.set(false);
       },
       error: () => {
@@ -91,64 +83,65 @@ export class CredibilityTiersComponent implements OnInit {
     });
   }
 
-  openCreateDrawer(): void {
-    this.isEditMode.set(false);
-    this.editingTierId = null;
-    this.form.reset({
-      label: '',
-      min_accuracy_pct: 0,
-      max_accuracy_pct: 100,
-      weight: 1.0,
-      is_active: true,
+  private setTiers(tiers: CredibilityWeightTier[]): void {
+    this.tiers.set(tiers);
+    this.tiersForm.clear();
+    tiers.forEach((t) => this.tiersForm.push(this.tierGroup(t)));
+    this.tiersForm.markAsPristine();
+  }
+
+  private tierGroup(t: Partial<CredibilityWeightTierItem> = {}): FormGroup {
+    return this.fb.group({
+      id: [t.id ?? null],
+      label: [t.label ?? '', [Validators.required, Validators.maxLength(100)]],
+      min_accuracy_pct: [
+        t.min_accuracy_pct ?? 0,
+        [Validators.required, Validators.min(0), Validators.max(100)],
+      ],
+      max_accuracy_pct: [
+        t.max_accuracy_pct ?? 100,
+        [Validators.required, Validators.min(0), Validators.max(100)],
+      ],
+      weight: [t.weight ?? 1.0, [Validators.required, Validators.min(0.01)]],
+      is_active: [t.is_active ?? true],
     });
-    this.drawerOpen.set(true);
   }
 
-  openEditDrawer(tier: CredibilityWeightTier): void {
-    this.isEditMode.set(true);
-    this.editingTierId = tier.id;
-    this.form.patchValue(tier);
-    this.drawerOpen.set(true);
+  addTier(): void {
+    this.tiersForm.push(this.tierGroup());
+    this.tiersForm.markAsDirty();
   }
 
-  closeDrawer(): void {
-    this.drawerOpen.set(false);
+  removeTier(index: number): void {
+    this.tiersForm.removeAt(index);
+    this.tiersForm.markAsDirty();
   }
 
-  onSubmit(): void {
-    if (this.form.invalid) {
-      this.form.markAllAsTouched();
+  discardChanges(): void {
+    this.setTiers(this.tiers());
+  }
+
+  saveTiers(): void {
+    if (this.tiersForm.invalid) {
+      this.tiersForm.markAllAsTouched();
       this.toast.error('Please fix the validation errors.');
       return;
     }
     this.saving.set(true);
-    const raw = this.form.value;
-    const request = this.isEditMode()
-      ? this.adminSvc.updateCredibilityTier(this.editingTierId!, raw)
-      : this.adminSvc.createCredibilityTier(raw);
-
-    request.subscribe({
-      next: () => {
-        this.toast.success(`Tier ${this.isEditMode() ? 'updated' : 'created'} successfully!`);
+    const tiers = this.tiersForm.getRawValue() as CredibilityWeightTierItem[];
+    this.adminSvc.saveCredibilityTiers(tiers).subscribe({
+      next: (saved) => {
+        this.setTiers(saved);
         this.saving.set(false);
-        this.drawerOpen.set(false);
-        this.load();
+        this.toast.success('Credibility tiers saved.');
       },
       error: (err) => {
-        this.toast.error(err.error?.detail?.message || err.error?.message || 'An error occurred.');
+        // Nothing is saved unless the active tiers cover 0–100% exactly.
         this.saving.set(false);
+        this.toast.error(
+          err.error?.detail?.message || err.error?.message || 'Failed to save credibility tiers.',
+        );
       },
-    });
-  }
-
-  deleteTier(tier: CredibilityWeightTier): void {
-    if (!confirm(`Delete tier "${tier.label}"? This cannot be undone.`)) return;
-    this.adminSvc.deleteCredibilityTier(tier.id).subscribe({
-      next: () => {
-        this.toast.success('Tier deleted.');
-        this.load();
-      },
-      error: () => this.toast.error('Failed to delete tier.'),
     });
   }
 }

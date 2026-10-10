@@ -109,7 +109,7 @@ class InternalSiteSearchClient:
                 ):
                     continue
 
-                link_text = a_tag.get_text(strip=True)
+                link_text = _visible_text(a_tag)
                 if len(link_text) < 8:
 
                     parent = a_tag.parent
@@ -117,7 +117,7 @@ class InternalSiteSearchClient:
                         if parent is None:
                             break
                         if parent.name in ("h1", "h2", "h3", "h4", "li"):
-                            parent_text = parent.get_text(strip=True)
+                            parent_text = _visible_text(parent)
                             if len(parent_text) > len(link_text):
                                 link_text = parent_text
                             break
@@ -146,6 +146,17 @@ class InternalSiteSearchClient:
             result_count=len(results),
         )
         return results
+
+
+def _visible_text(element) -> str:
+    """The element's text with the whitespace the page actually has, collapsed.
+
+    `get_text(strip=True)` strips every text node separately and joins them
+    with nothing, so a kicker span and the headline after it ("<span>মন্ত্রিসভার
+    বৈঠক</span> গ্রাম সরকার...") become one glued word ("বৈঠকগ্রাম"). No space is
+    inserted where the page has none.
+    """
+    return " ".join(element.get_text().split())
 
 
 def _query_tokens(query: str) -> set[str]:

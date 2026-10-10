@@ -1,4 +1,3 @@
-"""Admin home page data: what needs action now, what changed, who is active."""
 
 from __future__ import annotations
 
