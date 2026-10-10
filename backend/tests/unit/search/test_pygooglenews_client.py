@@ -56,6 +56,10 @@ async def test_query_and_date_window(monkeypatch):
     assert gn.calls[1] == ("site:prothomalo.com সেতু", {})  # no duplicate operator, no window for old stories
     with pytest.raises(PyGoogleNewsError):
         await client(monkeypatch, FakeGoogleNews(error=RuntimeError("rate limited"))).search_entries("q")
+    monkeypatch.setattr(pgn, "_FEED_TIMEOUT_S", 0.1)
+    monkeypatch.setattr(gn, "search", lambda *a, **k: __import__("time").sleep(0.5))
+    with pytest.raises(PyGoogleNewsError, match="timed out"):  # the feed fetch has no timeout of its own
+        await c.search_entries("q")
 
 
 async def test_redirects_are_resolved_once_and_unresolvable_ones_fail_the_call(monkeypatch):
@@ -78,20 +82,30 @@ async def test_redirects_are_resolved_once_and_unresolvable_ones_fail_the_call(m
         await client(monkeypatch, FakeGoogleNews([{"link": OTHER, "title": "b"}]), browser_down).search_entries("q")
 
 
-async def test_the_browser_follows_the_redirect_and_a_failed_launch_is_retried(monkeypatch):
+async def test_the_browser_captures_the_publisher_hop_and_a_failed_launch_is_retried(monkeypatch):
     async def no_sleep(_):
         return None
 
     monkeypatch.setattr(pgn.asyncio, "sleep", no_sleep)
+    monkeypatch.setattr(pgn, "_REDIRECT_WAIT_S", 0.2)
+    server = "https://news.google.com/rss/articles/server"
     scripts = {
-        WRAPPED: {"late": True, "final": FINAL + "?__cf_chl_rt_tk=abc&id=1"},
+        WRAPPED: {"late": True, "final": FINAL + "?__cf_chl_rt_tk=abc&id=1"},  # the interstitial's JS hop
+        server: {"final": FINAL},                             # a 302: aborting it fails goto
         OTHER: {"late": True},                                # never leaves Google
         "https://news.google.com/rss/articles/crash": {"crash": True},
     }
     fake_playwright.install(monkeypatch, scripts)
     resolved = await pgn.PyGoogleNewsClient()._resolve_with_retry(list(scripts))
-    assert resolved == {WRAPPED: FINAL + "?id=1", OTHER: OTHER,
+    assert resolved == {WRAPPED: FINAL + "?id=1", server: FINAL, OTHER: OTHER,
                         "https://news.google.com/rss/articles/crash": "https://news.google.com/rss/articles/crash"}
+
+    # A dead browser never answers: the session deadline returns what was
+    # resolved instead of holding the claim at "processing" forever.
+    monkeypatch.setattr(pgn, "_SESSION_DEADLINE_S", 0.5)
+    hung = "https://news.google.com/rss/articles/hung"
+    fake_playwright.install(monkeypatch, {WRAPPED: scripts[WRAPPED], hung: {"hang": True}})
+    assert await pgn.PyGoogleNewsClient()._run_playwright_async([WRAPPED, hung]) == {WRAPPED: FINAL + "?id=1"}
 
     attempts = []
     fake_playwright.install(monkeypatch, scripts, launch_error=OSError("browser would not start"))

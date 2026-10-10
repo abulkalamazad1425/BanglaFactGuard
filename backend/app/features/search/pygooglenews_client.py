@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import re
 import threading
 from collections import OrderedDict
@@ -32,7 +33,22 @@ _SITE_OPERATOR_RE = re.compile(r"\bsite:", re.IGNORECASE)
 _DATE_WINDOW = timedelta(days=45)
 
 # How long to wait for the Google News interstitial to hop to the publisher.
-_REDIRECT_WAIT_MS = 8000
+_REDIRECT_WAIT_S = 12.0
+
+# A crashed Chromium can leave a Playwright call waiting forever. Nothing
+# else bounds this stage and the job heartbeat keeps the claim RUNNING, so it
+# would sit at "processing" for good: cap one browser session, and each
+# cleanup step, then hand back whatever was resolved.
+_SESSION_DEADLINE_S = 60.0
+_CLEANUP_TIMEOUT_S = 5.0
+# pygooglenews fetches the feed with no timeout of its own.
+_FEED_TIMEOUT_S = 30.0
+
+# Hosts the interstitial itself needs. Any other request is the publisher (or
+# a tracker): it is never loaded - its URL is all we want.
+_GOOGLE_HOST_RE = re.compile(
+    r"(^|\.)(google\.com|gstatic\.com|googleapis\.com|googleusercontent\.com)$"
+)
 
 # Date-bounded Google News queries only behave on reasonably fresh stories.
 # Past this age the feed answers a bounded query with a near-empty set even
@@ -163,9 +179,13 @@ class PyGoogleNewsClient:
         domain: str | None = None,
         published_date: date | None = None,
     ) -> list[tuple[str, str]]:
-        entries = await asyncio.to_thread(
-            self._sync_search, query, domain, published_date
-        )
+        try:
+            entries = await asyncio.wait_for(
+                asyncio.to_thread(self._sync_search, query, domain, published_date),
+                _FEED_TIMEOUT_S,
+            )
+        except TimeoutError as exc:
+            raise PyGoogleNewsError("Google News feed timed out") from exc
 
         wrapped_urls = [u for u, _ in entries if "news.google.com" in u]
         if wrapped_urls:
@@ -232,75 +252,106 @@ class PyGoogleNewsClient:
             logger.warning("pygooglenews_playwright_not_installed")
             return {}
 
-        async with async_playwright() as pw:
-            try:
-                browser = await pw.chromium.launch(
-                    headless=True,
-                    args=[
-                        "--no-sandbox",
-                        "--disable-dev-shm-usage",
-                        "--disable-blink-features=AutomationControlled",
-                    ],
-                )
-                context = await browser.new_context(
-                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                )
-                await context.route(
-                    "**/*.{png,jpg,jpeg,gif,webp,svg,ico,woff,woff2,ttf,mp4,mp3}",
-                    lambda route: route.abort(),
-                )
+        try:
+            pw = await asyncio.wait_for(async_playwright().start(), _CLEANUP_TIMEOUT_S * 4)
+        except Exception as exc:
+            logger.error("pgn_playwright_error", error=str(exc))
+            return {}
 
-                # Resolving several redirect pages at once on one browser
-                # context causes enough contention that some navigations
-                # miss a 12s timeout even though a single page resolves in
-                # ~2-3s — cap concurrency and give each page more headroom.
-                semaphore = asyncio.Semaphore(4)
+        work = asyncio.ensure_future(self._resolve_in_browser(pw, urls, resolved))
+        done, _ = await asyncio.wait({work}, timeout=_SESSION_DEADLINE_S)
+        if not done:
+            logger.warning(
+                "pgn_resolve_deadline", resolved=len(resolved), total=len(urls)
+            )
+            work.cancel()
+        # Stopping the driver closes its browser and fails every call still
+        # waiting on it, so a hung page cannot outlive this session.
+        try:
+            await asyncio.wait_for(pw.stop(), _CLEANUP_TIMEOUT_S)
+        except Exception as exc:
+            logger.warning("pgn_playwright_stop_failed", error=str(exc)[:120])
+        await asyncio.wait({work}, timeout=_CLEANUP_TIMEOUT_S)
+        if work.done() and not work.cancelled() and work.exception():
+            logger.error("pgn_playwright_error", error=str(work.exception()))
+        return dict(resolved)
 
-                async def resolve_one(url: str) -> tuple[str, str]:
-                    async with semaphore:
-                        page = await context.new_page()
-                        try:
-                            await page.goto(
-                                url, wait_until="domcontentloaded", timeout=20000
-                            )
-                            # Google News hands back an interstitial that
-                            # redirects to the publisher from JS. A fixed
-                            # pause races that redirect — when it loses, the
-                            # unresolved news.google.com URL flows on to S04,
-                            # where the domain filter silently drops it and
-                            # the real article is lost. Wait for the hop.
-                            try:
-                                await page.wait_for_url(
-                                    lambda u: "news.google.com" not in u,
-                                    timeout=_REDIRECT_WAIT_MS,
-                                )
-                            except Exception:
-                                await page.wait_for_timeout(2500)
-                            final_url = _strip_challenge_params(page.url)
-                            if "news.google.com" in final_url:
-                                logger.warning(
-                                    "pgn_resolve_incomplete", url=url[:60]
-                                )
-                            logger.debug(
-                                "pgn_resolved_url", orig=url[:60], final=final_url[:60]
-                            )
-                            return url, final_url
-                        except Exception as exc:
-                            logger.warning(
-                                "pgn_resolve_failed", url=url[:60], error=str(exc)
-                            )
-                            return url, url
-                        finally:
-                            await page.close()
+    async def _resolve_in_browser(
+        self, pw, urls: list[str], resolved: dict[str, str]
+    ) -> None:
+        browser = await pw.chromium.launch(
+            headless=True,
+            args=[
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-blink-features=AutomationControlled",
+            ],
+        )
+        context = await browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        )
+        landing: dict = {}  # page -> future of the publisher URL it heads to
 
-                tasks = [resolve_one(u) for u in urls]
-                results = await asyncio.gather(*tasks)
-                for orig, final in results:
-                    resolved[orig] = final
+        # Google News hands back an interstitial that redirects to the
+        # publisher from JS. Only that hop's URL is needed: the publisher page
+        # is never loaded. Loading it (ads, sign-in and push scripts on every
+        # tab of six parallel browsers) exhausted memory and crashed Chromium.
+        async def route_request(route) -> None:
+            request = route.request
+            host = (urlparse(request.url).hostname or "").lower()
+            google = bool(_GOOGLE_HOST_RE.search(host))
+            allowed = google and request.resource_type not in ("image", "font", "media")
+            if not google:
+                # e.g. a service-worker request has no frame
+                with contextlib.suppress(Exception):
+                    if request.is_navigation_request():
+                        page = request.frame.page
+                        hop = landing.get(page)
+                        if hop and not hop.done() and request.frame == page.main_frame:
+                            hop.set_result(request.url)
+            # the page may close while the request is in flight
+            with contextlib.suppress(Exception):
+                await (route.continue_() if allowed else route.abort())
 
-                await context.close()
-                await browser.close()
-            except Exception as exc:
-                logger.error("pgn_playwright_error", error=str(exc))
+        await context.route("**/*", route_request)
 
-        return resolved
+        # Resolving several redirect pages at once on one browser context
+        # causes enough contention that some hops come late even though a
+        # single page resolves in ~2-3s - cap concurrency.
+        semaphore = asyncio.Semaphore(4)
+
+        async def resolve_one(url: str) -> None:
+            async with semaphore:
+                page = await context.new_page()
+                hop = asyncio.get_running_loop().create_future()
+                landing[page] = hop
+                try:
+                    await page.goto(url, wait_until="commit", timeout=20000)
+                    # A fixed pause races the redirect - when it loses, the
+                    # unresolved news.google.com URL flows on to S04, where
+                    # the domain filter silently drops it and the real
+                    # article is lost. Wait for the hop.
+                    try:
+                        final_url = await asyncio.wait_for(hop, _REDIRECT_WAIT_S)
+                    except TimeoutError:
+                        final_url = url
+                        logger.warning("pgn_resolve_incomplete", url=url[:60])
+                    final_url = _strip_challenge_params(final_url)
+                    logger.debug("pgn_resolved_url", orig=url[:60], final=final_url[:60])
+                    resolved[url] = final_url
+                except Exception as exc:
+                    if hop.done() and not hop.cancelled():
+                        # A server-side redirect: the aborted hop failed goto
+                        # itself, but its URL was already captured.
+                        resolved[url] = _strip_challenge_params(hop.result())
+                    else:
+                        logger.warning("pgn_resolve_failed", url=url[:60], error=str(exc))
+                        resolved[url] = url
+                finally:
+                    landing.pop(page, None)
+                    with contextlib.suppress(Exception):
+                        await asyncio.wait_for(page.close(), _CLEANUP_TIMEOUT_S)
+
+        await asyncio.gather(*(resolve_one(u) for u in urls))
+        with contextlib.suppress(Exception):
+            await asyncio.wait_for(browser.close(), _CLEANUP_TIMEOUT_S)
