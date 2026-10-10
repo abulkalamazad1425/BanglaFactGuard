@@ -31,11 +31,153 @@
         }}</h1></div
       ></header
     >
-    @if (lookup()?.headline) {
-      <section class="surface"
-        ><span class="eyebrow">SUBMITTED CLAIM</span
-        ><h2 class="claim-preview">{{ lookup()!.headline }}</h2></section
+    <!-- The original submission always comes first, in every state: the
+         richest record available (multimodal detail, photocard detail, or
+         the submission lookup while a check is still running or failed). -->
+    @if (multimodalResult(); as m) {
+      <section class="surface claim-section"
+        ><div class="section-heading"
+          ><span class="eyebrow">ORIGINAL SUBMISSION</span
+          ><h2>The article and image that were checked</h2></div
+        ><div class="claim-layout" [class.no-image]="!m.image_url || imageFailed">
+          @if (m.image_url && !imageFailed) {
+            <img
+              [src]="m.image_url"
+              class="media-image"
+              alt="Submitted article image"
+              (error)="imageFailed = true"
+            />
+          }
+          <div
+            ><h3 class="claim-preview">{{ m.headline || 'No headline recorded' }}</h3>
+            @if (imageFailed) {
+              <p class="field-hint">The submitted image is temporarily unavailable.</p>
+            }
+            @if (m.body_text) {
+              <details
+                ><summary>Read the submitted article text</summary
+                ><p class="long-text">{{ m.body_text }}</p></details
+              >
+            }
+          </div></div
+        ></section
       >
+    }
+    @if (!multimodalResult() && photocardResult(); as p) {
+      <section class="surface claim-section"
+        ><div class="section-heading"
+          ><span class="eyebrow">ORIGINAL SUBMISSION</span
+          ><h2>The photocard and what was read from it</h2></div
+        >
+        <div class="claim-layout" [class.no-image]="!p.image_url || imageFailed">
+          @if (p.image_url && !imageFailed) {
+            <img
+              [src]="p.image_url"
+              class="media-image"
+              alt="Submitted photo card"
+              (error)="imageFailed = true"
+            />
+          }
+          <div>
+            @if (p.headline) {
+              <span class="field-hint">Headline read from the card</span
+              ><h3 class="claim-preview" lang="bn">{{ p.headline }}</h3>
+            } @else if (p.status === 'FAILED') {
+              <p class="preview-placeholder">{{
+                p.extraction_status === 'INVALID_CONTENT'
+                  ? 'No valid headline or recognised news outlet was found on this card.'
+                  : 'The card could not be read.'
+              }}</p>
+            } @else {
+              <p class="preview-placeholder"
+                >Reading the headline, outlet and date from the card…</p
+              >
+            }
+            @if (imageFailed) {
+              <p class="field-hint">The submitted image is temporarily unavailable.</p>
+            }
+            <dl class="meta-grid"
+              ><div
+                ><dt>Claimed news outlet</dt
+                ><dd lang="bn">{{
+                  p.claimed_source_name ||
+                    p.claimed_source_text ||
+                    (p.extraction_status === 'SUCCEEDED'
+                      ? (p.detected_source_text
+                          ? p.detected_source_text + ' (not an active verified source)'
+                          : 'Not identified on the card') + ' — checked against verified sources'
+                      : p.status === 'FAILED'
+                        ? 'Not identified'
+                        : 'Not read yet')
+                }}</dd></div
+              ><div
+                ><dt>Claimed publication date</dt
+                ><dd>{{
+                  p.published_date
+                    ? (p.published_date | date: 'd MMM y')
+                    : p.extraction_status === 'SUCCEEDED'
+                      ? 'Not shown on the card'
+                      : '—'
+                }}</dd></div
+              ><div><dt>Comparison scope</dt><dd>Headline only</dd></div
+              ><div
+                ><dt>Submitted</dt><dd>{{ p.created_at | date: 'd MMM y' }}</dd></div
+              ></dl
+            >
+            @if (p.extraction_status === 'SUCCEEDED') {
+              <p class="field-hint">{{ extractionSummary(p) }}</p>
+            }
+            @if (p.extraction_failures?.length) {
+              <details
+                ><summary>Reading details</summary
+                ><ul class="long-text">
+                  @for (f of p.extraction_failures; track $index) {
+                    <li>{{ f }}</li>
+                  }
+                </ul></details
+              >
+            }
+          </div></div
+        ></section
+      >
+    }
+    @if (!multimodalResult() && !photocardResult() && lookup(); as l) {
+      @if (l.submission_type !== 'PHOTO_CARD') {
+        <section class="surface claim-section"
+          ><div class="section-heading"
+            ><span class="eyebrow">ORIGINAL SUBMISSION</span
+            ><h2>{{
+              l.submission_type === 'MULTIMODAL'
+                ? stillRunning()
+                  ? 'The article being checked'
+                  : 'The article that was checked'
+                : stillRunning()
+                  ? 'The claim being checked'
+                  : 'The claim that was checked'
+            }}</h2></div
+          ><h3 class="claim-preview">{{ l.headline || 'No headline recorded' }}</h3>
+          @if (l.submission_type === 'SOURCE_BASED') {
+            <dl class="meta-grid"
+              ><div
+                ><dt>Claimed outlet</dt><dd>{{ l.claimed_source_text || 'Not recorded' }}</dd></div
+              ><div
+                ><dt>Claimed publication date</dt
+                ><dd>{{
+                  l.published_date ? (l.published_date | date: 'd MMM y') : 'Not provided'
+                }}</dd></div
+              ></dl
+            >
+          } @else {
+            <p class="field-hint">The submitted image is shown here once the check finishes.</p>
+          }
+          @if (l.body_text) {
+            <details
+              ><summary>Read the submitted article text</summary
+              ><p class="long-text">{{ l.body_text }}</p></details
+            >
+          }
+        </section>
+      }
     }
     @if (loading()) {
       <section class="surface state-card" role="status"
@@ -127,135 +269,6 @@
             >Check against a news outlet ↗</a
           ></section
         >
-        <section class="surface claim-section"
-          ><div class="section-heading"
-            ><span class="eyebrow">ORIGINAL SUBMISSION</span
-            ><h2>The article and image that were checked</h2></div
-          ><div class="claim-layout" [class.no-image]="!m.image_url || imageFailed">
-            @if (m.image_url && !imageFailed) {
-              <img
-                [src]="m.image_url"
-                class="media-image"
-                alt="Submitted article image"
-                (error)="imageFailed = true"
-              />
-            }
-            <div
-              ><h3 class="claim-preview">{{ m.headline || 'No headline recorded' }}</h3>
-              @if (imageFailed) {
-                <p class="field-hint">The submitted image is temporarily unavailable.</p>
-              }
-              @if (m.body_text) {
-                <details
-                  ><summary>Read the submitted article text</summary
-                  ><p class="long-text">{{ m.body_text }}</p></details
-                >
-              }
-            </div></div
-          ></section
-        >
-      }
-      @if (photocardResult(); as p) {
-        <section class="surface claim-section"
-          ><div class="section-heading"
-            ><span class="eyebrow">ORIGINAL SUBMISSION</span
-            ><h2>The photocard and what was read from it</h2></div
-          >
-          <div class="claim-layout" [class.no-image]="!p.image_url || imageFailed">
-            @if (p.image_url && !imageFailed) {
-              <img
-                [src]="p.image_url"
-                class="media-image"
-                alt="Submitted photo card"
-                (error)="imageFailed = true"
-              />
-            }
-            <div>
-              @if (p.headline) {
-                <span class="field-hint">Headline read from the card</span
-                ><h3 class="claim-preview" lang="bn">{{ p.headline }}</h3>
-              } @else if (p.status === 'FAILED') {
-                <p class="preview-placeholder">{{
-                  p.extraction_status === 'INVALID_CONTENT'
-                    ? 'No valid headline or recognised news outlet was found on this card.'
-                    : 'The card could not be read.'
-                }}</p>
-              } @else {
-                <p class="preview-placeholder"
-                  >Reading the headline, outlet and date from the card…</p
-                >
-              }
-              @if (imageFailed) {
-                <p class="field-hint">The submitted image is temporarily unavailable.</p>
-              }
-              <dl class="meta-grid"
-                ><div
-                  ><dt>Claimed news outlet</dt
-                  ><dd lang="bn">{{
-                    p.claimed_source_name ||
-                      p.claimed_source_text ||
-                      (p.extraction_status === 'SUCCEEDED'
-                        ? (p.detected_source_text
-                            ? p.detected_source_text + ' (not an active verified source)'
-                            : 'Not identified on the card') + ' — checked against verified sources'
-                        : p.status === 'FAILED'
-                          ? 'Not identified'
-                          : 'Not read yet')
-                  }}</dd></div
-                ><div
-                  ><dt>Claimed publication date</dt
-                  ><dd>{{
-                    p.published_date
-                      ? (p.published_date | date: 'd MMM y')
-                      : p.extraction_status === 'SUCCEEDED'
-                        ? 'Not shown on the card'
-                        : '—'
-                  }}</dd></div
-                ><div><dt>Comparison scope</dt><dd>Headline only</dd></div
-                ><div
-                  ><dt>Submitted</dt><dd>{{ p.created_at | date: 'd MMM y' }}</dd></div
-                ></dl
-              >
-              @if (p.extraction_status === 'SUCCEEDED') {
-                <p class="field-hint">{{ extractionSummary(p) }}</p>
-              }
-              @if (p.extraction_failures?.length) {
-                <details
-                  ><summary>Reading details</summary
-                  ><ul class="long-text">
-                    @for (f of p.extraction_failures; track $index) {
-                      <li>{{ f }}</li>
-                    }
-                  </ul></details
-                >
-              }
-            </div></div
-          ></section
-        >
-      }
-      @if (kind() === 'SOURCE_BASED' && lookup(); as l) {
-        <section class="surface claim-section"
-          ><div class="section-heading"
-            ><span class="eyebrow">ORIGINAL SUBMISSION</span
-            ><h2>The claim that was checked</h2></div
-          ><h3 class="claim-preview">{{ l.headline || 'No headline recorded' }}</h3
-          ><dl class="meta-grid"
-            ><div
-              ><dt>Claimed outlet</dt><dd>{{ l.claimed_source_text || 'Not recorded' }}</dd></div
-            ><div
-              ><dt>Claimed publication date</dt
-              ><dd>{{
-                l.published_date ? (l.published_date | date: 'd MMM y') : 'Not provided'
-              }}</dd></div
-            ></dl
-          >
-          @if (l.body_text) {
-            <details
-              ><summary>Read the submitted article text</summary
-              ><p class="long-text">{{ l.body_text }}</p></details
-            >
-          }
-        </section>
       }
       @if (!hasDetail() && !stillRunning() && !failed()) {
         <section class="surface state-card"
