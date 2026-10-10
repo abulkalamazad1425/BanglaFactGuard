@@ -39,10 +39,13 @@ async def list_sources(
             "so only active sources are returned."
         ),
     ),
+    q: str | None = Query(
+        None, max_length=200, description="Search name, domain, URL or aliases"
+    ),
     service: SourceService = Depends(get_source_service),
 ) -> SourceListSchema:
     return await service.list_sources(
-        language=language, page=page, size=size, include_inactive=include_inactive
+        language=language, page=page, size=size, include_inactive=include_inactive, q=q
     )
 
 

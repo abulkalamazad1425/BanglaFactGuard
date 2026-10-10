@@ -98,3 +98,12 @@ summary {
     padding: 18px;
   }
 }
+.filter-row {
+  flex-wrap: wrap;
+  input {
+    flex: 1 1 240px;
+  }
+  select {
+    flex: 0 1 190px;
+  }
+}

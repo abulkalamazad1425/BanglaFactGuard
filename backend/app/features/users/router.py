@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.constants import SubmissionType
 from app.features.auth.models import User
 from app.features.auth.security import get_current_user
 from app.features.users.schemas import (
@@ -11,7 +14,7 @@ from app.features.users.schemas import (
     SubmissionSummary,
     UpdateProfileRequest,
 )
-from app.features.users.service import UserAccountService, to_profile_response
+from app.features.users.service import UserAccountService
 from app.shared.dependencies import get_async_session
 
 router = APIRouter(prefix="/users", tags=["Users"])
@@ -29,10 +32,15 @@ def _service(
 async def get_my_submissions(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    q: str | None = Query(default=None, max_length=200, description="Keyword search over headline, text and outlet"),
+    state: Literal["in_progress", "review", "final", "failed"] | None = Query(default=None),
+    submission_type: SubmissionType | None = Query(default=None, alias="type"),
     current_user: User = Depends(get_current_user),
     svc: UserAccountService = Depends(_service),
 ) -> list[SubmissionSummary]:
-    return await svc.my_submissions(current_user, limit=limit, offset=offset)
+    return await svc.my_submissions(
+        current_user, limit=limit, offset=offset, q=q, state=state, submission_type=submission_type
+    )
 
 
 @router.get("/me/submissions/stats", response_model=SubmissionStatsResponse)
@@ -46,8 +54,9 @@ async def get_my_submission_stats(
 @router.get("/me/profile", response_model=ProfileResponse)
 async def get_my_profile(
     current_user: User = Depends(get_current_user),
+    svc: UserAccountService = Depends(_service),
 ) -> ProfileResponse:
-    return to_profile_response(current_user)
+    return await svc.profile(current_user)
 
 
 @router.put("/me/profile", response_model=ProfileResponse)

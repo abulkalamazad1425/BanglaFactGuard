@@ -106,6 +106,52 @@ class SourceRepository(BaseRepository[VerifiedSource]):
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
+    async def search(
+        self,
+        query: str,
+        *,
+        include_inactive: bool,
+        language: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[VerifiedSource], int]:
+        """Sources matching `query` in the Bangla or English name, domain,
+        base URL or aliases (best matches first), with the matching total."""
+        from sqlalchemy import String, func
+
+        from app.shared.utils.keyword_search import KeywordSearch
+
+        search = KeywordSearch(
+            query,
+            [
+                VerifiedSource.display_name,
+                VerifiedSource.display_name_en,
+                VerifiedSource.canonical_name,
+                VerifiedSource.base_url,
+                cast(VerifiedSource.aliases, String),
+            ],
+            headline_column=VerifiedSource.display_name,
+        )
+        conditions = []
+        if not include_inactive:
+            conditions.append(VerifiedSource.is_active.is_(True))
+        if language:
+            conditions.append(VerifiedSource.language == language.lower())
+        if search.active:
+            conditions.append(search.condition)
+        stmt = (
+            select(VerifiedSource)
+            .where(*conditions)
+            .order_by(*search.order_by(), VerifiedSource.canonical_name.asc())
+            .offset(offset)
+            .limit(limit)
+        )
+        items = list((await self.session.execute(stmt)).scalars().all())
+        total = (
+            await self.session.execute(select(func.count()).select_from(VerifiedSource).where(*conditions))
+        ).scalar_one()
+        return items, total
+
     async def count_all(self) -> int:
         from sqlalchemy import func
 

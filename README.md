@@ -104,7 +104,7 @@ BanglaFactGuard/
 |   |   |                        # multimodal, expert review, admin and more
 |   |   `-- shared/              # Shared models, dependencies and utilities
 |   |-- scripts/                 # Source seeding and maintenance utilities
-|   |-- tests/                   # Unit and integration tests
+|   |-- tests/                   # Unit tests, one file per service module
 |   |-- .env.example
 |   |-- docker-compose.yml       # Redis and MinIO (not PostgreSQL)
 |   |-- requirements.txt

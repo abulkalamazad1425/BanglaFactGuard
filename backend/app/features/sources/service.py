@@ -68,9 +68,14 @@ class SourceService:
         page: int = 1,
         size: int = 20,
         include_inactive: bool = False,
+        q: str | None = None,
     ) -> SourceListSchema:
         offset = (page - 1) * size
-        if include_inactive:
+        if q and q.strip():
+            items, total = await self.source_repo.search(
+                q, include_inactive=include_inactive, language=language, limit=size, offset=offset
+            )
+        elif include_inactive:
             items = await self.source_repo.list_all(
                 language=language, limit=size, offset=offset
             )

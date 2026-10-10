@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
+from sqlalchemy.orm import aliased
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.constants import ContentStatus, SourceStatus, SubmissionStatus, SubmissionType
@@ -15,18 +16,43 @@ from app.features.verification.headline_status import headline_status_for_result
 from app.features.verification.models import VerificationResult
 from app.features.verification.presenter import effective_status, is_headline_result, pick_expert_row
 from app.shared.base_repository import rows_by_submission
+from app.shared.utils.keyword_search import KeywordSearch
 
 
-def to_profile_response(user: User) -> ProfileResponse:
+def to_profile_response(user: User, total_submissions: int) -> ProfileResponse:
     return ProfileResponse(
         id=str(user.id),
         full_name=user.full_name,
         email=user.email,
         role=user.role,
         is_active=user.is_active,
-        total_submissions=user.total_submissions,
+        total_submissions=total_submissions,
         member_since=user.created_at,
     )
+
+
+# My Submissions status filter -> the stored statuses behind each label the page
+# shows. A duplicate still EXPERT_REVIEW whose original is FINALIZED is shown
+# (and so filtered) as final - see presenter.effective_status.
+MY_SUBMISSION_STATES = ("in_progress", "review", "final", "failed")
+
+
+def _state_condition(state: str, original):
+    dup_of_final = and_(
+        Submission.duplicate_of_submission_id.is_not(None),
+        Submission.status == SubmissionStatus.EXPERT_REVIEW,
+        original.status == SubmissionStatus.FINALIZED,
+    )
+    if state == "in_progress":
+        return Submission.status.in_([SubmissionStatus.PENDING, SubmissionStatus.PROCESSING])
+    if state == "review":
+        return and_(
+            Submission.status.in_([SubmissionStatus.EXPERT_REVIEW, SubmissionStatus.ESCALATED]),
+            ~func.coalesce(dup_of_final, False),
+        )
+    if state == "final":
+        return or_(Submission.status == SubmissionStatus.FINALIZED, func.coalesce(dup_of_final, False))
+    return Submission.status == SubmissionStatus.FAILED
 
 
 class UserAccountService:
@@ -36,15 +62,41 @@ class UserAccountService:
         self._session = session
         self._photocard_storage = photocard_storage
 
-    async def my_submissions(self, user: User, *, limit: int, offset: int) -> list[SubmissionSummary]:
+    async def my_submissions(
+        self,
+        user: User,
+        *,
+        limit: int,
+        offset: int,
+        q: str | None = None,
+        state: str | None = None,
+        submission_type: SubmissionType | None = None,
+    ) -> list[SubmissionSummary]:
         """Owner-only: the user's own submissions, including ones still
-        PENDING/PROCESSING or FAILED and ones with no headline yet."""
+        PENDING/PROCESSING or FAILED and ones with no headline yet.
+
+        Optional filters: `q` keyword search over the headline, body text and
+        claimed outlet (best matches first), `state` (MY_SUBMISSION_STATES)
+        and `submission_type`. Filtering happens before pagination."""
         session = self._session
         photocard_storage = self._photocard_storage
+        stmt = select(Submission).where(Submission.submitter_id == user.id)
+        if state in MY_SUBMISSION_STATES:
+            original = aliased(Submission)
+            stmt = stmt.outerjoin(original, original.id == Submission.duplicate_of_submission_id).where(
+                _state_condition(state, original)
+            )
+        if submission_type is not None:
+            stmt = stmt.where(Submission.submission_type == submission_type)
+        search = KeywordSearch(
+            q,
+            [Submission.headline, Submission.body_text, Submission.claimed_source_text],
+            headline_column=Submission.headline,
+        )
+        if search.active:
+            stmt = stmt.where(search.condition)
         stmt = (
-            select(Submission)
-            .where(Submission.submitter_id == user.id)
-            .order_by(Submission.created_at.desc())
+            stmt.order_by(*search.order_by(), Submission.created_at.desc(), Submission.id)
             .offset(offset)
             .limit(limit)
         )
@@ -59,6 +111,12 @@ class UserAccountService:
         multimodal = await rows_by_submission(
             session, MultimodalAnalysis,
             [s.id for s in submissions if s.submission_type == SubmissionType.MULTIMODAL],
+        )
+        # A reused text & image check shows its original's decision.
+        multimodal_originals = await rows_by_submission(
+            session, MultimodalAnalysis,
+            list({s.duplicate_of_submission_id for s in submissions
+                  if s.submission_type == SubmissionType.MULTIMODAL and s.duplicate_of_submission_id}),
         )
         duplicate_of = list({s.duplicate_of_submission_id for s in submissions if s.duplicate_of_submission_id})
         original_statuses = (
@@ -85,8 +143,10 @@ class UserAccountService:
             is_finalized = bool(expert and expert.overall_verdict)
 
             mm = multimodal.get(submission.id)
+            mm_verdict = None
             if mm:
-                is_finalized = bool(mm.expert_overall_verdict)
+                mm_verdict = (multimodal_originals.get(submission.duplicate_of_submission_id) or mm).expert_overall_verdict
+                is_finalized = bool(mm_verdict)
             original_status = (
                 original_statuses.get(submission.duplicate_of_submission_id)
                 if submission.duplicate_of_submission_id else None
@@ -112,7 +172,7 @@ class UserAccountService:
                     headline_status=headline_status_for_result(result, claim_headline=submission.headline),
                     date_status=result.date_status if result else None,
                     published_date=submission.published_date,
-                    overall_verdict=mm.expert_overall_verdict if mm else expert.overall_verdict if is_finalized else None,
+                    overall_verdict=mm_verdict if mm else expert.overall_verdict if is_finalized else None,
                     prediction=mm.prediction if mm else None,
                     is_finalized=is_finalized,
                     ai_confidence=result.confidence if result else None,
@@ -182,9 +242,23 @@ class UserAccountService:
             pending=pending,
         )
 
+    async def submission_count(self, user: User) -> int:
+        """Every submission the user has made, counted live - the same total
+        My Submissions shows. (The cached `users.total_submissions` counter was
+        only bumped for some completed checks - never for photo cards, reused
+        results or failed checks - so it drifted far from the real number.)"""
+        return (
+            await self._session.execute(
+                select(func.count()).select_from(Submission).where(Submission.submitter_id == user.id)
+            )
+        ).scalar_one()
+
+    async def profile(self, user: User) -> ProfileResponse:
+        return to_profile_response(user, await self.submission_count(user))
+
     async def update_full_name(self, user: User, full_name: str | None) -> ProfileResponse:
         if full_name is not None:
             user.full_name = full_name
         self._session.add(user)
         await self._session.flush()
-        return to_profile_response(user)
+        return await self.profile(user)

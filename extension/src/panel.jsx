@@ -10,6 +10,9 @@ import {
   cropRect,
   validateDraft,
   FieldError,
+  ACTIVITY_STATUS,
+  searchActivity,
+  paginate,
 } from './shared.js';
 import { imageStore } from './db.js';
 import './style.css';
@@ -148,8 +151,16 @@ function App() {
     [fieldError, setFieldError] = useState(null);
   const [selection, setSelection] = useState(null),
     [sources, setSources] = useState([]);
+  const [activityQuery, setActivityQuery] = useState(''),
+    [activityPage, setActivityPage] = useState(1);
   const [addresses, setAddresses] = useState(DEFAULTS),
     [credentials, setCredentials] = useState({ email: '', password: '' });
+  const activityMatches = searchActivity(state.items, activityQuery);
+  const activity = paginate(activityMatches, activityPage);
+  const showActivityPage = (page) => {
+    setActivityPage(page);
+    window.scrollTo({ top: 0 }); // the pager sits below the list
+  };
   const owner = ownerOf({ user: state.user }),
     enabled = state.settings.enabled,
     locked = busy || state.busy || !enabled;
@@ -488,7 +499,7 @@ function App() {
                   {textField(
                     'headline',
                     'Headline',
-                    true,
+                    draft.type === 'SOURCE_BASED',
                     draft.type === 'SOURCE_BASED' ? 5 : undefined,
                   )}
                   {textField(
@@ -631,25 +642,46 @@ function App() {
               <button onClick={() => setTab('verify')}>Verify a claim</button>
             </div>
           )}
-          {state.items.map((item) => (
+          {state.items.length > 0 && (
+            <div class="activity-search">
+              <input
+                type="search"
+                aria-label="Search my activity"
+                placeholder="Search headline, type or result"
+                value={activityQuery}
+                onInput={(e) => {
+                  setActivityQuery(e.target.value);
+                  setActivityPage(1);
+                }}
+              />
+              <p class="hint" aria-live="polite">
+                {activityQuery.trim()
+                  ? `${activity.total} of ${state.items.length} claims match`
+                  : `${state.items.length} claim${state.items.length === 1 ? '' : 's'}`}
+              </p>
+            </div>
+          )}
+          {state.items.length > 0 && !activity.total && (
+            <div class="empty">
+              <h2>No claims match “{activityQuery.trim()}”</h2>
+              <button
+                onClick={() => {
+                  setActivityQuery('');
+                  setActivityPage(1);
+                }}
+              >
+                Clear search
+              </button>
+            </div>
+          )}
+          {activity.items.map((item) => (
             <article class={`result ${item.unread ? 'unread' : ''}`} key={item.id}>
               <div class="row between">
                 <span class="eyebrow">{item.type.replaceAll('_', ' ')}</span>
                 {item.unread && <span class="pill">New</span>}
               </div>
               <h2>{item.headline}</h2>
-              <p class="status">
-                {
-                  {
-                    PENDING: 'Queued',
-                    PROCESSING: 'Checking your claim',
-                    EXPERT_REVIEW: 'Preliminary result ready',
-                    FINALIZED: 'Final decision ready',
-                    ESCALATED: 'Preliminary result ready · under review',
-                    FAILED: 'Verification could not finish',
-                  }[item.status]
-                }
-              </p>
+              <p class="status">{ACTIVITY_STATUS[item.status]}</p>
               {item.summary?.lines
                 ?.map(resultLine)
                 .filter(Boolean)
@@ -700,6 +732,25 @@ function App() {
               </div>
             </article>
           ))}
+          {activity.pages > 1 && (
+            <nav class="row between pager" aria-label="Activity pages">
+              <button
+                disabled={activity.page <= 1}
+                onClick={() => showActivityPage(activity.page - 1)}
+              >
+                ← Previous
+              </button>
+              <span class="hint">
+                Page {activity.page} of {activity.pages}
+              </span>
+              <button
+                disabled={activity.page >= activity.pages}
+                onClick={() => showActivityPage(activity.page + 1)}
+              >
+                Next →
+              </button>
+            </nav>
+          )}
         </section>
       )}
       {tab === 'account' && (

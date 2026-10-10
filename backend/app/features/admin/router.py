@@ -11,6 +11,7 @@ from app.features.admin.schemas import (
     CreateExpertRequest,
     CredibilityWeightTierRequest,
     CredibilityWeightTierResponse,
+    CredibilityWeightTierSetRequest,
     CredibilityWeightTierUpdateRequest,
     ExpertResponse,
     ResetExpertPasswordRequest,
@@ -64,10 +65,11 @@ async def create_expert(
 async def list_experts(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    q: str | None = Query(default=None, max_length=200, description="Search name, email or expertise"),
     _: User = Depends(_ADMIN_ONLY),
     svc: AdminService = Depends(_get_service),
 ) -> list[ExpertResponse]:
-    return await svc.list_experts(limit=limit, offset=offset)
+    return await svc.list_experts(limit=limit, offset=offset, q=q)
 
 
 @router.get(
@@ -189,6 +191,24 @@ async def create_credibility_tier(
     svc: AdminService = Depends(_get_service),
 ) -> CredibilityWeightTierResponse:
     return await svc.create_credibility_tier(body)
+
+
+@router.put(
+    "/credibility-tiers",
+    response_model=list[CredibilityWeightTierResponse],
+    summary="Save the complete set of credibility weight tiers",
+    description=(
+        "Replaces the whole configuration in one transaction (listed ids are "
+        "updated, new rows created, omitted tiers deleted). Only the final set "
+        "is validated: the active tiers must cover 0-100% with no gap or overlap."
+    ),
+)
+async def replace_credibility_tiers(
+    body: CredibilityWeightTierSetRequest,
+    _: User = Depends(_ADMIN_ONLY),
+    svc: AdminService = Depends(_get_service),
+) -> list[CredibilityWeightTierResponse]:
+    return await svc.replace_credibility_tiers(body)
 
 
 @router.put(

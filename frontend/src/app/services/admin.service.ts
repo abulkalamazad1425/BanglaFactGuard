@@ -10,8 +10,7 @@ import {
   UpdateExpertRequest,
   ResetExpertPasswordRequest,
   CredibilityWeightTier,
-  CredibilityWeightTierRequest,
-  CredibilityWeightTierUpdateRequest,
+  CredibilityWeightTierItem,
   VotingConfig,
   VotingConfigUpdateRequest,
 } from '../models/admin.model';
@@ -27,9 +26,11 @@ export class AdminService {
     return this.api.post<ExpertResponse>(API_ENDPOINTS.ADMIN_EXPERTS, body);
   }
 
-  /** GET /api/v1/admin/experts?limit=&offset= */
-  listExperts(limit = 50, offset = 0): Observable<ExpertResponse[]> {
-    return this.api.get<ExpertResponse[]>(API_ENDPOINTS.ADMIN_EXPERTS, { limit, offset });
+  /** GET /api/v1/admin/experts?limit=&offset=&q= (q: name, email or expertise) */
+  listExperts(limit = 50, offset = 0, q = ''): Observable<ExpertResponse[]> {
+    const params: Record<string, string | number> = { limit, offset };
+    if (q.trim()) params['q'] = q.trim();
+    return this.api.get<ExpertResponse[]>(API_ENDPOINTS.ADMIN_EXPERTS, params);
   }
 
   /** GET /api/v1/admin/experts/{id} */
@@ -78,25 +79,10 @@ export class AdminService {
     return this.api.get<CredibilityWeightTier[]>(API_ENDPOINTS.ADMIN_CREDIBILITY_TIERS);
   }
 
-  /** POST /api/v1/admin/credibility-tiers */
-  createCredibilityTier(body: CredibilityWeightTierRequest): Observable<CredibilityWeightTier> {
-    return this.api.post<CredibilityWeightTier>(API_ENDPOINTS.ADMIN_CREDIBILITY_TIERS, body);
-  }
-
-  /** PUT /api/v1/admin/credibility-tiers/{id} */
-  updateCredibilityTier(
-    id: string,
-    body: CredibilityWeightTierUpdateRequest,
-  ): Observable<CredibilityWeightTier> {
-    return this.api.put<CredibilityWeightTier>(
-      `${API_ENDPOINTS.ADMIN_CREDIBILITY_TIERS}/${id}`,
-      body,
-    );
-  }
-
-  /** DELETE /api/v1/admin/credibility-tiers/{id} */
-  deleteCredibilityTier(id: string): Observable<void> {
-    return this.api.delete<void>(`${API_ENDPOINTS.ADMIN_CREDIBILITY_TIERS}/${id}`);
+  /** PUT /api/v1/admin/credibility-tiers — saves the complete tier set in one
+   *  transaction; the server checks that the active tiers cover 0–100%. */
+  saveCredibilityTiers(tiers: CredibilityWeightTierItem[]): Observable<CredibilityWeightTier[]> {
+    return this.api.put<CredibilityWeightTier[]>(API_ENDPOINTS.ADMIN_CREDIBILITY_TIERS, { tiers });
   }
 
   /** GET /api/v1/admin/voting-config */

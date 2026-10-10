@@ -410,42 +410,20 @@ ResultDeliveryWorker → "final" notification + email
 
 ## 11. `tests/`
 
-| File | কী যাচাই করে |
-|---|---|
-| `conftest.py` | Shared fixture: app, test client, mock service ও repository। |
-| `unit/db_helpers.py` | In-memory SQLite এ শুধু প্রয়োজনীয় table তৈরি করে (Postgres ARRAY/JSONB এর জন্য compile shim সহ)। |
-| `unit/pipeline_helpers.py` | ML service এর deterministic নকল (embedding, NLI, NER)। এগুলো যুক্তি পরীক্ষার জন্য, model এর accuracy সম্পর্কে কিছু প্রমাণ করে না। |
-| `unit/test_analysis_keywords_entities.py` | Keyword coverage, entity matching, passage বাছাই, chunking। |
-| `unit/test_body_similarity.py` | চারটি body measurement। এগুলো কখনো verdict হয় না, এবং unavailable মান কখনো ০ হয় না। |
-| `unit/test_claim_scope.py` | Photo card সবসময় HEADLINE_ONLY; identity hash এ scope এর অংশ। |
-| `unit/test_expert_queue_details.py` | সংরক্ষণ করে আবার লোড করার পরেও expert queue তে headline detail ও body score ঠিকঠাক আসে। |
-| `unit/test_expert_review_finalize.py` | Weighted ঐকমত্য: `_tally`, `_evaluate`, চূড়ান্ত করা, tier এর weight। |
-| `unit/test_expert_ux.py` | Queue item এর `can_vote` ও `decision_mode`। |
-| `unit/test_explorer_archive.py` | Fact Explorer এর filter ও archive এর সারাংশ। |
-| `unit/test_headline_comparison.py` | Headline comparator এর প্রতিটি পথ। একটি ঐচ্ছিক test আসল model দিয়ে চলে (`BFG_REAL_MODEL_TESTS=1`)। |
-| `unit/test_incomplete_never_cached.py` | INCOMPLETE ফলাফল expert review এ যায়, কিন্তু কখনো reuse হয় না। |
-| `unit/test_multimodal_background.py` | Extension এর panel বন্ধ হলেও এবং job retry হলেও multimodal submission টিকে থাকে। |
-| `unit/test_multimodal_embedding_extractor.py`, `unit/test_multimodal_service.py` | Embedding, duplicate খোঁজা, prediction service। |
-| `unit/test_nlp_services.py` | NER ও NLI এর audit: ব্যর্থ model কে কাজ করছে বলে দেখানো হয় না। |
-| `unit/test_no_automated_overall_verdict.py` | Automated system কখনো overall verdict দেয় না। |
-| `unit/test_normalizer.py` | S01। |
-| `unit/test_overall_vote_escalation.py` | শুধু overall vote দিয়ে সিদ্ধান্ত, escalation, admin এর সিদ্ধান্ত, public vote, notification একবারই যায় (SQLite)। |
-| `unit/test_personal_result_delivery.py` | Result delivery: reconcile, email, retry। |
-| `unit/test_photocard_background.py` | Photo card গ্রহণ, job এর টিকে থাকা, crash এর পর পুনরুদ্ধার, lane আলাদা থাকা। |
-| `unit/test_photocard_claim_extraction.py` | Gemini: সর্বোচ্চ ৯টি request, batch, key rotation, API_FAILED আর INVALID_CONTENT আলাদা। |
-| `unit/test_photocard_content.py` | Photo card text claim এর মতোই stage ব্যবহার করে, কিন্তু তার identity আলাদা। |
-| `unit/test_pipeline_end_to_end.py` | আসল S01–S13 class গুলো SQLite এর সাথে, শুধু বাইরের জগৎ (search, HTTP, ML) নকল। |
-| `unit/test_query_generator.py` | S03। |
-| `unit/test_reuse_identity_persistence.py` | Identity, reuse (মুছে ফেলা row থেকে কখনো নয়), সংরক্ষণ, expert snapshot সংরক্ষিত থাকা। |
-| `unit/test_search_and_dates.py` | Search ব্যর্থতার হিসাব, তারিখ ছাড়া retrieval, redirect যাচাই, প্রকাশের তারিখ। |
-| `unit/test_session_refresh.py` | Refresh token rotation এর grace window, logout এ সাথে সাথে বাতিল। |
-| `unit/test_source_resolution_guard.py` | Source অজানা হলে সব জায়গায় খোঁজা শুরু হয় না। |
-| `unit/test_verification_stages.py` | S08–S12 এর দায়িত্ব আলাদা। |
-| `integration/test_api_endpoints.py` | Health, `/verify` ইত্যাদি HTTP এর মাধ্যমে। |
-| `integration/test_multimodal_router.py` | Multimodal router (sync `/predict`)। |
-| `integration/test_verification_pipeline.py` | `VerificationService.verify` integration। |
+শুধু unit test। `tests/unit/` এর গঠন `app/` এর মতোই: service logic আছে এমন প্রতিটি file এর নিজস্ব `test_<module>.py` আছে (যেমন `app/features/verification/pipeline/stages/s08_source_correspondence.py` → `tests/unit/verification/pipeline/stages/test_s08_source_correspondence.py`)। Router, schema, model ও DI wiring এর জন্য আলাদা test নেই।
 
----
+| File / folder | কাজ |
+|---|---|
+| `conftest.py` | App import এর আগে test এর settings ঠিক করে (`.env` এর SMTP ও Gemini key খালি করে দেয়, যাতে test কখনো আসল email না পাঠায়), এবং SQLite এ Postgres ARRAY/JSONB চালানোর shim। |
+| `unit/conftest.py` | `db` / `session` (in-memory SQLite) ও `file_db` (background worker এর জন্য file-backed) fixture। |
+| `helpers/db.py` | সব table তৈরি করে, এবং user, source, submission, result, multimodal analysis, voting config বানানোর ছোট helper। |
+| `helpers/pipeline.py` | ML service এর deterministic নকল (embedding, NLI, NER), `make_context`, `run_analysis` (S08–S12) ও নকল source registry। এগুলো যুক্তি পরীক্ষার জন্য, model এর accuracy সম্পর্কে কিছু প্রমাণ করে না। |
+| `helpers/gemini.py`, `helpers/playwright.py`, `helpers/multimodal.py` | নকল Gemini endpoint, নকল Playwright browser, এবং ছোট নকল BanglaBERT/EfficientNet loader। |
+| `unit/core/`, `unit/shared/` | Settings এর নিয়ম, lifespan, এবং shared utility (hashing এর golden value সহ)। |
+| `unit/verification/analysis/` | Headline comparison, material difference, body similarity, keyword, entity, decision। |
+| `unit/verification/pipeline/` | Context, factory, orchestrator, এবং S01–S13 প্রতিটি stage আলাদা করে। |
+| `unit/verification/` | Service (registration, reuse), presenter, source policy, reuse, job queue ও worker। |
+| `unit/<feature>/` | auth, admin, dashboard, expert_review, multimodal, notifications, photocard, search, sources, submissions, users, nlp, cache: প্রতিটি service ও logic file এর জন্য একটি করে। |
 
 ## 12. Database table ও তাদের মালিক
 

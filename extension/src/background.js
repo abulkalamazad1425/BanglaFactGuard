@@ -251,7 +251,7 @@ async function submit(draft) {
       const form = new FormData();
       form.append('image', image, stored.name || 'capture.png');
       if (draft.type === 'MULTIMODAL') {
-        form.append('headline', draft.headline.trim());
+        if (draft.headline.trim()) form.append('headline', draft.headline.trim());
         form.append('body_text', draft.body_text.trim());
       }
       result = await request(
@@ -263,7 +263,9 @@ async function submit(draft) {
       id: result.submission_id,
       owner,
       type: draft.type,
-      headline: draft.headline || 'Photo card',
+      headline:
+        draft.headline.trim() ||
+        (draft.type === 'MULTIMODAL' ? headlinePreview(draft.body_text) : 'Photo card'),
       created: Date.now(),
       status: result.status,
       next: 0,

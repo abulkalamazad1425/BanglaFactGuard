@@ -11,6 +11,8 @@ import {
   HttpError,
   isDeletedOnServer,
   recheckDelay,
+  searchActivity,
+  paginate,
 } from '../src/shared.js';
 
 test('source absent and incomplete never imply FAKE or a final verdict', () => {
@@ -30,6 +32,13 @@ test('expert finalization is a separate stage from the multimodal AI prediction'
   assert.equal(s.stage, 'final:REAL');
   assert.equal(s.lines[0], 'Final decision: Real');
   assert.ok(s.lines.includes('AI decision: Likely Fake')); // shown apart, never merged into the final decision
+  const copy = summarize(
+    'MULTIMODAL',
+    { prediction: 'FAKE', expert_overall_verdict: 'REAL', original_submission_id: 'earlier' },
+    { status: 'FINALIZED' },
+  );
+  assert.equal(copy.stage, 'final:REAL'); // a matched earlier claim's decision is this claim's result
+  assert.ok(copy.lines.includes("Already checked earlier: showing that claim's result"));
 });
 test('preliminary predictions and historical Activity use readable consistent labels', () => {
   for (const [prediction, label] of [
@@ -163,8 +172,8 @@ test('required fields per submission type, with the failing field named', () => 
   assert.equal(fieldOf({ type: 'PHOTO_CARD', claimed_source_text: '' }, img), null); // image only: outlet/date come from the card
   assert.equal(
     fieldOf({ type: 'MULTIMODAL', headline: '', body_text: 'long enough text' }, img),
-    'headline',
-  );
+    null,
+  ); // headline optional for text & image
   assert.equal(
     fieldOf({ type: 'MULTIMODAL', headline: 'H', body_text: 'long enough text' }, null),
     'image',
@@ -202,4 +211,45 @@ test('only the server naming this submission as not found counts as a deletion',
       recheckDelay('EXPERT_REVIEW') > recheckDelay('PENDING'),
   );
   assert.ok(Number.isFinite(recheckDelay('FAILED')));
+});
+
+test('activity search matches every word in headline, type, status or result, any case or nukta form', () => {
+  // ঢাকায় spelled two ways: য় as letter + nukta, and the precomposed U+09DF
+  const SPLIT_YA = String.fromCodePoint(0x9a2, 0x9be, 0x995, 0x9be, 0x9af, 0x9bc);
+  const PRECOMPOSED_YA = String.fromCodePoint(0x9a2, 0x9be, 0x995, 0x9be, 0x9df);
+  const items = [
+    {
+      id: 'a',
+      type: 'PHOTO_CARD',
+      status: 'FINALIZED',
+      headline: `${SPLIT_YA} মেট্রোরেল চালু`,
+      summary: { lines: ['Expert verdict: FAKE'] },
+    },
+    { id: 'b', type: 'SOURCE_BASED', status: 'PENDING', headline: 'বন্যায় ক্ষতিগ্রস্ত কৃষক' },
+    {
+      id: 'c',
+      type: 'MULTIMODAL',
+      status: 'FAILED',
+      headline: null,
+      summary: { headline: 'Metro rail opens' },
+    },
+  ];
+  const ids = (q) => searchActivity(items, q).map((x) => x.id);
+  assert.deepEqual(ids('   '), ['a', 'b', 'c']); // blank: everything, order kept
+  assert.deepEqual(ids('মেট্রোরেল'), ['a']);
+  assert.deepEqual(ids(PRECOMPOSED_YA), ['a']); // typed with the precomposed য়, stored split
+  assert.deepEqual(ids('photo card fake'), ['a']); // type + current wording of an old cached line
+  assert.deepEqual(ids('METRO'), ['c']); // case-insensitive, extracted headline
+  assert.deepEqual(ids('queued'), ['b']); // status label
+  assert.deepEqual(ids('মেট্রোরেল কৃষক'), []); // every word must match
+});
+
+test('activity pages hold ten claims and an out-of-range page is clamped', () => {
+  const items = Array.from({ length: 23 }, (_, i) => i);
+  assert.deepEqual(paginate(items, 1).items, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  const last = paginate(items, 3);
+  assert.deepEqual([last.items, last.page, last.pages, last.total], [[20, 21, 22], 3, 3, 23]);
+  assert.equal(paginate(items, 9).page, 3); // e.g. after a search shrank the list
+  assert.equal(paginate(items, 0).page, 1);
+  assert.deepEqual(paginate([], 4), { items: [], page: 1, pages: 1, total: 0 });
 });

@@ -307,11 +307,14 @@ class ExpertReviewService:
                 Submission.status.in_(statuses),
                 Submission.duplicate_of_submission_id.is_(None),
             )
+            # Escalated claims first, longest-waiting first; then open claims
+            # newest first, as experts see them, so recent claims (of every
+            # type) are on the first page instead of behind the whole backlog.
             order = (
                 case((Submission.status == SubmissionStatus.ESCALATED, 0), else_=1),
-                Submission.escalated_at.asc(),
-                Submission.created_at.asc(),
-                Submission.id.asc(),
+                case((Submission.status == SubmissionStatus.ESCALATED, Submission.escalated_at)).asc(),
+                Submission.created_at.desc(),
+                Submission.id.desc(),
             )
         else:
             voted = select(ExpertReview.submission_id).where(ExpertReview.reviewer_id == expert_id)

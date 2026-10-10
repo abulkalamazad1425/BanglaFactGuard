@@ -193,20 +193,15 @@ export interface CredibilityWeightTier {
   is_active: boolean;
 }
 
-export interface CredibilityWeightTierRequest {
+/** One row of the complete tier set saved by PUT /admin/credibility-tiers.
+ *  `id` updates an existing tier; omit it for a new tier. Tiers left out are deleted. */
+export interface CredibilityWeightTierItem {
+  id?: string | null;
   label: string;
   min_accuracy_pct: number;
   max_accuracy_pct: number;
   weight: number;
-  is_active?: boolean;
-}
-
-export interface CredibilityWeightTierUpdateRequest {
-  label?: string;
-  min_accuracy_pct?: number;
-  max_accuracy_pct?: number;
-  weight?: number;
-  is_active?: boolean;
+  is_active: boolean;
 }
 
 // ── Voting configuration — admin-configurable, GET/PUT /admin/voting-config.

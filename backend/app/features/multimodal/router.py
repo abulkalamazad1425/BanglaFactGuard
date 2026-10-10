@@ -27,6 +27,7 @@ from app.db.engine import get_async_session
 from app.features.auth.models import User
 from app.features.auth.security import get_current_user_optional
 from app.features.multimodal.models import MultimodalAnalysis
+from app.features.multimodal.repository import MultimodalAnalysisRepository
 from app.features.multimodal.schemas import (
     MultimodalPredictionDetail,
     MultimodalPredictionResponse,
@@ -45,7 +46,7 @@ router = APIRouter(prefix="/multimodal", tags=["Multimodal Fake-News Detection"]
 @router.post("/predict/async", status_code=status.HTTP_202_ACCEPTED)
 async def predict_async(
     request: Request,
-    headline: str = Form(..., min_length=1, max_length=2000),
+    headline: str = Form("", max_length=2000),
     body_text: str = Form(..., min_length=10, max_length=50_000),
     image: UploadFile = File(...),
     db: AsyncSession = Depends(get_async_session),
@@ -53,8 +54,8 @@ async def predict_async(
 ) -> dict:
     """Accept a durable job; poll /submissions/{id} and then /multimodal/by-submission/{id}."""
     loader, storage = _get_loader(request), _get_storage(request)
-    if not headline.strip() or len(body_text.strip()) < 10:
-        raise HTTPException(422, "Headline and at least 10 characters of body text are required.")
+    if len(body_text.strip()) < 10:
+        raise HTTPException(422, "At least 10 characters of body text are required.")
     if image.content_type not in _ALLOWED_CONTENT_TYPES:
         raise HTTPException(415, "Upload a JPEG, PNG, GIF or WebP image.")
     content = await image.read(_MAX_IMAGE_BYTES + 1)
@@ -62,7 +63,7 @@ async def predict_async(
         raise HTTPException(413 if content else 400, "Image must be nonempty and at most 10 MB.")
     service = MultimodalPredictionService(db=db, loader=loader, storage=storage)
     submission = await service.accept_upload(
-        headline=headline.strip(), body_text=body_text.strip(), image_bytes=content,
+        headline=headline.strip() or None, body_text=body_text.strip(), image_bytes=content,
         original_filename=image.filename or "image.png",
         submitter_id=current_user.id if current_user else None,
     )
@@ -101,6 +102,8 @@ async def _to_detail(
     storage: MultimodalStorageService,
 ) -> MultimodalPredictionDetail:
     submission = await submission_repo.get_by_id_or_none(record.submission_id)
+    # A reused copy shows its original's live review outcome.
+    original = await MultimodalAnalysisRepository(submission_repo.session).get_original(record)
     return MultimodalPredictionDetail(
         prediction_id=str(record.id),
         submission_id=str(record.submission_id),
@@ -109,10 +112,14 @@ async def _to_detail(
         prediction=record.prediction,
         confidence_fake=record.confidence_fake,
         confidence_real=record.confidence_real,
-        expert_overall_verdict=record.expert_overall_verdict,
+        expert_overall_verdict=(original or record).expert_overall_verdict,
         is_cached=record.is_duplicate_of_id is not None,
         original_id=(
             str(record.is_duplicate_of_id) if record.is_duplicate_of_id else None
+        ),
+        original_submission_id=(
+            str(submission.duplicate_of_submission_id)
+            if submission and submission.duplicate_of_submission_id else None
         ),
         minio_object_key=record.image_object_key,
         image_url=await storage.get_presigned_url(record.image_object_key),
@@ -137,18 +144,17 @@ async def _to_detail(
         "content, and a combined multimodal fingerprint — all three must exceed "
         "their respective thresholds for a cache hit to occur."
         "\n\n"
-        "**Input**: ``multipart/form-data`` with fields ``headline``, ``body_text``, "
-        "and ``image`` (JPEG/PNG/WebP, max 10 MB)."
+        "**Input**: ``multipart/form-data`` with fields ``body_text``, ``image`` "
+        "and an optional ``headline`` (JPEG/PNG/WebP, max 10 MB)."
     ),
     response_description="Prediction result with confidence scores and deduplication metadata",
 )
 async def predict(
     request: Request,
     headline: str = Form(
-        ...,
-        min_length=1,
+        "",
         max_length=2000,
-        description="News headline (stored for display; not used by the model)",
+        description="Optional news headline (stored for display; not used by the model)",
     ),
     body_text: str = Form(
         ...,
@@ -192,7 +198,7 @@ async def predict(
 
     try:
         response = await service.predict(
-            headline=headline,
+            headline=headline.strip() or None,
             body_text=body_text,
             image_bytes=image_bytes,
             original_filename=image.filename or "upload.jpg",

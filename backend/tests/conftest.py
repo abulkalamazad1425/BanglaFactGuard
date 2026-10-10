@@ -1,24 +1,34 @@
+"""Unit-test environment.
+
+Settings are fixed before the app is imported, so the developer's `.env`
+(real SMTP credentials, Gemini keys, database) is never used by a test.
+Postgres-only column types are rendered as JSON on SQLite, which the
+database-backed unit tests use (see tests/helpers/db.py).
+"""
+
 from __future__ import annotations
 
-import asyncio
-from collections.abc import AsyncGenerator
-from datetime import datetime
-import json
 import os
-from unittest.mock import AsyncMock, MagicMock, patch
-import uuid
 
-import numpy as np
-import pytest
+from dotenv import dotenv_values
 from sqlalchemy import ARRAY
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.ext.compiler import compiles
 
+os.environ.update(
+    ENVIRONMENT="development",
+    DB_NAME="test",
+    AUTH_SECRET_KEY="test-only-jwt-signing-key-not-a-secret-0123456789",
+    EMAIL_SMTP_HOST="",
+    GEMINI_API_KEY="",
+    ML_LOAD_MODELS_ON_STARTUP="false",
+    MULTIMODAL_LOAD_ON_STARTUP="false",
+)
+# Blank values win over `.env` (load_dotenv never overrides) and are ignored
+# by the numbered Gemini key reader.
+os.environ.update({k: "" for k in dotenv_values(".env") if k.upper().startswith("GEMINI_API_KEY")})
 
-# The shared `test_engine` builds the full metadata on SQLite. Postgres-only
-# column types are rendered as JSON there, so the fixture works regardless of
-# which test modules happen to be imported first.
+
 @compiles(JSONB, "sqlite")
 def _jsonb_sqlite(type_, compiler, **kw):  # pragma: no cover - trivial shim
     return "JSON"
@@ -27,164 +37,3 @@ def _jsonb_sqlite(type_, compiler, **kw):  # pragma: no cover - trivial shim
 @compiles(ARRAY, "sqlite")
 def _array_sqlite(type_, compiler, **kw):  # pragma: no cover - trivial shim
     return "JSON"
-
-os.environ["ENVIRONMENT"] = "development"
-os.environ["DB_HOST"] = "localhost"
-os.environ["DB_PORT"] = "5432"
-os.environ["DB_NAME"] = "test"
-os.environ["DB_USER"] = "postgres"
-os.environ["DB_PASSWORD"] = "postgres"
-os.environ["REDIS_HOST"] = "localhost"
-os.environ["REDIS_PORT"] = "6379"
-# Required setting; tests must not depend on (or use) the developer's real key.
-os.environ["AUTH_SECRET_KEY"] = "test-only-jwt-signing-key-not-a-secret-0123456789"
-
-from app.shared.dependencies import get_async_session
-from app.core.config import get_settings
-from app.shared.models_registry import Base
-from app.main import create_app
-from app.features.sources.models import VerifiedSource
-from app.features.nlp.ner_service import NERResult
-from app.features.verification.schemas import NLIScoresSchema
-from app.features.cache.cache_service import CacheService
-from app.features.nlp.embedding_service import EmbeddingService
-from app.features.nlp.ner_service import NERService
-from app.features.nlp.nli_service import NLIService
-
-SQLITE_URL = "sqlite+aiosqlite:///:memory:"
-
-
-@pytest.fixture(scope="session")
-def event_loop():
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
-
-
-@pytest.fixture(scope="session")
-async def test_engine():
-    engine = create_async_engine(SQLITE_URL, echo=False)
-    async with engine.begin() as conn:
-
-        await conn.run_sync(Base.metadata.create_all)
-    yield engine
-    await engine.dispose()
-
-
-@pytest.fixture
-async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
-    session_local = async_sessionmaker(
-        bind=test_engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-        autoflush=False,
-        autocommit=False,
-    )
-    async with session_local() as session:
-        yield session
-
-        await session.rollback()
-
-
-@pytest.fixture
-def mock_redis() -> MagicMock:
-    client = MagicMock()
-
-    client.get = AsyncMock(return_value=None)
-    client.set = AsyncMock(return_value=True)
-    client.delete = AsyncMock(return_value=True)
-    return client
-
-
-@pytest.fixture
-def test_cache_service(mock_redis) -> CacheService:
-    return CacheService(mock_redis)
-
-
-@pytest.fixture
-def mock_embedding_service() -> MagicMock:
-    service = MagicMock(spec=EmbeddingService)
-    service.load = AsyncMock()
-
-    mock_vector = np.zeros(768, dtype=np.float32)
-    mock_vector[0] = 1.0
-    service.encode = AsyncMock(return_value=mock_vector)
-    service.encode_batch = AsyncMock(return_value=[mock_vector])
-    service.compute_similarity = AsyncMock(return_value=0.90)
-    return service
-
-
-@pytest.fixture
-def mock_ner_service() -> MagicMock:
-    service = MagicMock(spec=NERService)
-    service.load = AsyncMock()
-    service.extract_mentions = AsyncMock(return_value=NERResult(True, []))
-    return service
-
-
-@pytest.fixture
-def mock_nli_service() -> MagicMock:
-    service = MagicMock(spec=NLIService)
-    service.load = AsyncMock()
-    service.predict = AsyncMock(
-        return_value=NLIScoresSchema(entailment=0.90, contradiction=0.05, neutral=0.05)
-    )
-    return service
-
-
-@pytest.fixture
-def mock_search_clients() -> dict[str, MagicMock]:
-    from app.features.search.pygooglenews_client import PyGoogleNewsClient
-    from app.features.search.internal_site_client import InternalSiteSearchClient
-
-    pgn = MagicMock(spec=PyGoogleNewsClient)
-    pgn.search_entries = AsyncMock(return_value=[])
-    internal = MagicMock(spec=InternalSiteSearchClient)
-    internal.search_entries = AsyncMock(return_value=[])
-    return {"pygooglenews": pgn, "internal_site": internal}
-
-
-@pytest.fixture
-async def app(
-    db_session,
-    test_cache_service,
-    mock_embedding_service,
-    mock_ner_service,
-    mock_nli_service,
-    mock_search_clients,
-) -> FastAPI:
-
-    with (
-        patch("app.main.lifespan") as mock_lifespan,
-        patch(
-            "app.features.nlp.embedding_service.EmbeddingService.load",
-            new_callable=AsyncMock,
-        ),
-        patch("app.features.nlp.ner_service.NERService.load", new_callable=AsyncMock),
-        patch("app.features.nlp.nli_service.NLIService.load", new_callable=AsyncMock),
-    ):
-        application = create_app()
-
-        application.state.cache_service = test_cache_service
-        application.state.embedding_service = mock_embedding_service
-        application.state.ner_service = mock_ner_service
-        application.state.nli_service = mock_nli_service
-        application.state.http_client = MagicMock()
-
-        application.dependency_overrides[get_async_session] = lambda: db_session
-
-        yield application
-
-        application.dependency_overrides.clear()
-
-
-@pytest.fixture
-async def client(app) -> AsyncGenerator[httpx.AsyncClient, None]:
-    import httpx
-
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as async_client:
-        yield async_client

@@ -126,7 +126,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["app"]
+known-first-party = ["app", "tests"]
 
 # ---------------------------------------------------------------------------
 # MyPy
@@ -145,6 +145,7 @@ plugins = ["pydantic.mypy"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+pythonpath = ["."]
 addopts = "--cov=app --cov-report=term-missing --cov-report=xml -v"
 filterwarnings = [
     "ignore::DeprecationWarning",

@@ -1,6 +1,7 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
+import { Subscription } from 'rxjs';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { AdminService } from '../../../services/admin.service';
 import { ToastService } from '../../../shared/services/toast.service';
@@ -50,22 +51,47 @@ export class ExpertManagementComponent implements OnInit {
     this.loading.set(true);
     this.loadError.set(false);
     // One extra row tells whether another page exists.
-    this.adminSvc.listExperts(this.limit + 1, (this.page() - 1) * this.limit).subscribe({
-      next: (rows) => {
-        this.hasNext.set(rows.length > this.limit);
-        this.experts.set(rows.slice(0, this.limit));
-        this.loading.set(false);
-      },
-      error: () => {
-        this.loading.set(false);
-        this.loadError.set(true);
-      },
-    });
+    // A newer search supersedes any request still in flight.
+    this.request?.unsubscribe();
+    this.request = this.adminSvc
+      .listExperts(this.limit + 1, (this.page() - 1) * this.limit, this.query)
+      .subscribe({
+        next: (rows) => {
+          this.hasNext.set(rows.length > this.limit);
+          this.experts.set(rows.slice(0, this.limit));
+          this.loading.set(false);
+        },
+        error: () => {
+          this.loading.set(false);
+          this.loadError.set(true);
+        },
+      });
   }
 
   goToPage(page: number): void {
     this.page.set(page);
     this.load();
+  }
+
+  /* ─── Search (name, email or expertise; server-side, before pagination) ─── */
+  query = '';
+  private searchTimer: ReturnType<typeof setTimeout> | null = null;
+  private request?: Subscription;
+
+  search(value: string): void {
+    if (this.searchTimer) clearTimeout(this.searchTimer);
+    this.query = value.trim();
+    this.page.set(1);
+    this.load();
+  }
+
+  /** Search as you type: ~300 ms after the last keystroke, first page. */
+  onSearchInput(value: string): void {
+    if (this.searchTimer) clearTimeout(this.searchTimer);
+    this.searchTimer = setTimeout(() => {
+      this.searchTimer = null;
+      if (value.trim() !== this.query) this.search(value);
+    }, 300);
   }
 
   /** Merge the server's answer into the existing row so a partial response
