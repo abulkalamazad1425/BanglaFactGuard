@@ -267,6 +267,19 @@ async def test_queues_show_each_role_only_what_it_may_act_on(session):
     assert (await svc.get_queue_item(own.id, viewer_id=experts[0].id, viewer_role="expert")).can_vote is False
 
 
+async def test_admin_queue_lists_escalated_claims_first_then_the_newest_open_claims(session):
+    svc, admin, _, older = await setup(session, age_hours=5)
+    newer, _ = await add_multimodal_submission(session)
+    escalated, _ = await add_completed_submission(session, headline="জটিল দাবি", submitter_id=None)
+    escalated.status, escalated.escalated_at = SubmissionStatus.ESCALATED, datetime.now(timezone.utc)
+    escalated.created_at = datetime.now(timezone.utc) - timedelta(hours=9)
+    copy, _ = await add_multimodal_submission(session)
+    copy.duplicate_of_submission_id = newer.id  # a reused check is never reviewed on its own
+    await session.flush()
+    queue = await svc.get_queue(admin.id, viewer_role="admin")
+    assert [q.submission_id for q in queue] == [str(escalated.id), str(newer.id), str(older.id)]
+
+
 async def test_queue_search_runs_before_pagination_over_every_open_claim(session):
     svc, _, experts, _ = await setup(session)
     for n in range(105):

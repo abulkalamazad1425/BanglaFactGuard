@@ -112,6 +112,12 @@ class UserAccountService:
             session, MultimodalAnalysis,
             [s.id for s in submissions if s.submission_type == SubmissionType.MULTIMODAL],
         )
+        # A reused text & image check shows its original's decision.
+        multimodal_originals = await rows_by_submission(
+            session, MultimodalAnalysis,
+            list({s.duplicate_of_submission_id for s in submissions
+                  if s.submission_type == SubmissionType.MULTIMODAL and s.duplicate_of_submission_id}),
+        )
         duplicate_of = list({s.duplicate_of_submission_id for s in submissions if s.duplicate_of_submission_id})
         original_statuses = (
             dict((await session.execute(
@@ -137,8 +143,10 @@ class UserAccountService:
             is_finalized = bool(expert and expert.overall_verdict)
 
             mm = multimodal.get(submission.id)
+            mm_verdict = None
             if mm:
-                is_finalized = bool(mm.expert_overall_verdict)
+                mm_verdict = (multimodal_originals.get(submission.duplicate_of_submission_id) or mm).expert_overall_verdict
+                is_finalized = bool(mm_verdict)
             original_status = (
                 original_statuses.get(submission.duplicate_of_submission_id)
                 if submission.duplicate_of_submission_id else None
@@ -164,7 +172,7 @@ class UserAccountService:
                     headline_status=headline_status_for_result(result, claim_headline=submission.headline),
                     date_status=result.date_status if result else None,
                     published_date=submission.published_date,
-                    overall_verdict=mm.expert_overall_verdict if mm else expert.overall_verdict if is_finalized else None,
+                    overall_verdict=mm_verdict if mm else expert.overall_verdict if is_finalized else None,
                     prediction=mm.prediction if mm else None,
                     is_finalized=is_finalized,
                     ai_confidence=result.confidence if result else None,

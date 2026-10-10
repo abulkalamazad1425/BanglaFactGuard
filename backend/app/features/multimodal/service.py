@@ -47,7 +47,7 @@ class MultimodalPredictionService:
     async def predict(
         self,
         *,
-        headline: str,
+        headline: str | None,
         body_text: str,
         image_bytes: bytes,
         original_filename: str,
@@ -85,6 +85,9 @@ class MultimodalPredictionService:
         )
 
         if duplicate is not None:
+            # A match on an earlier copy points at that copy's original: the
+            # original alone carries the expert review and the final decision.
+            duplicate = await self._repo.get_original(duplicate) or duplicate
             log.info(
                 "multimodal_dedup_cache_hit",
                 original_id=str(duplicate.id),
@@ -102,6 +105,11 @@ class MultimodalPredictionService:
                 model_version=self._cfg.model_version,
                 is_duplicate_of_id=duplicate.id,
             )
+            # Same link as a reused source-based result: the copy stays the
+            # requester's own submission but is kept out of Fact Explorer and
+            # the review queues, and shows the original's review outcome.
+            submission.duplicate_of_submission_id = duplicate.submission_id
+            await self._db.flush()
             return await self._build_response(
                 record=record,
                 is_cached=True,
@@ -136,7 +144,7 @@ class MultimodalPredictionService:
         return await self._build_response(record=record, is_cached=False)
 
     async def accept_upload(
-        self, *, headline: str, body_text: str, image_bytes: bytes,
+        self, *, headline: str | None, body_text: str, image_bytes: bytes,
         original_filename: str, submitter_id: uuid.UUID | None,
     ) -> Submission:
         """Store input and queue a job atomically before acknowledging acceptance."""
@@ -145,7 +153,7 @@ class MultimodalPredictionService:
         submission = Submission(
             id=uuid.uuid4(), submission_type=SubmissionType.MULTIMODAL,
             headline=headline, body_text=body_text, submitter_id=submitter_id,
-            content_hash=compute_text_hash(f"{headline}\n{body_text}"),
+            content_hash=compute_text_hash(f"{headline or ''}\n{body_text}"),
             status=SubmissionStatus.PENDING, processing_phase=JobPhase.QUEUED.value,
         )
         key = await self._storage.upload_image(
@@ -172,7 +180,7 @@ class MultimodalPredictionService:
         if await self._repo.get_by_submission_id(submission.id) is None:
             image = await self._storage.read_image(payload["image_key"])
             await self.predict(
-                headline=submission.headline or "", body_text=submission.body_text or "",
+                headline=submission.headline, body_text=submission.body_text or "",
                 image_bytes=image, original_filename=payload["filename"],
                 submitter_id=submission.submitter_id, existing_submission=submission,
                 stored_image_key=payload["image_key"],
@@ -188,7 +196,7 @@ class MultimodalPredictionService:
     async def _create_submission(
         self,
         *,
-        headline: str,
+        headline: str | None,
         body_text: str,
         submitter_id: uuid.UUID | None,
     ) -> Submission:
@@ -200,10 +208,10 @@ class MultimodalPredictionService:
         considered final; see ExpertReviewService's MULTIMODAL branch."""
         submission = Submission(
             submission_type=SubmissionType.MULTIMODAL,
-            headline=headline[:2000],
+            headline=headline[:2000] if headline else None,
             body_text=body_text,
             submitter_id=submitter_id,
-            content_hash=compute_text_hash(f"{headline}\n{body_text}"),
+            content_hash=compute_text_hash(f"{headline or ''}\n{body_text}"),
             status=SubmissionStatus.EXPERT_REVIEW,
         )
         created = await self._submissions.create(submission)
@@ -280,13 +288,15 @@ class MultimodalPredictionService:
         original_id: str | None = None,
         similarity_scores: dict[str, float] | None = None,
     ) -> MultimodalPredictionResponse:
+        # A copy shows the original's expert decision (one source of truth).
+        original = await self._repo.get_original(record)
         return MultimodalPredictionResponse(
             prediction_id=str(record.id),
             submission_id=str(record.submission_id),
             prediction=record.prediction,
             confidence_fake=record.confidence_fake,
             confidence_real=record.confidence_real,
-            expert_overall_verdict=record.expert_overall_verdict,
+            expert_overall_verdict=(original or record).expert_overall_verdict,
             is_cached=is_cached,
             original_id=original_id,
             similarity_scores=similarity_scores if is_cached else None,

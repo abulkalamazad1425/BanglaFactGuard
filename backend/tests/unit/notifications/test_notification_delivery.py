@@ -65,6 +65,21 @@ async def test_guests_get_nothing_and_a_reused_copy_follows_its_original(session
     assert mail.send_result_email.await_args.kwargs["verdict"] == "Altered"
 
 
+async def test_a_reused_text_and_image_check_gets_its_originals_final_decision(session):
+    user = await add_user(session)
+    original, analysis = await add_multimodal_submission(session)
+    copy, _ = await add_multimodal_submission(session, submitter_id=user.id, is_duplicate_of_id=analysis.id)
+    copy.duplicate_of_submission_id = original.id
+    await session.flush()
+    assert await reconcile(session) == 1  # preliminary only
+    original.status, analysis.expert_overall_verdict = SubmissionStatus.FINALIZED, OverallVerdict.FAKE
+    await session.flush()
+    assert await reconcile(session) == 1
+    mail = AsyncMock()
+    await deliver_email(session, mail)
+    assert (mail.send_result_email.await_args.kwargs["submission_id"], mail.send_result_email.await_args.kwargs["verdict"]) == (str(copy.id), "Fake")
+
+
 async def test_smtp_failures_back_off_and_retry_without_new_notices(session):
     user = await add_user(session)
     sub, _ = await add_completed_submission(session, headline="Final", submitter_id=user.id, overall_verdict=OverallVerdict.FAKE)

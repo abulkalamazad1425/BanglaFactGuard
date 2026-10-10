@@ -58,6 +58,8 @@ async def test_each_row_shows_ai_findings_and_only_a_final_decision(session):
     open_, _ = await mine(session, me, "চলমান", SubmissionStatus.EXPERT_REVIEW, headline_exact_match=True)
     legacy, _ = await mine(session, me, "পুরনো", SubmissionStatus.EXPERT_REVIEW, headline_check_status=None)
     mm, analysis = await add_multimodal_submission(session, submitter_id=me.id, prediction=MultimodalPredictionLabel.NON_FAKE)
+    mm_copy, _ = await add_multimodal_submission(session, submitter_id=me.id, is_duplicate_of_id=analysis.id)
+    mm_copy.duplicate_of_submission_id = mm.id
     card, _ = await mine(session, me, "কার্ড", SubmissionStatus.EXPERT_REVIEW, kind=SubmissionType.PHOTO_CARD)
     session.add(PhotocardExtraction(submission_id=card.id, image_object_key="photocard/k.png", status="SUCCEEDED"))
     await session.flush()
@@ -76,6 +78,7 @@ async def test_each_row_shows_ai_findings_and_only_a_final_decision(session):
     await session.flush()
     rows = {r.submission_id: r for r in await UserAccountService(session).my_submissions(me, limit=10, offset=0)}
     assert (rows[str(mm.id)].is_finalized, rows[str(mm.id)].overall_verdict) == (True, OverallVerdict.REAL)
+    assert (rows[str(mm_copy.id)].is_finalized, rows[str(mm_copy.id)].overall_verdict) == (True, OverallVerdict.REAL)
 
 
 async def test_statistics_and_the_profile_total_are_counted_live(session):

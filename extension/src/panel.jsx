@@ -499,7 +499,7 @@ function App() {
                   {textField(
                     'headline',
                     'Headline',
-                    true,
+                    draft.type === 'SOURCE_BASED',
                     draft.type === 'SOURCE_BASED' ? 5 : undefined,
                   )}
                   {textField(

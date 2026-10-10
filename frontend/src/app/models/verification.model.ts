@@ -343,6 +343,9 @@ export interface MultimodalPredictionDetail {
   expert_overall_verdict?: OverallVerdict | null;
   is_cached: boolean;
   original_id?: string | null;
+  /** Set when this upload matched an earlier claim: that claim's submission
+   *  id. Its review outcome is the one shown for this submission. */
+  original_submission_id?: string | null;
   minio_object_key: string;
   image_url?: string | null;
   model_version: string;

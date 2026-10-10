@@ -31,6 +31,31 @@
         }}</h1></div
       ></header
     >
+    <!-- A text & image upload that matched an earlier claim is not checked or
+         reviewed again: it shows that claim's result and points to it. -->
+    @if (multimodalResult(); as m) {
+      @if (m.original_submission_id) {
+        <section class="surface duplicate-notice" role="status"
+          ><span class="eyebrow">ALREADY CHECKED</span
+          ><h2>{{
+            m.expert_overall_verdict
+              ? 'A final decision is already available for this claim'
+              : 'A preliminary result is already available for this claim'
+          }}</h2
+          ><p>{{
+            m.expert_overall_verdict
+              ? 'This text and image match a claim that was checked and reviewed earlier, so it was not checked again. The final decision on that claim is shown below.'
+              : 'This text and image match a claim that was checked earlier, so it was not checked again. The preliminary result of that claim is shown below; its expert review is in progress.'
+          }}</p
+          ><p>You can find the earlier claim in Fact Explorer.</p
+          ><div class="actions"
+            ><a class="btn btn-primary" [routerLink]="['/verify', m.original_submission_id]"
+              >Open the earlier claim</a
+            ><a class="btn btn-secondary" routerLink="/dashboard">Go to Fact Explorer</a></div
+          ></section
+        >
+      }
+    }
     <!-- The original submission always comes first, in every state: the
          richest record available (multimodal detail, photocard detail, or
          the submission lookup while a check is still running or failed). -->

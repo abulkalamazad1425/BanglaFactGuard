@@ -123,6 +123,9 @@ export function summarize(type, data, lookup = {}) {
   }
   if (result?.prediction && type === 'MULTIMODAL')
     lines.push(`AI decision: ${aiDecisionLabel(result.prediction)}`);
+  // A text & image upload matching an earlier claim shows that claim's result.
+  if (type === 'MULTIMODAL' && result?.original_submission_id)
+    lines.push("Already checked earlier: showing that claim's result");
   if (final) lines.unshift(`Final decision: ${OVERALL_LABELS[final] || final}`);
   return {
     status,
@@ -156,15 +159,10 @@ export class FieldError extends Error {
 //   Text & source (SOURCE_BASED): headline (5+ characters), claimed news outlet
 //   Photo card   (PHOTO_CARD):    photocard image only - the headline, outlet and
 //                                 date are read from the card on the server
-//   Text & image (MULTIMODAL):    headline, article text (10+ characters), image
+//   Text & image (MULTIMODAL):    article text (10+ characters), image; headline optional
 export function validateDraft(d, image) {
-  if (d.type !== 'PHOTO_CARD' && d.headline.trim().length < (d.type === 'SOURCE_BASED' ? 5 : 1))
-    throw new FieldError(
-      'headline',
-      d.type === 'SOURCE_BASED'
-        ? 'Enter the headline (at least 5 characters).'
-        : 'Enter the headline.',
-    );
+  if (d.type === 'SOURCE_BASED' && d.headline.trim().length < 5)
+    throw new FieldError('headline', 'Enter the headline (at least 5 characters).');
   if (d.headline.length > 2000)
     throw new FieldError('headline', 'Headline limit is 2,000 characters.');
   if (d.body_text.length > 50000)

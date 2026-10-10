@@ -62,6 +62,13 @@ class MultimodalPredictionDetail(BaseModel):
     expert_overall_verdict: Optional[OverallVerdict] = None
     is_cached: bool
     original_id: Optional[str] = None
+    original_submission_id: Optional[str] = Field(
+        default=None,
+        description=(
+            "Set when this upload matched an earlier claim: that claim's "
+            "submission id. Its review outcome is the one shown here."
+        ),
+    )
     minio_object_key: str
     image_url: Optional[str] = Field(
         default=None,

@@ -32,6 +32,13 @@ test('expert finalization is a separate stage from the multimodal AI prediction'
   assert.equal(s.stage, 'final:REAL');
   assert.equal(s.lines[0], 'Final decision: Real');
   assert.ok(s.lines.includes('AI decision: Likely Fake')); // shown apart, never merged into the final decision
+  const copy = summarize(
+    'MULTIMODAL',
+    { prediction: 'FAKE', expert_overall_verdict: 'REAL', original_submission_id: 'earlier' },
+    { status: 'FINALIZED' },
+  );
+  assert.equal(copy.stage, 'final:REAL'); // a matched earlier claim's decision is this claim's result
+  assert.ok(copy.lines.includes("Already checked earlier: showing that claim's result"));
 });
 test('preliminary predictions and historical Activity use readable consistent labels', () => {
   for (const [prediction, label] of [
@@ -165,8 +172,8 @@ test('required fields per submission type, with the failing field named', () => 
   assert.equal(fieldOf({ type: 'PHOTO_CARD', claimed_source_text: '' }, img), null); // image only: outlet/date come from the card
   assert.equal(
     fieldOf({ type: 'MULTIMODAL', headline: '', body_text: 'long enough text' }, img),
-    'headline',
-  );
+    null,
+  ); // headline optional for text & image
   assert.equal(
     fieldOf({ type: 'MULTIMODAL', headline: 'H', body_text: 'long enough text' }, null),
     'image',

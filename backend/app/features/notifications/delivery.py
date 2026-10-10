@@ -29,13 +29,16 @@ READY = (SubmissionStatus.EXPERT_REVIEW, SubmissionStatus.FINALIZED, SubmissionS
 
 async def reconcile(session, *, limit: int = 100) -> int:
     original = aliased(VerificationResult)
-    verdict = func.coalesce(original.overall_verdict, VerificationResult.overall_verdict, MultimodalAnalysis.expert_overall_verdict)
+    original_mm = aliased(MultimodalAnalysis)  # a reused text & image check reads its original
+    verdict = func.coalesce(original.overall_verdict, VerificationResult.overall_verdict,
+                            original_mm.expert_overall_verdict, MultimodalAnalysis.expert_overall_verdict)
     count = 0
     for stage in ('preliminary', 'final'):
         stmt = (select(Submission, verdict.label('verdict'))
                 .outerjoin(VerificationResult, VerificationResult.submission_id == Submission.id)
                 .outerjoin(original, original.submission_id == VerificationResult.reused_from_submission_id)
                 .outerjoin(MultimodalAnalysis, MultimodalAnalysis.submission_id == Submission.id)
+                .outerjoin(original_mm, original_mm.id == MultimodalAnalysis.is_duplicate_of_id)
                 .where(Submission.submitter_id.is_not(None), Submission.status.in_(READY),
                        or_(VerificationResult.source_status.is_not(None), MultimodalAnalysis.id.is_not(None)),
                        ~exists().where(ResultDelivery.submission_id == Submission.id, ResultDelivery.stage == stage))

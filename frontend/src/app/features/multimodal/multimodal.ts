@@ -79,7 +79,7 @@ export class MultimodalComponent {
   onSubmit(): void {
     this.submitted = true;
 
-    if (!this.headline.trim() || this.bodyText.trim().length < 10 || !this.selectedFile) {
+    if (this.bodyText.trim().length < 10 || !this.selectedFile) {
       return;
     }
 
@@ -87,7 +87,7 @@ export class MultimodalComponent {
     this.errorMsg = null;
     this.result = null;
 
-    this.svc.submitAsync(this.headline, this.bodyText, this.selectedFile).subscribe({
+    this.svc.submitAsync(this.headline.trim(), this.bodyText, this.selectedFile).subscribe({
       next: (r) => {
         this.accepted = r;
         this.loading = false;

@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 from sqlalchemy import func, select
 
-from app.core.constants import MultimodalPredictionLabel, SubmissionStatus
+from app.core.constants import MultimodalPredictionLabel, OverallVerdict, SubmissionStatus
 from app.features.auth.models import User
 from app.features.multimodal.models import MultimodalAnalysis
 from app.features.multimodal.pipeline.inference_engine import PredictionResult
@@ -73,6 +73,13 @@ async def test_a_near_identical_upload_reuses_the_earlier_prediction(session):
     assert cached.is_cached and cached.original_id == first.prediction_id and cached.prediction == first.prediction
     assert set(cached.similarity_scores) == {"text_similarity", "image_similarity", "combined_similarity"}
     assert cached.submission_id != first.submission_id  # still the requester's own submission
+    copy = await session.get(Submission, uuid.UUID(cached.submission_id))
+    assert str(copy.duplicate_of_submission_id) == first.submission_id  # kept out of Fact Explorer and the queues
+    original = await session.get(MultimodalAnalysis, uuid.UUID(first.prediction_id))
+    original.expert_overall_verdict = OverallVerdict.FAKE
+    third = await predict(service(session))  # may match the copy: always linked to the original
+    assert third.original_id == first.prediction_id and third.expert_overall_verdict == OverallVerdict.FAKE
+    assert str((await session.get(Submission, uuid.UUID(third.submission_id))).duplicate_of_submission_id) == first.submission_id
     other_image = await predict(service(session, image=np.eye(1792, dtype=np.float32)[0]))
     assert other_image.is_cached is False
 
@@ -102,7 +109,7 @@ async def test_a_failed_acceptance_rolls_back_and_removes_the_uploaded_image(ses
 async def test_processing_a_queued_upload_is_idempotent(session):
     user = await add_user(session)
     svc = service(session)
-    row = await svc.accept_upload(headline="Claim", body_text="Body", image_bytes=b"image", original_filename="card.png",
+    row = await svc.accept_upload(headline=None, body_text="Body", image_bytes=b"image", original_filename="card.png",
                                   submitter_id=user.id)
     payload = {"image_key": f"multimodal/{row.id}/card.png", "filename": "card.png"}
     await svc.process_queued(row, payload)

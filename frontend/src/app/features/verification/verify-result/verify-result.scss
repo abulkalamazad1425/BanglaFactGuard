@@ -7,6 +7,10 @@
 :host .claim-section {
   margin-top: 0;
 }
+// The "already checked" notice sits above the original submission.
+:host .duplicate-notice {
+  margin: 0 0 24px;
+}
 // The multimodal decision and AI result have no spacing of their own.
 :host .decision-panel,
 :host .decision-panel + .surface {

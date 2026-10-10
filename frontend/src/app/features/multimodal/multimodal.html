@@ -6,8 +6,7 @@
         ><fieldset [disabled]="loading">
           <div class="form-group">
             <label for="mm-headline"
-              >Headline <span class="req-mark" aria-hidden="true">*</span
-              ><span class="sr-only">(required)</span></label
+              >Headline <span class="optional">optional</span></label
             >
             <input
               type="text"
@@ -16,16 +15,7 @@
               name="headline"
               maxlength="2000"
               placeholder="Enter the news headline in Bangla"
-              required
-              [class.is-invalid]="submitted && !headline.trim()"
-              [attr.aria-invalid]="submitted && !headline.trim()"
-              aria-describedby="mm-headline-error"
             />
-            @if (submitted && !headline.trim()) {
-              <span id="mm-headline-error" class="form-error" role="alert"
-                >Enter the headline.</span
-              >
-            }
           </div>
 
           <div class="form-group">
@@ -182,7 +172,7 @@
         >Open full report ↗</a
       ></section
     ><section class="surface claim-section"
-      ><span class="eyebrow">SUBMITTED ARTICLE</span><h2 class="claim-preview">{{ headline }}</h2>
+      ><span class="eyebrow">SUBMITTED ARTICLE</span>@if (headline.trim()) {<h2 class="claim-preview">{{ headline }}</h2>}
       @if (previewUrl) {
         <img [src]="previewUrl" class="preview-image" alt="Submitted article image" />
       }
