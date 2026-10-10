@@ -343,6 +343,15 @@ fieldset {
 .actions {
   margin-top: 14px;
 }
+.activity-search {
+  margin: 12px 0 10px;
+}
+.activity-search .hint {
+  margin-top: 6px;
+}
+.pager {
+  margin-top: 14px;
+}
 .empty {
   text-align: center;
   padding: 30px 15px;

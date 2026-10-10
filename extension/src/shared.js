@@ -227,3 +227,54 @@ export function resultLine(line) {
     .replace(/^Headline Alteration: /, 'Headline: ')
     .replace('Date: Date mismatch', 'Date: Mismatched');
 }
+
+export const ACTIVITY_STATUS = {
+  PENDING: 'Queued',
+  PROCESSING: 'Checking your claim',
+  EXPERT_REVIEW: 'Preliminary result ready',
+  FINALIZED: 'Final decision ready',
+  ESCALATED: 'Preliminary result ready · under review',
+  FAILED: 'Verification could not finish',
+};
+
+export const ACTIVITY_PAGE_SIZE = 10;
+
+// NFC also turns a precomposed য় ড় ঢ় into letter + nukta, so either spelling matches.
+const fold = (text) =>
+  String(text ?? '')
+    .normalize('NFC')
+    .toLocaleLowerCase();
+
+/** Activity items containing every word of `query` in their headline, claim
+ *  type, status or result lines. A blank query keeps every item; order is kept. */
+export function searchActivity(items, query) {
+  const words = fold(query).split(/\s+/).filter(Boolean);
+  if (!words.length) return items;
+  return items.filter((item) => {
+    const text = fold(
+      [
+        item.headline,
+        item.summary?.headline,
+        item.type?.replaceAll('_', ' '),
+        ACTIVITY_STATUS[item.status],
+        ...(item.summary?.lines || []).map(resultLine),
+      ]
+        .filter(Boolean)
+        .join(' \n '),
+    );
+    return words.every((word) => text.includes(word));
+  });
+}
+
+/** One page of `items`; an out-of-range page is clamped (e.g. after a search
+ *  shrinks the list), and an empty list is a single empty page. */
+export function paginate(items, page, size = ACTIVITY_PAGE_SIZE) {
+  const pages = Math.max(1, Math.ceil(items.length / size));
+  const current = Math.min(Math.max(1, page || 1), pages);
+  return {
+    items: items.slice((current - 1) * size, current * size),
+    page: current,
+    pages,
+    total: items.length,
+  };
+}
