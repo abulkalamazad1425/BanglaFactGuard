@@ -1,43 +1,4 @@
-﻿"""
-Natural Language Inference (NLI) service used by the Headline Alteration
-semantic assessment (S09: source title vs claim headline).
-
-## Model
-
-`settings.ml.nli_model_name`, default `MoritzLaurer/mDeBERTa-v3-base-mnli-xnli`
-— an mDeBERTa-v3-base cross-encoder fine-tuned on XNLI (15 languages) + MNLI,
-built on a 100-language multilingual vocabulary. Outputs entailment/
-contradiction/neutral probabilities.
-
-Why multilingual: an English-only NLI checkpoint (e.g. the earlier
-`cross-encoder/nli-deberta-v3-small`) tokenizes a Bangla sentence into
-near-single code points, so its scores carry no Bangla meaning. This model's
-tokenizer produces well-formed Bangla subwords. That is a tokenization check,
-not an accuracy benchmark: Bengali is covered only through multilingual
-pretraining and cross-lingual transfer, so the score should be validated on
-labelled Bangla NLI pairs before it is trusted for high-stakes decisions.
-
-## Why a cross-encoder (not bi-encoder)?
-
-Cross-encoders process the premise and hypothesis jointly (concatenated input),
-capturing fine-grained token interactions. This is critical for detecting subtle
-numerical or entity-level contradictions that bi-encoders (like LaBSE) miss.
-
-## Input truncation
-
-DeBERTa input limit: 512 tokens. The premise is truncated to 1200 characters
-and the hypothesis to 300 (at sentence boundaries where possible).
-
-## Async wrapping
-
-HuggingFace `pipeline` is synchronous; runs in a dedicated `ThreadPoolExecutor`.
-
-## Output
-
-Returns `NLIScoresSchema` with entailment/contradiction/neutral probabilities.
-Used only by the Headline Alteration comparison (source title vs claim
-headline, in both directions) - never on article bodies.
-"""
+﻿
 
 from __future__ import annotations
 

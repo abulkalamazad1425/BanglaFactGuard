@@ -1,18 +1,3 @@
-"""Which sentence-embedding model actually runs, and how it is named in
-persisted identities (photo-card claim hash, embedding cache keys).
-
-Until 2026-10-07 the embedding service ignored ML_EMBEDDING_MODEL_NAME and
-always loaded LaBSE, while the setting said
-`paraphrase-multilingual-mpnet-base-v2`. That setting value was nevertheless
-folded into every photo-card claim hash. To keep those hashes (and cached
-embeddings) valid:
-
-* the legacy setting value is read as LaBSE, the model that actually ran;
-* LaBSE keeps the legacy identity tag in hashes and the legacy cache key.
-
-Any other model gets its own name in both places, so a genuine model change
-still changes claim identity and never reuses vectors from another model.
-"""
 
 from __future__ import annotations
 
