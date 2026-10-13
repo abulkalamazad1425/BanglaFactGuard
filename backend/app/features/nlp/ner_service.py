@@ -1,38 +1,4 @@
-"""
-Bangla named-entity recognition (PER/LOC/ORG) for similarity and statement-level content checking.
 
-## Model and what is (not) known about it
-
-`settings.ml.ner_model_name` defaults to `arafatfahim/BanglaTag`, a
-BanglaBERT/ELECTRA checkpoint fine-tuned for token classification. The base
-`csebuetnlp/banglabert` pretraining checkpoint has no trained NER head.
-The service audits the selected checkpoint before using its entity output:
-
-1. **Label audit** — the checkpoint's `id2label` must contain PER, LOC and ORG
-   (BIO prefixes stripped). Generic `LABEL_n` names mean the head cannot be
-   mapped to entity types and the service marks itself UNAVAILABLE.
-2. **Smoke test** — a fixed Bangla sentence with a known person, place and
-   organisation must yield at least one entity of a kept type. A model that
-   cannot tag it is treated as non-functional.
-
-The audit proves the checkpoint is wired and loosely functional, not that it
-is accurate: no Bangla NER accuracy benchmark has been run for this project.
-
-## Normalisation and truncation
-
-Surfaces are normalised with the same `normalize_for_match` used for every
-other comparison (NFC, zero-width removal, SentencePiece `▁` removed, digits
--> ASCII, casefold). Long text is split into sentence chunks (<= 350 chars,
-well under the 512-token limit) and each chunk is tagged — the earlier
-`text[:1000]` truncation silently dropped every entity after the first ~1000
-characters.
-
-## Results
-
-`extract_mentions()` returns an `NERResult`. `available=False` means "could
-not run" (not loaded / failed audit / inference error); callers must report
-the entity metric as unavailable, never as zero entities or a pass.
-"""
 
 from __future__ import annotations
 

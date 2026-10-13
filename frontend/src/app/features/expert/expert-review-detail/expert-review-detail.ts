@@ -26,13 +26,7 @@ const OVERALL_VERDICTS: { value: OverallVerdict; label: string; icon: string }[]
   { value: 'ALTERED', label: 'Altered', icon: '✎' },
 ];
 
-/**
- * One claim's review workspace. Experts vote on open claims. An admin opens
- * the same page from the admin review queue: on an ESCALATED claim the
- * admin's overall vote is the final decision; every other claim is view-only.
- * Only the overall vote ("Cast your vote based on your findings") decides a
- * claim — the supplementary findings are optional and recorded for reference.
- */
+
 @Component({
   selector: 'app-expert-review-detail',
   standalone: true,
