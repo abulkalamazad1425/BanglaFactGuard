@@ -74,7 +74,6 @@ export class AdminDashboardComponent implements OnInit {
     return c.headline || 'Headline not available yet';
   }
 
-  /** Where a claim row leads: the admin review page for open/escalated claims, the result otherwise. */
   claimLink(c: DashboardClaim): string[] {
     return c.status === 'ESCALATED' || c.status === 'EXPERT_REVIEW'
       ? ['/admin/review-queue', c.submission_id]

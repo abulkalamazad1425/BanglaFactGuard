@@ -3,23 +3,8 @@ import { VerificationService } from './verification.service';
 import { ToastService } from '../shared/services/toast.service';
 import { SubmissionStatus, SubmissionType } from '../models/verification.model';
 
-/**
- * Keeps track of verifications that are still running.
- *
- * A source-based verification takes up to a minute, which is far too long to
- * pin someone to the submit form. Claims are queued on the server and tracked
- * here instead, so the user can move around the app — or close the tab and
- * come back — and still be told when a verdict is ready.
- *
- * The list is mirrored into localStorage because the work outlives the page:
- * the pipeline keeps running on the server regardless of what the browser is
- * showing.
- */
-
 const STORAGE_KEY = 'bfg.pending_verifications';
 
-/** True only for the API's own "this submission does not exist" answer (HTTP
- *  404 naming this submission) - not for a generic 404, outage or offline. */
 export function isDeletedOnServer(err: unknown, submissionId: string): boolean {
   const e = err as {
     status?: number;
@@ -33,18 +18,15 @@ export function isDeletedOnServer(err: unknown, submissionId: string): boolean {
   );
 }
 const POLL_INTERVAL_MS = 4000;
-/** Stop chasing a job that is clearly never going to report back. */
 const MAX_POLL_MS = 10 * 60 * 1000;
 
 export interface TrackedVerification {
   submissionId: string;
   headline: string;
   source: string;
-  /** Photo cards have no headline until the server has extracted it. */
   kind?: SubmissionType;
   status: SubmissionStatus;
   queuedAt: number;
-  /** Set once the verdict is in, so the UI can offer a link to it. */
   done: boolean;
 }
 
@@ -56,9 +38,7 @@ export class PendingVerificationsService {
   private readonly items = signal<TrackedVerification[]>(this.restore());
   private timer: ReturnType<typeof setInterval> | null = null;
 
-  /** Everything still being worked on. */
   readonly running = computed(() => this.items().filter((i) => !i.done));
-  /** Finished, but not yet acknowledged by the user. */
   readonly ready = computed(() => this.items().filter((i) => i.done));
   readonly all = this.items.asReadonly();
 
@@ -66,7 +46,6 @@ export class PendingVerificationsService {
     if (this.running().length) this.ensurePolling();
   }
 
-  /** Begin following a queued verification. */
   track(
     submissionId: string,
     headline: string,
@@ -90,7 +69,6 @@ export class PendingVerificationsService {
     this.ensurePolling();
   }
 
-  /** Drop a finished entry once the user has seen it. */
   dismiss(submissionId: string): void {
     this.items.update((list) => list.filter((i) => i.submissionId !== submissionId));
     this.persist();
@@ -118,8 +96,6 @@ export class PendingVerificationsService {
       this.stopPolling();
       return;
     }
-    // No need to chase a job while nobody is looking at the tab: it keeps
-    // running on the server and is read back by id whenever the user returns.
     if (typeof document !== 'undefined' && document.hidden) return;
 
     for (const item of outstanding) {
@@ -142,9 +118,6 @@ export class PendingVerificationsService {
             this.updateStatus(item.submissionId, res.status);
           }
         },
-        // A submission deleted on the server is forgotten here too (never
-        // reported as ready or failed). Any other failed poll is not
-        // meaningful - the next tick retries.
         error: (err) => {
           if (isDeletedOnServer(err, item.submissionId)) this.dismiss(item.submissionId);
         },
@@ -175,8 +148,6 @@ export class PendingVerificationsService {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this.items()));
     } catch {
-      // Private-mode or a full quota: tracking is a convenience, not state
-      // the result depends on, so carry on without it.
     }
   }
 
@@ -186,7 +157,6 @@ export class PendingVerificationsService {
       if (!raw) return [];
       const parsed = JSON.parse(raw) as TrackedVerification[];
       if (!Array.isArray(parsed)) return [];
-      // Anything older than the poll ceiling is stale from a previous visit.
       return parsed.filter((i) => Date.now() - i.queuedAt < MAX_POLL_MS);
     } catch {
       return [];

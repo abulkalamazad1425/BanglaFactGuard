@@ -50,8 +50,6 @@ export class ExpertManagementComponent implements OnInit {
   load(): void {
     this.loading.set(true);
     this.loadError.set(false);
-    // One extra row tells whether another page exists.
-    // A newer search supersedes any request still in flight.
     this.request?.unsubscribe();
     this.request = this.adminSvc
       .listExperts(this.limit + 1, (this.page() - 1) * this.limit, this.query)
@@ -73,7 +71,6 @@ export class ExpertManagementComponent implements OnInit {
     this.load();
   }
 
-  /* ─── Search (name, email or expertise; server-side, before pagination) ─── */
   query = '';
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
   private request?: Subscription;
@@ -85,7 +82,6 @@ export class ExpertManagementComponent implements OnInit {
     this.load();
   }
 
-  /** Search as you type: ~300 ms after the last keystroke, first page. */
   onSearchInput(value: string): void {
     if (this.searchTimer) clearTimeout(this.searchTimer);
     this.searchTimer = setTimeout(() => {
@@ -94,8 +90,6 @@ export class ExpertManagementComponent implements OnInit {
     }, 300);
   }
 
-  /** Merge the server's answer into the existing row so a partial response
-   *  can never blank a cell or reshape the table. */
   private applyUpdate(
     id: string,
     updated: Partial<ExpertResponse> | null | undefined,

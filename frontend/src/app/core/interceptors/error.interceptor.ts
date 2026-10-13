@@ -11,11 +11,9 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
       const status = err.status;
 
       if (status === 401) {
-        // Authentication handles refresh and session invalidation.
       } else if (status === 403) {
         toast.error('You do not have permission to perform this action.');
       } else if (status === 422) {
-        // Validation errors — let components handle them
       } else if (status >= 500) {
         toast.error('This service is temporarily unavailable. Please try again shortly.');
       } else if (status === 0) {

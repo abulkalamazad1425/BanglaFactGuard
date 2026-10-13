@@ -71,7 +71,7 @@ export class ForgotPasswordComponent {
         this.submittedEmail = email;
         this.step = 'confirm';
         this.loading = false;
-      }, // never reveal whether the email exists
+      },
     });
   }
 

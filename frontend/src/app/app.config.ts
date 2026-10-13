@@ -9,7 +9,6 @@ import { errorInterceptor } from './core/interceptors/error.interceptor';
 export const appConfig: ApplicationConfig = {
   providers: [
     provideZoneChangeDetection({ eventCoalescing: true }),
-    // Anchor scrolling lets links such as /faq#body-scores open the right answer.
     provideRouter(
       APP_ROUTES,
       withViewTransitions(),

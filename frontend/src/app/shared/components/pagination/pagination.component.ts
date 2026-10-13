@@ -1,16 +1,7 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 
-/** Items per page for every paginated list in the app. */
 export const PAGE_SIZE = 10;
 
-/**
- * The one pager used by every list page (Fact Explorer's design).
- *
- * Give it `total` when the API reports a total ("Page 2 of 5"); otherwise give
- * it `hasNext` (lists fetched with PAGE_SIZE + 1 rows know whether another
- * page exists) and it shows "Page 2". It hides itself when everything fits on
- * the first page.
- */
 @Component({
   selector: 'app-pagination',
   standalone: true,
@@ -64,14 +55,10 @@ export const PAGE_SIZE = 10;
   ],
 })
 export class PaginationComponent {
-  /** Current page, 1-based. */
   @Input({ required: true }) page = 1;
-  /** Total item count, when the API reports one. */
   @Input() total: number | null = null;
-  /** Whether another page exists, for lists without a total. */
   @Input() hasNext = false;
   @Input() pageSize = PAGE_SIZE;
-  /** Disables both buttons (e.g. while a page is loading). */
   @Input() disabled = false;
   @Input() label = 'Pages';
   @Output() pageChange = new EventEmitter<number>();

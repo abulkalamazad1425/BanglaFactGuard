@@ -17,20 +17,6 @@ import { VerificationReportComponent } from '../../../shared/components/verifica
 import { VerdictBadgeComponent } from '../../../shared/components/verdict-badge/verdict-badge.component';
 import { VotingDetailsComponent } from '../../../shared/components/voting-details/voting-details.component';
 
-/**
- * Universal submission result page — the one destination every "view this
- * claim" link in the app points to (Fact Explorer rows, submission history,
- * notification links), regardless of which of the three verification
- * methods produced it.
- *
- * The three methods are not interchangeable: each has its own detail
- * endpoint and its own shape (a source-based claim has a matched article
- * and a 3-part verdict; a multimodal check has an uploaded image and a
- * binary FAKE/REAL call; a photo card has its image, the headline, outlet
- * and date read from it, and a source verdict). Rather than forcing one of those shapes to stand in for all
- * three, this component looks up the submission's type first and then
- * renders a layout built for that type specifically.
- */
 @Component({
   selector: 'app-verify-result',
   standalone: true,
@@ -66,7 +52,6 @@ export class VerifyResultComponent implements OnInit, OnDestroy {
   private readonly multimodalSvc = inject(MultimodalService);
   private readonly photocardSvc = inject(PhotoCardService);
   private readonly submissionsSvc = inject(SubmissionsService);
-  /** Signed-in and anonymous users are told different next steps. */
   readonly signedIn = inject(AuthService).isLoggedIn;
   readonly followUp = verificationFollowUp;
 
@@ -97,14 +82,10 @@ export class VerifyResultComponent implements OnInit, OnDestroy {
 
   readonly kind = computed(() => this.lookup()?.submission_type ?? null);
 
-  /** True once the pipeline has produced a verdict to show, for whichever
-   *  type this submission is. */
   readonly hasDetail = computed(
     () => !!(this.sourceResult() || this.photocardResult() || this.multimodalResult()),
   );
 
-  /** True while the pipeline is still working — multimodal never sits here,
-   *  it finalises synchronously within the request that created it. */
   readonly stillRunning = computed(() => {
     const s = this.photocardResult()?.status ?? this.lookup()?.status;
     return s === 'PENDING' || s === 'PROCESSING';
@@ -114,12 +95,10 @@ export class VerifyResultComponent implements OnInit, OnDestroy {
     () => (this.photocardResult()?.status ?? this.lookup()?.status) === 'FAILED',
   );
 
-  /** Why a failed submission failed, in words the submitter can act on. */
   readonly failureReason = computed(
     () => this.photocardResult()?.failure_reason ?? this.lookup()?.failure_reason ?? null,
   );
 
-  /** Server-side phase of a pending photo card, for the progress text. */
   readonly phaseText = computed(() => {
     const phase = this.photocardResult()?.phase ?? this.lookup()?.processing_phase;
     switch (phase) {
@@ -151,12 +130,6 @@ export class VerifyResultComponent implements OnInit, OnDestroy {
     this.stopPolling();
   }
 
-  /**
-   * Results are produced in the background (source-based and photo-card both
-   * go through the same async pipeline), so this page is routinely opened
-   * while work is still in progress — poll the type-agnostic lookup until a
-   * verdict exists, then fetch the one detail endpoint that actually applies.
-   */
   private load(id: string): void {
     this.submissionsSvc.getLookup(id).subscribe({
       next: (l) => {
@@ -164,10 +137,6 @@ export class VerifyResultComponent implements OnInit, OnDestroy {
         this.lookup.set(l);
 
         if (l.submission_type === 'PHOTO_CARD') {
-          // A photo card is readable in EVERY state (pending, processing,
-          // failed, complete): the detail endpoint returns the stored image,
-          // the extracted headline once known, a failure reason, or the saved
-          // result - so the page never needs the extracted headline to exist.
           this.loadPhotocard(id);
           return;
         }
@@ -232,9 +201,6 @@ export class VerifyResultComponent implements OnInit, OnDestroy {
 
   private ensurePolling(id: string): void {
     if (this.pollTimer !== null) return;
-    // Polling is only a courtesy to a viewer who stays: it pauses while the
-    // tab is hidden and stops entirely when the page is left (ngOnDestroy).
-    // None of that affects the server-side job.
     this.pollTimer = setInterval(() => {
       if (typeof document !== 'undefined' && document.hidden) return;
       this.load(id);
@@ -247,9 +213,6 @@ export class VerifyResultComponent implements OnInit, OnDestroy {
     this.pollTimer = null;
   }
 
-  /* ─── Shared template helpers ─── */
-
-  /** How the card was read, in plain words (no model names). */
   extractionSummary(p: PhotoCardResultResponse): string {
     const n = p.extraction_attempts ?? 1;
     const attempt = n > 1 ? ` (succeeded on attempt ${n} of 9)` : '';
@@ -263,14 +226,10 @@ export class VerifyResultComponent implements OnInit, OnDestroy {
     return `Headline, outlet and date were read directly from the image${attempt}.`;
   }
 
-  /** Lifecycle states in which a saved automated result exists. */
   isReviewed(status: string | undefined): boolean {
     return status === 'EXPERT_REVIEW' || status === 'FINALIZED' || status === 'ESCALATED';
   }
 
-  /** Ring/accent colour for a source-based or photo-card verdict —
-   *  content status wins once the source is confirmed; a date mismatch
-   *  never changes this colour. */
   verdictColor(v: VerificationResponse | null): string {
     if (!v || v.source_status === 'NOT_FOUND') return '#6b7280';
     if (v.content_status === 'MATCHED') return '#10b981';
@@ -282,8 +241,6 @@ export class VerifyResultComponent implements OnInit, OnDestroy {
     return 283 - 283 * (confidence || 0);
   }
 
-  /** The binary multimodal model can only imply FAKE/REAL — true if the
-   *  expert-finalized verdict is something else, or flips that call. */
   multimodalWasOverridden(m: MultimodalPredictionDetail): boolean {
     if (!m.expert_overall_verdict) return false;
     const impliedByAi = m.prediction === 'FAKE' ? 'FAKE' : 'REAL';

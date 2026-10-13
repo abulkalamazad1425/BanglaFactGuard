@@ -28,7 +28,7 @@ import { ToastComponent } from '../../shared/components/toast/toast.component';
       }
       .main-content {
         flex: 1;
-        padding-top: 64px; /* navbar height */
+        padding-top: 64px;
       }
     `,
   ],

@@ -1,25 +1,7 @@
-// ============================================================
-// Verification Models — synced with backend schemas.py
-// ============================================================
-
-// ── Independent findings ─────────────────────────────────────────────
-// Source, Headline Alteration and date are decided separately: a date
-// mismatch never implies an altered headline, and the headline is only
-// compared once the source is CONFIRMED.
-// INCOMPLETE means the check itself could not be completed (search/retrieval
-// failure, or the source's own publication date was undeterminable) — never a
-// confident negative such as NOT_FOUND or MISMATCHED.
 export type SourceStatus = 'CONFIRMED' | 'NOT_FOUND' | 'INCOMPLETE';
-/** Headline Alteration verdict: the claim headline vs the source TITLE only.
- *  There is no third verdict; when none was reached `content_status` is null
- *  and `headline_check_status` says why. */
 export type ContentStatus = 'MATCHED' | 'ALTERED';
 export type DateStatus = 'MATCHED' | 'MISMATCHED' | 'INCOMPLETE';
-/** Display status of the Headline Alteration verdict. EXACT_MATCHED and
- *  MEANING_PRESERVED are both a stored MATCHED verdict (exact title match vs
- *  any other basis); ALTERED is unchanged. */
 export type HeadlineAlterationStatus = 'EXACT_MATCHED' | 'MEANING_PRESERVED' | 'ALTERED';
-/** Processing status of the headline check — separate from the verdict. */
 export type HeadlineCheckStatus =
   | 'COMPLETED'
   | 'SOURCE_NOT_FOUND'
@@ -27,13 +9,8 @@ export type HeadlineCheckStatus =
   | 'SOURCE_TITLE_MISSING'
   | 'MODEL_UNAVAILABLE'
   | 'UNDETERMINED';
-/** Whether the claim-body vs source-body scores were computed. */
 export type BodyComparisonStatus = 'COMPUTED' | 'SKIPPED' | 'UNAVAILABLE';
 
-// ── Overall verdict — voted on by experts for EVERY submission type
-// (source-based, photo card, and multimodal alike), independently of the
-// (Source, Content, Date) structured vote that additionally exists for
-// source-based/photo-card claims.
 export type OverallVerdict = 'FAKE' | 'REAL' | 'MISLEADING' | 'ALTERED';
 
 export type SubmissionStatus =
@@ -41,28 +18,19 @@ export type SubmissionStatus =
 
 export type SubmissionType = 'SOURCE_BASED' | 'MULTIMODAL' | 'PHOTO_CARD';
 
-/** What the pipeline treated as "the claim". Photo cards are ALWAYS
- *  HEADLINE_ONLY (no submitted body exists to compare). */
 export type ClaimScope = 'HEADLINE_ONLY' | 'HEADLINE_WITH_BODY';
 
-/** Why a score is (or is not) a number. */
 export type MetricState = 'COMPUTED' | 'NOT_APPLICABLE' | 'EMPTY' | 'UNAVAILABLE';
 
-/** Progress inside PENDING/PROCESSING (public lifecycle enum is unchanged). */
 export type ProcessingPhase = 'QUEUED' | 'EXTRACTING' | 'VERIFYING' | 'DONE' | 'FAILED';
 
-// ── Request ──────────────────────────────────────────────────────────
 export interface VerificationRequest {
   headline: string;
-  /** Optional: without a (recognised, active) outlet the claim is checked
-   *  against the active verified sources. */
   claimed_source_text?: string | null;
   body_text?: string | null;
-  published_date?: string | null; // YYYY-MM-DD
+  published_date?: string | null;
 }
 
-// ── Sub-types returned in VerificationResponse ───────────────────────
-/** A source-correspondence measurement. null value = no measurement (see state), never 0. */
 export interface MetricDetail {
   state: MetricState;
   value?: number | null;
@@ -84,7 +52,6 @@ export interface SearchAccounting {
 
 export interface DateAnalysis {
   claimed_date?: string | null;
-  /** datePublished as a calendar day in Asia/Dhaka. */
   article_date?: string | null;
   article_published_at?: string | null;
   provenance?: string | null;
@@ -92,7 +59,6 @@ export interface DateAnalysis {
   timezone?: string;
 }
 
-/** One material difference between the claim headline and the source title. */
 export interface HeadlineDifference {
   kind: string;
   detail: string;
@@ -106,19 +72,14 @@ export interface HeadlineSemanticAssessment {
   contradiction_title_to_claim?: number | null;
   entailment_claim_to_title?: number | null;
   contradiction_claim_to_title?: number | null;
-  /** Raw LaBSE cosine, -1..1. */
   embedding_cosine?: number | null;
   reason?: string | null;
 }
 
-/** Headline Alteration — the claim headline compared ONLY with the selected
- *  source article's title (never its body). */
 export interface HeadlineAlterationDetail {
   status: HeadlineCheckStatus;
   verdict?: ContentStatus | null;
-  /** Short, evidence-based basis for the verdict or for its absence. */
   reason: string;
-  /** True when decided by an exact match before any alteration analysis ran. */
   exact_match: boolean;
   basis?: string;
   claim_headline: string;
@@ -131,8 +92,6 @@ export interface HeadlineAlterationDetail {
   method?: string | null;
 }
 
-/** One body similarity measurement. `value` is the displayed 0–1 score and is
- *  null when unavailable — never a default 0. */
 export interface BodySimilarityMetric {
   available: boolean;
   value?: number | null;
@@ -141,8 +100,6 @@ export interface BodySimilarityMetric {
   details?: Record<string, unknown>;
 }
 
-/** Claim body vs source body — similarity MEASUREMENTS only, never a truth,
- *  alteration or contradiction verdict. */
 export interface BodySimilarityReport {
   status: BodyComparisonStatus;
   reason?: string | null;
@@ -157,7 +114,6 @@ export interface BodySimilarityReport {
 export interface AnalysisDetails {
   pipeline_version?: string | null;
   claim_scope?: ClaimScope | null;
-  /** Source-correspondence measurements. */
   metrics?: Record<string, MetricDetail>;
   search?: SearchAccounting | null;
   source_basis?: string[];
@@ -165,7 +121,6 @@ export interface AnalysisDetails {
   body_similarity?: BodySimilarityReport | null;
   date?: DateAnalysis | null;
   stage_errors?: Record<string, string>;
-  /** How the evidence scope was chosen (absent on older results). */
   source_scope?: SourceScopeDetails | null;
 }
 
@@ -190,22 +145,16 @@ export interface MatchedArticle {
   published_date?: string | null;
   body?: string | null;
   rank_score?: number | null;
-  /** Verified publisher this article belongs to. */
   publisher?: string | null;
-  /** The article the headline/date/body comparisons used. */
   is_primary?: boolean;
 }
 
-// ── Acknowledgement from POST /verify/async ─────────────────────────
 export interface VerificationQueued {
   submission_id: string;
   status: SubmissionStatus;
-  /** True when this exact claim was already verified and the stored
-   *  result is being reused instead of re-running the pipeline. */
   cached: boolean;
 }
 
-// ── Response from GET /verify/{id}/status ───────────────────────────
 export interface VerificationStatus {
   submission_id: string;
   status: SubmissionStatus;
@@ -216,58 +165,38 @@ export interface VerificationStatus {
   updated_at: string;
 }
 
-// ── Full response from POST /verify or GET /verify/{id} ─────────────
 export interface VerificationResponse {
   submission_id: string;
-  /** The expert-finalized Overall verdict. NULL until expert review finalizes
-   *  the claim - the automated system never sets it. */
   overall_verdict?: OverallVerdict | null;
-  /** True once expert review has finalized overall_verdict. */
   is_finalized?: boolean;
-  /** True until finalization: show "review pending", never a truth badge. */
   review_pending?: boolean;
-  /** True when an administrator made the final decision on an escalated claim. */
   decided_by_admin?: boolean;
-  /** Deprecated — always false. Preliminary findings are always the AI's own. */
   was_overridden?: boolean;
-  /** The AI's own original call — immutable, never changed by expert review. */
   ai_source_status?: SourceStatus | null;
   ai_content_status?: ContentStatus | null;
   ai_date_status?: DateStatus | null;
   source_status: SourceStatus;
-  /** Headline Alteration verdict (MATCHED | ALTERED), or null. */
   content_status?: ContentStatus | null;
-  /** Exact Matched / Meaning Preserved / Altered (null when no verdict). */
   headline_status?: HeadlineAlterationStatus | null;
   headline_check_status?: HeadlineCheckStatus | null;
   date_status?: DateStatus | null;
-  /** The publication date the submitter claimed; date comparison is shown only when set. */
   claimed_published_date?: string | null;
-  /** Source-correspondence strength — not a probability of truth. */
   confidence: number;
   reasoning: string;
   matched_articles: MatchedArticle[];
   normalized_source?: string | null;
-  /** CLAIMED_SOURCE (only the claimed outlet was searched) or
-   *  VERIFIED_SOURCES (no usable outlet: the active verified sources were). */
   verification_mode?: VerificationMode;
   source_resolution_reason?: string | null;
   cached: boolean;
   processing_time_ms?: number | null;
   created_at: string;
   claim_scope?: ClaimScope | null;
-  /** What `confidence` means: a measurement summary, not a probability of truth. */
   confidence_meaning?: string;
   pipeline_version?: string | null;
-  /** Stored by the pre-Headline-Alteration pipeline: its old content verdict is not shown. */
   legacy_result?: boolean;
   analysis?: AnalysisDetails | null;
 }
 
-// ── My Submissions filters (GET /users/me/submissions?q=&state=&type=) ──
-/** in_progress: being checked · review: preliminary result, awaiting the
- *  expert decision (incl. escalated) · final: final decision · failed: check
- *  could not complete. */
 export type MySubmissionState = 'in_progress' | 'review' | 'final' | 'failed';
 export interface MySubmissionFilters {
   q?: string;
@@ -275,12 +204,10 @@ export interface MySubmissionFilters {
   type?: SubmissionType | '';
 }
 
-// ── Submission history item from GET /users/me/submissions ───────────
 export interface SubmissionSummary {
   prediction?: string | null;
   submission_id: string;
   submission_type: SubmissionType;
-  /** null for a just-accepted photo card (the headline is extracted in the background). */
   headline: string | null;
   claimed_source_text: string | null;
   status: string;
@@ -291,7 +218,6 @@ export interface SubmissionSummary {
   headline_status?: HeadlineAlterationStatus | null;
   date_status?: DateStatus | null;
   published_date?: string | null;
-  /** Expert-finalized only. */
   overall_verdict?: OverallVerdict | null;
   is_finalized?: boolean;
   ai_confidence: number | null;
@@ -300,7 +226,6 @@ export interface SubmissionSummary {
   updated_at?: string | null;
 }
 
-// ── Stats from GET /users/me/submissions/stats ───────────────────────
 export interface SubmissionStats {
   total: number;
   source_confirmed: number;
@@ -310,14 +235,12 @@ export interface SubmissionStats {
   pending: number;
 }
 
-// ── Multimodal prediction from POST /multimodal/predict ─────────────
 export interface MultimodalPredictionResult {
   prediction_id: string;
   submission_id: string;
-  prediction: string; // 'FAKE' | 'NON_FAKE' — the AI's preliminary call
+  prediction: string;
   confidence_fake: number;
   confidence_real: number;
-  /** NULL until expert review finalizes this claim — see SubmissionLookup.status. */
   expert_overall_verdict?: OverallVerdict | null;
   is_cached: boolean;
   original_id?: string | null;
@@ -329,22 +252,17 @@ export interface MultimodalPredictionResult {
   processing_time_ms?: number | null;
 }
 
-// ── Multimodal prediction from GET /multimodal/predict/{id} or
-//    GET /multimodal/by-submission/{submission_id} — includes the original
-//    claim text, which the bare prediction response above does not. ────
 export interface MultimodalPredictionDetail {
   prediction_id: string;
   submission_id: string;
   headline: string | null;
   body_text: string | null;
-  prediction: string; // 'FAKE' | 'NON_FAKE' — the AI's preliminary call
+  prediction: string;
   confidence_fake: number;
   confidence_real: number;
   expert_overall_verdict?: OverallVerdict | null;
   is_cached: boolean;
   original_id?: string | null;
-  /** Set when this upload matched an earlier claim: that claim's submission
-   *  id. Its review outcome is the one shown for this submission. */
   original_submission_id?: string | null;
   minio_object_key: string;
   image_url?: string | null;
@@ -353,11 +271,6 @@ export interface MultimodalPredictionDetail {
   updated_at: string;
 }
 
-// ── Type-agnostic lookup from GET /submissions/{id} ──────────────────
-// The first call a result page makes: tells it which detail endpoint to
-// call next (GET /verify/{id}, GET /multimodal/by-submission/{id}, or
-// GET /photocard/{id}) and carries enough to render a loading/pending
-// state before that second call resolves.
 export interface SubmissionLookup {
   submission_id: string;
   submission_type: SubmissionType;
@@ -371,10 +284,6 @@ export interface SubmissionLookup {
   created_at: string;
 }
 
-// ── Public voting details from GET /submissions/{id}/voting-details ─────
-// Only available after the final decision (404 before). Shows each
-// reviewer's overall vote and justification; an admin's final decision on an
-// escalated claim is marked with is_final_decision.
 export interface PublicVote {
   reviewer_name: string;
   reviewer_role: 'Expert' | 'Admin';

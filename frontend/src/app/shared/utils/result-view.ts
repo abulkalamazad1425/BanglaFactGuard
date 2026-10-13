@@ -1,18 +1,3 @@
-// ============================================================
-// Result presentation rules — pure functions shared by the detail page,
-// photo-card page, expert view and history, so a finding, its explanation
-// and its evidence can never disagree.
-//
-// Rules enforced here (and unit-tested in result-view.spec.ts):
-//  * Headline Alteration is shown as Exact Matched / Meaning Preserved /
-//    Altered (both "matched" statuses are a stored MATCHED verdict). When no
-//    verdict was reached, the reason is shown — never a guessed verdict.
-//  * A legacy result's old content verdict is never shown as a headline verdict.
-//  * Body similarity scores are measurements only, shown apart from the
-//    headline verdict. An unavailable score is "Unavailable" with its reason,
-//    never 0 or 0%.
-// ============================================================
-
 import {
   AnalysisDetails,
   BodySimilarityMetric,
@@ -31,8 +16,6 @@ export function hasBody(scope: ClaimScope | null | undefined): boolean {
 export function formatPercent(v: number | null | undefined, digits = 0): string {
   return v == null ? '—' : `${(v * 100).toFixed(digits)}%`;
 }
-
-// ── Headline Alteration ──────────────────────────────────────────────────
 
 export type HeadlineTone = 'matched' | 'altered' | 'none';
 
@@ -73,9 +56,6 @@ export const HEADLINE_STATUS_TEXT: Record<HeadlineCheckStatus, { title: string; 
     },
   };
 
-/** Display status for a result, also for a response from an older API that
- *  only carries the MATCHED/ALTERED verdict (exactness then comes from the
- *  stored detail; without it a match is Meaning Preserved, never Exact). */
 export function headlineStatusOf(r: VerificationResponse): HeadlineAlterationStatus | null {
   if (r.headline_status) return r.headline_status;
   if (r.content_status === 'ALTERED') return 'ALTERED';
@@ -86,7 +66,6 @@ export function headlineStatusOf(r: VerificationResponse): HeadlineAlterationSta
   return null;
 }
 
-/** The AI's preliminary headline finding (claim headline vs source title). */
 export function headlineView(r: VerificationResponse): HeadlineView {
   const status = headlineStatusOf(r);
   if (status) {
@@ -126,8 +105,6 @@ export const DIFFERENCE_LABELS: Record<string, string> = {
 export function differenceLabel(kind: string): string {
   return DIFFERENCE_LABELS[kind] ?? 'Meaningful difference';
 }
-
-// ── Body similarity (measurements only — never a verdict) ───────────────
 
 export type BodyMetricKey =
   'tfidf_cosine' | 'jaccard' | 'normalized_levenshtein' | 'semantic_cosine';
@@ -174,7 +151,6 @@ export const BODY_METRICS: BodyMetricSpec[] = [
 
 export type ScoreBand = 'High' | 'Moderate' | 'Low';
 
-/** A descriptive band for a 0–1 similarity score. It describes overlap only. */
 export function scoreBand(value: number): ScoreBand {
   if (value >= 0.75) return 'High';
   if (value >= 0.4) return 'Moderate';
@@ -183,9 +159,7 @@ export function scoreBand(value: number): ScoreBand {
 
 export interface BodyMetricRow extends BodyMetricSpec {
   available: boolean;
-  /** 0–1, or null when unavailable. */
   value: number | null;
-  /** "82%" or "Unavailable" — never a fabricated number. */
   display: string;
   band: ScoreBand | null;
   note: string | null;
@@ -226,7 +200,6 @@ function bodyMetricNote(
   return null;
 }
 
-/** Why the body section has no scores, or null when it does. */
 export function bodySectionMessage(
   report: BodySimilarityReport | null | undefined,
   scope: ClaimScope | null | undefined,
@@ -236,8 +209,6 @@ export function bodySectionMessage(
   if (report.status === 'COMPUTED') return null;
   return report.reason ?? 'Body similarity is unavailable for this result.';
 }
-
-// ── Source correspondence measurements (reviewer detail) ────────────────
 
 export interface MeasurementRow {
   key: string;

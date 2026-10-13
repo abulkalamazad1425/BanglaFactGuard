@@ -38,7 +38,6 @@ const HEADLINE_CONFIG: Record<HeadlineAlterationStatus, BadgeConfig> = {
   ALTERED: { text: `Headline: ${HEADLINE_LABELS.ALTERED}`, cls: 'badge-partial', icon: '◑' },
 };
 
-// Legacy callers that only have the stored MATCHED/ALTERED verdict.
 const CONTENT_CONFIG: Record<ContentStatus, BadgeConfig> = {
   MATCHED: { text: 'Headline: Matched', cls: 'badge-true', icon: '✓' },
   ALTERED: { text: `Headline: ${HEADLINE_LABELS.ALTERED}`, cls: 'badge-partial', icon: '◑' },
@@ -50,17 +49,6 @@ const DATE_CONFIG: Record<DateStatus, BadgeConfig> = {
   INCOMPLETE: { text: `Date: ${DATE_LABELS.INCOMPLETE}`, cls: 'badge-incomplete', icon: '?' },
 };
 
-/**
- * Verdict and finding chips. Every chip carries readable text (and an icon),
- * never colour alone.
- * - `[overallVerdict]` — the FINAL decision (Real/Fake/Misleading/Altered).
- * - `[label]` — the text & image model's preliminary call, shown as
- *   "AI: Likely Fake / Likely Real" — never as a final verdict.
- * - `[sourceStatus]` + `[headlineStatus]`/`[contentStatus]` + `[dateStatus]`
- *   — preliminary findings in summary form: "Found" is never shown here; a
- *   missing article shows only "Not found in claimed source". Set
- *   `[hideDate]` when the submitter claimed no date.
- */
 @Component({
   selector: 'app-verdict-badge',
   standalone: true,

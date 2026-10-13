@@ -36,8 +36,6 @@
 .table-card {
   padding: 0;
 }
-/* The table scrolls inside its card instead of overflowing or squeezing:
-   fixed column widths keep alignment identical in Active and Inactive rows. */
 .table-scroll {
   overflow-x: auto;
   border-radius: inherit;
@@ -50,9 +48,6 @@
   table-layout: fixed;
   min-width: 1150px;
 }
-/* Pixel widths sized to the content: the Actions column always fits its three
-   buttons (Activate and Deactivate share one width), so toggling a row's
-   status can never widen a column or overflow the table. */
 .col-name {
   width: 150px;
 }

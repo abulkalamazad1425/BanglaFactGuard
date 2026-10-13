@@ -29,8 +29,6 @@ export class NotificationListComponent implements OnInit, OnDestroy {
   readonly hasNext = signal(false);
   readonly limit = PAGE_SIZE;
 
-  // Computed to avoid arrow functions in template. Unread items may sit on
-  // another page, so the server-wide unread count counts too.
   readonly hasUnread = computed(
     () => this.notifSvc.unreadCount() > 0 || this.notifications().some((n) => !n.is_read),
   );
@@ -46,7 +44,6 @@ export class NotificationListComponent implements OnInit, OnDestroy {
     if (this.timer) clearInterval(this.timer);
   }
   load(): void {
-    // One extra row tells whether another page exists.
     this.notifSvc.list(this.limit + 1, (this.page() - 1) * this.limit).subscribe({
       next: (rows) => {
         this.hasNext.set(rows.length > this.limit);
@@ -67,7 +64,6 @@ export class NotificationListComponent implements OnInit, OnDestroy {
     this.load();
   }
 
-  /** These notifications carry the claim headline's first words — shown as written. */
   isHeadlinePreview(n: NotificationItem): boolean {
     return ['VERIFICATION_COMPLETE', 'EXPERT_REVIEW_COMPLETE', 'CLAIM_ESCALATED'].includes(
       n.notification_type,

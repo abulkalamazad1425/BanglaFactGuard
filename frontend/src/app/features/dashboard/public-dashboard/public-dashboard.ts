@@ -91,8 +91,6 @@ export class PublicDashboardComponent implements OnInit {
       if (values.source_id || values.date_from || values.date_to) this.advanced.set(true);
       this.runSearch();
     });
-    // Search as you type (~300 ms): goes to the first page; a newer search
-    // cancels the request still in flight (runSearch unsubscribes it).
     this.filterForm.controls.keyword.valueChanges
       .pipe(debounceTime(300), distinctUntilChanged(), takeUntilDestroyed(this.destroyRef))
       .subscribe((value) => {
@@ -220,9 +218,6 @@ export class PublicDashboardComponent implements OnInit {
         .map((key) => ({ key, label: labels[key] })),
     );
   }
-  /** Preliminary AI findings for a card: headline status, the date only when
-   *  one was claimed, "Not found in claimed source" instead of any found
-   *  status, or the AI decision for text & image checks. */
   chips(item: ExplorerItem): FindingChip[] {
     if (item.submission_type === 'MULTIMODAL') {
       const label = aiDecisionLabel(item.prediction);

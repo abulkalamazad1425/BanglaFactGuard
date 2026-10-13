@@ -1,7 +1,3 @@
-// ============================================================
-// Admin Models — synced with backend admin/schemas.py
-// ============================================================
-
 import {
   ContentStatus,
   DateStatus,
@@ -10,7 +6,6 @@ import {
   SourceStatus,
 } from './verification.model';
 
-// ── Expert account response from GET /admin/experts ──────────────────
 export interface ExpertResponse {
   id: string;
   email: string;
@@ -24,20 +19,16 @@ export interface ExpertResponse {
   created_at: string;
 }
 
-// ── Platform-wide admin stats from GET /admin/stats ─────────────────
 export interface AdminStats {
   total_submissions: number;
   submissions_last_30_days: number;
   total_experts: number;
   active_experts: number;
-  /** Claims currently open for expert voting. */
   pending_expert_reviews: number;
-  /** Claims awaiting an admin decision. */
   escalated_claims?: number;
   avg_verification_time_seconds?: number | null;
 }
 
-// ── Admin home from GET /admin/dashboard ─────────────────────────────
 export interface DashboardClaim {
   submission_id: string;
   headline: string | null;
@@ -86,14 +77,12 @@ export interface AdminDashboard {
   recent_activity: DashboardActivity[];
 }
 
-// ── Request to POST /admin/experts ───────────────────────────────────
 export interface CreateExpertRequest {
   email: string;
   password: string;
   full_name?: string | null;
 }
 
-// ── Request to PUT /admin/experts/{id} ───────────────────────────────
 export interface UpdateExpertRequest {
   full_name?: string | null;
   email?: string | null;
@@ -101,20 +90,16 @@ export interface UpdateExpertRequest {
   is_active?: boolean;
 }
 
-// ── Request to POST /admin/experts/{id}/reset-password ──────────────
 export interface ResetExpertPasswordRequest {
   new_password: string;
 }
 
-// ── Method distribution sub-object in PublicStats ────────────────────
 export interface MethodDistribution {
   source_based: number;
   multimodal: number;
   photo_card: number;
 }
 
-// ── Public dashboard stats from GET /dashboard/stats ─────────────────
-// (used by home component; also available in admin context)
 export interface PublicStats {
   total_submissions: number;
   source_confirmed_count: number;
@@ -128,31 +113,24 @@ export interface PublicStats {
   avg_verification_time_seconds?: number | null;
 }
 
-// ── Top claimed source from GET /dashboard/top-sources ───────────────
 export interface TopSource {
   source: string;
   count: number;
 }
 
-// ── Fact Explorer — GET /dashboard/explorer ───────────────────────────
 export interface ExplorerItem {
   prediction?: string | null;
   submission_id: string;
   headline: string | null;
   submission_type: 'SOURCE_BASED' | 'MULTIMODAL' | 'PHOTO_CARD';
   claimed_source_text: string | null;
-  /** The expert-finalized Overall verdict; null until experts finalize it
-   *  (the automated system never sets it for source-based/photo-card claims). */
   overall_verdict: OverallVerdict | null;
-  /** True once expert review has finalized overall_verdict. */
   is_finalized: boolean;
   source_status: SourceStatus | null;
   content_status: ContentStatus | null;
-  /** Exact Matched / Meaning Preserved / Altered — the AI's preliminary finding. */
   headline_status?: HeadlineAlterationStatus | null;
   date_status: DateStatus | null;
   confidence: number | null;
-  /** Thumbnail for MULTIMODAL/PHOTO_CARD submissions. */
   image_url?: string | null;
   published_date: string | null;
   created_at: string;
@@ -164,7 +142,6 @@ export interface ExplorerSearchParams {
   source_status?: string;
   content_status?: string;
   date_status?: string;
-  /** Matches only expert-finalized claims; spans every submission type. */
   overall_verdict?: string;
   method?: string;
   date_from?: string;
@@ -182,8 +159,6 @@ export interface ExplorerSearchResponse {
   offset: number;
 }
 
-// ── Credibility weight tiers — admin-configurable, GET/POST/PUT/DELETE
-//    /admin/credibility-tiers ───────────────────────────────────────
 export interface CredibilityWeightTier {
   id: string;
   label: string;
@@ -193,8 +168,6 @@ export interface CredibilityWeightTier {
   is_active: boolean;
 }
 
-/** One row of the complete tier set saved by PUT /admin/credibility-tiers.
- *  `id` updates an existing tier; omit it for a new tier. Tiers left out are deleted. */
 export interface CredibilityWeightTierItem {
   id?: string | null;
   label: string;
@@ -204,22 +177,13 @@ export interface CredibilityWeightTierItem {
   is_active: boolean;
 }
 
-// ── Voting configuration — admin-configurable, GET/PUT /admin/voting-config.
-//    No fixed limit in code; the admin decides how many expert votes a
-//    claim needs before it's finalized. ───────────────────────────────
 export interface VotingConfig {
   id: string;
-  /** M — minimum votes before a claim can finalize */
   min_expert_votes: number;
-  /** N — votes on FINALIZED claims an expert needs before their tier weight applies */
   activation_threshold_votes: number;
-  /** T — weighted score the leading verdict must reach */
   verified_threshold: number;
-  /** Leader's score must exceed the runner-up's by at least this */
   lead_margin: number;
-  /** Escalate to admin once this many votes are cast without a final decision (null = not configured) */
   max_review_votes: number | null;
-  /** Escalate to admin once this many hours pass since submission without a final decision (null = not configured) */
   max_review_hours: number | null;
   updated_at: string;
 }

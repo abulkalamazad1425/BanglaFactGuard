@@ -1,4 +1,3 @@
-/** Presentation-only mappings. Raw responses remain available to diagnostics. */
 export function requestError(
   error: { status?: number },
   fallback = 'Unable to complete this request. Please try again.',
@@ -27,7 +26,6 @@ export function requestError(
   }
 }
 
-/** Photo-card reasons from the server (app/features/photocard/claim_extraction.py). */
 export const PHOTOCARD_UNAVAILABLE_MESSAGE =
   'Sorry for the temporary inconvenience. Information cannot be collected ' +
   'from the photo card right now. Please submit it again after a while.';
@@ -37,8 +35,6 @@ export const PHOTOCARD_INVALID_MESSAGE =
   "the news outlet's name or logo.";
 
 export function verificationFailure(reason?: string | null): string {
-  // The card could not be read right now (every Gemini request failed) vs. it
-  // was read but shows no headline / no recognised outlet: different advice.
   if (/temporary inconvenience|cannot be collected from the photo card/i.test(reason ?? '')) {
     return PHOTOCARD_UNAVAILABLE_MESSAGE;
   }
@@ -57,7 +53,6 @@ export function verificationFailure(reason?: string | null): string {
   );
 }
 
-/** The text & image model's preliminary call — never an expert verdict. */
 export function predictionLabel(value?: string | null): string {
   const v = (value ?? '').toUpperCase();
   if (v === 'FAKE' || v === 'LIKELY FAKE') return 'Likely Fake';
@@ -65,7 +60,6 @@ export function predictionLabel(value?: string | null): string {
   return 'Result unavailable';
 }
 
-/** Preserve evidence prose, replacing diagnostic sentences with a limitation. */
 export function readableExplanation(value?: string | null): string {
   if (!value) return '';
   const terms: Record<string, string> = {

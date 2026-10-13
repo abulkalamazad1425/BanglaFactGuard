@@ -13,20 +13,6 @@ import { PhotoCardAccepted } from '../../models/photocard.model';
 
 type Step = 'upload' | 'accepted';
 
-/**
- * Photo-card verification — the image is the whole submission.
- *
- * The user only uploads the card. The server stores it, queues a durable job
- * and answers 202 immediately. There, Gemini reads the headline, identifies
- * the news outlet among the currently active verified sources (by its name,
- * logo or a known alias) and reads the printed date; those become the claim's
- * headline, claimed outlet and claimed date, and the headline is verified.
- * Leaving this page does not cancel anything — the result is fetched later by
- * submission id (My Submissions, the notification link, or the result page).
- *
- * The outlets a card may come from are listed beside the form (collapsed by
- * default, like the article text on a result page).
- */
 @Component({
   selector: 'app-photocard',
   standalone: true,
@@ -39,26 +25,21 @@ export class PhotoCardComponent implements OnInit {
   private readonly sourceSvc = inject(SourceService);
   private readonly toast = inject(ToastService);
   private readonly pending = inject(PendingVerificationsService);
-  /** Signed-in and anonymous users are told different next steps. */
   readonly signedIn = inject(AuthService).isLoggedIn;
   readonly followUp = verificationFollowUp;
 
   step: Step = 'upload';
 
-  // ── Upload form ──
   selectedFile: File | null = null;
   previewUrl: string | null = null;
   dragActive = false;
   submitted = false;
-  /** True only while the (fast) upload itself is in flight. */
   verifying = false;
 
-  // ── Accepted ──
   accepted: PhotoCardAccepted | null = null;
 
   errorMsg: string | null = null;
 
-  /** Active verified sources — the only outlets a card can be checked against. */
   sources: SourceResponse[] = [];
   sourcesLoading = true;
   sourcesError = false;
@@ -83,8 +64,6 @@ export class PhotoCardComponent implements OnInit {
       },
     });
   }
-
-  /* ─── Upload ─── */
 
   onFileChange(event: Event): void {
     const file = (event.target as HTMLInputElement).files?.[0];
@@ -142,9 +121,6 @@ export class PhotoCardComponent implements OnInit {
         this.verifying = false;
         this.accepted = res;
         this.step = 'accepted';
-        // Lets the app tell the user when the result lands while they are
-        // elsewhere in the app; the server job does not depend on this. The
-        // outlet is not known until the card has been read.
         this.pending.track(res.submission_id, 'Photo card', '', 'PHOTO_CARD');
       },
       error: (err) => {

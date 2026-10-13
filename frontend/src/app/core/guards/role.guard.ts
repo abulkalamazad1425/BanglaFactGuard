@@ -18,7 +18,6 @@ export const roleGuard = (...roles: UserRole[]): CanActivateFn => {
       return true;
     }
 
-    // Admin can access expert routes too
     if (roles.includes('expert') && user.role === 'admin') {
       return true;
     }

@@ -65,7 +65,6 @@ export class ExpertReviewDetailComponent implements OnInit {
   formSubmitted = false;
 
   readonly queueLink = computed(() => (this.isAdmin() ? '/admin/review-queue' : '/expert/queue'));
-  /** Source/headline/date findings only apply to SOURCE_BASED/PHOTO_CARD claims. */
   readonly isStructuredType = computed(() => this.claim()?.submission_type !== 'MULTIMODAL');
   readonly needsContentAndDate = computed(() => this.selectedSource() === 'CONFIRMED');
   readonly isAdminDecision = computed(
@@ -106,7 +105,6 @@ export class ExpertReviewDetailComponent implements OnInit {
     this.selectedDate.set(val);
   }
 
-  /** Only the overall vote (plus the justification) is required. */
   readonly voteComplete = computed(() => !!this.selectedOverall());
 
   ngOnInit(): void {
@@ -136,8 +134,6 @@ export class ExpertReviewDetailComponent implements OnInit {
         }
 
         if (c.submission_type === 'MULTIMODAL') {
-          // No separate "detailed AI result" endpoint for multimodal — the
-          // queue item already carries everything (image, AI label, confidence).
           this.loading.set(false);
           return;
         }
