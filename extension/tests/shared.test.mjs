@@ -31,13 +31,13 @@ test('expert finalization is a separate stage from the multimodal AI prediction'
   );
   assert.equal(s.stage, 'final:REAL');
   assert.equal(s.lines[0], 'Final decision: Real');
-  assert.ok(s.lines.includes('AI decision: Likely Fake')); // shown apart, never merged into the final decision
+  assert.ok(s.lines.includes('AI decision: Likely Fake'));
   const copy = summarize(
     'MULTIMODAL',
     { prediction: 'FAKE', expert_overall_verdict: 'REAL', original_submission_id: 'earlier' },
     { status: 'FINALIZED' },
   );
-  assert.equal(copy.stage, 'final:REAL'); // a matched earlier claim's decision is this claim's result
+  assert.equal(copy.stage, 'final:REAL');
   assert.ok(copy.lines.includes("Already checked earlier: showing that claim's result"));
 });
 test('preliminary predictions and historical Activity use readable consistent labels', () => {
@@ -50,7 +50,7 @@ test('preliminary predictions and historical Activity use readable consistent la
     assert.equal(resultLine(`AI prediction: ${prediction} (preliminary)`), `AI decision: ${label}`);
   }
   assert.equal(resultLine('Expert verdict: MISLEADING'), 'Final decision: Misleading');
-  assert.equal(resultLine('Source: Confirmed'), null); // a found source is never shown in the extension
+  assert.equal(resultLine('Source: Confirmed'), null);
   assert.equal(resultLine('Source: Not found'), 'Not found in claimed source');
   assert.equal(resultLine('Date: Date mismatch'), 'Date: Mismatched');
 });
@@ -71,7 +71,7 @@ test('photocard extracted headline and card date drive the summary', () => {
   assert.equal(s.headline, 'Extracted claim');
   assert.deepEqual(s.warnings, []);
   assert.equal(s.final, false);
-  assert.ok(s.lines.includes('Date: Mismatched')); // Actual source verification is unaffected.
+  assert.ok(s.lines.includes('Date: Mismatched'));
   const noDate = summarize('PHOTO_CARD', {
     status: 'EXPERT_REVIEW',
     verification: {
@@ -80,7 +80,7 @@ test('photocard extracted headline and card date drive the summary', () => {
       headline_status: 'EXACT_MATCHED',
     },
   });
-  assert.deepEqual(noDate.lines, ['Headline: Exact Matched']); // no claimed date -> no date comparison
+  assert.deepEqual(noDate.lines, ['Headline: Exact Matched']);
 });
 test('capture coordinates handle display scaling and clip to viewport', () => {
   assert.deepEqual(
@@ -123,7 +123,7 @@ test('headline status is Exact Matched / Meaning Preserved / Altered; a missing 
   );
   assert.deepEqual(lines({ source_status: 'CONFIRMED', content_status: 'MATCHED' }), [
     'Headline: Meaning Preserved',
-  ]); // no exactness evidence
+  ]);
   assert.deepEqual(lines({ source_status: 'CONFIRMED', content_status: null }), [
     'Headline: No verdict',
   ]);
@@ -155,7 +155,7 @@ test('required fields per submission type, with the failing field named', () => 
   assert.equal(
     fieldOf({ type: 'SOURCE_BASED', headline: 'Valid headline', claimed_source_text: '' }),
     null,
-  ); // outlet optional: verified sources are searched instead
+  );
   assert.equal(
     fieldOf({ type: 'SOURCE_BASED', headline: 'abc', claimed_source_text: 'x' }),
     'headline',
@@ -167,13 +167,13 @@ test('required fields per submission type, with the failing field named', () => 
       claimed_source_text: 'Prothom Alo',
     }),
     null,
-  ); // body optional
+  );
   assert.equal(fieldOf({ type: 'PHOTO_CARD' }, null), 'image');
-  assert.equal(fieldOf({ type: 'PHOTO_CARD', claimed_source_text: '' }, img), null); // image only: outlet/date come from the card
+  assert.equal(fieldOf({ type: 'PHOTO_CARD', claimed_source_text: '' }, img), null);
   assert.equal(
     fieldOf({ type: 'MULTIMODAL', headline: '', body_text: 'long enough text' }, img),
     null,
-  ); // headline optional for text & image
+  );
   assert.equal(
     fieldOf({ type: 'MULTIMODAL', headline: 'H', body_text: 'long enough text' }, null),
     'image',
@@ -214,7 +214,6 @@ test('only the server naming this submission as not found counts as a deletion',
 });
 
 test('activity search matches every word in headline, type, status or result, any case or nukta form', () => {
-  // ঢাকায় spelled two ways: য় as letter + nukta, and the precomposed U+09DF
   const SPLIT_YA = String.fromCodePoint(0x9a2, 0x9be, 0x995, 0x9be, 0x9af, 0x9bc);
   const PRECOMPOSED_YA = String.fromCodePoint(0x9a2, 0x9be, 0x995, 0x9be, 0x9df);
   const items = [
@@ -235,13 +234,13 @@ test('activity search matches every word in headline, type, status or result, an
     },
   ];
   const ids = (q) => searchActivity(items, q).map((x) => x.id);
-  assert.deepEqual(ids('   '), ['a', 'b', 'c']); // blank: everything, order kept
+  assert.deepEqual(ids('   '), ['a', 'b', 'c']);
   assert.deepEqual(ids('মেট্রোরেল'), ['a']);
-  assert.deepEqual(ids(PRECOMPOSED_YA), ['a']); // typed with the precomposed য়, stored split
-  assert.deepEqual(ids('photo card fake'), ['a']); // type + current wording of an old cached line
-  assert.deepEqual(ids('METRO'), ['c']); // case-insensitive, extracted headline
-  assert.deepEqual(ids('queued'), ['b']); // status label
-  assert.deepEqual(ids('মেট্রোরেল কৃষক'), []); // every word must match
+  assert.deepEqual(ids(PRECOMPOSED_YA), ['a']);
+  assert.deepEqual(ids('photo card fake'), ['a']);
+  assert.deepEqual(ids('METRO'), ['c']);
+  assert.deepEqual(ids('queued'), ['b']);
+  assert.deepEqual(ids('মেট্রোরেল কৃষক'), []);
 });
 
 test('activity pages hold ten claims and an out-of-range page is clamped', () => {
@@ -249,7 +248,7 @@ test('activity pages hold ten claims and an out-of-range page is clamped', () =>
   assert.deepEqual(paginate(items, 1).items, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
   const last = paginate(items, 3);
   assert.deepEqual([last.items, last.page, last.pages, last.total], [[20, 21, 22], 3, 3, 23]);
-  assert.equal(paginate(items, 9).page, 3); // e.g. after a search shrank the list
+  assert.equal(paginate(items, 9).page, 3);
   assert.equal(paginate(items, 0).page, 1);
   assert.deepEqual(paginate([], 4), { items: [], page: 1, pages: 1, total: 0 });
 });

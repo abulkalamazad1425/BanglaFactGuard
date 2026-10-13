@@ -1,4 +1,3 @@
-// Serialized by Chrome into the active page; keep this function self-contained.
 export async function selectArea() {
   if (document.getElementById('__bfg_capture'))
     throw Error('A screenshot selection is already open.');
@@ -33,7 +32,6 @@ export async function selectArea() {
       window.removeEventListener('resize', cancel);
       host.remove();
       document.documentElement.style.overflow = previous;
-      // Give the compositor time to remove the selection UI before capture.
       setTimeout(() => resolve(value), 150);
     };
     const cancel = () => finish(null);

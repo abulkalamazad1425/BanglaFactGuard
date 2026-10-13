@@ -14,14 +14,12 @@ export const EMPTY_DRAFT = {
 export const ownerOf = (auth) => auth?.user?.id || 'guest';
 export const terminal = (status) => ['FINALIZED', 'FAILED'].includes(status);
 export const ready = (status) => ['EXPERT_REVIEW', 'FINALIZED', 'ESCALATED'].includes(status);
-// Input modes, in the order shown everywhere (same as the website).
 export const MODES = [
   ['SOURCE_BASED', 'Text & source'],
   ['PHOTO_CARD', 'Photo card'],
   ['MULTIMODAL', 'Text & image'],
 ];
 
-/** A failed API call, keeping the HTTP status and the structured detail. */
 export class HttpError extends Error {
   constructor(message, status, detail) {
     super(message);
@@ -29,27 +27,18 @@ export class HttpError extends Error {
     this.detail = detail;
   }
 }
-/** True only for the server's own "this submission does not exist" answer
- *  (HTTP 404 naming this very submission) - never for a generic 404 from a
- *  wrong API address, an outage or a network error. */
 export const isDeletedOnServer = (error, id) =>
   error?.status === 404 &&
   error.detail?.error === 'not_found' &&
   String(error.detail?.submission_id) === String(id);
-/** How long until an Activity item is re-checked. Finished items are still
- *  re-checked so that a submission deleted on the server disappears here. */
 export const recheckDelay = (status) =>
   terminal(status) ? 10 * 60000 : ready(status) ? 5 * 60000 : 30000;
-// Applied to fresh responses and cached Activity entries from older builds.
 export const withoutDateWarnings = (warnings) =>
   (warnings || []).filter(
     (w) => !/\b(?:dates?|years?|months?|source|outlet|publisher)\b|তারিখ/i.test(w),
   );
 
-// Same words as the website (frontend/src/app/shared/utils/status-labels.ts)
-// and backend (app/shared/status_labels.py). Stored API values never change.
 export const NOT_FOUND_IN_CLAIMED_SOURCE = 'Not found in claimed source';
-/** A claim without a usable outlet is checked against the verified sources. */
 export const NOT_FOUND_IN_VERIFIED_SOURCES = 'Not found in verified sources';
 export const HEADLINE_LABELS = {
   EXACT_MATCHED: 'Exact Matched',
@@ -70,7 +59,6 @@ export const OVERALL_LABELS = {
 export const aiDecisionLabel = (prediction) =>
   !prediction ? null : String(prediction).toUpperCase() === 'FAKE' ? 'Likely Fake' : 'Likely Real';
 
-/** First five whitespace-separated words, with "..." only when there are more. */
 export function headlinePreview(headline, words = 5) {
   const tokens = String(headline || '')
     .normalize('NFC')
@@ -89,15 +77,6 @@ function headlineStatus(result) {
   return null;
 }
 
-/**
- * Activity summary. Preliminary view rules: never a "found" source status;
- * a missing article shows only "Not found in claimed source" (no headline or
- * date); the headline status is Exact Matched / Meaning Preserved / Altered;
- * the date comparison only when a date was claimed. The text & image model's
- * call is "AI decision: Likely Fake/Real". A final decision is the reviewers'
- * (or an admin's) overall verdict and is never mixed with the AI call.
- * Individual reviewer votes are never shown here.
- */
 export function summarize(type, data, lookup = {}) {
   const result =
     type === 'PHOTO_CARD' ? data.verification : type === 'SOURCE_BASED' ? data.result : data;
@@ -123,7 +102,6 @@ export function summarize(type, data, lookup = {}) {
   }
   if (result?.prediction && type === 'MULTIMODAL')
     lines.push(`AI decision: ${aiDecisionLabel(result.prediction)}`);
-  // A text & image upload matching an earlier claim shows that claim's result.
   if (type === 'MULTIMODAL' && result?.original_submission_id)
     lines.push("Already checked earlier: showing that claim's result");
   if (final) lines.unshift(`Final decision: ${OVERALL_LABELS[final] || final}`);
@@ -147,7 +125,6 @@ export function summarize(type, data, lookup = {}) {
   };
 }
 
-/** A validation error that names the field it belongs to, so the panel can show it there. */
 export class FieldError extends Error {
   constructor(field, message) {
     super(message);
@@ -155,11 +132,6 @@ export class FieldError extends Error {
   }
 }
 
-// Required fields (same as the website and the API):
-//   Text & source (SOURCE_BASED): headline (5+ characters), claimed news outlet
-//   Photo card   (PHOTO_CARD):    photocard image only - the headline, outlet and
-//                                 date are read from the card on the server
-//   Text & image (MULTIMODAL):    article text (10+ characters), image; headline optional
 export function validateDraft(d, image) {
   if (d.type === 'SOURCE_BASED' && d.headline.trim().length < 5)
     throw new FieldError('headline', 'Enter the headline (at least 5 characters).');
@@ -202,8 +174,6 @@ export function cropRect(rect, view, bitmap) {
   };
 }
 
-/** Normalises lines cached by older builds to the current wording. Returns
- *  null for a line that must no longer be shown (a "found" source status). */
 export function resultLine(line) {
   if (/^Source: (?:Confirmed|Found in claimed source|CONFIRMED)$/.test(line)) return null;
   return line
@@ -237,14 +207,11 @@ export const ACTIVITY_STATUS = {
 
 export const ACTIVITY_PAGE_SIZE = 10;
 
-// NFC also turns a precomposed য় ড় ঢ় into letter + nukta, so either spelling matches.
 const fold = (text) =>
   String(text ?? '')
     .normalize('NFC')
     .toLocaleLowerCase();
 
-/** Activity items containing every word of `query` in their headline, claim
- *  type, status or result lines. A blank query keeps every item; order is kept. */
 export function searchActivity(items, query) {
   const words = fold(query).split(/\s+/).filter(Boolean);
   if (!words.length) return items;
@@ -264,8 +231,6 @@ export function searchActivity(items, query) {
   });
 }
 
-/** One page of `items`; an out-of-range page is clamped (e.g. after a search
- *  shrinks the list), and an empty list is a single empty page. */
 export function paginate(items, page, size = ACTIVITY_PAGE_SIZE) {
   const pages = Math.max(1, Math.ceil(items.length / size));
   const current = Math.min(Math.max(1, page || 1), pages);
