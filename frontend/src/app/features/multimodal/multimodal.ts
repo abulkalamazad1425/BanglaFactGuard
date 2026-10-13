@@ -30,7 +30,6 @@ export class MultimodalComponent {
   }
   private readonly svc = inject(MultimodalService);
   private readonly toast = inject(ToastService);
-  /** Signed-in and anonymous users are told different next steps. */
   readonly signedIn = inject(AuthService).isLoggedIn;
   readonly followUp = verificationFollowUp;
 

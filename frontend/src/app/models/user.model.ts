@@ -1,7 +1,3 @@
-// ============================================================
-// User & Auth Models
-// ============================================================
-
 export type UserRole = 'user' | 'expert' | 'admin';
 
 export interface User {
@@ -10,7 +6,6 @@ export interface User {
   full_name: string | null;
   role: UserRole;
   is_active: boolean;
-  // Auth tokens (only present after login/register)
   access_token?: string;
   refresh_token?: string;
   token_type?: string;

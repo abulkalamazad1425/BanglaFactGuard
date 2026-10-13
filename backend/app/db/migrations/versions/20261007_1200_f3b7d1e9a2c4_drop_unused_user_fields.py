@@ -1,18 +1,3 @@
-"""Drop unused user profile columns and the user_profiles table.
-
-users: bio, phone, avatar_url, is_verified, is_email_verified,
-oauth_provider and oauth_subject were never read by any feature (no OAuth
-or email-verification flow exists; the settings page no longer edits a
-bio/phone/avatar). user_profiles only held a duplicate bio/avatar_url and a
-verification_count that was never incremented.
-
-Downgrade recreates the columns/table empty (values are not restorable).
-
-Revision ID: f3b7d1e9a2c4
-Revises: e5c9a3f7b1d2
-Create Date: 2026-10-07 12:00:00
-"""
-
 from __future__ import annotations
 
 import sqlalchemy as sa

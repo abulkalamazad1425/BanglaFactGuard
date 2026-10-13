@@ -31,8 +31,6 @@
         }}</h1></div
       ></header
     >
-    <!-- A text & image upload that matched an earlier claim is not checked or
-         reviewed again: it shows that claim's result and points to it. -->
     @if (multimodalResult(); as m) {
       @if (m.original_submission_id) {
         <section class="surface duplicate-notice" role="status"
@@ -56,9 +54,6 @@
         >
       }
     }
-    <!-- The original submission always comes first, in every state: the
-         richest record available (multimodal detail, photocard detail, or
-         the submission lookup while a check is still running or failed). -->
     @if (multimodalResult(); as m) {
       <section class="surface claim-section"
         ><div class="section-heading"

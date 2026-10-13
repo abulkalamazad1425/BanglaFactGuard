@@ -18,9 +18,6 @@ ModelT = TypeVar("ModelT", bound=Base)
 
 
 async def rows_by_submission(session: AsyncSession, model: type, submission_ids: list) -> dict:
-    """{submission_id: row} for a page of submissions, in one query. For
-    tables holding at most one row per submission (results, analyses,
-    extractions) - avoids one query per listed submission."""
     if not submission_ids:
         return {}
     rows = (

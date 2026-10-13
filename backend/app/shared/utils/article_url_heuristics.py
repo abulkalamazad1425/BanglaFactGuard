@@ -1,18 +1,3 @@
-"""
-Shared heuristics for deciding whether a discovered URL is *probably* a
-news article, as opposed to a nav/category/tag/listing page.
-
-## Why this exists
-
-Both `SourceSearchStage` (S04) and `InternalSiteSearchClient` filter search
-results down to "probable articles" before they're fetched. Bangla news sites
-redesign their URL schemes more often than `verified_sources.article_url_patterns`
-is updated; an all-or-nothing pattern check would then filter out every
-candidate and wrongly report the source as NOT_FOUND. So a structural fallback
-is used when the configured patterns don't match: a stale pattern degrades
-precision instead of breaking discovery.
-"""
-
 from __future__ import annotations
 
 import re
@@ -50,22 +35,11 @@ def _segment_looks_like_id(segment: str) -> bool:
     if _WORD_ID_TAIL_RE.match(segment):
         return True
     if len(segment) >= 8 and segment.isalnum() and any(c.isdigit() for c in segment):
-        # Opaque alphanumeric slug (e.g. a short-hash CMS ID) rather than a
-        # readable category word — category slugs are letters/hyphens only.
         return True
     return False
 
 
 def looks_like_article_url(url: str) -> bool:
-    """
-    Structural fallback check: does this URL look like a specific article
-    rather than a listing/category/tag/nav page?
-
-    Looks for a `/YYYY/MM/DD/` date segment, or any path segment that reads
-    as an opaque content ID (a run of 4+ digits, a `word-1234` slug, or an
-    8+ character alphanumeric hash-like slug) — patterns shared by nearly
-    every Bangla news CMS regardless of how the rest of the URL is shaped.
-    """
     try:
         path = urlparse(url).path
     except Exception:
@@ -78,17 +52,6 @@ def looks_like_article_url(url: str) -> bool:
 
 
 def is_probable_article(url: str, source_patterns: list[str] | None) -> bool:
-    """
-    Combined check used by search-result filtering.
-
-    1. Always reject known non-article URL shapes (tags, feeds, search
-       pages, etc.) — a source's custom patterns should never override this.
-    2. If the source has custom `article_url_patterns` and one matches,
-       accept immediately (high-confidence, curator-verified signal).
-    3. Otherwise fall back to the structural heuristic above, so a stale or
-       missing pattern list degrades gracefully instead of rejecting every
-       candidate for that source.
-    """
     if NON_ARTICLE_URL_RE.search(url):
         return False
 

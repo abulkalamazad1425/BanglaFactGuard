@@ -1,7 +1,3 @@
-"""Query parsing for the application's list search. Ranking and filtering
-against real rows are covered by the repositories/services that use it
-(e.g. test_submission_repository.py)."""
-
 from app.shared.utils.keyword_search import KeywordSearch, escape_like, spellings, split_keywords
 
 

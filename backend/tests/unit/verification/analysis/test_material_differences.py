@@ -1,6 +1,3 @@
-"""Deterministic, quotable meaning changes between a headline and a title.
-Each rule must fire on its change and stay silent on look-alikes."""
-
 import pytest
 
 from app.features.verification.analysis.entities import EntityMention
@@ -37,11 +34,11 @@ def test_each_rule_fires_with_quoted_evidence(claim, title, kind):
 
 
 @pytest.mark.parametrize("claim,title", [
-    ("সড়ক দুর্ঘটনায় পাঁচ জন নিহত", "সড়ক দুর্ঘটনায় ৫ জন নিহত"),            # same value, other spelling
+    ("সড়ক দুর্ঘটনায় পাঁচ জন নিহত", "সড়ক দুর্ঘটনায় ৫ জন নিহত"),
     ("বাজেটে ১০০ কোটি টাকা বরাদ্দ", "বাজেটে ১০০ কোটি টাকা বরাদ্দ দিল সরকার"),
-    ("শিক্ষার্থীদের দাবি মেনে নিল সরকার", "শিক্ষার্থীদের দাবি মেনে নিল সরকার"),  # দাবি = demand, not a claim frame
+    ("শিক্ষার্থীদের দাবি মেনে নিল সরকার", "শিক্ষার্থীদের দাবি মেনে নিল সরকার"),
     ("সে আসবে কি না জানা যায়নি", "সে আসবে কি না জানা যায়নি"),
-    ("ঢাকায় ভালোভাবে বৃষ্টি হয়েছে", "ঢাকায় ভারী বৃষ্টি হয়েছে"),                 # ভালোভাবে is not a future verb
+    ("ঢাকায় ভালোভাবে বৃষ্টি হয়েছে", "ঢাকায় ভারী বৃষ্টি হয়েছে"),
 ])
 def test_no_rule_fires_on_lookalikes(claim, title):
     assert kinds(claim, title) == set()
@@ -61,7 +58,7 @@ def test_building_blocks():
     [q] = quantities("২০ শতাংশ মূল্যস্ফীতি")
     assert (q.value, q.unit, q.role) == (20.0, "শতাংশ", "মূল্যস্ফীতি")
     assert quantities("৫ লাখ টাকা জরিমানা")[0].value == 500_000
-    assert polarity("সে আসেনি") and not polarity("সে আসেনি না")  # double negation
+    assert polarity("সে আসেনি") and not polarity("সে আসেনি না")
     assert modality("সেতু উদ্বোধন হতে পারে") == "NOT_COMPLETED" and modality("সেতু উদ্বোধন হয়েছে") == "COMPLETED"
     assert modality("ঢাকার সেতু") == "UNKNOWN"
     assert same_word_sequence("‘মেসি’, রোনালদো!", "মেসি রোনালদো") and not same_word_sequence("", "")

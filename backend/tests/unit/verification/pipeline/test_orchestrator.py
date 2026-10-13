@@ -1,5 +1,3 @@
-"""Stage sequencing, reuse short-circuit and fault isolation, over fake stages."""
-
 import uuid
 from unittest.mock import AsyncMock, MagicMock
 
@@ -70,9 +68,9 @@ async def test_status_bookkeeping_failures_never_mask_the_run():
     repo = MagicMock(mark_processing=AsyncMock(side_effect=RuntimeError("db")),
                      mark_failed=AsyncMock(side_effect=RuntimeError("db")))
     orch, ctx, _ = run([Stage(S.S01_NORMALIZER, [])], submission_id=uuid.uuid4(), repo=repo)
-    await orch.run(ctx)  # mark_processing failing is only logged
+    await orch.run(ctx)
     orch, ctx, _ = run([Stage(S.S12_RESULT_ASSEMBLY, [], fail=RuntimeError("x"))], submission_id=uuid.uuid4(), repo=repo)
-    with pytest.raises(PipelineError):  # the original failure, not the bookkeeping one
+    with pytest.raises(PipelineError):
         await orch.run(ctx)
     with pytest.raises(ValueError):
         PipelineOrchestrator([], repo)

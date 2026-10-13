@@ -212,9 +212,6 @@ class MultimodalSettings(BaseSettings):
 
 
 class PhotocardSettings(BaseSettings):
-    """Photo-card upload limits. The card is read by Gemini only
-    (see GeminiSettings); there is no OCR engine."""
-
     model_config = SettingsConfigDict(env_prefix="PHOTOCARD_")
 
     max_image_bytes: int = Field(default=10 * 1024 * 1024)
@@ -283,16 +280,8 @@ class SearchSettings(BaseSettings):
 
 
 class ClassificationThresholds(BaseSettings):
-    """Source-correspondence and search-adequacy thresholds.
-
-    The Headline Alteration verdict has its own documented constants in
-    `analysis/headline_comparison.py`; body similarity has no thresholds at
-    all (it produces measurements only, never a verdict).
-    """
-
     model_config = SettingsConfigDict(env_prefix="THRESHOLD_")
 
-    # ── source correspondence (does the claimed outlet carry THIS report?) ──
     corr_headline_sim_alone: float = Field(
         default=0.85,
         description="Headline/source-title similarity at/above which the report corresponds without further lexical support (near-identical wording).",
@@ -317,7 +306,6 @@ class ClassificationThresholds(BaseSettings):
         default=0.70,
         description="Title keyword coverage required when no embedding similarity is available.",
     )
-    # ── search adequacy ──
     search_min_successful_calls: int = Field(
         default=2,
         description="Minimum completed provider calls (success or successful-empty) for a search to count as adequate.",
@@ -396,16 +384,6 @@ class EmailSettings(BaseSettings):
 
 
 class GeminiSettings(BaseSettings):
-    """Gemini is the ONLY photo-card extractor: it reads the headline, the
-    claimed news outlet (matched against the active verified sources) and the
-    published date from the ORIGINAL image. There is no OCR fallback.
-
-    Attempts are made in batches: ``attempts_per_batch`` requests, then a
-    ``batch_pause_seconds`` pause, up to ``batches`` batches. With the
-    defaults that is at most 3 x 3 = 9 requests in total, the first request
-    included; the first success stops the loop.
-    """
-
     model_config = SettingsConfigDict(env_prefix="GEMINI_")
 
     api_key: str = Field(
@@ -460,8 +438,6 @@ class GeminiSettings(BaseSettings):
 
     @property
     def all_api_keys(self) -> list[str]:
-        """GEMINI_API_KEY first, then the numbered keys; blanks, placeholders
-        and duplicates removed. This is the rotation order."""
         keys: list[str] = []
         for key in (self.api_key, *self.api_keys):
             key = (key or "").strip()
@@ -487,8 +463,6 @@ def _numbered_gemini_keys() -> list[str]:
 
 
 class JobSettings(BaseSettings):
-    """Background verification worker (see app/features/verification/jobs.py)."""
-
     model_config = SettingsConfigDict(env_prefix="JOBS_")
 
     enabled: bool = Field(default=True, description="Run the in-process job worker.")

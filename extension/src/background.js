@@ -21,7 +21,6 @@ let refreshing,
   submitting = false,
   submissionQueued = false;
 let operations = Promise.resolve();
-// Serialize account/configuration mutations with network work, including alarms.
 function exclusive(operation) {
   const result = operations.then(operation);
   operations = result.catch(() => {});
@@ -116,8 +115,6 @@ async function badge() {
 }
 async function setup() {
   await chrome.storage.local.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' });
-  // Use an explicit toolbar action to obtain activeTab before opening the panel.
-  // A click inside an already-open side panel does not grant access to a new site.
   await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
   if (!(await chrome.alarms.get('check-results')))
     await chrome.alarms.create('check-results', { periodInMinutes: 0.5 });
@@ -160,7 +157,6 @@ async function deliver(item) {
         priority: 1,
       });
     } catch {
-      // A desktop-notification failure must not hide a saved result or its badge.
       item.notificationError = 'Desktop alert unavailable. Your result is saved in Activity.';
       return;
     }
@@ -168,8 +164,6 @@ async function deliver(item) {
   item.notified = item.summary.stage;
   item.notificationError = null;
 }
-/** The submission no longer exists on the server: drop every local trace of
- *  it (summary, unread badge, desktop alert) so a deleted result is never shown. */
 async function forget(item) {
   await chrome.storage.local.remove(ITEM + item.id);
   await chrome.notifications.clear(`bfg:${item.id}`).catch(() => {});
@@ -184,8 +178,6 @@ async function pollNow(force = false) {
         await deliver(item);
         await chrome.storage.local.set({ [ITEM + item.id]: item });
       }
-      // Finished items are still re-checked (less often): a submission deleted
-      // on the server must disappear here too, never linger as a cached result.
       if (!force && item.next > Date.now()) continue;
       try {
         const options = { anonymous: item.owner === 'guest' };
@@ -242,7 +234,6 @@ async function submit(draft) {
         body: {
           headline: draft.headline.trim(),
           body_text: draft.body_text.trim() || null,
-          // Optional: without an outlet the server searches the verified sources.
           claimed_source_text: draft.claimed_source_text.trim() || null,
           published_date: draft.published_date || null,
         },
@@ -287,8 +278,6 @@ async function activeTab(windowId) {
   const [tab] = await chrome.tabs.query(query);
   if (!Number.isInteger(tab?.id))
     throw Error('No active page was found in this window. Open the page you want to capture.');
-  // Chrome may omit url when activeTab has not been granted. Missing metadata
-  // is not evidence that a normal Facebook/news page is a restricted page.
   if (tab.url && !/^https?:/.test(tab.url))
     throw Error(
       'This Chrome or extension page cannot be selected. Switch to the ' +
@@ -416,7 +405,6 @@ async function handle(message) {
         const session = await auth();
         if (session?.user?.role !== 'admin')
           throw Error('Only an administrator can change connection settings.');
-        // Revalidate against the current server before changing the API destination.
         const user = await request('/auth/me');
         if (user.role !== 'admin' || user.id !== session.user.id)
           throw Error('Only an administrator can change connection settings.');
@@ -501,13 +489,11 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
   return true;
 });
 chrome.action.onClicked.addListener((tab) => {
-  // Call synchronously from the toolbar gesture, before any storage awaits.
   if (Number.isInteger(tab.windowId))
     void chrome.sidePanel.open({ windowId: tab.windowId }).catch(() => {});
 });
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (!['headline', 'body_text'].includes(info.menuItemId)) return;
-  // Invoke open synchronously from the user gesture, before storage awaits.
   const opening = chrome.sidePanel.open({ windowId: tab.windowId }).catch(() => {});
   void (async () => {
     await requireOn();

@@ -1,5 +1,3 @@
-"""What Gemini is offered (only active sources, by id) and how its answer is read."""
-
 from app.features.photocard.gemini_prompt import (
     FieldStatus,
     GeminiPhotocardFields,

@@ -29,23 +29,8 @@ _NLI_POOL = ThreadPoolExecutor(
 
 
 class NLIService:
-    """
-    Singleton NLI service backed by DeBERTa-v3 cross-encoder.
-
-    Usage::
-
-        service = NLIService()
-        await service.load()
-        result = await service.predict(premise, hypothesis)
-        # → NLIScoresSchema(entailment=0.87, contradiction=0.05, neutral=0.08)
-    """
-
     _pipeline = None
     _loaded: bool = False
-    # Label audit: the pipeline output is mapped by label NAME, so the
-    # checkpoint must expose exactly entailment/neutral/contradiction. A model
-    # with generic LABEL_n names would be silently mis-mapped (label order is
-    # model-specific), so it is refused rather than guessed at.
     _labels_ok: bool = False
     _audit: dict = {}
 
@@ -54,7 +39,6 @@ class NLIService:
         return dict(NLIService._audit)
 
     async def load(self) -> None:
-        """Load the DeBERTa NLI pipeline (called once at startup)."""
         if NLIService._loaded:
             return
         loop = asyncio.get_event_loop()
@@ -99,17 +83,6 @@ class NLIService:
             )
 
     async def predict(self, premise: str, hypothesis: str) -> NLIScoresSchema | None:
-        """
-        Run NLI inference for a (premise, hypothesis) pair.
-
-        Args:
-            premise:    The retrieved article text (or truncated version).
-            hypothesis: The claim headline (what we are testing).
-
-        Returns:
-            NLIScoresSchema with entailment/contradiction/neutral probabilities,
-            or None if the model is not loaded or inference fails.
-        """
         if not NLIService._loaded or NLIService._pipeline is None or not NLIService._labels_ok:
             logger.warning("nli_not_usable_returning_none")
             return None
@@ -133,17 +106,6 @@ class NLIService:
 
     @staticmethod
     def _parse_output(raw_output: list[dict]) -> NLIScoresSchema | None:
-        """
-        Parse DeBERTa pipeline output into NLIScoresSchema.
-
-        The pipeline returns a list of dicts: [{"label": "ENTAILMENT", "score": 0.87}, ...]
-
-        Args:
-            raw_output: Raw HuggingFace pipeline output.
-
-        Returns:
-            NLIScoresSchema or None if parsing fails.
-        """
         if not raw_output:
             return None
         try:

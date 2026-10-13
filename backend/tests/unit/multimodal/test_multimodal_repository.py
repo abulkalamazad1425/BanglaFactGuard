@@ -1,6 +1,3 @@
-"""Stored predictions: duplicate candidates come only from the same model
-version, newest first, bounded."""
-
 from __future__ import annotations
 
 import uuid
@@ -21,7 +18,7 @@ async def test_candidates_are_same_version_newest_first(session, monkeypatch):
     created = []
     for n, version in enumerate(("v1", "v1", "v2")):
         sub, seeded = await add_multimodal_submission(session, headline=f"h{n}")
-        await session.delete(seeded)  # store our own analysis instead
+        await session.delete(seeded)
         await session.flush()
         row = await repo.create(submission_id=sub.id, image_object_key=f"k{n}", prediction="FAKE", confidence_fake=0.7,
                                 confidence_real=0.3, text_embedding=vec, image_embedding=vec, combined_embedding=vec,

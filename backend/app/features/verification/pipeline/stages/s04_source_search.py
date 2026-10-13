@@ -52,10 +52,6 @@ _STRIP_PARAMS = frozenset(
 
 @dataclass
 class _CallResult:
-    """Outcome of ONE provider call. A failed call is FAILED - never a
-    successful empty result - so the caller's accounting cannot mistake an
-    outage for "the source has nothing"."""
-
     provider: SearchProvider
     outcome: SearchCallOutcome
     candidates: list[CandidateArticleSchema] = field(default_factory=list)
@@ -72,9 +68,6 @@ def _canonicalise_url(url: str) -> str:
             qs = {
                 k: v
                 for k, v in parse_qs(p.query, keep_blank_values=False).items()
-                # __cf_* is Cloudflare's post-challenge token: the same article
-                # reached through a challenge would otherwise canonicalise to a
-                # different URL and survive dedup as a duplicate candidate.
                 if k.lower() not in _STRIP_PARAMS
                 and not k.lower().startswith("__cf_")
             }
@@ -174,7 +167,7 @@ class SourceSearchStage:
         for (provider_enum, _, _qt, _), item in zip(tasks, raw):
             if isinstance(item, _CallResult):
                 results.append(item)
-            else:  # defensive: an exception escaped _call_provider
+            else:
                 results.append(
                     _CallResult(provider_enum, SearchCallOutcome.FAILED, error=str(item))
                 )
@@ -248,10 +241,6 @@ class SourceSearchStage:
     async def _search_verified_sources(
         self, context: PipelineContext, log: structlog.BoundLogger
     ) -> PipelineContext:
-        """VERIFIED_SOURCES mode: Google only (the internal-site provider is
-        never dispatched and its cached candidates never read), restricted to
-        the active verified publishers. Each phrasing runs once per bounded
-        group of domains, so the call count does not multiply per source."""
         scope = context.verified_scope
         if scope is None or scope.empty:
             context.record_stage_error(self.stage_id, "No active verified sources are available to search")
@@ -299,8 +288,6 @@ class SourceSearchStage:
                 continue
             for candidate in call.candidates:
                 host = urlparse(candidate.url).hostname or ""
-                # Allowlist BEFORE any fetch: off-source or deceptive hosts
-                # (e.g. prothomalo.com.evil.net) never become evidence.
                 if not allowed or not is_allowed_host(host, allowed):
                     continue
                 publisher = scope.publisher_for_host(host)
@@ -312,12 +299,6 @@ class SourceSearchStage:
                 if canon not in canon_map:
                     canon_map[canon] = candidate
 
-        # One query covers several outlets (site:a OR site:b ...), so it also
-        # returns unrelated and years-old stories that would use up S05's
-        # fetch cap. Rank by how well the search title matches the claim
-        # (position breaks ties) and drop results whose title shares none of
-        # the claim's keywords. Results without a title are kept, after the
-        # titled ones.
         relevance = {
             canon: _title_relevance(context.normalized_headline, c.title_snippet)
             for canon, c in canon_map.items()
@@ -381,9 +362,6 @@ class SourceSearchStage:
     ) -> bool:
         if not domain:
             return False
-        # The outlet's own ("internal") search runs for every source that has
-        # an `internal_search_url` (unconfigured ones are recorded as SKIPPED);
-        # Google (PY_GOOGLE_NEWS) runs for every source as well.
         return provider in (SearchProvider.INTERNAL_SITE, SearchProvider.PY_GOOGLE_NEWS)
 
     def _adapt_query(
@@ -395,8 +373,6 @@ class SourceSearchStage:
         if not domain:
             return ""
         content = re.sub(r"\bsite:\S+\s*", "", query, flags=re.IGNORECASE).strip()
-        # The internal endpoint already belongs to the selected outlet.
-        # Preserve every keyword instead of truncating to a shorter variant.
         if provider == SearchProvider.INTERNAL_SITE:
             return content
         return f"site:{domain} {content}"
@@ -414,14 +390,8 @@ class SourceSearchStage:
         log: structlog.BoundLogger,
         cache_namespace: str | None = None,
     ) -> _CallResult:
-        # The search-result cache is partitioned by mode: a verified-sources
-        # search never reuses claimed-source (or internal-site) results.
         provider_name = cache_namespace or provider_enum.value
 
-        # Retrieval is date-free unless this query is explicitly DATE_BOUND.
-        # Applying the claimed date to every query would hide the right
-        # article whenever the claimed date is the thing that is wrong (the
-        # Content MATCHED + Date MISMATCHED case).
         search_date = (
             context.published_date if query_type.upper() == "DATE_BOUND" else None
         )
@@ -430,7 +400,6 @@ class SourceSearchStage:
         if provider_enum == SearchProvider.INTERNAL_SITE and not (
             source_config and source_config.get("internal_search_url")
         ):
-            # Not configured for this outlet: skipped, not a search that ran.
             return _CallResult(provider_enum, SearchCallOutcome.SKIPPED)
 
         cached = await self._get_cached_search(provider_name, query_hash)
@@ -491,8 +460,6 @@ class SourceSearchStage:
         ]
         urls = [url for url, _ in entries]
         if urls:
-            # Titles are cached with the URLs: S04 ranks by them and S08 uses
-            # them to recognise a matching result whose page was blocked.
             await self._cache_search_result(
                 provider_name, query_hash, [[url, title or None] for url, title in entries]
             )
@@ -523,7 +490,6 @@ class SourceSearchStage:
 
 
 def _cached_entries(cached: list) -> list[tuple[str, str | None]]:
-    """Cached search results: [url, title] pairs, or plain URLs (older entries)."""
     out: list[tuple[str, str | None]] = []
     for item in cached:
         if isinstance(item, str):
@@ -534,9 +500,6 @@ def _cached_entries(cached: list) -> list[tuple[str, str | None]]:
 
 
 def _title_relevance(claim_headline: str, title: str | None) -> float | None:
-    """Share of the claim's keywords (stemmed, compound-aware - the same
-    measure S08 uses) found in a search-result title, ignoring the
-    " - <publisher>" suffix Google adds. None without a title."""
     if not title:
         return None
     head, sep, _ = title.rpartition(" - ")

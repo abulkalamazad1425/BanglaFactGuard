@@ -1,6 +1,3 @@
-"""App lifespan with every external service (Redis, MinIO, models, workers)
-faked; the startup/shutdown code itself is real."""
-
 from __future__ import annotations
 
 from contextlib import ExitStack
@@ -57,7 +54,7 @@ async def test_restartable_and_stops_workers_before_clients_and_engine():
             async with lifespan_module.lifespan(app):
                 assert app.state.job_worker is not None
                 assert app.state.multimodal_loader.is_loaded is False
-            await app.state.http_client.aclose()  # idempotent; already closed
+            await app.state.http_client.aclose()
 
     cycle = [
         "jobs.start", "delivery.start", "escalation.start",

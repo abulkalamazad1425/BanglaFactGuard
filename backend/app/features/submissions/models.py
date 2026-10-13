@@ -1,8 +1,3 @@
-"""Current submission, source-evidence, retrieved-article and photo-card extraction storage.
-
-These models are used by the live text, photo-card and multimodal workflows.
-"""
-
 from __future__ import annotations
 
 import uuid
@@ -35,8 +30,6 @@ if TYPE_CHECKING:
 
 
 class Submission(UUIDMixin, TimestampMixin, ReprMixin, Base):
-    """DatabaseDescription.pdf Table 4.5 — submissions."""
-
     __tablename__ = "submissions"
 
     submission_type: Mapped[SubmissionType] = mapped_column(
@@ -160,8 +153,6 @@ class Submission(UUIDMixin, TimestampMixin, ReprMixin, Base):
 
 
 class SourceEvidenceQuery(UUIDMixin, ReprMixin, Base):
-    """DatabaseDescription.pdf Table 4.6 — source_evidence_queries."""
-
     __tablename__ = "source_evidence_queries"
 
     submission_id: Mapped[uuid.UUID] = mapped_column(
@@ -205,8 +196,6 @@ class SourceEvidenceQuery(UUIDMixin, ReprMixin, Base):
 
 
 class RetrievedArticle(UUIDMixin, ReprMixin, Base):
-    """Retrieved source evidence for a submission."""
-
     __tablename__ = "retrieved_articles"
 
     submission_id: Mapped[uuid.UUID] = mapped_column(
@@ -266,15 +255,6 @@ class RetrievedArticle(UUIDMixin, ReprMixin, Base):
 
 
 class PhotocardExtraction(UUIDMixin, TimestampMixin, ReprMixin, Base):
-    """Gemini extraction of a photo card (one row per PHOTO_CARD submission).
-
-    The extracted headline, verified source and published date are NOT
-    stored here: on success they become the submission's own headline,
-    claimed_source_id/claimed_source_text and published_date - the single
-    representation of the claim. This row keeps the stored image and the
-    extraction provenance only.
-    """
-
     __tablename__ = "photocard_extractions"
 
     submission_id: Mapped[uuid.UUID] = mapped_column(

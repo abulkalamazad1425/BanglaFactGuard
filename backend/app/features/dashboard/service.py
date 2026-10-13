@@ -1,6 +1,3 @@
-"""Public dashboard read models: platform statistics, most-claimed sources
-and the Fact Explorer listing."""
-
 from __future__ import annotations
 
 import uuid
@@ -51,7 +48,6 @@ class DashboardService:
 
     async def public_stats(self) -> PublicStatsResponse:
         session = self._session
-        # Two aggregate queries (conditional counts) instead of one query per number.
         submission_counts = (
             await session.execute(
                 select(
@@ -76,7 +72,6 @@ class DashboardService:
                     func.count().filter(VerificationResult.content_status == ContentStatus.ALTERED),
                     func.count().filter(VerificationResult.date_status == DateStatus.MATCHED),
                     func.count().filter(VerificationResult.date_status == DateStatus.MISMATCHED),
-                    # AVG ignores NULL, exactly like the former `IS NOT NULL` filter.
                     func.avg(VerificationResult.avg_verification_time_ms),
                 ).select_from(VerificationResult)
             )
@@ -206,8 +201,6 @@ class DashboardService:
 
             result = results_by_sub.get(submission.id)
 
-            # Automated checks never produce an Overall verdict — it stays NULL
-            # here until expert review finalizes the claim.
             is_finalized = bool(result and result.overall_verdict)
             overall = result.overall_verdict if result else None
 

@@ -80,7 +80,6 @@ globalThis.chrome = {
 };
 let currentResponse,
   requests = 0;
-// `{httpStatus, body}` simulates an error response; anything else is a 200 body.
 globalThis.fetch = async (url, options = {}) => {
   requests++;
   if (options.body instanceof FormData) sentForms.push(options.body);
@@ -225,7 +224,7 @@ test('finished results are re-checked later, so a later deletion is noticed', as
   };
   await send('poll');
   assert.equal(requests, 1);
-  assert.ok(data['claim:one'].next > Date.now() + 5 * 60000); // finished: re-checked rarely, not never
+  assert.ok(data['claim:one'].next > Date.now() + 5 * 60000);
   await send('poll');
   assert.equal(requests, 1);
   currentResponse = {
@@ -277,7 +276,7 @@ test('a photo card is submitted as the image only, whatever an old draft holds',
   assert.equal(sentForms.length, 1);
   assert.deepEqual([...sentForms[0].keys()], ['image']);
   assert.equal(data['claim:new-card'].type, 'PHOTO_CARD');
-  await send('poll'); // let the poll started by submit finish before the next test
+  await send('poll');
 });
 test('content scripts cannot invoke privileged extension messages', () => {
   let called = false;

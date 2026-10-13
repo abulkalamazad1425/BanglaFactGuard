@@ -1,6 +1,3 @@
-"""Weights load once per loader instance, from a complete model directory,
-into eval-mode modules; nothing is reported loaded that is not."""
-
 from __future__ import annotations
 
 import os
@@ -44,7 +41,7 @@ async def test_weights_load_into_eval_mode_once_per_instance(model_dir):
     assert loader.is_loaded and loader.tokenizer == "tokenizer@tokenizer"
     for part in (loader.img_backbone, loader.text_backbone, loader.classifier):
         assert not part.training and part.layer.bias.tolist() == [7.0, 7.0]
-    fresh = MultimodalModelLoader()  # a later startup does not inherit this instance's state
+    fresh = MultimodalModelLoader()
     assert fresh.is_loaded is False and str(fresh.device) == "cpu"
     for prop in ("img_backbone", "text_backbone", "tokenizer"):
         with pytest.raises(ModelNotLoadedError):

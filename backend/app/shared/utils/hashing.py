@@ -20,8 +20,6 @@ def sha256_hex(value: str) -> str:
 
 
 def _canon_text(text: str | None) -> str:
-    """The one text normalisation used for claim identity. Idempotent, so a
-    caller may pass raw or already-normalised text and get the same hash."""
     from app.shared.utils.bangla_normalizer import normalize_bangla_text
 
     if not text:
@@ -38,13 +36,6 @@ def claim_identity_payload(
     published_date: "date | str | None" = None,
     version: str | None = None,
 ) -> dict:
-    """The structured fields that make two verification runs interchangeable.
-
-    A complete result may only be reused when every one of these is equal:
-    normalised headline, normalised submitted body (only when the scope
-    includes one), canonical claimed source, claimed publication date, claim
-    scope, and the pipeline/model version.
-    """
     from app.core.constants import VERIFICATION_PIPELINE_VERSION, ClaimScope
 
     with_body = claim_scope == ClaimScope.HEADLINE_WITH_BODY
@@ -71,11 +62,6 @@ def compute_claim_hash(
     published_date: "date | str | None" = None,
     version: str | None = None,
 ) -> str:
-    """Identity of a claim for caching/deduplication — deterministic
-    structured serialisation (sorted-key JSON), never ambiguous string
-    concatenation. This is the single identity function: S01, the async
-    registration path, S02 (Redis + DB), S12 write-back and the photo-card
-    flow all call it."""
     payload = claim_identity_payload(
         headline,
         claimed_source,
@@ -100,8 +86,6 @@ def compute_text_hash(text: str) -> str:
 def compute_search_query_hash(
     provider: str, query: str, published_date: "date | None" = None
 ) -> str:
-    """Search-result cache key. The date is part of the key because a
-    date-bound query is only valid for the date it was issued with."""
     return sha256_hex(
         json.dumps(
             {

@@ -1,7 +1,3 @@
-"""What is sent to Gemini for a photo card and what comes back: the offered
-source catalogue, the instructions, the response schema and the validated
-response fields."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -17,16 +13,14 @@ class FieldStatus(str, Enum):
 
 
 class SourceStatus(str, Enum):
-    IDENTIFIED = "IDENTIFIED"          # visible evidence matches exactly one listed source
-    NOT_VISIBLE = "NOT_VISIBLE"        # no outlet name/logo on the card
-    NOT_RECOGNIZED = "NOT_RECOGNIZED"  # an outlet is shown, but it is none of the listed sources
-    UNCLEAR = "UNCLEAR"                # something is shown but it is not enough to decide
+    IDENTIFIED = "IDENTIFIED"
+    NOT_VISIBLE = "NOT_VISIBLE"
+    NOT_RECOGNIZED = "NOT_RECOGNIZED"
+    UNCLEAR = "UNCLEAR"
 
 
 @dataclass(frozen=True)
 class SourceOption:
-    """One active verified source as offered to Gemini."""
-
     canonical_name: str
     display_name: str
     display_name_en: str | None = None
@@ -41,9 +35,6 @@ class SourceOption:
 
 
 class GeminiPhotocardFields(BaseModel):
-    """The validated structured response. Values are raw transcriptions;
-    ``source`` is a canonical id from the offered catalogue (or null)."""
-
     model_config = ConfigDict(extra="ignore")
 
     headline: str | None = None
@@ -55,7 +46,6 @@ class GeminiPhotocardFields(BaseModel):
     date_status: FieldStatus
 
     def present(self, name: str) -> str | None:
-        """The raw headline/date when the model marked it PRESENT and non-blank."""
         value = getattr(self, name)
         if getattr(self, f"{name}_status") != FieldStatus.PRESENT or value is None or not value.strip():
             return None

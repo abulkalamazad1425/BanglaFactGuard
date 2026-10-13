@@ -1,7 +1,3 @@
-"""S05: fetch candidate pages from the claimed source only. Anti-bot blocks
-go to the browser tier; a redirect off the source is a rejected candidate,
-never a fetch failure."""
-
 from __future__ import annotations
 
 import httpx
@@ -83,7 +79,7 @@ async def test_candidates_are_cleaned_capped_and_restricted_to_the_allowed_scope
         await s05.EvidenceRetrievalStage(http).execute(
             context("https://www.google.com/search?q=x", "/story/amp", "/b", "/c")
         )
-    assert requested == [BASE + "/story", BASE + "/b"]  # search page dropped, AMP undone, capped at 2
+    assert requested == [BASE + "/story", BASE + "/b"]
 
     verified = context("https://www.jugantor.com/a/1", "https://www.unknown.com/a/1")
     verified.verification_mode = source_policy.VERIFIED_SOURCES
@@ -101,8 +97,6 @@ async def _response(url):
     return httpx.Response(200, text=ARTICLE, request=httpx.Request("GET", url))
 
 
-# ── browser tier (fake Playwright) ───────────────────────────────────────
-
 async def test_browser_waits_out_challenges_and_backs_off_from_walled_hosts(monkeypatch):
     walled_url, cooling_url = "https://walled.example/a/1", "https://walled.example/a/2"
     scripts = {
@@ -116,7 +110,6 @@ async def test_browser_waits_out_challenges_and_backs_off_from_walled_hosts(monk
     stage._allowed = ["prothomalo.com", "walled.example"]
     results = await stage._run_playwright_async(list(scripts))
     assert results == {BASE + "/cleared": ARTICLE, walled_url: None, BASE + "/moved": s05._REJECTED, BASE + "/crash": None}
-    # the walled host is now left alone: its next page is not even opened
     assert s05._host_cooling_down(cooling_url)
     opened.clear()
     assert await stage._run_playwright_async([cooling_url]) == {cooling_url: None} and opened == []

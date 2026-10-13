@@ -1,5 +1,3 @@
-"""Redis wrapper: namespaced keys with TTLs, and Redis trouble is never an error."""
-
 from __future__ import annotations
 
 import json
@@ -57,4 +55,4 @@ async def test_an_unavailable_redis_degrades_to_cache_misses():
     assert await cache.health_check() is False
     for call in (cache.set_claim_result("h", "x"), cache.set_claim_pointer("h", "x", ttl=1), cache.invalidate_claim("h"),
                  cache.set_search_result("p", "q", []), cache.set_raw("k", "v")):
-        await call  # never raises
+        await call

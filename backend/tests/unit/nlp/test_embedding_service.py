@@ -1,6 +1,3 @@
-"""LaBSE wrapper: loads once, caches vectors by text, clips similarity to [0, 1].
-A fake model is used; nothing here measures LaBSE itself."""
-
 from __future__ import annotations
 
 import asyncio
@@ -67,7 +64,7 @@ async def test_vectors_are_cached_by_text_and_cache_trouble_is_ignored():
     miss_cache = cache()
     miss = EmbeddingService(miss_cache)
     assert hit_vector(await miss.encode("a")) == [1.0, 0.0]
-    await asyncio.sleep(0)  # the cache write runs in the background
+    await asyncio.sleep(0)
     key, payload = miss_cache.set_raw.await_args.args
     assert key.startswith(module._CACHE_KEY_PREFIX) and json.loads(payload) == [1.0, 0.0]
 
@@ -78,7 +75,7 @@ async def test_similarity_is_clipped_and_batches_are_encoded_together():
     svc = EmbeddingService(cache())
     await svc.load()
     assert await svc.compute_similarity("a", "a") == 1.0
-    assert await svc.compute_similarity("a", "b") == 0.0  # raw cosine -1 is shown as 0
+    assert await svc.compute_similarity("a", "b") == 0.0
     vectors = await svc.encode_batch(["a", "b"])
     assert [hit_vector(v) for v in vectors] == [[1.0, 0.0], [-1.0, 0.0]]
 

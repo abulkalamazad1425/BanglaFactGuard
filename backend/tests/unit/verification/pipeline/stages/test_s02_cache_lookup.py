@@ -1,6 +1,3 @@
-"""S02: reuse an identical, complete, current result. The database row is
-authoritative; a Redis pointer is only a hint that is re-validated."""
-
 from __future__ import annotations
 
 import json
@@ -56,7 +53,7 @@ async def test_redis_pointer_hits_and_falls_back_to_the_database(session, redis)
     c = {"valid": cache(pointer(sub)), "malformed": cache(raw=b"{not json"), "down": cache(error=True)}[redis]
     out = await lookup(session, sub, c)
     assert out.cache_hit and out.reused_from_submission_id == sub.id
-    assert c.set_claim_pointer.await_count == (0 if redis == "valid" else 1)  # DB hits are written back
+    assert c.set_claim_pointer.await_count == (0 if redis == "valid" else 1)
 
 
 @pytest.mark.parametrize("fields", [
@@ -64,7 +61,7 @@ async def test_redis_pointer_hits_and_falls_back_to_the_database(session, redis)
     dict(pipeline_version="v-old"),
     dict(content_status=None, headline_check_status="UNDETERMINED"),
     dict(content_status=None, headline_check_status="MODEL_UNAVAILABLE"),
-    dict(analysis_details={"reused_from_submission_id": str(uuid.uuid4())}),  # a copy is never a source
+    dict(analysis_details={"reused_from_submission_id": str(uuid.uuid4())}),
 ])
 async def test_a_result_that_is_not_a_settled_answer_is_never_reused(session, fields):
     sub, result = await add_completed_submission(session, headline=HEADLINE, submitter_id=None, **fields)
@@ -76,7 +73,7 @@ async def test_a_result_that_is_not_a_settled_answer_is_never_reused(session, fi
 
 async def test_a_pointer_to_a_deleted_or_own_submission_is_never_served(session):
     sub, _ = await add_completed_submission(session, headline=HEADLINE, submitter_id=None)
-    assert (await lookup(session, sub, cache(pointer(sub)), own_id=sub.id)).cache_hit is False  # itself
+    assert (await lookup(session, sub, cache(pointer(sub)), own_id=sub.id)).cache_hit is False
     await session.execute(delete(Submission).where(Submission.id == sub.id))
     c = cache(pointer(sub))
     out = await lookup(session, sub, c)

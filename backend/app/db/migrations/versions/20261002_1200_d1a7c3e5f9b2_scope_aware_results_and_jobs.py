@@ -1,30 +1,3 @@
-"""Scope-aware component scores, durable result analysis, and durable jobs.
-
-* verification_results_v2 gains the applicable component scores that used to
-  live only in Redis (headline/body/passage similarity, keyword coverages),
-  the claim scope and pipeline version they were computed under, and an
-  `analysis_details` JSONB with metric states, check states, selected
-  evidence, NLI output, search accounting and date provenance. Results can
-  therefore be shown identically right after verification, after navigating
-  away, after Redis expiry, and via the database cache fallback.
-* `pipeline_version` / `claim_scope` are NULL on historical rows. Those rows
-  are kept (nothing is deleted or rewritten) but are never served as fresh
-  results: the pipeline version is part of claim identity, so identity hashes
-  computed by the corrected code differ from every historical hash.
-* `reused_from_submission_id` records that a result row is an automated-result
-  copy of an earlier identical verification (the requester still gets their
-  own submission row — owner, photo-card image and OCR record intact).
-* submissions gains `processing_phase` and `failure_reason` so a pending or
-  failed submission can render a useful state without a result row.
-* verification_jobs is the durable work queue behind background verification
-  (text and photo-card): written in the same transaction as the accepted
-  submission, claimed with FOR UPDATE SKIP LOCKED, reclaimed when a lock goes
-  stale after a restart.
-
-ai_consensus_label is intentionally left in place (historical data) but is no
-longer written: the automated system casts no overall truth vote.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -105,11 +78,6 @@ def upgrade() -> None:
         "ix_verification_jobs_status_created", "verification_jobs", ["status", "created_at"]
     )
 
-    # Restart-recovery backstop for rows accepted before jobs existed:
-    # text submissions left PENDING/PROCESSING are re-queued (everything the
-    # job needs is on the submission row); photo cards from the old
-    # synchronous flow have no stored job inputs, so they are failed with a
-    # reason instead of spinning forever.
     op.execute(
         """
         INSERT INTO verification_jobs (id, submission_id, kind, status, attempts, max_attempts)

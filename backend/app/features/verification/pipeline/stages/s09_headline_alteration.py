@@ -1,17 +1,3 @@
-"""S09 - Headline Alteration: the claim headline vs. the selected source TITLE.
-
-Identical for photo cards, headline-only text claims and headline + body
-claims. The source body, body passages, body similarity scores and any
-body-derived NLI are never read here, so changing the source body cannot
-change this verdict. See `analysis/headline_comparison.py` for the decision
-procedure (exact match first; otherwise deterministic material-difference
-rules plus a semantic assessment that is always run).
-
-Output: `content_status` = MATCHED | ALTERED | None, and
-`headline_check_status` explaining a missing verdict. No source found and a
-failed search are kept apart (SOURCE_NOT_FOUND vs SOURCE_CHECK_INCOMPLETE).
-"""
-
 from __future__ import annotations
 
 import structlog
@@ -62,7 +48,7 @@ class HeadlineAlterationStage:
         article = context.top_article
         try:
             comparison = await self._comparator.compare(claim_headline, article.title)
-        except Exception as exc:  # noqa: BLE001 - never guess a verdict
+        except Exception as exc:  # noqa: BLE001
             logger.warning("s09_comparison_failed", error=str(exc))
             context.record_stage_error(self.stage_id, f"Headline comparison failed: {exc}")
             comparison = HeadlineComparison(

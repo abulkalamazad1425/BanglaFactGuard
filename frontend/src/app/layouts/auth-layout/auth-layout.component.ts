@@ -9,20 +9,16 @@ import { FooterComponent } from '../../shared/components/footer/footer.component
   selector: 'app-auth-layout',
   standalone: true,
   imports: [RouterOutlet, ToastComponent, RouterLink, NavbarComponent, FooterComponent],
-  // Same outer shell as the main layout (skip link, navbar, footer, one
-  // toast host) around the centred auth card.
   template: `
     <a class="skip-link" href="#main-content">Skip to content</a>
     <app-navbar />
     <main class="auth-shell" id="main-content" tabindex="-1">
-      <!-- Background decoration -->
       <div class="auth-bg">
         <div class="bg-blob bg-blob-1"></div>
         <div class="bg-blob bg-blob-2"></div>
         <div class="bg-grid"></div>
       </div>
 
-      <!-- Auth card -->
       <div class="auth-wrapper">
         <a routerLink="/" class="auth-brand">
           <svg width="32" height="32" viewBox="0 0 28 28" fill="none">
@@ -56,7 +52,6 @@ import { FooterComponent } from '../../shared/components/footer/footer.component
         display: flex;
         align-items: center;
         justify-content: center;
-        /* the fixed navbar is 64px tall */
         padding: calc(64px + 24px) 24px 24px;
         position: relative;
         overflow: hidden;

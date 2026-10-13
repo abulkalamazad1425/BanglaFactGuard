@@ -1,6 +1,3 @@
-"""S07: retrieval relevance. The article whose headline IS the claim must win;
-the cross-encoder only breaks near-ties."""
-
 from __future__ import annotations
 
 from app.features.verification import source_policy
@@ -14,9 +11,6 @@ BODY = "জঙ্গল সলিমপুরে সারদার আদলে
 
 
 class SaturatedCrossEncoder:
-    """Scores that slightly favour a re-worded video page, as observed on the
-    real Prothom Alo case (+10.87 vs +10.79)."""
-
     async def scores(self, claim, articles):
         return [10.9 if "/video/" in a.url else 10.7 for a in articles]
 
@@ -54,7 +48,7 @@ async def test_verified_sources_give_every_eligible_publisher_the_same_bonus():
 
 async def test_weak_or_unmeasurable_evidence_still_yields_the_best_candidate(monkeypatch):
     s = stage(embedder=FakeEmbedder(fail=True))
-    monkeypatch.setattr(s, "_min_score", 5.0)  # nothing reaches the minimum
+    monkeypatch.setattr(s, "_min_score", 5.0)
     untitled = article(None, BODY, url="https://www.prothomalo.com/a/3")
     ctx = await s.execute(make_context(CLAIM, articles=[article(UNRELATED, url="https://x.com/a/1"), untitled]))
     assert [a.url for a in ctx.ranked_articles] == [untitled.url]

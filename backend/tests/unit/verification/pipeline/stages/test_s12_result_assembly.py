@@ -1,6 +1,3 @@
-"""S12: one explainable result with the dimensions kept separate, and never
-an automated overall (Fake/Real) verdict."""
-
 from __future__ import annotations
 
 from datetime import date
@@ -55,7 +52,7 @@ async def test_not_found_is_not_a_false_verdict_and_its_strength_is_search_compl
     assert ctx.source_status == SourceStatus.NOT_FOUND and ctx.content_status is None
     assert "does not establish that the claim is false" in ctx.reasoning
     assert "Body similarity is unavailable" in ctx.reasoning and "Search: 3 call(s)" in ctx.reasoning
-    assert ctx.confidence == 1.0  # 3 completed of 4 attempted, one empty: (3 + 1)/4
+    assert ctx.confidence == 1.0
 
 
 @pytest.mark.parametrize("setup,reason", [
@@ -76,7 +73,7 @@ async def test_incomplete_checks_say_why_and_carry_no_findings(setup, reason):
 
 async def test_a_run_whose_source_check_never_finished_is_incomplete():
     ctx = make_context(HEADLINE)
-    ctx.content_status = "MATCHED"  # leftover from a partial run is cleared
+    ctx.content_status = "MATCHED"
     out = await ResultAssemblyStage().execute(ctx)
     assert out.source_status == SourceStatus.INCOMPLETE
     assert out.headline_check_status == HeadlineCheckStatus.SOURCE_CHECK_INCOMPLETE

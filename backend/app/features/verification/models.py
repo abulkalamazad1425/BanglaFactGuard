@@ -16,8 +16,6 @@ if TYPE_CHECKING:
 
 
 class VerificationResult(UUIDMixin, TimestampMixin, ReprMixin, Base):
-    """Stored source-based or photo-card analysis for one submission."""
-
     __tablename__ = "verification_results"
 
     submission_id: Mapped[uuid.UUID] = mapped_column(
@@ -91,8 +89,6 @@ class VerificationResult(UUIDMixin, TimestampMixin, ReprMixin, Base):
         ),
     )
 
-    # Legacy: final_source/content/date_status are no longer written (the
-    # experts' Overall vote is the only final decision); kept for historical rows.
     final_source_status: Mapped[SourceStatus | None] = mapped_column(
         Enum(SourceStatus, name="source_status_enum", create_type=False),
         nullable=True,
@@ -155,7 +151,6 @@ class VerificationResult(UUIDMixin, TimestampMixin, ReprMixin, Base):
 
     avg_verification_time_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
-    # ── Source-correspondence measurements (NULL = no measurement) ──────────
     headline_similarity: Mapped[float | None] = mapped_column(
         Float, nullable=True, comment="LaBSE cosine of claim headline vs selected source title (correspondence)."
     )
@@ -222,16 +217,6 @@ class VerificationResult(UUIDMixin, TimestampMixin, ReprMixin, Base):
 
 
 class VerificationJob(UUIDMixin, TimestampMixin, ReprMixin, Base):
-    """Durable unit of background verification work.
-
-    The row is written in the same transaction as the accepted submission, so
-    an accepted submission can never exist without its job. A worker claims
-    jobs with ``FOR UPDATE SKIP LOCKED`` and stamps ``locked_at``; a job whose
-    lock has gone stale (process crashed or restarted mid-run) is reclaimed on
-    the next poll. Nothing about execution depends on the browser, polling, or
-    the request that created it.
-    """
-
     __tablename__ = "verification_jobs"
 
     submission_id: Mapped[uuid.UUID] = mapped_column(

@@ -29,9 +29,7 @@ _NER_POOL = ThreadPoolExecutor(
 
 
 def _base_type(label: str) -> str | None:
-    """B-PER / I-PER / PER -> PER; anything else (O, LABEL_3) -> None."""
     base = label.split("-", 1)[-1].upper()
-    # BanglaTag distinguishes institutions and political organizations.
     base = {"INST": "ORG", "POL": "ORG"}.get(base, base)
     return base if base in _KEPT_TYPES else None
 
@@ -48,7 +46,6 @@ class NERService:
 
     _pipeline = None
     _loaded: bool = False
-    # Audit state. `usable` is the only flag callers need.
     _labels_ok: bool = False
     _smoke_ok: bool = False
     _audit: dict = {}
@@ -147,7 +144,6 @@ class NERService:
         return NERResult(True, mentions)
 
     async def extract_mentions(self, text: str) -> NERResult:
-        """Typed entity mentions across the WHOLE text (chunked, not truncated)."""
         if not self.usable:
             return NERResult(False, error="NER unavailable (not loaded or failed audit)")
         if not text or len(text.strip()) < 5:

@@ -1,24 +1,3 @@
-"""The one source-resolution policy shared by registration, the photo-card
-flow and the pipeline (S01), so the same input never gets a different
-verification mode in different places.
-
-Two explicit modes:
-
-* ``CLAIMED_SOURCE`` - the claim names an outlet that resolves (and is not a
-  deactivated verified source). Unchanged behaviour: search and fetch are
-  restricted to that one outlet, with Google and its internal search.
-* ``VERIFIED_SOURCES`` - no outlet was given, or it is not recognised, or it
-  is a deactivated verified source. Google only, restricted to the domains of
-  the currently ACTIVE verified sources; the internal-site provider is never
-  used. An unknown outlet is never guessed to be a verified publisher.
-
-Identity: a claimed-source claim keeps exactly the hash it always had. A
-verified-sources claim hashes a ``verified-sources:<fingerprint>`` key in the
-source slot, where the fingerprint covers the active publishers and their
-domains, so a registry change starts a new verification context instead of
-relabelling an old result.
-"""
-
 from __future__ import annotations
 
 import hashlib
@@ -33,7 +12,6 @@ from app.shared.utils.bangla_normalizer import extract_canonical_domain
 CLAIMED_SOURCE = "CLAIMED_SOURCE"
 VERIFIED_SOURCES = "VERIFIED_SOURCES"
 
-# Why a claim is verified the way it is (persisted with the result).
 REASON_SELECTED = "SOURCE_SELECTED"
 REASON_DETECTED = "SOURCE_DETECTED"
 REASON_NOT_SUPPLIED = "SOURCE_NOT_SUPPLIED"
@@ -109,7 +87,6 @@ class VerifiedScope:
 
 
 def source_config_for(record) -> dict:
-    """The per-outlet configuration S04-S06 use (selectors, allowed hosts)."""
     return {
         "name": record.display_name,
         "body_selectors": record.body_selectors or [],
@@ -117,8 +94,6 @@ def source_config_for(record) -> dict:
         "date_selectors": record.date_selectors or [],
         "internal_search_url": record.internal_search_url,
         "article_url_patterns": record.article_url_patterns or [],
-        # Registered channels for this outlet: S04 filters candidate hosts and
-        # S05 validates FINAL redirected hosts against them.
         "allowed_domains": [
             d
             for d in (
@@ -137,7 +112,6 @@ async def resolve_source(
     selected_reason: str = REASON_SELECTED,
     missing_reason: str = REASON_NOT_SUPPLIED,
 ) -> SourceResolution:
-    """Decide the verification mode for a claimed source text."""
     raw = (raw_text or "").strip() or None
     if raw is None:
         return SourceResolution(VERIFIED_SOURCES, None, missing_reason, None)
@@ -146,7 +120,7 @@ async def resolve_source(
         return SourceResolution(VERIFIED_SOURCES, None, REASON_UNRECOGNIZED, raw)
     try:
         record = await source_repo.get_by_canonical_name(canonical)
-    except Exception:  # noqa: BLE001 - a lookup hiccup keeps the claimed path
+    except Exception:  # noqa: BLE001
         record = None
     if record is not None and not record.is_active:
         return SourceResolution(VERIFIED_SOURCES, None, REASON_INACTIVE, raw)
@@ -154,8 +128,6 @@ async def resolve_source(
 
 
 async def load_verified_scope(source_repo: SourceRepository) -> VerifiedScope:
-    """Active verified publishers with their allowed domains and selectors.
-    An empty registry is an empty scope - never an unrestricted search."""
     records = [s for s in await source_repo.list_active(limit=_MAX_PUBLISHERS) if s.is_active]
     publishers: list[VerifiedPublisher] = []
     for r in records:
@@ -177,7 +149,6 @@ async def load_verified_scope(source_repo: SourceRepository) -> VerifiedScope:
 
 
 def verified_identity_key(scope: VerifiedScope) -> str:
-    """Stands in for the canonical source in the claim identity."""
     return f"{_VERIFIED_KEY_PREFIX}{scope.fingerprint or 'empty'}"
 
 

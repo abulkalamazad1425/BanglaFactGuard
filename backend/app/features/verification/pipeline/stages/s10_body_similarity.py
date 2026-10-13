@@ -1,12 +1,3 @@
-"""S10 - Body similarity: four measurements, never a verdict.
-
-Runs only when the claim carries a body. Compares the submitted body with the
-selected source article's body using TF-IDF cosine, Jaccard, normalised
-Levenshtein and LaBSE embedding cosine (`analysis/body_similarity.py`).
-Nothing here writes `content_status`: the scores cannot produce or change a
-matched / altered / contradiction verdict.
-"""
-
 from __future__ import annotations
 
 import structlog

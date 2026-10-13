@@ -85,8 +85,6 @@ class MultimodalPredictionService:
         )
 
         if duplicate is not None:
-            # A match on an earlier copy points at that copy's original: the
-            # original alone carries the expert review and the final decision.
             duplicate = await self._repo.get_original(duplicate) or duplicate
             log.info(
                 "multimodal_dedup_cache_hit",
@@ -105,9 +103,6 @@ class MultimodalPredictionService:
                 model_version=self._cfg.model_version,
                 is_duplicate_of_id=duplicate.id,
             )
-            # Same link as a reused source-based result: the copy stays the
-            # requester's own submission but is kept out of Fact Explorer and
-            # the review queues, and shows the original's review outcome.
             submission.duplicate_of_submission_id = duplicate.submission_id
             await self._db.flush()
             return await self._build_response(
@@ -118,8 +113,6 @@ class MultimodalPredictionService:
             )
 
         log.info("multimodal_running_fresh_inference")
-        # The backbones already ran in the extractor above; reuse their
-        # features instead of running them a second time (identical output).
         infer_result: PredictionResult = await self._engine.predict_from_features(
             text_emb, img_emb
         )
@@ -147,7 +140,6 @@ class MultimodalPredictionService:
         self, *, headline: str | None, body_text: str, image_bytes: bytes,
         original_filename: str, submitter_id: uuid.UUID | None,
     ) -> Submission:
-        """Store input and queue a job atomically before acknowledging acceptance."""
         from app.features.verification.job_repository import VerificationJobRepository
 
         submission = Submission(
@@ -176,7 +168,6 @@ class MultimodalPredictionService:
         return submission
 
     async def process_queued(self, submission: Submission, payload: dict) -> None:
-        # A retry after successful persistence must not create another analysis.
         if await self._repo.get_by_submission_id(submission.id) is None:
             image = await self._storage.read_image(payload["image_key"])
             await self.predict(
@@ -200,12 +191,6 @@ class MultimodalPredictionService:
         body_text: str,
         submitter_id: uuid.UUID | None,
     ) -> Submission:
-        """Every verification method produces a Submission row per the thesis ER
-        model. The AI prediction below is returned to the caller immediately
-        (no long-running search, unlike source-based/photo-card), but the
-        submission still goes to EXPERT_REVIEW rather than FINALIZED — every
-        verification method is reviewed by an expert before its verdict is
-        considered final; see ExpertReviewService's MULTIMODAL branch."""
         submission = Submission(
             submission_type=SubmissionType.MULTIMODAL,
             headline=headline[:2000] if headline else None,
@@ -288,7 +273,6 @@ class MultimodalPredictionService:
         original_id: str | None = None,
         similarity_scores: dict[str, float] | None = None,
     ) -> MultimodalPredictionResponse:
-        # A copy shows the original's expert decision (one source of truth).
         original = await self._repo.get_original(record)
         return MultimodalPredictionResponse(
             prediction_id=str(record.id),

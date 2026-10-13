@@ -51,8 +51,6 @@ class InputNormalizerStage:
 
         resolution = await source_policy.resolve_source(context.raw_claimed_source, self.source_repo)
         if resolution.is_fallback and context.source_resolution_reason and not context.raw_claimed_source.strip():
-            # The caller knows why there is no source (e.g. a photo card where
-            # none was detected) - keep that more specific reason.
             resolution = source_policy.SourceResolution(
                 resolution.mode, None, context.source_resolution_reason, None
             )
@@ -60,7 +58,6 @@ class InputNormalizerStage:
 
         if resolution.is_fallback:
             if not source_policy.fallback_enabled():
-                # Fallback disabled: the original fail-closed behaviour.
                 raise NormalizationError(
                     stage_id=self.stage_id.value,
                     message=f"Claimed source could not be resolved: {context.raw_claimed_source!r}",
@@ -95,9 +92,6 @@ class InputNormalizerStage:
         if source_record:
             context.source_config = source_policy.source_config_for(source_record)
 
-        # The single identity function (shared with registration, S02, S12 and
-        # the photo-card flow): headline, body (only if the scope has one),
-        # canonical source, claimed date, scope and pipeline version.
         context.content_hash = compute_claim_hash(
             context.normalized_headline,
             context.normalized_source,

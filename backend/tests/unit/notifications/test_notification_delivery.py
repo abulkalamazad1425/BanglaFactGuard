@@ -1,6 +1,3 @@
-"""Submitter-only result notices (preliminary and final, once each) and the
-final-result email, retried with backoff and never duplicated."""
-
 from __future__ import annotations
 
 import asyncio
@@ -55,7 +52,7 @@ async def test_guests_get_nothing_and_a_reused_copy_follows_its_original(session
                                              reused_from_submission_id=original.id)
     copy.duplicate_of_submission_id = original.id
     await session.flush()
-    assert await reconcile(session) == 1  # preliminary only
+    assert await reconcile(session) == 1
     original.status, result.overall_verdict = SubmissionStatus.FINALIZED, OverallVerdict.ALTERED
     await session.flush()
     assert await reconcile(session) == 1
@@ -71,7 +68,7 @@ async def test_a_reused_text_and_image_check_gets_its_originals_final_decision(s
     copy, _ = await add_multimodal_submission(session, submitter_id=user.id, is_duplicate_of_id=analysis.id)
     copy.duplicate_of_submission_id = original.id
     await session.flush()
-    assert await reconcile(session) == 1  # preliminary only
+    assert await reconcile(session) == 1
     original.status, analysis.expert_overall_verdict = SubmissionStatus.FINALIZED, OverallVerdict.FAKE
     await session.flush()
     assert await reconcile(session) == 1
@@ -89,7 +86,7 @@ async def test_smtp_failures_back_off_and_retry_without_new_notices(session):
     assert await deliver_email(session, mail)
     row = await session.get(ResultDelivery, (sub.id, "final"))
     assert (row.email_status, row.email_attempts) == ("pending", 1) and row.next_attempt_at
-    assert not await deliver_email(session, mail)  # waiting out the backoff
+    assert not await deliver_email(session, mail)
     row.next_attempt_at = datetime.now(timezone.utc) - timedelta(seconds=1)
     mail.send_result_email.side_effect = None
     assert await deliver_email(session, mail) and row.email_status == "sent"
@@ -125,7 +122,7 @@ async def test_the_worker_reconciles_and_sends_then_survives_errors(db, monkeypa
     assert delivery.deliver_email.await_count == 2 and delivery.reconcile.await_count == 2
 
     worker = ResultDeliveryWorker(db)
-    await worker.stop()  # never started: nothing to stop
+    await worker.stop()
     monkeypatch.setattr(ResultDeliveryWorker, "run", lambda self: asyncio.sleep(3600))
     worker.start()
     await worker.stop()

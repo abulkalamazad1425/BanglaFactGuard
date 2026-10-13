@@ -4,12 +4,6 @@ import { PublicVotingDetails } from '../../../models/verification.model';
 import { SubmissionsService } from '../../../services/submissions.service';
 import { VerdictBadgeComponent } from '../verdict-badge/verdict-badge.component';
 
-/**
- * Public "Voting Details" for a claim with a final decision: each reviewer's
- * overall vote and justification, with an admin's final decision marked.
- * Rendered only after finalization (the API also refuses before that), and
- * loaded on first open so the result page stays light.
- */
 @Component({
   selector: 'app-voting-details',
   standalone: true,

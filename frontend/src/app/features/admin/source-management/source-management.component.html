@@ -1,6 +1,5 @@
 <div class="sources-page">
   <div class="container" style="padding-top: 48px; padding-bottom: 80px">
-    <!-- ══════════ Page Header ══════════ -->
     <div class="page-header">
       <div class="header-text">
         <h1>Verified Sources</h1>
@@ -46,7 +45,6 @@
       >
     </form>
 
-    <!-- ══════════ Source Cards Grid ══════════ -->
     <div class="sources-grid">
       <div *ngIf="sources().length === 0 && query" class="empty-state">
         <div class="empty-icon">🔍</div>
@@ -65,7 +63,6 @@
         class="source-card"
         [class.inactive]="!source.is_active"
       >
-        <!-- Card Top: Name + Status -->
         <div class="card-header">
           <div class="source-identity">
             <div class="source-favicon">
@@ -93,7 +90,6 @@
           </span>
         </div>
 
-        <!-- Domain -->
         <div class="card-domain">
           <svg
             width="12"
@@ -112,7 +108,6 @@
           {{ source.canonical_name }}
         </div>
 
-        <!-- Pills -->
         <div class="card-pills">
           <span class="pill pill-lang">{{ source.language | uppercase }}</span>
           <span *ngIf="source.search_language !== source.language" class="pill pill-search"
@@ -122,14 +117,12 @@
           <span *ngIf="source.rss_url" class="pill pill-rss">📡 RSS</span>
         </div>
 
-        <!-- Selectors Count -->
         <div class="card-meta">
           <span>{{ source.body_selectors.length }} body selectors</span>
           <span class="meta-sep">·</span>
           <span>{{ source.article_url_patterns.length }} URL patterns</span>
         </div>
 
-        <!-- Actions -->
         <div class="card-actions">
           <button class="action-btn" (click)="openEditDrawer(source)" title="Edit">
             <svg
@@ -208,7 +201,6 @@
   </div>
 </div>
 
-<!-- ══════════ Slide-over Drawer ══════════ -->
 <div class="drawer-overlay" [class.open]="drawerOpen()" (click)="closeDrawer()"></div>
 <div class="drawer" [class.open]="drawerOpen()">
   <div class="drawer-header">
@@ -237,7 +229,6 @@
 
   <div class="drawer-body">
     <form [formGroup]="form" class="drawer-form">
-      <!-- ── Basic Info ── -->
       <div class="form-section">
         <div class="section-title">
           <span class="section-num">1</span>
@@ -362,7 +353,6 @@
         </div>
       </div>
 
-      <!-- ── Search & Feed ── -->
       <div class="form-section">
         <div class="section-title">
           <span class="section-num">2</span>
@@ -424,7 +414,6 @@
         </div>
       </div>
 
-      <!-- ── Extraction Rules ── -->
       <div class="form-section">
         <div class="section-title">
           <span class="section-num">3</span>
@@ -432,7 +421,6 @@
         </div>
 
         <div class="selectors-grid">
-          <!-- Body -->
           <div class="form-group">
             <div class="array-label">
               <label>Body Selectors</label>
@@ -469,7 +457,6 @@
             </div>
           </div>
 
-          <!-- Title -->
           <div class="form-group">
             <div class="array-label">
               <label>Title Selectors</label>
@@ -506,7 +493,6 @@
             </div>
           </div>
 
-          <!-- Date -->
           <div class="form-group">
             <div class="array-label">
               <label>Date Selectors</label>
@@ -544,7 +530,6 @@
           </div>
         </div>
 
-        <!-- URL Patterns -->
         <div class="form-group mt-4">
           <div class="array-label">
             <label>Article URL Patterns (Regex)</label>
@@ -587,7 +572,6 @@
     </form>
   </div>
 
-  <!-- Drawer Footer -->
   <div class="drawer-footer">
     <button class="btn btn-ghost" (click)="closeDrawer()">Cancel</button>
     <button class="btn btn-primary" (click)="onSubmit()" [disabled]="form.invalid || saving()">

@@ -1,6 +1,3 @@
-"""MinIO image storage: safe object keys, the right content type, and storage
-errors surfaced as a typed 502 error."""
-
 from __future__ import annotations
 
 from unittest.mock import MagicMock
@@ -32,7 +29,7 @@ async def test_upload_uses_a_safe_key_and_the_right_content_type(minio):
     for name, kind in (("a.jpeg", "image/jpeg"), ("a.webp", "image/webp"), ("a.gif", "image/gif"), ("a.bin", "application/octet-stream")):
         await svc.upload_image(b"x", name)
         assert minio.put_object.call_args.kwargs["content_type"] == kind
-    assert (await svc.upload_image(b"x", "a.png")).startswith("multimodal/")  # a generated id when none is given
+    assert (await svc.upload_image(b"x", "a.png")).startswith("multimodal/")
 
 
 async def test_bucket_urls_reads_and_deletes(minio):
@@ -47,7 +44,7 @@ async def test_bucket_urls_reads_and_deletes(minio):
     assert await svc.read_image("k") == b"bytes"
     response.release_conn.assert_called_once()
     minio.remove_object.side_effect = RuntimeError("gone")
-    await svc.delete_image("k")  # cleanup never raises
+    await svc.delete_image("k")
 
 
 @pytest.mark.parametrize("method,args", [

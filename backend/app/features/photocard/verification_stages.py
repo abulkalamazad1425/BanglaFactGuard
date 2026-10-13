@@ -1,10 +1,3 @@
-"""The shared verification stages, wired for a photo card.
-
-A photo card runs the very same S01-S13 pipeline as a typed claim; only the
-normaliser differs, so that the result identity (content hash) of a card is
-computed under the photo-card rules: headline only, never a body.
-"""
-
 from __future__ import annotations
 
 from app.core.config import get_settings
@@ -18,8 +11,6 @@ from app.shared.utils.hashing import compute_claim_hash
 
 
 def compute_photocard_hash(headline: str, source: str, *, published_date=None) -> str:
-    """Never reuse a result computed under another pipeline version, headline
-    comparison method or model set."""
     settings = get_settings()
     embedding = embedding_identity_tag(settings.ml.embedding_model_name)
     models = f"{embedding}:{settings.ml.nli_model_name}:{settings.ml.ner_model_name}"
@@ -47,9 +38,6 @@ class PhotocardNormalizerStage(InputNormalizerStage):
 
 
 def build_photocard_stages(**kwargs):
-    """The shared stages with the photo-card normaliser. Dispatch is explicit
-    from PhotoCardService, never inferred from HEADLINE_ONLY (which also
-    describes text claims submitted without a body)."""
     return [
         PhotocardNormalizerStage(source_repo=kwargs["source_repo"])
         if stage.stage_id == PipelineStageID.S01_NORMALIZER

@@ -91,7 +91,6 @@ async def get_queue_item(
     current_user: User = Depends(_EXPERT_OR_ADMIN),
     svc: ExpertReviewService = Depends(_get_service),
 ) -> ExpertQueueItemResponse:
-    # Escalated claims are refused to experts here (403), not just hidden.
     return await svc.get_queue_item(
         submission_id, viewer_id=current_user.id, viewer_role=current_user.role
     )

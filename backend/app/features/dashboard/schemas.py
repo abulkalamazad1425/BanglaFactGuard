@@ -55,9 +55,6 @@ class ExplorerItem(BaseModel):
         default=False,
         description="True once expert review has finalized overall_verdict.",
     )
-    # Preliminary AI findings (never the final verdict). Cards show the
-    # headline status, the date comparison only when a date was claimed, and
-    # the source finding only when no relevant article was found.
     source_status: SourceStatus | None = None
     content_status: ContentStatus | None = None
     headline_status: HeadlineAlterationStatus | None = None

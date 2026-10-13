@@ -24,19 +24,10 @@ from app.shared.utils.bangla_normalizer import normalize_bangla_text
 logger = structlog.get_logger(__name__)
 _SETTINGS = get_settings()
 
-# Retrieval relevance only: how likely is this article the report the claim is
-# about. The claimed date is deliberately NOT a ranking input - a wrong claimed
-# date must not push the genuine report below a same-day unrelated one (the
-# date is compared separately, in S11, against the report's datePublished).
 _W_SEM = 0.55
 _W_KW = 0.25
 _W_DOMAIN = 0.20
 
-# The cross-encoder only breaks near-ties. On these Bangla headlines its scores
-# saturate (+10.7 .. +10.9 for every same-story article), so letting it reorder
-# the list outright promoted re-worded copies of a story - another outlet's
-# version, or a video page - over the article whose headline IS the claim, and
-# S09 then compared the claim against the wrong headline (false ALTERED).
 _CE_TIEBREAK = 0.03
 
 
@@ -120,8 +111,6 @@ class EvidenceRankerStage:
         claim_keywords: list[str],
         context: PipelineContext,
     ) -> float:
-        """Best score over the page's headline variants (e.g. a kicker line
-        printed above the title): a claim may quote any of them."""
         best = 0.0
         for title in [article.title, *article.title_variants] or [None]:
             best = max(best, await self._score_title(
@@ -179,16 +168,12 @@ class EvidenceRankerStage:
             elif sim > 0.70:
                 composite += 0.08
 
-        # Not capped at 1.0: a cap made the exact-headline article tie with
-        # near-duplicates, leaving the order to chance.
         return max(0.0, composite)
 
     def _source_domain_bonus(
         self, context: PipelineContext, article: RankedArticleSchema
     ) -> float:
         if context.is_verified_sources_mode:
-            # Every eligible verified publisher gets the same bonus, so having
-            # no claimed source never pushes a good article down the ranking.
             return 1.0 if context.publisher_for_url(article.url) else 0.0
         if not context.normalized_source:
             return 0.0

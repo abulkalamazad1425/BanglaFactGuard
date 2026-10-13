@@ -1,11 +1,3 @@
-"""Identity/cache hashes.
-
-They are persisted (submissions.content_hash, retrieved_articles.url_hash)
-and used as Redis keys, so the golden values guard against an accidental
-change silently breaking reuse for every existing row. A deliberate change
-(e.g. bumping VERIFICATION_PIPELINE_VERSION) must update them on purpose.
-"""
-
 from datetime import date
 
 from app.core.constants import ClaimScope
@@ -54,7 +46,6 @@ def test_identity_is_normalisation_stable_and_unambiguous():
     a = compute_claim_hash("  ঢাকায়  বৃষ্টি ​", "prothomalo.com", HO)
     assert a == compute_claim_hash("ঢাকায় বৃষ্টি", "prothomalo.com", HO)
     assert a == compute_claim_hash("ঢাকায় বৃষ্টি", "prothomalo.com", HO, body="ignored for headline-only")
-    # structured serialisation: moving text between fields changes the hash
     assert compute_claim_hash("ক|খ", "গ", HO) != compute_claim_hash("ক", "খ|গ", HO)
 
 

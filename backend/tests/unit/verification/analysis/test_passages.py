@@ -15,7 +15,7 @@ def test_relevant_sentences_are_selected_with_context_and_overlaps_merged():
     assert len(passages) == 1
     top = passages[0]
     assert top.score == 1.0 and "উদ্বোধন" in top.text
-    assert "বাজারে ভিড়" in top.text and "তিন বছর" in top.text  # one sentence of context each side
+    assert "বাজারে ভিড়" in top.text and "তিন বছর" in top.text
     assert "ক্রিকেট" not in top.text and (top.first_sentence, top.last_sentence) == (1, 3)
 
 

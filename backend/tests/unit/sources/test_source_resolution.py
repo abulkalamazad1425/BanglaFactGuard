@@ -1,6 +1,3 @@
-"""Claimed-source text -> canonical domain: URL, then static alias, then the
-registry; None (never a guess) when all three miss."""
-
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -16,9 +13,9 @@ def repo(found=None, *, error=False) -> AsyncMock:
 
 
 @pytest.mark.parametrize("raw,registry,expected,looked_up", [
-    ("https://www.prothomalo.com/some/path", None, "prothomalo.com", False),   # URL wins, no DB call
-    ("প্রথম আলো", None, "prothomalo.com", False),                             # static alias
-    ("এক্সাম্পল নিউজ", "example-news.com", "example-news.com", True),          # registry
+    ("https://www.prothomalo.com/some/path", None, "prothomalo.com", False),
+    ("প্রথম আলো", None, "prothomalo.com", False),
+    ("এক্সাম্পল নিউজ", "example-news.com", "example-news.com", True),
     ("কোনো অজানা পত্রিকা", None, None, True),
     ("", None, None, False),
 ])

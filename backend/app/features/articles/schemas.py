@@ -1,7 +1,4 @@
-﻿"""Pipeline article DTOs: search candidates (S04) and extracted, ranked
-articles (S06/S07; also returned as `matched_articles`)."""
-
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from datetime import date, datetime
 
@@ -11,8 +8,6 @@ from app.core.constants import ExtractionMethod, SearchProvider
 
 
 class CandidateArticleSchema(BaseModel):
-    """A candidate article URL returned by a search provider (Stage 5 output)."""
-
     url: str = Field(..., description="Full URL of the candidate article")
     title_snippet: str | None = Field(default=None)
     search_provider: SearchProvider
@@ -25,7 +20,6 @@ class RankedArticleSchema(BaseModel):
 
     url: str = Field(..., description="Source URL of the article")
     title: str | None = Field(default=None)
-    # Pipeline-internal (S06 -> S07/S08): never part of an API response.
     title_variants: list[str] = Field(
         default_factory=list,
         exclude=True,

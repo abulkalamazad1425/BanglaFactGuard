@@ -1,5 +1,3 @@
-"""Claim body vs source body: four independent measurements, never a verdict."""
-
 from __future__ import annotations
 
 import numpy as np
@@ -25,7 +23,7 @@ async def test_identical_bodies_score_one_and_unrelated_bodies_score_low():
     assert same.status == BodyComparisonStatus.COMPUTED
     assert all(same.metrics[n].value == pytest.approx(1.0, abs=1e-4) for n in bs.METRIC_NAMES)
     different = await compare_bodies(BODY, OTHER, FakeEmbedder())
-    assert different.status == BodyComparisonStatus.COMPUTED  # a low score is still a measurement
+    assert different.status == BodyComparisonStatus.COMPUTED
     assert different.metrics["jaccard"].value < 0.2 and different.metrics["tfidf_cosine"].value < 0.2
 
 
@@ -38,7 +36,6 @@ def test_lexical_metrics_follow_their_documented_formulas(monkeypatch):
     monkeypatch.setattr(bs, "LEVENSHTEIN_MAX_CHARS", 50)
     long = normalized_levenshtein_similarity(BODY * 5, BODY * 6)
     assert long.details["truncated"] and long.details["claim_chars_compared"] == 50
-    # numbers and negation are kept as TF-IDF terms
     same = tfidf_cosine_similarity("৫ জন নিহত হননি", "৫ জন নিহত হননি")
     changed = tfidf_cosine_similarity("৫ জন নিহত হননি", "১০ জন নিহত হয়েছেন")
     assert same.value == pytest.approx(1.0) and changed.value < same.value
@@ -60,7 +57,7 @@ async def test_semantic_similarity_keeps_the_raw_cosine_and_chunks_long_text():
 
 @pytest.mark.parametrize("claim,source,status", [
     (None, BODY, BodyComparisonStatus.SKIPPED),
-    ("।।।", BODY, BodyComparisonStatus.SKIPPED),        # no words: empty input, never a zero score
+    ("।।।", BODY, BodyComparisonStatus.SKIPPED),
     (BODY, "  ", BodyComparisonStatus.UNAVAILABLE),
     (BODY, "?!", BodyComparisonStatus.UNAVAILABLE),
 ])

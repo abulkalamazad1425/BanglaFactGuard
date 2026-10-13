@@ -1,13 +1,3 @@
-"""S12 - Result assembly: one coherent, explainable result (no I/O).
-
-Collects the independent findings of S08-S11 into the stored result:
-pipeline version and claim scope, a source-correspondence strength, the
-recorded stage errors, and a plain-language reasoning that keeps the
-dimensions separate (source / headline alteration / body similarity /
-date). Nothing here re-decides a dimension, and no overall Fake/Real verdict
-is derived - that is an expert-only assessment.
-"""
-
 from __future__ import annotations
 
 import structlog
@@ -36,7 +26,6 @@ class ResultAssemblyStage:
     async def execute(self, context: PipelineContext) -> PipelineContext:
         try:
             if context.source_status is None:
-                # S08 never ran to completion: a failed check, not a negative.
                 context.source_status = SourceStatus.INCOMPLETE
                 context.analysis.source_basis = context.analysis.source_basis or [
                     "the source correspondence check did not complete"
@@ -74,9 +63,6 @@ class ResultAssemblyStage:
 
     @staticmethod
     def _strength(context: PipelineContext) -> float:
-        """CONFIRMED: mean of the correspondence measurements. NOT_FOUND:
-        share of attempted search calls that completed (how thoroughly the
-        absence was checked). INCOMPLETE: 0. Never a probability of truth."""
         if context.source_status == SourceStatus.CONFIRMED:
             m = context.analysis.metrics
             return correspondence_strength([
@@ -177,8 +163,6 @@ class ResultAssemblyStage:
 
     @staticmethod
     def _verified_reasoning(context: PipelineContext) -> str:
-        """VERIFIED_SOURCES mode: never implies the claimed/original outlet
-        published anything - the comparison is with a verified-source article."""
         parts: list[str] = []
         if context.source_status == SourceStatus.NOT_FOUND:
             parts.append(

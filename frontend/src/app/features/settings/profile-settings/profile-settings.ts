@@ -30,7 +30,6 @@ export class ProfileSettingsComponent implements OnInit {
   readonly stats = signal<ExpertStats | null>(null);
   readonly statsError = signal(false);
 
-  // Requirement 2.2: experts may VIEW their profile but never modify it.
   readonly isExpertOnly = computed(() => this.auth.user()?.role === 'expert');
 
   readonly displayName = computed(

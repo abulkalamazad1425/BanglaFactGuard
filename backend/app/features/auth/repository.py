@@ -20,7 +20,6 @@ class UserRepository(BaseRepository[User]):
         return result.scalar_one_or_none()
 
     async def increment_submission_count(self, user_id: uuid.UUID) -> None:
-        """`users.total_submissions` is a cached counter, bumped atomically."""
         await self.session.execute(
             update(User).where(User.id == user_id).values(total_submissions=User.total_submissions + 1)
         )
@@ -130,10 +129,6 @@ class PasswordResetTokenRepository(BaseRepository[PasswordResetToken]):
         return result.scalar_one_or_none()
 
     async def hash_in_use(self, token_hash: str) -> bool:
-        """True if any row (used or unused, expired or not) already has this
-        hash — token_hash carries a DB-level unique constraint, so this must
-        be checked before inserting a newly generated OTP to avoid a
-        collision on the (rare) matching digit string."""
         stmt = select(PasswordResetToken.id).where(
             PasswordResetToken.token_hash == token_hash
         )

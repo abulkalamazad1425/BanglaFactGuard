@@ -1,5 +1,3 @@
-"""The evaluation transform must match training: resize, then ImageNet normalisation."""
-
 import torch
 from PIL import Image
 

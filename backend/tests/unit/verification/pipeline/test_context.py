@@ -10,7 +10,6 @@ def test_scope_follows_the_body_and_an_explicit_headline_only_drops_it():
     for kwargs in ({}, {"news_body": "   "}):
         ctx = build_context("শিরোনাম", "prothomalo.com", **kwargs)
         assert ctx.claim_scope == ClaimScope.HEADLINE_ONLY and ctx.raw_news_body is None
-    # a photo card is headline-only even if a body is passed by mistake
     card = build_context("শিরোনাম", None, news_body="বডি", claim_scope=ClaimScope.HEADLINE_ONLY)
     assert card.raw_news_body is None and card.raw_claimed_source == ""
 
@@ -35,6 +34,6 @@ def test_publisher_and_confirmation_depend_on_the_mode():
     assert ctx.publisher_for_url("https://www.jugantor.com/a/1") == "jugantor.com"
     assert ctx.publisher_for_url("https://other.com/a") is None
     ctx.source_status = SourceStatus.CONFIRMED
-    assert not ctx.source_confirmed  # needs the selected article too
+    assert not ctx.source_confirmed
     ctx.top_article = article("t")
     assert ctx.source_confirmed

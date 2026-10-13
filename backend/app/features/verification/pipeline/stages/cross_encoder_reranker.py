@@ -14,9 +14,6 @@ class CrossEncoderReranker:
 
     MODEL_NAME = "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
 
-    # The ranker stage is rebuilt for every verification, and loading a
-    # transformer each time cost seconds of wall clock on the API's event
-    # loop. The weights are read-only, so share one instance process-wide.
     _model: CrossEncoder | None = None
     _load_lock = threading.Lock()
     _load_failed = False
@@ -40,8 +37,6 @@ class CrossEncoderReranker:
         return self._get_model()
 
     async def scores(self, claim_headline: str, articles: List[RankedArticleSchema]) -> List[float] | None:
-        """Cross-encoder relevance of each article to the claim, or None when
-        the model is unavailable or fails."""
         if not articles:
             return []
         model = self._get_model()

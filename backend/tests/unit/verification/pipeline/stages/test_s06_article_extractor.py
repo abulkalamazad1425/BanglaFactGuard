@@ -1,6 +1,3 @@
-"""S06: title, body and datePublished from fetched pages, with provenance.
-dateModified and crawl dates are never a publication date."""
-
 from __future__ import annotations
 
 from datetime import date
@@ -40,13 +37,13 @@ def extract(html: str, config=None, candidate=None):
 
 @pytest.mark.parametrize("head,expected,source", [
     (ld('{"@type":"NewsArticle","datePublished":"2026-03-15T21:30:00+00:00","dateModified":"2026-04-01T10:00:00+06:00"}'),
-     date(2026, 3, 16), "json_ld.datePublished"),                                        # Dhaka day, not modified
+     date(2026, 3, 16), "json_ld.datePublished"),
     (ld('{"@graph":[{"@type":"WebSite"},{"@type":"NewsArticle","datePublished":"2026-05-02"}]}'),
      date(2026, 5, 2), "json_ld.datePublished"),
     ('<meta property="article:published_time" content="2026-03-15T08:00:00+06:00">',
      date(2026, 3, 15), "meta.article:published_time"),
     ('<meta property="article:modified_time" content="2026-04-01T10:00:00+06:00">' + ld('{"dateModified":"2026-04-01"}'),
-     None, None),                                                                       # only a modification date
+     None, None),
 ])
 def test_publication_date_and_provenance(head, expected, source):
     a = extract(page(head))
@@ -72,7 +69,7 @@ def test_fallback_extractors_in_order(monkeypatch):
     monkeypatch.setattr(s06.trafilatura, "extract", lambda *a, **k: body)
     via_trafilatura = extract(generic)
     assert via_trafilatura.extraction_method == ExtractionMethod.TRAFILATURA
-    assert via_trafilatura.title == TITLE  # the " | প্রথম আলো" suffix is removed
+    assert via_trafilatura.title == TITLE
     monkeypatch.setattr(s06.trafilatura, "extract", lambda *a, **k: None)
     assert extract(generic).extraction_method == ExtractionMethod.READABILITY
     monkeypatch.setattr(s06, "Document", lambda html: (_ for _ in ()).throw(ValueError("no readability")))
@@ -101,7 +98,7 @@ def test_kicker_lines_next_to_the_title_are_headline_variants():
         "প্রধানমন্ত্রীর সঙ্গে আবরার ফাহাদের পরিবারের সাক্ষাৎ রায় দ্রুত কার্যকরের দাবি",
     ]
     linked = BeautifulSoup('<div><h1>শিরোনাম এখানে</h1><h2><a href="/x">আরও খবর পড়ুন এখানে</a></h2></div>', "html.parser")
-    assert _headline_variants(linked, "শিরোনাম এখানে") == []  # a linked heading is not a kicker
+    assert _headline_variants(linked, "শিরোনাম এখানে") == []
     assert _headline_variants(linked, None) == []
 
 

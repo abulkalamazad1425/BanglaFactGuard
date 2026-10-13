@@ -1,6 +1,3 @@
-"""Reviewer votes and justifications become public only after the final
-decision, and never reveal reviewers' emails or ids."""
-
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -28,7 +25,7 @@ async def test_an_admin_decision_is_published_with_every_vote_and_no_private_dat
     session.add_all([review(sub, admin, OverallVerdict.ALTERED, 0, admin=True),
                      review(sub, named, OverallVerdict.FAKE, 1), review(sub, unnamed, OverallVerdict.REAL, 2)])
     await session.flush()
-    assert await load_public_voting_details(session, sub) is None  # not final yet
+    assert await load_public_voting_details(session, sub) is None
 
     sub.status, result.overall_verdict = SubmissionStatus.FINALIZED, OverallVerdict.ALTERED
     await session.flush()
@@ -36,7 +33,7 @@ async def test_an_admin_decision_is_published_with_every_vote_and_no_private_dat
     assert (details.final_verdict, details.decided_by) == (OverallVerdict.ALTERED, "ADMIN")
     assert [(v.reviewer_name, v.reviewer_role, v.overall_vote, v.is_final_decision) for v in details.votes] == [
         ("Expert One", "Expert", OverallVerdict.FAKE, False),
-        ("Expert reviewer 2", "Expert", OverallVerdict.REAL, False),  # no name -> never the email
+        ("Expert reviewer 2", "Expert", OverallVerdict.REAL, False),
         ("Site Admin", "Admin", OverallVerdict.ALTERED, True),
     ]
     dumped = details.model_dump_json()
@@ -58,7 +55,7 @@ async def test_a_copy_shows_its_originals_expert_consensus_and_multimodal_claims
     mm, analysis = await add_multimodal_submission(session)
     mm.status = SubmissionStatus.FINALIZED
     await session.flush()
-    assert await load_public_voting_details(session, mm) is None  # finalized status but no verdict stored
+    assert await load_public_voting_details(session, mm) is None
     analysis.expert_overall_verdict = OverallVerdict.FAKE
     await session.flush()
     assert (await load_public_voting_details(session, mm)).final_verdict == OverallVerdict.FAKE

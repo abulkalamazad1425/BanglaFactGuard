@@ -37,7 +37,6 @@ export class ExpertHistoryComponent implements OnInit {
     this.load();
   }
 
-  /** Search as you type: ~300 ms after the last keystroke, first page. */
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
   onSearchInput(value: string): void {
     if (this.searchTimer) clearTimeout(this.searchTimer);
@@ -53,7 +52,6 @@ export class ExpertHistoryComponent implements OnInit {
   ngOnInit(): void {
     this.load();
   }
-  /** The optional, non-decisive findings recorded with a vote, as plain text. */
   supplementary(h: ExpertHistoryItem): string {
     if (!h.vote_source_status) return 'None recorded.';
     const parts = [`${SOURCE_QUESTION}: ${SOURCE_LABELS[h.vote_source_status]}`];
@@ -67,7 +65,6 @@ export class ExpertHistoryComponent implements OnInit {
   load(): void {
     this.request?.unsubscribe();
     this.loading.set(true);
-    // One extra row tells whether another page exists.
     this.request = this.expertSvc.getHistory(this.limit + 1, this.offset(), this.query).subscribe({
       next: (rows) => {
         this.hasNext.set(rows.length > this.limit);

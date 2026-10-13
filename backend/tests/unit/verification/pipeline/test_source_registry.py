@@ -1,6 +1,3 @@
-"""The seed snapshot of verified sources must be loadable as-is: every
-record describes its own domain and its URL patterns compile."""
-
 import re
 
 from app.features.verification.pipeline.source_registry import (

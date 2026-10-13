@@ -16,8 +16,6 @@ if TYPE_CHECKING:
 
 
 class ExpertProfile(UUIDMixin, TimestampMixin, ReprMixin, Base):
-    """Current expert credibility and review statistics."""
-
     __tablename__ = "expert_profiles"
 
     user_id: Mapped[uuid.UUID] = mapped_column(
@@ -168,28 +166,6 @@ class ExpertReview(UUIDMixin, TimestampMixin, ReprMixin, Base):
 
 
 class VotingConfig(UUIDMixin, TimestampMixin, ReprMixin, Base):
-    """Admin-configurable voting parameters — a single-row table (the oldest
-    row is always the one in effect) so none of these are fixed settings in
-    code.
-
-    Only the reviewers' OVERALL vote (Real/Fake/Misleading/Altered) decides a
-    claim. It finalizes when ALL of these hold for the weighted overall tally:
-        leader's weighted score   >= verified_threshold        (T)
-        number of votes cast      >= min_expert_votes           (M)
-        leader's score - runner-up's score >= lead_margin
-        the leader is unique (an exact tie never finalizes)
-    The supplementary source/headline/date assessments are recorded for
-    reference only and never affect finalization or escalation.
-
-    Escalation: a claim still undecided ESCALATES to admin review as soon as
-    ANY configured limit is exceeded — votes cast >= max_review_votes, OR
-    hours since submission >= max_review_hours. A NULL limit is "not
-    configured" and is never treated as exceeded; with both NULL a claim stays
-    in expert review until it reaches consensus. The time limit is enforced
-    by a background sweep (`escalation.py`), so it does not depend on a new
-    vote or a page visit.
-    """
-
     __tablename__ = "voting_config"
 
     min_expert_votes: Mapped[int] = mapped_column(

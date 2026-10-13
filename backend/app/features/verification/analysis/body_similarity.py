@@ -1,50 +1,3 @@
-"""Claim body vs. source body — four similarity MEASUREMENTS, never a verdict.
-
-Nothing here decides or influences Headline Alteration, and no score is ever
-turned into matched / altered / contradiction. A high score says the two
-texts are close in wording or meaning; it does not say the claim is true or
-free of contradiction, and a low score is not proof of alteration.
-
-Each metric is computed independently, so one failing never discards the
-others; every metric records its own availability and reason. Nothing
-unavailable is ever reported as 0.
-
-1. TF-IDF cosine similarity (`tfidf_cosine`)
-   Cosine of TF-IDF vectors over both bodies' content words (Bangla
-   stop-words removed; numbers, negations and quantifiers KEPT). TF = term
-   count / document length; IDF is the smoothed form ln((1+N)/(1+df)) + 1
-   with N = 2 (the two compared documents), so shared words carry less
-   weight than words unique to one side. Range 0–1.
-2. Jaccard similarity (`jaccard`)
-   |unique words in both| / |unique words in either|, over ALL normalised
-   word tokens (no stop-word removal). Range 0–1.
-3. Normalised Levenshtein similarity (`normalized_levenshtein`)
-   1 − edit_distance / max(len(claim_body), len(source_body)), in Unicode
-   code points, on lightly normalised text (NFC, zero-width characters
-   removed, whitespace runs collapsed — no punctuation, digit or case
-   changes). Bodies longer than LEVENSHTEIN_MAX_CHARS are compared on their
-   first LEVENSHTEIN_MAX_CHARS characters and the metric records
-   `truncated` with the compared lengths. Range 0–1. Note: when one body is
-   much longer than the other (an excerpt vs a full article) this score is
-   low by construction.
-4. Embedding-based semantic similarity (`semantic_cosine`)
-   Cosine similarity of LaBSE sentence embeddings (sentence-transformers/
-   LaBSE, the multilingual model this application already loads; it
-   supports Bangla). BanglaBERT is not used: it is not trained as a
-   sentence-embedding model, so its raw vector cosine is not a meaningful
-   similarity. This is NOT BERTScore.
-   Aggregation for long text: both bodies are split into sentence-grouped
-   chunks of at most SEMANTIC_CHUNK_CHARS characters (no text is dropped
-   inside the chunk caps); each claim chunk takes its best-matching source
-   chunk's cosine, and the score is the claim-chunk-length-weighted mean of
-   those best matches (claim -> source coverage). Chunk caps
-   (SEMANTIC_MAX_CLAIM_CHUNKS / SEMANTIC_MAX_SOURCE_CHUNKS) are recorded as
-   coverage + truncated when hit.
-   Raw cosine range is [-1, 1]; the stored `raw_value` keeps it. The
-   displayed `value` is max(0, raw) — negative similarity is shown as 0 and
-   this clipping is recorded in `details.display_transform`.
-"""
-
 from __future__ import annotations
 
 import math
@@ -180,10 +133,8 @@ async def semantic_cosine_similarity(a: str, b: str, embedder) -> MetricResult:
 
 
 async def compare_bodies(claim_body: str | None, source_body: str | None, embedder) -> BodySimilarityResult:
-    """All four metrics, each independently. Never raises."""
     claim = (claim_body or "").strip()
     source = (source_body or "").strip()
-    # Text without a single word (only punctuation/symbols) is empty input.
     if not tokenize(claim):
         return BodySimilarityResult(BodyComparisonStatus.SKIPPED, "The claim has no body, so body similarity was not computed.")
     if not tokenize(source):

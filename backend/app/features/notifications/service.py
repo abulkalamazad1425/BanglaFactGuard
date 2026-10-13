@@ -1,11 +1,3 @@
-"""Idempotent in-app notifications.
-
-A background job can be retried (crash, restart, duplicate dispatch). Writing
-a notification must therefore be safe to repeat: the same (user, type, link)
-is only ever inserted once. Notification failure never invalidates a saved
-result — callers treat the return value as best-effort.
-"""
-
 from __future__ import annotations
 
 import uuid
@@ -36,9 +28,6 @@ async def notify_preliminary_result(
     submission_id: uuid.UUID,
     headline: str | None,
 ) -> bool:
-    """The "preliminary result ready" notification for a submission (fresh,
-    reused, photo-card or multimodal alike). Same identity and wording as
-    every other VERIFICATION_COMPLETE notification, so it is written once."""
     title, body = preliminary_notification_text(headline)
     return await notify_once(
         session,
@@ -61,12 +50,6 @@ async def notify_once(
     body: str,
     headline: str | None = None,
 ) -> bool:
-    """Insert the notification unless an identical one exists. Returns True
-    when a new row was written. Never raises.
-
-    Every preliminary-result notification (text, photo card, multimodal,
-    reused) uses one wording: the claim headline's first five words, with
-    "..." only when the headline is longer. `headline` is the claim headline."""
     if notification_type == "VERIFICATION_COMPLETE":
         title, body = preliminary_notification_text(headline)
     try:
@@ -83,8 +66,6 @@ async def notify_once(
         ).scalar_one_or_none()
         if existing is not None:
             return False
-        # SAVEPOINT: a notification problem must not poison the caller's
-        # transaction (which holds the saved result).
         async with session.begin_nested():
             session.add(
                 Notification(
@@ -97,6 +78,6 @@ async def notify_once(
                 )
             )
         return True
-    except Exception as exc:  # noqa: BLE001 - best effort by design
+    except Exception as exc:  # noqa: BLE001
         logger.warning("notification_write_failed", type=notification_type, error=str(exc))
         return False

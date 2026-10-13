@@ -11,7 +11,6 @@ import { NotificationService } from '../../../services/notification.service';
   template: `
     <nav class="navbar" [class.scrolled]="scrolled">
       <div class="navbar-container">
-        <!-- Logo -->
         <a routerLink="/" class="navbar-brand">
           <div class="brand-icon">
             <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
@@ -35,7 +34,6 @@ import { NotificationService } from '../../../services/notification.service';
           <span class="brand-name">BanglaFactGuard</span>
         </a>
 
-        <!-- Desktop Nav -->
         <div class="navbar-links">
           <a
             routerLink="/"
@@ -91,10 +89,8 @@ import { NotificationService } from '../../../services/notification.service';
           }
         </div>
 
-        <!-- Right Side -->
         <div class="navbar-actions">
           @if (isLoggedIn()) {
-            <!-- Notifications -->
             <a
               routerLink="/notifications"
               class="notif-btn"
@@ -117,7 +113,6 @@ import { NotificationService } from '../../../services/notification.service';
               }
             </a>
 
-            <!-- User Menu -->
             <div class="user-menu" [class.open]="menuOpen">
               <button
                 class="user-avatar"
@@ -213,7 +208,6 @@ import { NotificationService } from '../../../services/notification.service';
           }
         </div>
 
-        <!-- Mobile toggle -->
         <button
           class="mobile-toggle"
           aria-label="Toggle navigation"
@@ -225,7 +219,6 @@ import { NotificationService } from '../../../services/notification.service';
         </button>
       </div>
 
-      <!-- Mobile Menu -->
       @if (mobileOpen) {
         <div class="mobile-menu animate-in">
           <a routerLink="/" class="mobile-link" (click)="closeMobileMenu()">Home</a>
@@ -277,7 +270,6 @@ import { NotificationService } from '../../../services/notification.service';
         </div>
       }
     </nav>
-    <!-- Backdrop for dropdown -->
     @if (menuOpen) {
       <div class="backdrop" (click)="closeMenu()"></div>
     }
@@ -590,7 +582,6 @@ export class NavbarComponent {
   readonly isLoggedIn = this.auth.isLoggedIn;
   readonly isAdmin = this.auth.isAdmin;
   readonly isExpert = this.auth.isExpert;
-  /** Signed-in account that is neither an expert reviewer nor an admin. */
   readonly isRegularUser = computed(() => this.isLoggedIn() && !this.isExpert());
   readonly unreadCount = this.notificationSvc.unreadCount;
 

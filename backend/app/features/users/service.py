@@ -1,5 +1,3 @@
-"""The signed-in user's own submissions, submission statistics and profile."""
-
 from __future__ import annotations
 
 from sqlalchemy import and_, func, or_, select
@@ -31,9 +29,6 @@ def to_profile_response(user: User, total_submissions: int) -> ProfileResponse:
     )
 
 
-# My Submissions status filter -> the stored statuses behind each label the page
-# shows. A duplicate still EXPERT_REVIEW whose original is FINALIZED is shown
-# (and so filtered) as final - see presenter.effective_status.
 MY_SUBMISSION_STATES = ("in_progress", "review", "final", "failed")
 
 
@@ -72,12 +67,6 @@ class UserAccountService:
         state: str | None = None,
         submission_type: SubmissionType | None = None,
     ) -> list[SubmissionSummary]:
-        """Owner-only: the user's own submissions, including ones still
-        PENDING/PROCESSING or FAILED and ones with no headline yet.
-
-        Optional filters: `q` keyword search over the headline, body text and
-        claimed outlet (best matches first), `state` (MY_SUBMISSION_STATES)
-        and `submission_type`. Filtering happens before pagination."""
         session = self._session
         photocard_storage = self._photocard_storage
         stmt = select(Submission).where(Submission.submitter_id == user.id)
@@ -102,7 +91,6 @@ class UserAccountService:
         )
         submissions = (await session.execute(stmt)).scalars().all()
 
-        # One query per related table for the whole page (no per-row queries).
         results = await rows_by_submission(session, VerificationResult, [s.id for s in submissions])
         originals = await rows_by_submission(
             session, VerificationResult,
@@ -112,7 +100,6 @@ class UserAccountService:
             session, MultimodalAnalysis,
             [s.id for s in submissions if s.submission_type == SubmissionType.MULTIMODAL],
         )
-        # A reused text & image check shows its original's decision.
         multimodal_originals = await rows_by_submission(
             session, MultimodalAnalysis,
             list({s.duplicate_of_submission_id for s in submissions
@@ -166,7 +153,6 @@ class UserAccountService:
                     status=effective_status(submission, original_status).value,
                     phase=submission.processing_phase,
                     failure_reason=submission.failure_reason,
-                    # Preliminary findings are always the AI's own calls.
                     source_status=result.source_status if result else None,
                     content_status=(result.content_status if result and is_headline_result(result) else None),
                     headline_status=headline_status_for_result(result, claim_headline=submission.headline),
@@ -243,10 +229,6 @@ class UserAccountService:
         )
 
     async def submission_count(self, user: User) -> int:
-        """Every submission the user has made, counted live - the same total
-        My Submissions shows. (The cached `users.total_submissions` counter was
-        only bumped for some completed checks - never for photo cards, reused
-        results or failed checks - so it drifted far from the real number.)"""
         return (
             await self._session.execute(
                 select(func.count()).select_from(Submission).where(Submission.submitter_id == user.id)

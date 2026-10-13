@@ -1,7 +1,3 @@
-"""One source policy for registration, photo cards and S01: a claim names a
-usable outlet (CLAIMED_SOURCE) or is checked against the active verified
-sources (VERIFIED_SOURCES) - never an unrestricted search."""
-
 from unittest.mock import AsyncMock
 
 import pytest

@@ -1,6 +1,3 @@
-"""NLI wrapper: output is mapped by label NAME, and a checkpoint without
-entailment/neutral/contradiction labels is refused (None), never guessed."""
-
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -36,7 +33,7 @@ def install(monkeypatch, id2label, *, output=OUTPUT, error=None):
 async def test_scores_are_mapped_by_label_name_and_inputs_truncated(monkeypatch):
     pipe = install(monkeypatch, GOOD)
     svc = NLIService()
-    assert await svc.predict("p", "h") is None  # not loaded yet
+    assert await svc.predict("p", "h") is None
     await svc.load()
     await svc.load()
     assert svc.audit["label_order"] == ["entailment", "neutral", "contradiction"] and svc.audit["bangla_validated"] is False

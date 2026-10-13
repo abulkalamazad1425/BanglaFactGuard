@@ -1,17 +1,10 @@
 @use './app/shared/styles/verification-workspace';
-// ============================================================
-// BanglaFactGuard — Global Styles
-// Light, accessible design system
-// ============================================================
 
 @use '@angular/material' as mat;
 
-// ── Google Fonts ─────────────────────────────────────────────
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap');
 
-// ── CSS Custom Properties ─────────────────────────────────────
 :root {
-  // Color palette — soft lavender-tinted paper, not stark white
   --bg-base: #e5efed;
   --bg-surface: #ffffff;
   --bg-surface-2: #eaf3ee;
@@ -48,31 +41,26 @@
   --glass-bg: rgba(255, 255, 255, 0.65);
   --glass-border: rgba(25, 26, 46, 0.08);
 
-  // Typography
   --font-sans:
     'Inter', 'Noto Sans Bengali', 'Nirmala UI', -apple-system, BlinkMacSystemFont, 'Segoe UI',
     sans-serif;
   --font-display: var(--font-sans);
 
-  // Spacing
   --radius-sm: 6px;
   --radius-md: 12px;
   --radius-lg: 18px;
   --radius-xl: 24px;
   --radius-full: 9999px;
 
-  // Shadows — light-theme shadows are soft and low-opacity
   --shadow-sm: 0 1px 3px rgba(25, 26, 46, 0.07);
   --shadow-md: 0 4px 16px rgba(25, 26, 46, 0.08);
   --shadow-lg: 0 12px 32px rgba(25, 26, 46, 0.12);
   --shadow-glow: 0 0 24px rgba(31, 127, 78, 0.18);
 
-  // Transitions
   --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   --transition-slow: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-// ── Reset & Base ──────────────────────────────────────────────
 *,
 *::before,
 *::after {
@@ -96,7 +84,6 @@ body {
   min-height: 100vh;
 }
 
-// ── Typography ────────────────────────────────────────────────
 h1,
 h2,
 h3,
@@ -135,7 +122,6 @@ a:hover {
   color: var(--accent-light);
 }
 
-// ── Scrollbar ─────────────────────────────────────────────────
 ::-webkit-scrollbar {
   width: 6px;
 }
@@ -150,7 +136,6 @@ a:hover {
   background: var(--text-muted);
 }
 
-// ── Glass Card ────────────────────────────────────────────────
 .glass-card {
   background: var(--glass-bg);
   backdrop-filter: blur(20px);
@@ -167,7 +152,6 @@ a:hover {
   }
 }
 
-// ── Card ──────────────────────────────────────────────────────
 .card {
   background: var(--bg-surface);
   border: 1px solid var(--border);
@@ -182,7 +166,6 @@ a:hover {
   }
 }
 
-// ── Buttons ───────────────────────────────────────────────────
 .btn {
   display: inline-flex;
   align-items: center;
@@ -265,7 +248,6 @@ a:hover {
   }
 }
 
-// ── Form Controls ─────────────────────────────────────────────
 .form-group {
   display: flex;
   flex-direction: column;
@@ -324,7 +306,6 @@ textarea.form-control {
   gap: 4px;
 }
 
-// ── Badge ─────────────────────────────────────────────────────
 .badge {
   display: inline-flex;
   align-items: center;
@@ -366,9 +347,6 @@ textarea.form-control {
     color: var(--primary-light);
     border: 1px solid rgba(31, 127, 78, 0.25);
   }
-  // A check that could not be completed — deliberately distinct from both a
-  // positive (true) and a negative (not-found/false) result, since neither
-  // was actually reached.
   &-incomplete {
     background: rgba(139, 146, 169, 0.15);
     color: var(--text-secondary);
@@ -376,7 +354,6 @@ textarea.form-control {
   }
 }
 
-// ── Table ─────────────────────────────────────────────────────
 .data-table {
   width: 100%;
   border-collapse: collapse;
@@ -408,7 +385,6 @@ textarea.form-control {
   }
 }
 
-// ── Section ───────────────────────────────────────────────────
 .section {
   padding: 80px 0;
 
@@ -430,7 +406,6 @@ textarea.form-control {
   }
 }
 
-// ── Grid ──────────────────────────────────────────────────────
 .grid-2 {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -463,7 +438,6 @@ textarea.form-control {
   }
 }
 
-// ── Gradient Text ─────────────────────────────────────────────
 .gradient-text {
   background: var(--gradient-primary);
   -webkit-background-clip: text;
@@ -471,14 +445,12 @@ textarea.form-control {
   -webkit-text-fill-color: transparent;
 }
 
-// ── Divider ───────────────────────────────────────────────────
 .divider {
   height: 1px;
   background: var(--border);
   margin: 24px 0;
 }
 
-// ── Loading ───────────────────────────────────────────────────
 .spinner {
   width: 40px;
   height: 40px;
@@ -501,7 +473,6 @@ textarea.form-control {
   min-height: 300px;
 }
 
-// ── Animations ────────────────────────────────────────────────
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -552,7 +523,6 @@ textarea.form-control {
   animation: scaleIn 0.3s ease forwards;
 }
 
-// ── Angular Material Overrides ────────────────────────────────
 .mat-mdc-form-field {
   --mdc-outlined-text-field-outline-color: var(--border);
   --mdc-outlined-text-field-focus-outline-color: var(--primary);
@@ -566,7 +536,6 @@ textarea.form-control {
   --mdc-snackbar-supporting-text-color: var(--text-primary);
 }
 
-// ── Utility ───────────────────────────────────────────────────
 .flex {
   display: flex;
 }
@@ -674,7 +643,6 @@ textarea.form-control {
   border: 0;
 }
 
-/* Shared accessible controls and restrained, pine-accented surfaces. */
 :root {
   --space-sm: 12px;
   --space-md: 24px;
@@ -829,20 +797,12 @@ textarea {
   border-radius: 8px;
 }
 
-// ============================================================
-// Application UI layer — controls must read as controls.
-// Buttons are solid or outlined, inputs are white with a visible
-// border, links in content are underlined, required fields carry a
-// visible "*" plus screen-reader text, errors carry an icon + text,
-// and every status uses words, not colour alone.
-// ============================================================
 :root {
   --border-strong: #8ea79a;
   --input-bg: #ffffff;
   --focus-ring: 0 0 0 3px rgba(31, 127, 78, 0.35);
 }
 
-// Buttons: one solid primary, outlined secondary, quiet ghost — never look like text.
 .btn {
   border: 1px solid transparent;
   line-height: 1.25;
@@ -910,7 +870,6 @@ textarea {
   vertical-align: -3px;
 }
 
-// Inputs: white field, visible border, clear focus and error states.
 .form-control,
 .verification-shell .form-control,
 .verification-shell input[type='text'],
@@ -982,7 +941,6 @@ textarea {
   }
 }
 
-// Links inside reading content are underlined so they never look like static text.
 .verification-shell p a:not(.btn),
 .verification-shell dd a:not(.btn),
 .verification-shell .section-sub a,
@@ -993,7 +951,6 @@ textarea {
   text-underline-offset: 3px;
 }
 
-// Tables: visible row separators and header.
 .data-table th {
   color: var(--text-secondary);
   border-bottom: 1px solid var(--border-strong);
@@ -1005,7 +962,6 @@ textarea {
   background: var(--bg-surface-2);
 }
 
-// Badges: always bordered text chips.
 .badge {
   border: 1px solid currentColor;
 }
@@ -1016,7 +972,6 @@ textarea {
   border-style: dashed;
 }
 
-// Surfaces: cards get a visible edge so content groups are distinct.
 .card,
 .verification-shell .surface {
   border-color: var(--border);

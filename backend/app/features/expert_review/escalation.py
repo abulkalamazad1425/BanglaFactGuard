@@ -1,5 +1,3 @@
-"""Escalation of undecided claims to admin review: admin notification and the periodic review-limit sweep."""
-
 from __future__ import annotations
 
 import asyncio
@@ -32,9 +30,6 @@ def escalation_message(headline: str | None) -> str:
 
 
 async def notify_admins_of_escalation(session: AsyncSession, submission: Submission) -> int:
-    """One notification per active admin, linking to the claim in the admin
-    review queue. `notify_once` keys on (user, type, link), so a retried
-    transaction cannot duplicate it either."""
     admin_ids = (
         await session.execute(select(User.id).where(User.role == "admin", User.is_active.is_(True)))
     ).scalars().all()
@@ -77,8 +72,6 @@ def _service(session: AsyncSession):
 async def sweep_review_limits(
     session: AsyncSession, *, now: datetime | None = None, limit: int = 50
 ) -> int:
-    """Re-evaluates open claims that have exceeded a configured limit. Returns
-    how many changed status (finalized or escalated). Caller commits."""
     from app.features.expert_review.repository import VotingConfigRepository
 
     config = await VotingConfigRepository(session).get_or_create()
@@ -120,8 +113,6 @@ async def sweep_review_limits(
 
 
 class EscalationWorker:
-    """Runs `sweep_review_limits` every SWEEP_INTERVAL_SECONDS."""
-
     def __init__(self, session_factory=None, interval_s: float = SWEEP_INTERVAL_SECONDS):
         if session_factory is None:
             from app.db.engine import AsyncSessionLocal

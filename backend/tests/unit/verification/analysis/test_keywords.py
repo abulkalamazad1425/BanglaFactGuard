@@ -1,5 +1,3 @@
-"""Directional keyword coverage: are the claim's keywords in the evidence?"""
-
 from app.core.constants import MetricState
 from app.features.verification.analysis import keywords as kw
 from app.features.verification.analysis.keywords import keyword_coverage
@@ -27,7 +25,7 @@ def test_negation_and_numbers_are_weighted_units():
     units = {u.text: u.kind for u in keyword_coverage(claim, claim).units}
     assert units["10"] == "number" and units["দেয়নি"] == "negation"
     r = keyword_coverage(claim, "সরকার ১০ জনকে নিয়োগ দিয়েছে")
-    assert r.unmatched == ["দেয়নি"] and r.value == 4.5 / 6  # numbers and negation weigh 1.5
+    assert r.unmatched == ["দেয়নি"] and r.value == 4.5 / 6
 
 
 def test_states_for_missing_input_and_failure(monkeypatch):

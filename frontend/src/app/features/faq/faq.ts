@@ -6,12 +6,6 @@ export interface FaqTopic {
   question: string;
 }
 
-/**
- * Frequently asked questions about how results are produced. The answers
- * describe the implemented behaviour (see the backend's
- * analysis/headline_comparison.py, analysis/body_similarity.py and
- * photocard/claim_extraction.py) and must be kept in step with it.
- */
 @Component({
   selector: 'app-faq',
   standalone: true,

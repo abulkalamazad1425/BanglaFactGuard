@@ -1,12 +1,3 @@
-"""S11 - Date verification: the USER'S claimed date vs the report's own date.
-
-Compared as calendar days in Asia/Dhaka, only once the source is CONFIRMED.
-No claimed date -> not applicable (None); the report's date unknown ->
-INCOMPLETE (never MISMATCHED). The claimed date is the submission's
-`published_date`: typed by the user for a text claim, or read from the card
-by Gemini for a photo card. Independent of the headline verdict.
-"""
-
 from __future__ import annotations
 
 import structlog

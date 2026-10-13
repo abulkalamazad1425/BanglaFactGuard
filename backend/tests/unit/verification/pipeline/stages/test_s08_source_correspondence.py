@@ -1,6 +1,3 @@
-"""S08: did the outlet publish THIS report? A matching result that could not
-be read is INCOMPLETE - never NOT_FOUND, never replaced by a weaker stand-in."""
-
 from __future__ import annotations
 
 import pytest
@@ -39,7 +36,7 @@ async def test_the_best_corresponding_article_is_selected_not_rank_one():
     ctx = await correspond(make_context(CLAIM, articles=[unrelated, reworded, exact]))
     assert ctx.source_status == SourceStatus.CONFIRMED and ctx.top_article.url == exact.url
     assert ctx.analysis.metrics["headline_title_similarity"].value == pytest.approx(1.0)
-    assert ctx.analysis.search.attempted == 4  # search accounting is recorded
+    assert ctx.analysis.search.attempted == 4
 
 
 async def test_a_claim_quoting_the_kicker_selects_that_headline_line():
@@ -51,9 +48,9 @@ async def test_a_claim_quoting_the_kicker_selects_that_headline_line():
 
 
 @pytest.mark.parametrize("articles,search_title,status", [
-    ([], CLAIM, SourceStatus.INCOMPLETE),                                    # matching result blocked, nothing read
-    ([article(LOOSE, BODY, url="https://dailyinqilab.com/n/947665")], CLAIM, SourceStatus.INCOMPLETE),  # no weaker stand-in
-    ([article(CLAIM, BODY, url="https://dailynayadiganta.com/p/1")], CLAIM, SourceStatus.CONFIRMED),   # exact report was read
+    ([], CLAIM, SourceStatus.INCOMPLETE),
+    ([article(LOOSE, BODY, url="https://dailyinqilab.com/n/947665")], CLAIM, SourceStatus.INCOMPLETE),
+    ([article(CLAIM, BODY, url="https://dailynayadiganta.com/p/1")], CLAIM, SourceStatus.CONFIRMED),
     ([article(UNRELATED, url="https://prothomalo.com/a/9")], "ক্রিকেট দলের অধিনায়ক ঘোষণা", SourceStatus.NOT_FOUND),
 ])
 async def test_a_blocked_search_result_only_matters_when_it_matches_better(articles, search_title, status):
@@ -71,7 +68,7 @@ async def test_without_evidence_only_an_adequate_search_means_not_found(adequate
 async def test_a_failed_similarity_model_is_recorded_and_keywords_still_decide():
     ctx = await correspond(make_context(CLAIM, articles=[article(CLAIM, BODY)]), FakeEmbedder(fail=True))
     assert ctx.analysis.metrics["headline_title_similarity"].state == MetricState.UNAVAILABLE
-    assert ctx.stage_errors and ctx.source_status == SourceStatus.CONFIRMED  # strong title keyword coverage
+    assert ctx.stage_errors and ctx.source_status == SourceStatus.CONFIRMED
     untitled = await correspond(make_context(CLAIM, articles=[article(None, BODY)]))
     assert untitled.analysis.metrics["headline_title_similarity"].reason == "source article has no title"
 

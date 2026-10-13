@@ -30,7 +30,6 @@ class SubmissionSummary(BaseModel):
     headline_status: HeadlineAlterationStatus | None = None
     date_status: DateStatus | None = None
     published_date: date | None = None
-    # Expert-finalized only; None while the claim is still under review.
     overall_verdict: OverallVerdict | None = None
     prediction: str | None = None
     is_finalized: bool = False

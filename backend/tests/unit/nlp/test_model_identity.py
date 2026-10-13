@@ -1,6 +1,3 @@
-"""The legacy embedding setting name is read as LaBSE (the model that always
-ran) and keeps its historic identity; any other model gets a new one."""
-
 import pytest
 
 from app.features.nlp.model_identity import (

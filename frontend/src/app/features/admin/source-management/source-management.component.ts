@@ -28,7 +28,6 @@ export class SourceManagementComponent implements OnInit {
   page = signal(1);
   size = PAGE_SIZE;
 
-  // Drawer state
   drawerOpen = signal(false);
   isEditMode = signal(false);
   saving = signal(false);
@@ -78,7 +77,6 @@ export class SourceManagementComponent implements OnInit {
     this.loadSources();
   }
 
-  /* ─── Search (name, domain, URL or alias; server-side, before pagination) ─── */
   query = '';
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
   private request?: Subscription;
@@ -90,7 +88,6 @@ export class SourceManagementComponent implements OnInit {
     this.loadSources();
   }
 
-  /** Search as you type: ~300 ms after the last keystroke, first page. */
   onSearchInput(value: string) {
     if (this.searchTimer) clearTimeout(this.searchTimer);
     this.searchTimer = setTimeout(() => {
@@ -100,8 +97,6 @@ export class SourceManagementComponent implements OnInit {
   }
 
   loadSources() {
-    // Admins manage the full registry, including deactivated sources.
-    // A newer search supersedes any request still in flight.
     this.request?.unsubscribe();
     this.request = this.sourceService
       .listSources(undefined, this.page(), this.size, true, this.query)

@@ -47,7 +47,6 @@ export class VerifyFactsComponent {
     try {
       localStorage.setItem(DESC_KEY, this.hideDescriptions ? '1' : '0');
     } catch {
-      /* storage unavailable */
     }
   }
 }

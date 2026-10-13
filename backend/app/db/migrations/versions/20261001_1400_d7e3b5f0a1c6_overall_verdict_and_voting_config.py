@@ -1,27 +1,3 @@
-"""Add the Overall verdict dimension (FAKE | REAL | MISLEADING | ALTERED) that
-experts vote on for EVERY submission type, independent of the (Source,
-Content, Date) structured vote that additionally exists for SOURCE_BASED /
-PHOTO_CARD claims:
-
-    expert_reviews_v2.vote_overall_verdict / ai_overall_verdict — NOT NULL,
-        all types. vote_source_status / ai_source_status are relaxed to
-        nullable since MULTIMODAL votes never set them.
-    verification_results_v2.overall_verdict — nullable; written only once
-        expert review finalizes a SOURCE_BASED/PHOTO_CARD claim.
-    multimodal_analysis.expert_overall_verdict — nullable; written only once
-        expert review finalizes a MULTIMODAL claim (which, before this
-        migration, had no expert-review step at all).
-
-Also adds voting_config, a single-row admin-configurable table holding
-min_expert_votes — replacing the previously-fixed AUTH_MIN_EXPERT_VOTES_TO_FINALIZE
-setting so the threshold is no longer hard-coded.
-
-No AI pipeline code changes accompany this migration — the derivation used to
-backfill ai_overall_verdict below mirrors
-app/features/expert_review/overall_verdict.py, which is a presentation/
-weighting helper only, not part of the pipeline.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -43,7 +19,6 @@ def upgrade() -> None:
     bind = op.get_bind()
     OVERALL_VERDICT_ENUM.create(bind, checkfirst=True)
 
-    # ─── expert_reviews_v2 ──────────────────────────────────────────────
     op.add_column(
         "expert_reviews_v2",
         sa.Column(
@@ -84,7 +59,6 @@ def upgrade() -> None:
     op.alter_column("expert_reviews_v2", "ai_overall_verdict", nullable=False)
     op.alter_column("expert_reviews_v2", "vote_overall_verdict", nullable=False)
 
-    # ─── verification_results_v2 ───────────────────────────────────────
     op.add_column(
         "verification_results_v2",
         sa.Column(
@@ -99,8 +73,6 @@ def upgrade() -> None:
         ["overall_verdict"],
         unique=False,
     )
-    # Only backfill claims that actually went through finalization — a claim
-    # still mid-review should not retroactively appear "expert verified".
     op.execute(
         """
         UPDATE verification_results_v2 vr
@@ -116,10 +88,6 @@ def upgrade() -> None:
         """
     )
 
-    # ─── multimodal_analysis ────────────────────────────────────────────
-    # No backfill: every existing row was finalized synchronously with no
-    # expert review at all (see multimodal/service.py pre-cutover), so none
-    # of them have actually been expert-verified.
     op.add_column(
         "multimodal_analysis",
         sa.Column(
@@ -129,7 +97,6 @@ def upgrade() -> None:
         ),
     )
 
-    # ─── voting_config (admin-configurable min_expert_votes) ───────────
     op.create_table(
         "voting_config",
         sa.Column("min_expert_votes", sa.Integer(), nullable=False),

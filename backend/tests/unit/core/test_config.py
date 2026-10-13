@@ -1,6 +1,3 @@
-"""Settings rules that protect behaviour: the Gemini request budget, key
-rotation order, and `.env.example` staying in sync with the settings."""
-
 import re
 from pathlib import Path
 

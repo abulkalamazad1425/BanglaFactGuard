@@ -11,6 +11,6 @@ def test_host_must_be_an_allowed_domain_or_its_subdomain():
     allowed = ["jugantor.com"]
     assert is_allowed_host("https://www.jugantor.com/a/1", allowed)
     assert is_allowed_host("m.jugantor.com", allowed)
-    assert not is_allowed_host("jugantor.com.evil.net", allowed)   # deceptive suffix
+    assert not is_allowed_host("jugantor.com.evil.net", allowed)
     assert not is_allowed_host("notjugantor.com", allowed)
     assert not is_allowed_host("", allowed)

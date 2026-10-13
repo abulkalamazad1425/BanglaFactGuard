@@ -1,5 +1,3 @@
-"""Notification queries are always scoped to their recipient."""
-
 from datetime import datetime, timedelta, timezone
 
 from app.features.notifications.models import Notification
@@ -23,7 +21,7 @@ async def test_listing_counting_and_marking_never_cross_users(session):
     assert [n.title for n in await repo.list_for_user(me.id, limit=1, offset=1, unread_only=True)] == ["t0"]
     assert await repo.count_unread(me.id) == 2
 
-    await repo.mark_read(me.id, notes[3].id)  # someone else's: no effect
+    await repo.mark_read(me.id, notes[3].id)
     await repo.mark_read(me.id, notes[0].id)
     assert await repo.count_unread(me.id) == 1 and await repo.count_unread(other.id) == 1
     await repo.mark_all_read(me.id)

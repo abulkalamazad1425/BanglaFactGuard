@@ -63,12 +63,6 @@ def upgrade() -> None:
         ),
     )
 
-    # Best-effort backfill from the old flat columns.
-    #   NOT_FOUND_IN_CLAIMED_SOURCE -> source NOT_FOUND, content/date N/A
-    #   TRUE                        -> CONFIRMED / MATCHED / MATCHED
-    #   FALSE, PARTIALLY_TRUE       -> CONFIRMED / ALTERED / MATCHED (lossy:
-    #       the old model could not distinguish "content altered" from
-    #       "date mismatched" as independent axes)
     op.execute(
         """
         UPDATE expert_reviews_v2

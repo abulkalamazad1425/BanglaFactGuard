@@ -1,40 +1,4 @@
-﻿"""
-Pipeline orchestrator - runs the verification stages in order over one
-shared, observable, fault-tolerant `PipelineContext`.
-
-## Responsibilities
-
-1. **Stage sequencing**: S01 -> S02 -> ... -> S13, passing the context through.
-2. **Reuse short-circuit**: if S02 sets `context.cache_hit`, every later
-   stage is skipped; the service layer copies the reused automated result.
-3. **Per-stage timing**: recorded in `context.stage_timings` (persisted with
-   the result as `analysis_details.timings`).
-4. **Non-fatal fault isolation**: a failing non-critical stage is recorded in
-   `context.stage_errors` and the run continues with degraded data; the
-   affected dimension then reports an explicit unavailable/incomplete state.
-5. **Fatal error handling**: a failing CRITICAL stage marks the submission
-   FAILED and raises `PipelineError` (the job retries or fails visibly).
-
-## Stage criticality
-
-| Stage | Critical? | On failure |
-|-------|-----------|------------|
-| S01 Normalizer | yes | no hash, no search |
-| S02 Reuse lookup | no | run the full pipeline |
-| S03 Query generator | no | no queries -> search INCOMPLETE |
-| S04 Source search | no | failed calls -> source INCOMPLETE (never NOT_FOUND) |
-| S05 Evidence retrieval | no | fetch failures -> source INCOMPLETE |
-| S06 Article extractor | no | extraction failures -> source INCOMPLETE |
-| S07 Evidence ranker | no | no ranked article |
-| S08 Source correspondence | yes | the source decision every later stage depends on |
-| S09 Headline alteration | no | no verdict; headline status MODEL_UNAVAILABLE |
-| S10 Body similarity | no | body scores unavailable (never 0) |
-| S11 Date verification | no | no date status |
-| S12 Result assembly | yes | without it there is no coherent result |
-| S13 Result persistence | yes | the result must be stored |
-"""
-
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import time
 from typing import TYPE_CHECKING
@@ -80,12 +44,6 @@ _POST_CACHE_STAGES: frozenset[PipelineStageID] = frozenset(
 
 
 class PipelineOrchestrator:
-    """Executes the verification stages (S01-S13) in sequence.
-
-    Stages are injected (see `factory.build_verification_stages`), so tests
-    can replace any of them without touching the orchestration logic.
-    """
-
     def __init__(
         self,
         stages: list[PipelineStage],
@@ -97,8 +55,6 @@ class PipelineOrchestrator:
         self.submission_repo = submission_repo
 
     async def run(self, context: PipelineContext) -> PipelineContext:
-        """Run every stage for one verification request. Raises
-        `PipelineError` when a critical stage fails."""
         log = logger.bind(
             submission_id=str(context.submission_id) if context.submission_id else "pending",
             request_id=str(context.request_id),
@@ -219,17 +175,6 @@ class PipelineOrchestrator:
         return context
 
     async def _handle_fatal_failure(self, context: PipelineContext) -> None:
-        """
-        Mark the submission as FAILED in the database after a critical stage error.
-
-        This is a best-effort operation — if the DB call itself fails, the
-        exception is swallowed and only logged, because we are already
-        in an error-handling path.
-
-        Args:
-            context: The pipeline context with `submission_id` set (may be None
-                     if failure occurred in Stage 1 before DB insert).
-        """
         if context.submission_id is None:
             return
         try:

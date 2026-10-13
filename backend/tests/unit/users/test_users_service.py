@@ -1,6 +1,3 @@
-"""My Submissions (owner only, filters before pagination, the same display
-rules as the result page), statistics and the profile's live total."""
-
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
@@ -32,7 +29,6 @@ async def test_my_submissions_are_private_and_filtered_before_paging(session):
     review, _ = await mine(session, me, "বন্যায় ক্ষতিগ্রস্ত কৃষক", SubmissionStatus.EXPERT_REVIEW)
     running, _ = await mine(session, me, "ঢাকায় বাস ভাড়া বাড়ল", SubmissionStatus.PROCESSING, kind=SubmissionType.PHOTO_CARD)
     failed, _ = await mine(session, me, "নির্বাচন কমিশনের বৈঠক", SubmissionStatus.FAILED)
-    # a re-submitted copy of a finalized claim: stored EXPERT_REVIEW, shown (and filtered) as final
     dup, _ = await mine(session, me, "ঢাকায় মেট্রোরেল চালু", SubmissionStatus.EXPERT_REVIEW, duplicate_of=final.id)
     await mine(session, other, "ঢাকায় অন্য কারও দাবি", SubmissionStatus.FINALIZED)
     svc = UserAccountService(session)
@@ -46,7 +42,7 @@ async def test_my_submissions_are_private_and_filtered_before_paging(session):
     assert await ids(state="in_progress") == {str(running.id)}
     assert await ids(state="failed") == {str(failed.id)}
     assert await ids(submission_type=SubmissionType.PHOTO_CARD) == {str(running.id)}
-    assert await ids(q="ঢাকায়") == {str(final.id), str(running.id), str(dup.id)}  # never another user's
+    assert await ids(q="ঢাকায়") == {str(final.id), str(running.id), str(dup.id)}
     assert await ids(q="ঢাকায়", state="in_progress") == {str(running.id)}
     assert len(await svc.my_submissions(me, limit=2, offset=0)) == 2
 
@@ -70,7 +66,7 @@ async def test_each_row_shows_ai_findings_and_only_a_final_decision(session):
     assert (f.is_finalized, f.overall_verdict, f.headline_status) == (True, OverallVerdict.FAKE, HeadlineAlterationStatus.ALTERED)
     o = rows[str(open_.id)]
     assert (o.is_finalized, o.overall_verdict, o.headline_status) == (False, None, HeadlineAlterationStatus.EXACT_MATCHED)
-    assert rows[str(legacy.id)].content_status is None  # an old content verdict is not a headline verdict
+    assert rows[str(legacy.id)].content_status is None
     m = rows[str(mm.id)]
     assert (m.prediction, m.is_finalized, m.overall_verdict) == (MultimodalPredictionLabel.NON_FAKE, False, None)
     assert rows[str(card.id)].image_url == "https://img/k.png"
@@ -82,7 +78,7 @@ async def test_each_row_shows_ai_findings_and_only_a_final_decision(session):
 
 
 async def test_statistics_and_the_profile_total_are_counted_live(session):
-    me = await add_user(session, total_submissions=1)  # the drifted cached counter
+    me = await add_user(session, total_submissions=1)
     await mine(session, me, "এক", SubmissionStatus.EXPERT_REVIEW)
     await mine(session, me, "দুই", SubmissionStatus.EXPERT_REVIEW, content_status=ContentStatus.ALTERED)
     await mine(session, me, "তিন", SubmissionStatus.EXPERT_REVIEW, source_status=SourceStatus.NOT_FOUND)

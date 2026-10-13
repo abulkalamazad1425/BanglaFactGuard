@@ -113,8 +113,6 @@ async def verify_claim_async(
         ) from exc
 
     if not cached:
-        # The job row was committed with the submission; this only wakes the
-        # worker so it starts without waiting for its next poll.
         worker = getattr(http_request.app.state, "job_worker", None)
         if worker is not None:
             worker.wake()

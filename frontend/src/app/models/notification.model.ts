@@ -1,8 +1,3 @@
-// ============================================================
-// Notification Models — synced with backend notifications/router.py
-// ============================================================
-
-// ── Single notification from GET /notifications ──────────────────────
 export interface NotificationItem {
   id: string;
   title: string;
@@ -13,7 +8,6 @@ export interface NotificationItem {
   created_at: string;
 }
 
-// ── Count from GET /notifications/count ──────────────────────────────
 export interface UnreadCountResponse {
   unread_count: number;
 }

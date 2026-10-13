@@ -5,7 +5,6 @@ import { authGuard } from '../core/guards/auth.guard';
 import { roleGuard } from '../core/guards/role.guard';
 
 export const APP_ROUTES: Routes = [
-  // ── Auth Layout ──────────────────────────────────────────────
   {
     path: 'auth',
     component: AuthLayoutComponent,
@@ -30,12 +29,10 @@ export const APP_ROUTES: Routes = [
     ],
   },
 
-  // ── Main Layout ──────────────────────────────────────────────
   {
     path: '',
     component: MainLayoutComponent,
     children: [
-      // Public
       {
         path: '',
         loadComponent: () => import('../features/home/home').then((m) => m.HomeComponent),
@@ -72,7 +69,6 @@ export const APP_ROUTES: Routes = [
         loadComponent: () => import('../features/about/about').then((m) => m.AboutComponent),
       },
 
-      // Authenticated
       {
         path: 'history',
         canActivate: [authGuard],
@@ -98,7 +94,6 @@ export const APP_ROUTES: Routes = [
           ),
       },
 
-      // Expert
       {
         path: 'expert',
         canActivate: [authGuard, roleGuard('expert')],
@@ -129,7 +124,6 @@ export const APP_ROUTES: Routes = [
         ],
       },
 
-      // Admin
       {
         path: 'admin',
         canActivate: [authGuard, roleGuard('admin')],
@@ -169,7 +163,6 @@ export const APP_ROUTES: Routes = [
                 (m) => m.CredibilityTiersComponent,
               ),
           },
-          // Admin expert queue: escalated claims to decide, other claims view-only.
           {
             path: 'review-queue',
             loadComponent: () =>
@@ -187,7 +180,6 @@ export const APP_ROUTES: Routes = [
         ],
       },
 
-      // 404
       {
         path: '**',
         loadComponent: () =>

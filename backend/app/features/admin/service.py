@@ -88,8 +88,6 @@ class AdminService:
     async def list_experts(
         self, *, limit: int = 50, offset: int = 0, q: str | None = None
     ) -> list[ExpertResponse]:
-        """Expert accounts, newest first. `q` searches name, email and
-        expertise area (best matches first) before pagination."""
         search = KeywordSearch(
             q, [User.full_name, User.email, ExpertProfile.area_of_expertise],
             headline_column=User.full_name,
@@ -209,7 +207,6 @@ class AdminService:
         return AdminStatsResponse(
             total_submissions=await count(),
             submissions_last_30_days=await count(Submission.created_at >= thirty_days_ago),
-            # Claims open for expert voting (previously a count of vote rows).
             pending_expert_reviews=await count(Submission.status == SubmissionStatus.EXPERT_REVIEW, original),
             escalated_claims=await count(Submission.status == SubmissionStatus.ESCALATED, original),
             total_experts=await self._users.count_by_role("expert"),
@@ -266,8 +263,6 @@ class AdminService:
         lo = updates.get("min_accuracy_pct", tier.min_accuracy_pct)
         hi = updates.get("max_accuracy_pct", tier.max_accuracy_pct)
         _check_range(lo, hi)
-        # Deactivating is checked too: the remaining active tiers must still
-        # cover every accuracy%.
         final = await self._active_ranges(excluding={tier_id})
         if updates.get("is_active", tier.is_active):
             final.append((lo, hi))
@@ -294,9 +289,6 @@ class AdminService:
     async def replace_credibility_tiers(
         self, req: CredibilityWeightTierSetRequest
     ) -> list[CredibilityWeightTierResponse]:
-        """Save the whole tier configuration at once. Only the final set is
-        validated, so tiers can be split, merged or re-bounded in one save;
-        nothing is written unless the final active tiers cover 0-100%."""
         existing = {
             t.id: t for t in (await self._session.execute(select(CredibilityWeightTier))).scalars().all()
         }
@@ -355,7 +347,6 @@ def _check_range(min_pct: float, max_pct: float) -> None:
 
 
 def _check_tiling(active: list[tuple[float, float]]) -> None:
-    """The active tiers must cover every accuracy% from 0 to 100 exactly once."""
     if not active:
         raise DomainValidationError(message="At least one active tier must cover 0% to 100%.")
     ranges = sorted(active)

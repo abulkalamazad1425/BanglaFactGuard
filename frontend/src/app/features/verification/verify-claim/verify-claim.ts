@@ -8,7 +8,6 @@ import {
   Validators,
 } from '@angular/forms';
 
-/** Like minLength, but whitespace never counts (the API strips it). */
 export function trimmedMinLength(min: number) {
   return (c: AbstractControl): ValidationErrors | null =>
     String(c.value ?? '').trim().length >= min ? null : { trimmedMinLength: { min } };
@@ -44,7 +43,6 @@ export class VerifyClaimComponent implements OnInit, OnDestroy {
   private readonly svc = inject(VerificationService);
   private readonly sourceSvc = inject(SourceService);
   readonly pending = inject(PendingVerificationsService);
-  /** Signed-in and anonymous users are told different next steps. */
   readonly signedIn = inject(AuthService).isLoggedIn;
   readonly followUp = verificationFollowUp;
 
@@ -52,9 +50,7 @@ export class VerifyClaimComponent implements OnInit, OnDestroy {
   error: string | null = null;
   result: VerificationResponse | null = null;
 
-  /** Set when this particular result was reused rather than freshly computed. */
   servedFromCache = false;
-  /** Id of the claim currently being verified, while we wait on it. */
   pendingSubmissionId: string | null = null;
   pendingStatus: SubmissionStatus | null = null;
   pendingHeadline = '';
@@ -68,9 +64,6 @@ export class VerifyClaimComponent implements OnInit, OnDestroy {
   private pollTimer: ReturnType<typeof setInterval> | null = null;
 
   form = this.fb.group({
-    // Same rules as the API (VerificationRequest): headline >= 5 non-blank
-    // characters; claimed outlet, article text and date optional. Without an
-    // outlet the claim is checked against the active verified sources.
     headline: ['', [Validators.required, trimmedMinLength(5), Validators.maxLength(2000)]],
     claimed_source_text: [''],
     body_text: [''],
@@ -84,7 +77,6 @@ export class VerifyClaimComponent implements OnInit, OnDestroy {
   loadSources(): void {
     this.sourcesLoading = true;
     this.sourcesError = false;
-    // Only active verified sources are ever eligible for selection here.
     this.sourceSvc.listSources(undefined, 1, 100).subscribe({
       next: (res) => {
         this.sources = [...res.items].sort((a, b) =>
@@ -138,14 +130,11 @@ export class VerifyClaimComponent implements OnInit, OnDestroy {
         this.pendingStatus = queued.status;
 
         if (queued.cached) {
-          // Already verified before — the stored verdict is available now.
           this.servedFromCache = true;
           this.loadResult(queued.submission_id);
           return;
         }
 
-        // Registered and running on the server. Follow it here for anyone who
-        // stays, and hand it to the tracker so leaving the page is safe.
         this.pending.track(queued.submission_id, this.pendingHeadline, v.claimed_source_text ?? '');
         this.startPolling(queued.submission_id);
       },
@@ -158,7 +147,6 @@ export class VerifyClaimComponent implements OnInit, OnDestroy {
     });
   }
 
-  /** Watch a queued verification while the user is still on this page. */
   private startPolling(submissionId: string): void {
     this.stopPolling();
     this.pollTimer = setInterval(() => {
@@ -186,7 +174,6 @@ export class VerifyClaimComponent implements OnInit, OnDestroy {
             this.pending.dismiss(submissionId);
           }
         },
-        // Transient poll failures resolve themselves on the next tick.
         error: () => undefined,
       });
     }, 4000);
@@ -214,7 +201,6 @@ export class VerifyClaimComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    // The tracker keeps following it app-wide; this page just stops its own.
     this.stopPolling();
   }
 
@@ -227,10 +213,6 @@ export class VerifyClaimComponent implements OnInit, OnDestroy {
     this.stopPolling();
   }
 
-  /* ─── Template helpers ─── */
-
-  /** Ring/accent colour for the overall verdict — content status wins once
-   *  the source is confirmed; a date mismatch never changes this colour. */
   verdictColor(
     sourceStatus: SourceStatus | null | undefined,
     contentStatus?: ContentStatus | null,
@@ -242,7 +224,6 @@ export class VerifyClaimComponent implements OnInit, OnDestroy {
   }
 
   getDashOffset(confidence: number): number {
-    // Circumference of r=45 circle ≈ 282.7
     return 283 - 283 * (confidence || 0);
   }
 

@@ -1,24 +1,3 @@
-"""
-Photo-card verification - image only, accepted fast, processed in the background.
-
-Flow
-----
-1. ``accept_upload`` validates and durably stores the image, creates a
-   PHOTO_CARD submission (owner; no headline, source or date yet), its
-   extraction record holding the image key, and its durable job row in ONE
-   transaction, and returns. Nothing slow runs on the request.
-2. ``process_submission`` is what the job worker runs, with its own session:
-   load the stored ORIGINAL image -> `PhotocardClaimExtractor` (Gemini with
-   the active verified sources and their aliases, at most 9 requests) ->
-   the extracted headline, verified source and printed date become the
-   submission's claim -> the shared S01-S13 pipeline, HEADLINE_ONLY.
-
-When every Gemini request fails, or a successful response lacks a headline
-or an active verified source, the submission is FAILED with a user-facing
-reason and verification never runs. There is no OCR and no fallback, and no
-claim is fabricated.
-"""
-
 from __future__ import annotations
 
 import time
@@ -62,8 +41,6 @@ logger = structlog.get_logger(__name__)
 
 
 class PhotoCardService:
-    """Unattended extraction and verification for photo-card submissions."""
-
     def __init__(
         self,
         *,
@@ -92,8 +69,6 @@ class PhotoCardService:
         self.http_client = http_client
         self.reuse = ResultReuseService(submission_repo, result_repo)
 
-    # ── 1. accept (fast path) ────────────────────────────────────────────
-
     async def accept_upload(
         self,
         *,
@@ -102,28 +77,21 @@ class PhotoCardService:
         submitter_id: uuid.UUID | None = None,
         enqueue: bool = True,
     ) -> Submission:
-        """Durably store the image and persist the submission + job. The
-        caller acknowledges (HTTP 202) only after this returns."""
         submission_id = uuid.uuid4()
         object_key = self.storage.build_object_key(submission_id, original_filename)
         if not await self.storage.upload(image_bytes, object_key):
-            # The job reads the image back from storage, so an unstored image
-            # cannot be accepted.
             raise ImageStorageUnavailableError()
 
         submission = await self.submission_repo.create(
             Submission(
                 id=submission_id,
                 submission_type=SubmissionType.PHOTO_CARD,
-                # Headline, claimed source and date are read from the card.
                 headline=None,
                 body_text=None,
                 claimed_source_text=None,
                 claimed_source_id=None,
                 published_date=None,
                 submitter_id=submitter_id,
-                # Provisional, unique per submission: never collides with a
-                # real claim identity. Replaced after extraction.
                 content_hash=f"pending:{submission_id.hex}",
                 status=SubmissionStatus.PENDING,
                 processing_phase=JobPhase.QUEUED.value,
@@ -160,16 +128,7 @@ class PhotoCardService:
             queued_at=submission.created_at,
         )
 
-    # ── 2. process (job body) ────────────────────────────────────────────
-
     async def process_submission(self, submission_id: uuid.UUID) -> None:
-        """Extraction -> shared pipeline for a stored card.
-
-        Raises ``PermanentJobError`` for failures retrying cannot fix
-        (including an exhausted Gemini budget: the job is never re-run, so a
-        card never costs more than 9 Gemini requests). Any other exception is
-        retryable and is handled by the worker.
-        """
         session = self.submission_repo.session
         submission = await self.submission_repo.get_by_id(submission_id)
         if submission.submission_type != SubmissionType.PHOTO_CARD:
@@ -179,7 +138,7 @@ class PhotoCardService:
             SubmissionStatus.FINALIZED,
             SubmissionStatus.ESCALATED,
         ):
-            return  # already processed: idempotent re-run
+            return
         record = await self.extraction_repo.get_by_submission_id(submission_id)
         if record is None or not record.image_object_key:
             raise PermanentJobError("The uploaded card image is missing.")
@@ -192,9 +151,6 @@ class PhotoCardService:
         preprocessing_ms: dict[str, int] = {}
         source_reason: str | None = None
         if record.status == STATUS_SUCCEEDED and submission.headline:
-            # A retry after a crash past extraction: never call Gemini twice.
-            # A card without a recognised outlet resumes in verified-sources
-            # mode (its claimed source stays empty).
             if submission.claimed_source_id:
                 canonical = submission.claimed_source_text or ""
                 source_reason = source_policy.REASON_DETECTED
@@ -206,7 +162,7 @@ class PhotoCardService:
             image_bytes = await self.storage.download(record.image_object_key)
             preprocessing_ms["image_download"] = int((time.perf_counter() - started) * 1000)
             if not image_bytes:
-                raise RuntimeError("stored card image could not be read back")  # retryable
+                raise RuntimeError("stored card image could not be read back")
 
             extraction = await PhotocardClaimExtractor(
                 source_repo=self.source_repo, http_client=self.http_client,
@@ -223,8 +179,6 @@ class PhotoCardService:
                     details={"status": extraction.status, "code": extraction.failure_code},
                 )
 
-            # The extracted values ARE the claim - one representation, used
-            # exactly as a typed claim's headline / outlet / date are.
             source = extraction.source
             submission.headline = extraction.headline[:2000]
             submission.published_date = extraction.published_date
@@ -234,8 +188,6 @@ class PhotoCardService:
                 submission.claimed_source_id = source.id
                 submission.claimed_source_text = canonical[:255]
             else:
-                # No usable outlet: verified-sources mode. The raw outlet text
-                # stays in the extraction record as provenance only.
                 canonical = ""
                 source_reason = extraction.source_reason
                 submission.claimed_source_id = None
@@ -265,8 +217,6 @@ class PhotoCardService:
         context = await orchestrator.run(context)
 
         if context.cache_hit and context.reused_from_submission_id:
-            # Copy the identical, complete automated result onto THIS
-            # submission; the card, its image and its owner are untouched.
             source_sub = await self.submission_repo.get_by_id(context.reused_from_submission_id)
             source_result = await self.result_repo.get_by_submission_id(source_sub.id)
             if source_result is not None and source_sub.id != submission.id:
@@ -294,7 +244,6 @@ class PhotoCardService:
         record.extraction_details = extraction.details
 
     def _build_stages(self) -> list:
-        """Shared retrieval with the photo-card-only content comparison policy."""
         return build_photocard_stages(
             submission_repo=self.submission_repo,
             result_repo=self.result_repo,
@@ -307,12 +256,7 @@ class PhotoCardService:
             http_client=self.http_client,
         )
 
-    # ── retrieval ────────────────────────────────────────────────────────
-
     async def get_result(self, submission_id: uuid.UUID) -> PhotoCardResultResponse | None:
-        """Current state by submission id: a pending/processing/failed card
-        renders from the submission row; a completed one adds the saved
-        verification (identical to what was shown right after it finished)."""
         submission = await self.submission_repo.get_by_id_or_none(submission_id)
         if submission is None or submission.submission_type != SubmissionType.PHOTO_CARD:
             return None
@@ -368,7 +312,6 @@ _ATTEMPT_MESSAGES = {
 
 
 def extraction_failures(details: dict | None) -> list[str]:
-    """Short, user-presentable reasons for failed reading attempts."""
     if not details:
         return []
     out: list[str] = []
@@ -383,7 +326,6 @@ def extraction_failures(details: dict | None) -> list[str]:
 
 
 def _detected_source_text(details: dict | None) -> str | None:
-    """The outlet text Gemini saw on the card (provenance only)."""
     response = (details or {}).get("response") or {}
     value = response.get("source_evidence") if isinstance(response, dict) else None
     return value.strip()[:255] if isinstance(value, str) and value.strip() else None

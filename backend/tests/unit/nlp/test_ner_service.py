@@ -1,7 +1,3 @@
-"""NER audit: a checkpoint that fails the label or smoke audit is reported
-UNAVAILABLE, never as "no entities". No real checkpoint is loaded; nothing
-here says anything about BanglaTag's accuracy."""
-
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -46,13 +42,13 @@ async def test_a_working_checkpoint_is_usable_and_normalises_surfaces(monkeypatc
     install(monkeypatch, fake_pipe(BIO, [
         {"entity_group": "PER", "word": "▁শেখ হাসিনা", "score": 0.9},
         {"entity_group": "LOC", "word": "ঢাকায়", "score": 0.9},
-        {"entity_group": "LOC", "word": "ঢাকায়", "score": 0.8},   # duplicate
-        {"entity_group": "MISC", "word": "অন্য", "score": 0.9},   # not a kept type
-        {"entity": "B-PER", "word": "##ক", "score": 0.9},         # sub-word fragment
+        {"entity_group": "LOC", "word": "ঢাকায়", "score": 0.8},
+        {"entity_group": "MISC", "word": "অন্য", "score": 0.9},
+        {"entity": "B-PER", "word": "##ক", "score": 0.9},
     ]))
     svc = NERService()
     await svc.load()
-    await svc.load()  # once
+    await svc.load()
     assert svc.usable and svc.audit["usable"] and svc.audit["accuracy_validated"] is False
     res = await svc.extract_mentions(SENTENCE)
     assert res.available and [(m.text, m.type) for m in res.mentions] == [("শেখ হাসিনা", "PER"), ("ঢাকায়", "LOC")]
@@ -60,8 +56,8 @@ async def test_a_working_checkpoint_is_usable_and_normalises_surfaces(monkeypatc
 
 
 @pytest.mark.parametrize("id2label,entities", [
-    ({0: "LABEL_0", 1: "LABEL_1"}, []),   # a pretraining checkpoint: no NER head
-    (BIO, []),                           # right labels, but tags nothing in the smoke sentence
+    ({0: "LABEL_0", 1: "LABEL_1"}, []),
+    (BIO, []),
 ])
 async def test_a_checkpoint_failing_its_audit_is_unavailable_not_empty(monkeypatch, id2label, entities):
     install(monkeypatch, fake_pipe(id2label, entities))
@@ -79,7 +75,7 @@ async def test_long_text_is_chunked_and_inference_errors_are_unavailable(monkeyp
     await svc.load()
     long_text = " ".join(f"বাক্য নম্বর {i} এখানে আছে।" for i in range(200))
     await svc.extract_mentions(long_text)
-    assert len(pipe.seen) > 2 and "199" in pipe.seen[-1]  # the tail was tagged too, not truncated
+    assert len(pipe.seen) > 2 and "199" in pipe.seen[-1]
     NERService._pipeline = fake_pipe(BIO, [], error=RuntimeError("cuda"))
     assert (await svc.extract_mentions(SENTENCE)).available is False
 

@@ -1,19 +1,3 @@
-// ============================================================
-// One table of user-facing status words, shared by every page.
-// Mirrors backend app/shared/status_labels.py and extension/src/shared.js —
-// stored API values (CONFIRMED, MISMATCHED, FAKE, …) never change.
-//
-// Display rules (unit-tested in status-labels.spec.ts):
-//  * "Relevant article from claimed source" is Found / Not Found. Found is
-//    shown only on the detailed result page; summaries, cards and the
-//    extension show only "Not found in claimed source" (and then no headline,
-//    date or body findings).
-//  * Headline: Exact Matched / Meaning Preserved / Altered.
-//  * Date: Matched / Mismatched — only when the submitter claimed a date.
-//  * AI decision (text & image model): Likely Fake / Likely Real — never the
-//    expert final verdict.
-// ============================================================
-
 import {
   DateStatus,
   HeadlineAlterationStatus,
@@ -40,7 +24,6 @@ export const VERIFIED_SOURCE_EXPLANATIONS: Record<SourceStatus, string> = {
     'source carried this report.',
 };
 
-/** Why a claim was checked against the verified sources instead of one outlet. */
 export const SOURCE_RESOLUTION_NOTES: Record<string, string> = {
   SOURCE_NOT_SUPPLIED:
     'No claimed outlet was selected, so the active verified news sources were searched.',
@@ -102,7 +85,6 @@ export const OVERALL_LABELS: Record<OverallVerdict, string> = {
   ALTERED: 'Altered',
 };
 
-/** The text & image model's call: `FAKE` -> Likely Fake, any non-fake class -> Likely Real. */
 export function aiDecisionLabel(prediction?: string | null): string | null {
   if (!prediction) return null;
   const value = prediction.toUpperCase();
@@ -110,7 +92,6 @@ export function aiDecisionLabel(prediction?: string | null): string | null {
   return 'Likely Real';
 }
 
-/** A short finding line for a card or summary (never "Found"). */
 export interface FindingChip {
   label: string;
   value: string;
@@ -155,9 +136,6 @@ export function preliminaryChips(f: {
   return chips;
 }
 
-/** What happens after a claim is accepted — told differently to a signed-in
- *  user (notified, listed in My Submissions) and an anonymous one (nothing is
- *  saved to an account, so the progress link is the way back). */
 export function verificationFollowUp(
   signedIn: boolean,
   where: 'accepted' | 'progress-page' = 'accepted',

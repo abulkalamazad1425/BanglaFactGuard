@@ -19,7 +19,6 @@ import './style.css';
 
 async function call(type, payload = {}) {
   if (type === 'capture' || type === 'selection') {
-    // Bind capture to the panel's window, even if another Chrome window gains focus.
     const currentWindow = await chrome.windows.getCurrent();
     payload = { ...payload, windowId: currentWindow.id };
   }
@@ -159,7 +158,7 @@ function App() {
   const activity = paginate(activityMatches, activityPage);
   const showActivityPage = (page) => {
     setActivityPage(page);
-    window.scrollTo({ top: 0 }); // the pager sits below the list
+    window.scrollTo({ top: 0 });
   };
   const owner = ownerOf({ user: state.user }),
     enabled = state.settings.enabled,

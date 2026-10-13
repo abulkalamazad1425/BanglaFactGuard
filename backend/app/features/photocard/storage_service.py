@@ -1,16 +1,3 @@
-"""
-MinIO object storage for uploaded photo cards.
-
-Kept separate from the multimodal storage service so photo-card images land
-under their own ``photocard/`` prefix and can be retained, expired or audited
-independently of multimodal submission images.
-
-Failures are reported to the caller (False / None) rather than raised. The
-caller decides what they mean: an image that cannot be stored is not accepted
-(`ImageStorageUnavailableError`, 503), because the background job reads the
-card back from storage; a missing preview URL only hides the thumbnail.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -43,8 +30,6 @@ _CONTENT_TYPES = {
 
 
 class PhotoCardStorageService:
-    """Stores photo-card images and issues short-lived preview URLs."""
-
     def __init__(self) -> None:
         config = _SETTINGS.minio
         self._client = Minio(
@@ -72,7 +57,6 @@ class PhotoCardStorageService:
     async def upload(
         self, image_bytes: bytes, object_key: str
     ) -> bool:
-        """Upload the card. Returns ``False`` when storage is unavailable."""
         content_type = _infer_content_type(object_key)
         loop = asyncio.get_running_loop()
         try:
@@ -99,8 +83,6 @@ class PhotoCardStorageService:
             return False
 
     async def download(self, object_key: str) -> bytes | None:
-        """Fetch the stored card. The background job reads the image from
-        here rather than from the (long gone) upload request."""
         loop = asyncio.get_running_loop()
 
         def _get() -> bytes:
@@ -118,7 +100,6 @@ class PhotoCardStorageService:
             return None
 
     async def get_presigned_url(self, object_key: str) -> str | None:
-        """Short-lived preview URL, or ``None`` when it cannot be issued."""
         if not object_key:
             return None
         loop = asyncio.get_running_loop()

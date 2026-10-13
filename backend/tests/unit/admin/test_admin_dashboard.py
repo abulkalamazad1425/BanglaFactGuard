@@ -1,5 +1,3 @@
-"""The admin home page: what needs action now, recent changes and expert activity."""
-
 from __future__ import annotations
 
 from datetime import datetime, timezone

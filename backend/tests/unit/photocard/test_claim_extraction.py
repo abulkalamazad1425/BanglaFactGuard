@@ -1,7 +1,3 @@
-"""The card's values become the claim: headline, an ACTIVE verified source
-(or verified-sources mode) and the printed date. An API failure and a card
-without a usable headline are distinct outcomes, and neither is retried."""
-
 from __future__ import annotations
 
 import uuid
@@ -65,7 +61,7 @@ async def test_card_values_become_the_claim_and_only_active_sources_are_offered(
     gemini = Gemini(gemini_body())
     result = await extract(gemini, repo(source(), inactive))
     assert (result.status, result.attempts, result.model_version) == (STATUS_SUCCEEDED, 1, "gemini-test")
-    assert result.headline == HEADLINE  # quotes, dash, digits and punctuation untouched
+    assert result.headline == HEADLINE
     assert result.source.canonical_name == "prothomalo.com" and result.published_date == date(2026, 10, 5)
     assert result.details["response"]["date"] == "০৫ অক্টোবর, ২০২৬" and result.raw_source_text == "প্রথম আলো logo"
     assert "ittefaq.com" not in gemini.requests[0].content.decode()
@@ -96,7 +92,7 @@ async def test_a_readable_headline_without_a_verified_source_uses_the_verified_s
     assert (result.status, result.source, result.source_reason) == (STATUS_SUCCEEDED, None, reason)
     assert len(gemini.requests) == 1 and result.published_date == date(2026, 10, 5)
     if "source_evidence" in fields:
-        assert result.raw_source_text == "Somoy TV"  # provenance only, never a source
+        assert result.raw_source_text == "Somoy TV"
 
 
 async def test_a_source_deactivated_meanwhile_is_not_accepted():
@@ -107,7 +103,7 @@ async def test_a_source_deactivated_meanwhile_is_not_accepted():
 @pytest.mark.parametrize("fields,code", [
     ({"headline": None, "headline_status": "MISSING"}, "headline_missing"),
     ({"headline": "ছোট", "headline_status": "PRESENT"}, "headline_missing"),
-    ({"headline": "১২৩৪৫৬৭৮৯০", "headline_status": "PRESENT"}, "headline_missing"),  # no letters
+    ({"headline": "১২৩৪৫৬৭৮৯০", "headline_status": "PRESENT"}, "headline_missing"),
     ({"source": None, "source_status": "NOT_VISIBLE"}, "source_not_identified"),
     ({"source": "prothomalo.com", "source_status": "UNCLEAR"}, "source_not_identified"),
     ({"headline": None, "headline_status": "UNREADABLE", "source": None, "source_status": "UNCLEAR"},
@@ -118,7 +114,7 @@ async def test_with_the_fallback_off_a_card_needs_a_headline_and_a_verified_sour
     gemini = Gemini(gemini_body(**fields), gemini_body())
     result = await extract(gemini)
     assert (result.status, result.failure_code, result.failure_message) == (STATUS_INVALID_CONTENT, code, INVALID_CONTENT_MESSAGE)
-    assert len(gemini.requests) == 1 and result.headline is None and result.source is None  # never retried
+    assert len(gemini.requests) == 1 and result.headline is None and result.source is None
 
 
 async def test_with_the_fallback_on_a_missing_headline_is_still_rejected():

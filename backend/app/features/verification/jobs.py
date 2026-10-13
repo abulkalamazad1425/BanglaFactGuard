@@ -1,27 +1,3 @@
-"""Durable background execution of verification (text and photo-card).
-
-What makes this durable (and what does not)
--------------------------------------------
-* Accepting a submission writes a ``verification_jobs`` row in the SAME
-  transaction as the submission. A job therefore cannot be lost between
-  "accepted" and "scheduled".
-* The worker claims jobs with ``FOR UPDATE SKIP LOCKED`` and keeps the claim
-  alive with a heartbeat. A RUNNING job whose heartbeat has gone stale (the
-  process crashed or restarted mid-run) is reclaimed on the next poll, so no
-  accepted job is stranded. Recovery latency after a restart is therefore up
-  to ``stale_after`` seconds.
-* Execution depends on nothing from the originating request: the job reads
-  the submission row (and, for photo cards, the stored image), opens its own
-  DB session, and never needs the browser, polling or a request-scoped file.
-* Retries are idempotent: a re-run that finds the submission already in
-  expert review does nothing, and S12 / ``notify_once`` never duplicate a
-  result or a notification.
-
-This is a database-backed queue drained by an in-process worker, not a
-separate broker: it survives restarts, but only while an application process
-is running to drain it.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -59,8 +35,6 @@ logger = structlog.get_logger(__name__)
 
 @dataclass
 class JobDeps:
-    """Process-wide services the job needs (taken from ``app.state``)."""
-
     cache_service: CacheService
     embedding_service: EmbeddingService
     ner_service: NERService
@@ -92,7 +66,6 @@ async def execute_job(
     deps: JobDeps,
     session_factory: Callable[[], Any] = AsyncSessionLocal,
 ) -> None:
-    """Run one job body in its own session and commit on success."""
     async with session_factory() as session:
         submission_repo = SubmissionRepository(session)
         submission = await submission_repo.get_by_id_or_none(submission_id)
@@ -103,7 +76,7 @@ async def execute_job(
             SubmissionStatus.FINALIZED,
             SubmissionStatus.ESCALATED,
         ):
-            return  # idempotent: already processed
+            return
 
         ctx = _JobContext(
             session=session,
@@ -132,9 +105,6 @@ async def execute_job(
 
 @dataclass
 class _JobContext:
-    """What one job handler works with: the job's own session, the loaded
-    submission and the repositories bound to that session."""
-
     session: Any
     submission_id: uuid.UUID
     submission: Any
@@ -147,7 +117,6 @@ class _JobContext:
 
 
 async def _mark_verifying(ctx: _JobContext) -> None:
-    """Visible PROCESSING/VERIFYING before the slow part starts."""
     await ctx.submission_repo.mark_processing(ctx.submission_id)
     await ctx.submission_repo.set_phase(ctx.submission_id, JobPhase.VERIFYING.value)
     await ctx.session.commit()
@@ -181,7 +150,6 @@ async def _run_photocard(ctx: _JobContext) -> None:
         nli_service=deps.nli_service,
         http_client=deps.http_client,
     )
-    # Photo cards set their own phases (extraction comes before verification).
     await service.process_submission(ctx.submission_id)
 
 
@@ -202,7 +170,6 @@ async def _run_source_based(ctx: _JobContext) -> None:
     await service.run_for_submission(ctx.submission_id)
 
 
-# Job kind -> handler. Any other kind (SOURCE_BASED) runs the text pipeline.
 _HANDLERS: dict[str, Callable[[_JobContext], Awaitable[None]]] = {
     "MULTIMODAL": _run_multimodal,
     "PHOTO_CARD": _run_photocard,
@@ -214,23 +181,16 @@ PHOTO_CARD_KINDS = ("PHOTO_CARD",)
 
 @dataclass
 class _Lane:
-    """One independently bounded queue consumer. Photo cards get their own
-    lane: their Gemini step can wait out retries for minutes, and must never
-    hold the slots that text and text & image jobs need (nor vice versa)."""
-
     name: str
     concurrency: int
-    kinds: tuple[str, ...] | None = None          # only these kinds
-    exclude_kinds: tuple[str, ...] | None = None  # every kind but these
+    kinds: tuple[str, ...] | None = None
+    exclude_kinds: tuple[str, ...] | None = None
     slots: asyncio.Semaphore | None = None
     wake: asyncio.Event | None = None
     task: asyncio.Task | None = None
 
 
 class VerificationJobWorker:
-    """Drains ``verification_jobs`` with bounded concurrency, in two lanes:
-    photo cards, and everything else."""
-
     def __init__(
         self,
         deps: JobDeps,
@@ -257,8 +217,6 @@ class VerificationJobWorker:
             _Lane("photocard", max(1, photocard_concurrency), kinds=PHOTO_CARD_KINDS),
         ]
 
-    # ── lifecycle ────────────────────────────────────────────────────────
-
     def start(self) -> None:
         if any(lane.task for lane in self._lanes):
             return
@@ -284,12 +242,9 @@ class VerificationJobWorker:
             lane.task = None
 
     def wake(self) -> None:
-        """Poke the worker after enqueueing; purely a latency optimisation."""
         for lane in self._lanes:
             if lane.wake is not None:
                 lane.wake.set()
-
-    # ── loop ─────────────────────────────────────────────────────────────
 
     async def _run_loop(self, lane: _Lane) -> None:
         assert lane.slots is not None and lane.wake is not None
@@ -310,7 +265,7 @@ class VerificationJobWorker:
                 task.add_done_callback(self._inflight.discard)
             except asyncio.CancelledError:
                 raise
-            except Exception as exc:  # noqa: BLE001 - the loop must survive anything
+            except Exception as exc:  # noqa: BLE001
                 lane.slots.release()
                 logger.error("job_worker_loop_error", lane=lane.name, error=str(exc)[:200])
                 await asyncio.sleep(self._poll)
@@ -376,9 +331,6 @@ class VerificationJobWorker:
             logger.warning("job_heartbeat_failed", error=str(exc)[:120])
 
     async def _fail(self, job: dict, reason: str, *, permanent: bool, error: str | None = None) -> None:
-        """Retry or terminally fail. A terminal failure marks the submission
-        FAILED (with a user-presentable reason) and notifies the owner exactly
-        once. Notification trouble never changes the failure itself."""
         try:
             async with self._session_factory() as session:
                 repo = VerificationJobRepository(session)
@@ -403,4 +355,3 @@ class VerificationJobWorker:
                 await session.commit()
         except Exception as exc:  # noqa: BLE001
             logger.error("job_fail_handling_error", error=str(exc)[:200])
-            # The row stays RUNNING with a stale heartbeat and will be reclaimed.

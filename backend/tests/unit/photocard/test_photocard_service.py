@@ -1,7 +1,3 @@
-"""Photo cards: accepted image-only and durably, read by Gemini once, the
-card's values become a headline-only claim run through the shared pipeline,
-and failures stop before verification with their own message."""
-
 from __future__ import annotations
 
 import uuid
@@ -48,8 +44,6 @@ def storage(upload_ok=True, image=b"image-bytes") -> MagicMock:
 
 
 class FakeExtractor:
-    """Stands in for Gemini; `result` may be a callable taking the source repo."""
-
     result = None
     calls = 0
 
@@ -78,9 +72,6 @@ async def with_source(source_repo, published=CARD_DATE):
 
 
 class FakeOrchestrator:
-    """The shared pipeline over deterministic fakes: real analysis (S08-S12)
-    and the REAL persistence stage. `cache_hit_from` simulates an S02 hit."""
-
     captured: dict = {}
     cache_hit_from = None
     crash = False
@@ -98,7 +89,7 @@ class FakeOrchestrator:
         ctx = make_context(context.raw_headline, scope=context.claim_scope, published_date=context.published_date,
                            top=article(context.raw_headline, context.raw_headline + "।", published=context.published_date))
         ctx.submission_id, ctx.submitter_id = context.submission_id, context.submitter_id
-        ctx.content_hash = (await self.repo.get_by_id(context.submission_id)).content_hash  # what the card S01 computes
+        ctx.content_hash = (await self.repo.get_by_id(context.submission_id)).content_hash
         ctx = await run_analysis(ctx)
         session = self.repo.session
         return await ResultPersistenceStage(self.repo, ResultRepository(session), RetrievedArticleRepository(session),
@@ -140,14 +131,14 @@ async def test_acceptance_stores_only_the_image_with_an_owned_submission_and_a_j
     user = await add_user(session)
     svc, sub = await accept(session, user.id)
     assert svc.storage.upload.await_count == 1
-    async with db() as fresh:  # committed before the 202
+    async with db() as fresh:
         row = await SubmissionRepository(fresh).get_by_id(sub.id)
         rec = await PhotocardExtractionRepository(fresh).get_by_submission_id(sub.id)
         job = await VerificationJobRepository(fresh).get_by_submission(sub.id)
     assert (row.submission_type, row.submitter_id, row.status, row.processing_phase) == (
         SubmissionType.PHOTO_CARD, user.id, SubmissionStatus.PENDING, "QUEUED",
     )
-    assert row.headline is None and row.claimed_source_text is None and row.published_date is None  # unknown until read
+    assert row.headline is None and row.claimed_source_text is None and row.published_date is None
     assert rec.image_object_key.endswith("card.png") and rec.status == "PENDING"
     assert (job.kind, job.payload) == ("PHOTO_CARD", {})
     assert "My Submissions" in svc.accepted_response(row).message
@@ -185,7 +176,7 @@ async def test_the_read_card_becomes_a_saved_headline_only_result(session):
         HEADLINE, "প্রথম আলো", CARD_DATE, STATUS_SUCCEEDED,
     )
     assert detail.image_url and detail.verification.overall_verdict is None and detail.verification.review_pending
-    await service(session).process_submission(sub.id)  # a finished card is never re-processed
+    await service(session).process_submission(sub.id)
     assert FakeExtractor.calls == 1
 
 
@@ -203,7 +194,7 @@ async def test_a_failed_reading_stops_before_verification_with_its_own_message(s
     _, sub = await accept(session)
     with pytest.raises(PermanentJobError) as failed:
         await service(session).process_submission(sub.id)
-    assert failed.value.reason == message and "context" not in FakeOrchestrator.captured  # no verification ran
+    assert failed.value.reason == message and "context" not in FakeOrchestrator.captured
     rec = await PhotocardExtractionRepository(session).get_by_submission_id(sub.id)
     assert (rec.status, rec.failure_code) == (status, code)
     if status == STATUS_API_FAILED:
@@ -270,14 +261,14 @@ async def test_jobs_that_cannot_succeed_fail_permanently_and_unreadable_storage_
     text, _ = await add_completed_submission(session, headline="h", submitter_id=None)
     text.status = SubmissionStatus.PENDING
     await session.commit()
-    with pytest.raises(PermanentJobError):  # not a photo card
+    with pytest.raises(PermanentJobError):
         await service(session).process_submission(text.id)
     _, sub = await accept(session)
-    with pytest.raises(RuntimeError):  # the image could not be read back: retryable
+    with pytest.raises(RuntimeError):
         await service(session, storage(image=None)).process_submission(sub.id)
     await session.delete(await PhotocardExtractionRepository(session).get_by_submission_id(sub.id))
     await session.commit()
-    with pytest.raises(PermanentJobError):  # no stored image at all
+    with pytest.raises(PermanentJobError):
         await service(session).process_submission(sub.id)
     assert await service(session).get_result(text.id) is None and await service(session).get_result(uuid.uuid4()) is None
 

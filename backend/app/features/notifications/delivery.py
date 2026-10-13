@@ -1,8 +1,3 @@
-"""Recoverable submitter-only result notifications and final-result email.
-
-Reconciliation reads committed results, covering sync, async and reused claims.
-No public feed is exposed. SMTP delivery is at-least-once across process crashes.
-"""
 from __future__ import annotations
 
 import asyncio
@@ -29,7 +24,7 @@ READY = (SubmissionStatus.EXPERT_REVIEW, SubmissionStatus.FINALIZED, SubmissionS
 
 async def reconcile(session, *, limit: int = 100) -> int:
     original = aliased(VerificationResult)
-    original_mm = aliased(MultimodalAnalysis)  # a reused text & image check reads its original
+    original_mm = aliased(MultimodalAnalysis)
     verdict = func.coalesce(original.overall_verdict, VerificationResult.overall_verdict,
                             original_mm.expert_overall_verdict, MultimodalAnalysis.expert_overall_verdict)
     count = 0
@@ -53,8 +48,6 @@ async def reconcile(session, *, limit: int = 100) -> int:
                            else preliminary_notification_text(submission.headline))
             link = f'/verify/{submission.id}'
             kind = 'EXPERT_REVIEW_COMPLETE' if final else 'VERIFICATION_COMPLETE'
-            # Existing pipeline notifications use this same identity. A failed
-            # insert rolls back the delivery marker, allowing the next retry.
             existing = await session.scalar(select(Notification.id).where(
                 Notification.user_id == submission.submitter_id,
                 Notification.notification_type == kind, Notification.link_url == link).limit(1))
@@ -69,7 +62,6 @@ async def reconcile(session, *, limit: int = 100) -> int:
 
 
 async def deliver_email(session, mailer: EmailService) -> bool:
-    """Hold a row lock during delivery so multiple workers cannot send together."""
     now = datetime.now(timezone.utc)
     row = await session.scalar(select(ResultDelivery).where(
         ResultDelivery.email_status == 'pending',

@@ -26,21 +26,10 @@ import {
   VERIFIED_SOURCES_QUESTION,
 } from '../../utils/status-labels';
 
-/** At most this many evidence articles are shown (primary first). */
 export const MAX_EVIDENCE_ARTICLES = 3;
 import { VerdictBadgeComponent } from '../verdict-badge/verdict-badge.component';
 import { VotingDetailsComponent } from '../voting-details/voting-details.component';
 
-/**
- * The saved result for a SOURCE_BASED or PHOTO_CARD submission, in two
- * clearly separated parts:
- *  1. Final decision — the reviewers' overall verdict (or an admin's, for an
- *     escalated claim) with public Voting Details; "under review" until then.
- *  2. Preliminary AI verification — "Relevant article from claimed source"
- *     (Found / Not Found), then, only when found, the headline status (Exact
- *     Matched / Meaning Preserved / Altered), the date comparison (only when
- *     a date was claimed) and the body similarity measurements.
- */
 @Component({
   selector: 'app-verification-report',
   standalone: true,
@@ -62,7 +51,6 @@ export class VerificationReportComponent {
   readonly SOURCE_QUESTION = SOURCE_QUESTION;
   @Input({ required: true }) r!: VerificationResponse;
   @Input() reviewer = false;
-  /** Fallback when an older response lacks claimed_published_date. */
   @Input() claimedDate: string | null | undefined = undefined;
 
   get headline() {
@@ -77,7 +65,6 @@ export class VerificationReportComponent {
     return this.r.legacy_result ? null : (this.r.analysis?.headline_alteration ?? null);
   }
 
-  /** Headline, date and body findings only exist once a relevant article was found. */
   get articleFound(): boolean {
     return this.r.source_status === 'CONFIRMED';
   }
@@ -86,7 +73,6 @@ export class VerificationReportComponent {
     return SOURCE_LABELS[this.r.source_status];
   }
 
-  /** No usable claimed outlet: the active verified sources were searched. */
   get verifiedMode(): boolean {
     return this.r.verification_mode === 'VERIFIED_SOURCES';
   }
@@ -105,7 +91,6 @@ export class VerificationReportComponent {
       : SOURCE_EXPLANATIONS[this.r.source_status];
   }
 
-  /** Why the verified sources were searched instead of one outlet. */
   get resolutionNote(): string | null {
     if (!this.verifiedMode) return null;
     const reason = this.r.source_resolution_reason ?? '';
@@ -121,7 +106,6 @@ export class VerificationReportComponent {
       : null;
   }
 
-  /** At most three unique articles, the compared (primary) one first. */
   get evidence() {
     const seen = new Set<string>();
     const out = [];
@@ -154,7 +138,6 @@ export class VerificationReportComponent {
     );
   }
 
-  /** Date comparison is part of the result only when the submitter claimed a date. */
   get showDate(): boolean {
     return this.articleFound && !!this.claimedPublishedDate;
   }

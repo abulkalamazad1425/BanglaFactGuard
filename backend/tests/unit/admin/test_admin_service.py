@@ -1,6 +1,3 @@
-"""Expert account management, platform statistics, credibility tiers that
-must tile 0-100% exactly, and voting configuration."""
-
 from __future__ import annotations
 
 import uuid
@@ -73,14 +70,14 @@ async def test_expert_accounts_are_created_found_updated_and_switched_off(admin,
     session.add(RefreshToken(user_id=expert_id, token_hash="h", expires_at=security.create_refresh_token()[2]))
     await session.flush()
     assert (await admin.deactivate_expert(expert_id)).is_active is False
-    assert (await session.execute(select(RefreshToken.revoked))).scalar_one() is True  # signed out at once
+    assert (await session.execute(select(RefreshToken.revoked))).scalar_one() is True
     assert (await admin.activate_expert(expert_id)).is_active is True
 
 
 async def test_expert_search_covers_name_email_and_expertise(admin, session):
     await admin.create_expert(new_expert("newton@example.com"))
     await admin.create_expert(new_expert("rahima@iit.example.com", full_name="Rahima Begum", expertise_area="রাজনীতি"))
-    await add_user(session)  # never listed
+    await add_user(session)
 
     async def emails(q=None):
         return sorted(e.email for e in await admin.list_experts(q=q))
@@ -123,14 +120,12 @@ def tier(label, lo, hi, *, weight=1.0, active=True):
 
 
 def item(label, lo, hi, *, weight=1.0, active=True, id=None):
-    """One row of a whole-set save."""
     return CredibilityWeightTierItem(id=id, label=label, min_accuracy_pct=lo, max_accuracy_pct=hi, weight=weight,
                                      is_active=active)
 
 
 @pytest.fixture
 async def seeded(session):
-    """The tiers the migration seeds."""
     ids = {}
     for label, lo, hi, w in (("Novice", 0, 40, 0.5), ("Competent", 40, 70, 1.0), ("Expert", 70, 90, 1.5), ("Master", 90, 100, 2.0)):
         row = CredibilityWeightTier(label=label, min_accuracy_pct=lo, max_accuracy_pct=hi, weight=w, is_active=True)
@@ -149,15 +144,15 @@ async def test_single_tier_changes_never_leave_a_gap_or_an_overlap(admin, seeded
     for bad in (tier("Upside", 50, 40), tier("Overlap", 30, 50)):
         with pytest.raises(DomainValidationError):
             await admin.create_credibility_tier(bad)
-    draft = await admin.create_credibility_tier(tier("Draft", 30, 50, active=False))  # inactive tiers are not tiled
+    draft = await admin.create_credibility_tier(tier("Draft", 30, 50, active=False))
     await admin.update_credibility_tier(uuid.UUID(draft.id), CredibilityWeightTierUpdateRequest(weight=9.0))
-    for label, change in (("Competent", dict(max_accuracy_pct=75)),   # overlaps Expert
-                          ("Novice", dict(min_accuracy_pct=10)),      # no longer starts at 0
-                          ("Master", dict(max_accuracy_pct=95)),      # no longer ends at 100
-                          ("Expert", dict(is_active=False))):         # deactivating leaves a gap
+    for label, change in (("Competent", dict(max_accuracy_pct=75)),
+                          ("Novice", dict(min_accuracy_pct=10)),
+                          ("Master", dict(max_accuracy_pct=95)),
+                          ("Expert", dict(is_active=False))):
         with pytest.raises(DomainValidationError):
             await admin.update_credibility_tier(seeded[label], CredibilityWeightTierUpdateRequest(**change))
-    with pytest.raises(DomainValidationError):  # deleting an active tier leaves a gap
+    with pytest.raises(DomainValidationError):
         await admin.delete_credibility_tier(seeded["Expert"])
     assert (await admin.update_credibility_tier(seeded["Master"], CredibilityWeightTierUpdateRequest(weight=3.0))).weight == 3.0
     await admin.delete_credibility_tier(uuid.UUID(draft.id))
@@ -169,7 +164,6 @@ async def test_single_tier_changes_never_leave_a_gap_or_an_overlap(admin, seeded
 
 
 async def test_saving_the_whole_set_can_split_merge_and_rebound_tiers(admin, seeded):
-    # split Master into two, merge Novice+Competent, keep Expert: impossible one tier at a time
     saved = await admin.replace_credibility_tiers(CredibilityWeightTierSetRequest(tiers=[
         item("Learner", 0, 70, weight=0.75, id=seeded["Novice"]),
         item("Expert", 70, 90, weight=1.5, id=seeded["Expert"]),
@@ -179,19 +173,19 @@ async def test_saving_the_whole_set_can_split_merge_and_rebound_tiers(admin, see
     ]))
     assert await active(admin) == [("Learner", 0, 70, 0.75), ("Expert", 70, 90, 1.5),
                                    ("Master", 90, 95, 2.0), ("Grandmaster", 95, 100, 3.0)]
-    assert len(saved) == 5 and seeded["Competent"] not in {uuid.UUID(t.id) for t in saved}  # left out -> deleted
+    assert len(saved) == 5 and seeded["Competent"] not in {uuid.UUID(t.id) for t in saved}
     resolved = await CredibilityWeightTierRepository(admin._session).resolve_tier_for_accuracy(97.0)
     assert resolved.label == "Grandmaster"
 
 
 @pytest.mark.parametrize("tiers,error", [
-    ([item("A", 0, 60), item("B", 70, 100)], DomainValidationError),            # gap
-    ([item("A", 0, 60), item("B", 50, 100)], DomainValidationError),            # overlap
-    ([item("A", 5, 100)], DomainValidationError),                               # does not start at 0
-    ([item("A", 0, 90)], DomainValidationError),                                # does not end at 100
-    ([item("A", 0, 100, active=False)], DomainValidationError),                 # no active tier at all
-    ([item("A", 0, 100), item("B", 50, 40, active=False)], DomainValidationError),  # invalid range, even inactive
-    ([item("A", 0, 100, id=uuid.uuid4())], RecordNotFoundError),                # unknown tier
+    ([item("A", 0, 60), item("B", 70, 100)], DomainValidationError),
+    ([item("A", 0, 60), item("B", 50, 100)], DomainValidationError),
+    ([item("A", 5, 100)], DomainValidationError),
+    ([item("A", 0, 90)], DomainValidationError),
+    ([item("A", 0, 100, active=False)], DomainValidationError),
+    ([item("A", 0, 100), item("B", 50, 40, active=False)], DomainValidationError),
+    ([item("A", 0, 100, id=uuid.uuid4())], RecordNotFoundError),
 ])
 async def test_an_invalid_set_is_rejected_and_nothing_changes(admin, seeded, tiers, error):
     before = await active(admin)

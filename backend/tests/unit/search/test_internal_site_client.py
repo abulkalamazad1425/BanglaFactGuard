@@ -1,6 +1,3 @@
-"""The outlet's own search page: full query, on-domain article links with
-their headline text, and page chrome never mistaken for results."""
-
 import httpx
 import pytest
 
@@ -36,11 +33,10 @@ async def test_results_are_on_domain_articles_with_headline_text():
       <a href="/tag/setu">সেতু ট্যাগ</a><a href="#top">উপরে</a>
     """
     results, seen = await search(html)
-    assert seen == [QUERY]  # the full query, every keyword kept
+    assert seen == [QUERY]
     assert results == [
         ("https://www.prothomalo.com/bangladesh/abc12345xyz", "সরকার নতুন সেতু উদ্বোধন করেছে"),
-        ("https://www.prothomalo.com/politics/def67890uvw", "সেতু উদ্বোধনে মন্ত্রী"),  # text from the heading
-        # Prothom Alo's kicker span stays a separate word, never glued onto the headline
+        ("https://www.prothomalo.com/politics/def67890uvw", "সেতু উদ্বোধনে মন্ত্রী"),
         ("https://www.prothomalo.com/bangladesh/rigp7e6bkb", "মন্ত্রিসভার বৈঠক সেতু উদ্বোধনের দিন ঠিক"),
     ]
 
@@ -53,5 +49,5 @@ async def test_a_page_of_unrelated_latest_news_is_not_a_result_set():
 async def test_unconfigured_failed_and_empty_searches():
     assert await search("<html></html>", config={}) == ([], [])
     assert await search("<html></html>", query="site:prothomalo.com") == ([], [])
-    with pytest.raises(InternalSiteSearchError):  # a failure is never an empty search
+    with pytest.raises(InternalSiteSearchError):
         await search(503)

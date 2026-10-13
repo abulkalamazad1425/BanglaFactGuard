@@ -33,8 +33,6 @@ export class CredibilityTiersComponent implements OnInit {
     max_review_hours: [null as number | null, [Validators.min(1)]],
   });
 
-  /** The whole tier set, edited in place and saved together, so tiers can be
-   *  split, merged or re-bounded without passing through an invalid state. */
   tiersForm: FormArray<FormGroup> = this.fb.array<FormGroup>([]);
 
   ngOnInit(): void {
@@ -136,7 +134,6 @@ export class CredibilityTiersComponent implements OnInit {
         this.toast.success('Credibility tiers saved.');
       },
       error: (err) => {
-        // Nothing is saved unless the active tiers cover 0–100% exactly.
         this.saving.set(false);
         this.toast.error(
           err.error?.detail?.message || err.error?.message || 'Failed to save credibility tiers.',

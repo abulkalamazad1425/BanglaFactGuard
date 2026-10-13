@@ -1,6 +1,3 @@
-"""Shapes the trained checkpoints depend on: image features + text [CLS]
-features are fused and classified. Small configs, random weights."""
-
 import torch
 from transformers import BertConfig, BertModel
 
@@ -16,7 +13,7 @@ def test_backbones_expose_their_feature_size_and_the_classifier_fuses_both(monke
     monkeypatch.setattr(arch.AutoModel, "from_pretrained", staticmethod(lambda name: tiny_bert))
     text = arch.BanglaBERTBackbone("csebuetnlp/banglabert").eval()
     ids = torch.tensor([[1, 2, 3]])
-    assert text.out_dim == 8 and text(ids, torch.ones_like(ids)).shape == (1, 8)  # the [CLS] vector
+    assert text.out_dim == 8 and text(ids, torch.ones_like(ids)).shape == (1, 8)
 
     logits = arch.MultiFusionFake(img_dim=image.out_dim, text_dim=8, num_classes=2).eval()(
         torch.zeros(1, image.out_dim), torch.zeros(1, 8)

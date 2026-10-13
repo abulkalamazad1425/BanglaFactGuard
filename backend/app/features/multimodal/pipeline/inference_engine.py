@@ -51,7 +51,6 @@ class MultimodalInferenceEngine:
         body_text: str,
         image_bytes: bytes,
     ) -> PredictionResult:
-        """Full forward pass from raw inputs (both backbones + classifier)."""
         return await self._run(lambda: self._forward_pass_sync(body_text, image_bytes))
 
     async def predict_from_features(
@@ -59,11 +58,6 @@ class MultimodalInferenceEngine:
         text_features: np.ndarray,
         image_features: np.ndarray,
     ) -> PredictionResult:
-        """Classifier only, on the backbone outputs already computed by
-        `MultimodalEmbeddingExtractor` (raw [CLS] text features and pooled
-        image features - NOT the normalised combined vector). Same tokenizer,
-        transform and eval-mode backbones as `predict`, so the backbones need
-        not run a second time."""
         return await self._run(lambda: self._classify_features_sync(text_features, image_features))
 
     async def _run(self, forward) -> PredictionResult:
@@ -129,7 +123,6 @@ class MultimodalInferenceEngine:
             return self._classify(img_feats, text_feats)
 
     def _classify(self, img_feats: torch.Tensor, text_feats: torch.Tensor) -> PredictionResult:
-        """Classifier + softmax for one example; caller holds `torch.no_grad()`."""
         logits: torch.Tensor = self._loader.classifier(img_feats, text_feats)
         probs: torch.Tensor = F.softmax(logits, dim=1).squeeze(0)
 

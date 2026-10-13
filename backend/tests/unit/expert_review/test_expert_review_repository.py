@@ -1,6 +1,3 @@
-"""Expert statistics are derived from finalized claims (so they cannot drift),
-the score exists only after N such votes, and tiers cover accuracy inclusively."""
-
 from __future__ import annotations
 
 import uuid
@@ -45,12 +42,12 @@ async def test_only_votes_on_finalized_claims_count_and_correct_means_the_final_
     assert await repo.finalized_vote_counts(expert.id) == (4, 3)
     assert await repo.finalized_vote_counts(admin.id) == (0, 0)
 
-    profile = await repo.get_or_create(expert.id, initial_score=0.5)  # a legacy seed score is ignored
+    profile = await repo.get_or_create(expert.id, initial_score=0.5)
     assert profile.credibility_score is None and await repo.get_or_create(expert.id) is profile
     profile = await repo.refresh_stats(profile, activation_threshold=5)
-    assert (profile.total_votes, profile.correct_votes, profile.credibility_score) == (4, 3, None)  # below N
+    assert (profile.total_votes, profile.correct_votes, profile.credibility_score) == (4, 3, None)
 
-    escalated.status = SubmissionStatus.FINALIZED  # an administrator decided it: the vote now counts
+    escalated.status = SubmissionStatus.FINALIZED
     await session.execute(update(VerificationResult).where(VerificationResult.submission_id == escalated.id)
                           .values(overall_verdict=OverallVerdict.REAL))
     await session.flush()
@@ -59,7 +56,7 @@ async def test_only_votes_on_finalized_claims_count_and_correct_means_the_final_
 
     await session.execute(ExpertReview.__table__.delete().where(ExpertReview.submission_id == real[0].id))
     profile = await repo.refresh_stats(profile, activation_threshold=5)
-    assert (profile.total_votes, profile.correct_votes, profile.credibility_score) == (4, 2, None)  # never drifts
+    assert (profile.total_votes, profile.correct_votes, profile.credibility_score) == (4, 2, None)
 
 
 async def test_tiers_resolve_inclusively_among_active_ones_and_config_exists_once(session):
@@ -71,7 +68,7 @@ async def test_tiers_resolve_inclusively_among_active_ones_and_config_exists_onc
     await session.flush()
     tiers = CredibilityWeightTierRepository(session)
     assert [t.label for t in await tiers.get_active_tiers()] == ["Bronze", "Gold"]
-    assert (await tiers.resolve_tier_for_accuracy(60.0)).label == "Bronze"  # inclusive: lowest matching tier
+    assert (await tiers.resolve_tier_for_accuracy(60.0)).label == "Bronze"
     assert (await tiers.resolve_tier_for_accuracy(100.0)).label == "Gold"
     assert await tiers.resolve_tier_for_accuracy(101.0) is None
 

@@ -59,8 +59,6 @@ _T = TypeVar("_T")
 
 
 def _tally(reviews: list[ExpertReview], get_vote: Callable[[ExpertReview], _T | None]) -> dict[_T, float]:
-    """Weighted vote counts — experts only. Neither the AI's call nor any
-    supplementary (source/headline/date) assessment is ever added."""
     weights: dict[_T, float] = {}
     for review in reviews:
         vote = get_vote(review)
@@ -72,10 +70,6 @@ def _tally(reviews: list[ExpertReview], get_vote: Callable[[ExpertReview], _T | 
 def _evaluate(
     weights: dict[_T, float], voters: int, config: VotingConfig
 ) -> tuple[bool, _T | None]:
-    """Does the overall tally clear ALL of: a unique leader, leader >= T,
-    voters >= M, leader - runner_up >= margin? Returns (passes, leader).
-    `leader` is None while the top weight is tied — there is no AI or
-    ordering tie-break, so a tie never finalizes (even with margin 0)."""
     if not weights:
         return False, None
     sorted_weights = sorted(weights.values(), reverse=True)
@@ -99,8 +93,6 @@ def _aware(value: datetime) -> datetime:
 def review_limits_exceeded(
     config: VotingConfig, *, votes: int, submitted_at: datetime, now: datetime | None = None
 ) -> bool:
-    """OR semantics: any configured limit exceeded escalates. A NULL limit is
-    not configured and never counts as exceeded."""
     now = now or datetime.now(timezone.utc)
     if config.max_review_votes is not None and votes >= config.max_review_votes:
         return True
@@ -170,10 +162,6 @@ class ExpertReviewService:
 
     @staticmethod
     def _headline_alteration_and_body(result: VerificationResult | None):
-        """Headline Alteration detail + body similarity report from the
-        persisted analysis blob (the same source presenter.py reads), so the
-        expert view shows the identical detail after save/reload. Legacy rows
-        never surface an old content verdict as a headline detail."""
         if result is None:
             return None, None
         analysis = parse_analysis(result.analysis_details)
@@ -235,10 +223,6 @@ class ExpertReviewService:
             return ExpertQueueItemResponse(
                 **common,
                 ai_label=_ai_label_structured(result, submission),
-                # No AI-implied Overall is shown to the expert for source-based/
-                # photo-card claims — the automated system only ever produces
-                # source/content/date status; Overall is a separate, unprompted
-                # expert decision (see §6 of the business requirements).
                 ai_overall_verdict=None,
                 source_status=result.source_status if result else None,
                 content_status=result.content_status if result and is_headline_result(result) else None,
@@ -276,7 +260,6 @@ class ExpertReviewService:
     ) -> ExpertQueueItemResponse:
         submission = await self._submissions.get_by_id(submission_id)
         if submission.status == SubmissionStatus.ESCALATED and viewer_role != "admin":
-            # Escalated claims belong to the admin queue only.
             raise PermissionDeniedError("This claim has been escalated to an administrator for a final decision.")
         return await self._build_queue_item(
             submission, full_body=True, viewer_id=viewer_id, viewer_role=viewer_role
@@ -292,10 +275,6 @@ class ExpertReviewService:
         viewer_role: str = "expert",
         state: str = "all",
     ) -> list[ExpertQueueItemResponse]:
-        """Experts see open (EXPERT_REVIEW) claims they have not voted on and
-        did not submit — never escalated ones. Admins see the admin expert
-        queue: escalated claims (theirs to decide, listed first) plus open
-        claims they can only view. `state` (admin only): all | escalated | review."""
         from sqlalchemy import case, or_, select
 
         if viewer_role == "admin":
@@ -307,9 +286,6 @@ class ExpertReviewService:
                 Submission.status.in_(statuses),
                 Submission.duplicate_of_submission_id.is_(None),
             )
-            # Escalated claims first, longest-waiting first; then open claims
-            # newest first, as experts see them, so recent claims (of every
-            # type) are on the first page instead of behind the whole backlog.
             order = (
                 case((Submission.status == SubmissionStatus.ESCALATED, 0), else_=1),
                 case((Submission.status == SubmissionStatus.ESCALATED, Submission.escalated_at)).asc(),
@@ -343,15 +319,12 @@ class ExpertReviewService:
     async def _ai_snapshot(
         self, submission: Submission
     ) -> tuple[OverallVerdict | None, SourceStatus | None, ContentStatus | None, DateStatus | None]:
-        """The AI's own call at vote time, frozen onto the vote row."""
         if submission.submission_type in _STRUCTURED_TYPES:
             result = await self._results.get_by_submission_id(submission.id)
             if result is None or result.source_status is None:
                 raise DomainValidationError(
                     message="The AI result for this claim is not available yet."
                 )
-            # No AI-implied Overall exists for this type — the automated
-            # system only produces source/content/date status.
             return (
                 None,
                 result.source_status,
@@ -372,8 +345,6 @@ class ExpertReviewService:
         content_status: ContentStatus | None,
         date_status: DateStatus | None,
     ) -> None:
-        """Supplementary findings are optional and never decide anything —
-        they only have to be internally consistent."""
         if submission.submission_type not in _STRUCTURED_TYPES:
             if source_status is not None or content_status is not None or date_status is not None:
                 raise DomainValidationError(
@@ -397,9 +368,6 @@ class ExpertReviewService:
         *,
         voter_role: str = "expert",
     ) -> ExpertReviewResponse:
-        # Row-locks the submission for the rest of this transaction — a
-        # concurrent vote, admin decision or escalation sweep on the same
-        # claim blocks here until this one commits, so they can't race.
         submission = await self._submissions.get_by_id_locked(submission_id)
 
         if voter_role == "admin":
@@ -480,10 +448,6 @@ class ExpertReviewService:
         date_status: DateStatus | None,
         justification: str,
     ) -> ExpertReviewResponse:
-        """An administrator's overall vote on an ESCALATED claim IS the final
-        decision; earlier expert votes cannot override it. Every other claim is
-        view-only for admins. Caller holds the submission row lock, so a second
-        admin decision or a concurrent sweep sees FINALIZED and is refused."""
         if submission.status != SubmissionStatus.ESCALATED:
             raise PermissionDeniedError(
                 "Administrators can only decide escalated claims. Other claims are view-only."
@@ -523,13 +487,6 @@ class ExpertReviewService:
         return _review_to_response(review)
 
     async def _resolve_weight(self, profile, config: VotingConfig):
-        """Admin-configurable voting weight, resolved from credibility_weight_tiers
-        by the expert's current accuracy% — replaces the old hardcoded
-        ±0.05/-0.03 credibility deltas (PDF §2.2: "administrator-defined rules...
-        without changing system code"). Below config.activation_threshold_votes
-        (N) votes on claims whose final decision is complete, every vote counts as weight 1.0
-        regardless of tier — this is `weight_applied`, snapshotted onto the
-        vote row so later tier/config changes never retroactively alter it."""
         if not profile.total_votes or profile.total_votes < config.activation_threshold_votes:
             return _NEUTRAL_WEIGHT, None
         accuracy_pct = (profile.correct_votes / profile.total_votes) * 100
@@ -553,8 +510,6 @@ class ExpertReviewService:
         if review.reviewer_id != expert_id:
             raise PermissionDeniedError("You can only edit your own reviews.")
 
-        # Row-lock the submission too — an edit can itself tip finalization,
-        # same as a fresh vote, so it needs the same concurrency guard.
         submission = await self._submissions.get_by_id_locked(review.submission_id)
 
         if review.status == "finalized" or review.is_admin_decision or submission.status != SubmissionStatus.EXPERT_REVIEW:
@@ -668,8 +623,6 @@ class ExpertReviewService:
         )
 
     async def get_credibility(self, expert_id: uuid.UUID) -> CredibilityScoreResponse:
-        """Current score (unrounded); None until the expert has cast the
-        configured activation number of votes."""
         profile = await self._profiles.get_or_create(expert_id)
         config = await self._voting_config.get_or_create()
         return CredibilityScoreResponse(
@@ -681,19 +634,10 @@ class ExpertReviewService:
         )
 
     async def reevaluate(self, submission_id: uuid.UUID, *, now: datetime | None = None) -> bool:
-        """Row-lock the submission and finalize or escalate it if its votes or
-        review limits now require it (used by the escalation sweep). Returns
-        True when the status changed. Caller commits."""
         submission = await self._submissions.get_by_id_locked(submission_id)
         return await self._finalize_or_escalate(submission, now=now)
 
     async def _finalize_or_escalate(self, submission: Submission, *, now: datetime | None = None) -> bool:
-        """Re-evaluates an EXPERT_REVIEW claim after a vote, an edit or a
-        sweep. Only the reviewers' OVERALL votes count — the supplementary
-        source/headline/date assessments never affect the outcome. Finalizes
-        when the overall tally passes; otherwise escalates when any configured
-        review limit is exceeded. Returns True when the status changed.
-        Caller must already hold the submission's row lock."""
         if submission.status != SubmissionStatus.EXPERT_REVIEW:
             return False
         reviews = [
@@ -732,9 +676,6 @@ class ExpertReviewService:
         final_overall: OverallVerdict,
         expert_reviews: list[ExpertReview],
     ) -> None:
-        """Writes the final overall verdict. The AI's own columns and the
-        legacy final_source/content/date columns are left untouched — the
-        supplementary assessments are never promoted into a finding."""
         now = datetime.now(timezone.utc)
         if submission.submission_type in _STRUCTURED_TYPES:
             result = await self._results.get_by_submission_id(submission.id)
@@ -758,8 +699,6 @@ class ExpertReviewService:
     ) -> bool:
         if not review_limits_exceeded(config, votes=voters, submitted_at=submission.created_at, now=now):
             return False
-        # Conditional transition: only the transaction that actually moves the
-        # claim out of EXPERT_REVIEW notifies, so admins are told exactly once.
         if not await self._submissions.escalate_if_open(submission.id):
             return False
         submission.status = SubmissionStatus.ESCALATED
@@ -770,15 +709,6 @@ class ExpertReviewService:
         return True
 
     async def _update_expert_profiles(self, reviews: list[ExpertReview]) -> None:
-        """Correctness is judged on the Overall verdict uniformly across all
-        submission types — the one dimension every expert votes on, and the
-        headline judgment call the platform ultimately publishes. An admin's
-        own decision row is never scored.
-
-        A vote counts towards N (activation_threshold_votes) and accuracy only
-        once its claim's final decision is complete. The counters are re-derived
-        from the finalized claims rather than incremented, so they cannot drift
-        (an incremented counter kept counting votes on claims later deleted)."""
         config = await self._voting_config.get_or_create()
         await self._session.flush()
         for review in sorted(reviews, key=lambda r: str(r.reviewer_id)):

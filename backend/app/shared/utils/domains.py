@@ -1,5 +1,3 @@
-"""Host allow-listing against a claimed source's registered domains/channels."""
-
 from __future__ import annotations
 
 from urllib.parse import urlparse
@@ -16,8 +14,6 @@ def _host(value: str) -> str:
 
 
 def allowed_domains_for(normalized_source: str | None, source_config: dict | None) -> list[str]:
-    """The canonical domain plus any other registered channel for the source
-    (its base_url host and domain-looking aliases)."""
     domains: list[str] = []
     for candidate in [normalized_source, *(source_config or {}).get("allowed_domains", [])]:
         h = _host(candidate or "")
@@ -27,7 +23,6 @@ def allowed_domains_for(normalized_source: str | None, source_config: dict | Non
 
 
 def is_allowed_host(host: str, allowed: list[str]) -> bool:
-    """True when `host` is, or is a subdomain of, an allowed domain."""
     h = _host(host)
     if not h:
         return False

@@ -1,12 +1,3 @@
-"""Display helper for the expert queue's "AI said" column.
-
-The automated system only produces Source, Headline and Date findings; it must
-never derive an overall Fake/Real label (that is an expert-only decision).
-`verification_results.ai_consensus_label`, written by an earlier projection of
-the automated result onto TRUE/FALSE/..., is kept for historical rows but is
-no longer written.
-"""
-
 from __future__ import annotations
 
 from app.core.constants import DateStatus, HeadlineAlterationStatus, SourceStatus
@@ -24,7 +15,6 @@ def format_verdict_display(
     headline_status: HeadlineAlterationStatus | None,
     date_status: DateStatus | None = None,
 ) -> str | None:
-    """Human-readable one-line summary for the expert queue's "AI said" column."""
     if source_status is None:
         return None
     if source_status == SourceStatus.NOT_FOUND:

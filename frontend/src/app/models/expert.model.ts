@@ -1,7 +1,3 @@
-// ============================================================
-// Expert Models — synced with backend expert_review/schemas.py
-// ============================================================
-
 import {
   BodySimilarityReport,
   ContentStatus,
@@ -15,7 +11,6 @@ import {
   SubmissionType,
 } from './verification.model';
 
-// ── Queue item from GET /expert/queue ────────────────────────────────
 export interface ExpertTopArticle {
   url: string;
   title?: string | null;
@@ -30,9 +25,7 @@ export interface ExpertQueueItem {
   status?: SubmissionStatus | null;
   escalated_at?: string | null;
   published_date?: string | null;
-  /** Whether the requesting reviewer may vote now (admins: escalated claims only). */
   can_vote?: boolean;
-  /** ADMIN_FINAL when an admin's vote will be the final decision. */
   decision_mode?: 'EXPERT_VOTE' | 'ADMIN_FINAL';
   headline: string;
   body_text?: string | null;
@@ -49,17 +42,12 @@ export interface ExpertQueueItem {
   has_voted: boolean;
   vote_count: number;
   top_article?: ExpertTopArticle | null;
-  /** Multimodal submissions only — the submitted card/photo. */
   image_url?: string | null;
-  /** Why content_status (the headline verdict) may be null. */
   headline_check_status?: HeadlineCheckStatus | null;
-  /** Headline Alteration detail (claim headline vs. source title only). */
   headline_alteration?: HeadlineAlterationDetail | null;
-  /** Claim body vs. source body similarity measurements — never a verdict. */
   body_similarity?: BodySimilarityReport | null;
 }
 
-// ── Review detail from GET /expert/queue/{submission_id} ────────────
 export interface ExpertReviewDetail {
   submission_id: string;
   headline: string;
@@ -73,7 +61,6 @@ export interface ExpertReviewDetail {
   reasoning?: string | null;
 }
 
-// ── Submitted vote response — matches backend ExpertReviewResponse ──
 export interface ExpertReviewResponse {
   id: string;
   submission_id: string;
@@ -94,7 +81,6 @@ export interface ExpertReviewResponse {
   updated_at: string;
 }
 
-// ── History item from GET /expert/history ───────────────────────────
 export interface ExpertHistoryItem {
   review_id: string;
   submission_id: string;
@@ -119,7 +105,6 @@ export interface ExpertHistoryItem {
   voted_at: string;
 }
 
-// ── Stats from GET /expert/stats ─────────────────────────────────────
 export interface ExpertStats {
   user_id: string;
   full_name: string | null;
@@ -130,7 +115,6 @@ export interface ExpertStats {
   activation_threshold: number;
 }
 
-// ── Credibility from GET /expert/credibility ─────────────────────────
 export interface CredibilityScore {
   user_id: string;
   score: number | null;
@@ -139,10 +123,6 @@ export interface CredibilityScore {
   updated_at: string;
 }
 
-// ── Request to POST /expert/queue/{submission_id}/vote ──────────────
-// overall_verdict is required for every submission type. source_status
-// (plus, conditionally, content_status/date_status) additionally applies to
-// SOURCE_BASED/PHOTO_CARD claims only — omit all three for MULTIMODAL.
 export interface ExpertVoteRequest {
   overall_verdict: OverallVerdict;
   source_status?: SourceStatus | null;
@@ -151,7 +131,6 @@ export interface ExpertVoteRequest {
   justification: string;
 }
 
-// ── Request to PUT /expert/reviews/{review_id} ──────────────────────
 export interface ExpertVoteUpdateRequest {
   overall_verdict?: OverallVerdict | null;
   source_status?: SourceStatus | null;

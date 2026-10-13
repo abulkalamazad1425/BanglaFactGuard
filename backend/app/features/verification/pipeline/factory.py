@@ -1,16 +1,3 @@
-"""
-The one place that assembles the verification pipeline's stage list.
-`VerificationService` (POST /verify) and `PhotoCardService` both drive this
-same pipeline, so a photo-card result is defensible on the same terms as a
-typed claim.
-
-    S01 normalise -> S02 reuse lookup -> S03 queries -> S04 search ->
-    S05 fetch -> S06 extract -> S07 rank ->
-    S08 source correspondence -> S09 headline alteration (title only) ->
-    S10 body similarity (scores only) -> S11 date verification ->
-    S12 result assembly -> S13 persistence / cache / delivery
-"""
-
 from __future__ import annotations
 
 import httpx

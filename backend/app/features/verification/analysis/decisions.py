@@ -1,17 +1,3 @@
-"""Source and Date decisions as pure functions.
-
-* SOURCE  - did the claimed outlet publish a corresponding report?
-            (article correspondence + search adequacy; never the headline
-            verdict and never the body similarity scores)
-* DATE    - does the claimed day equal the report's datePublished day in
-            Asia/Dhaka? (independent of the headline verdict)
-
-The Headline Alteration verdict lives in `headline_comparison.py`; body
-similarity scores in `body_similarity.py`. Scores are measurements, not
-probabilities. Nothing here turns a weak or missing measurement into
-NOT_FOUND: that needs an adequate, completed search.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -22,8 +8,6 @@ from app.core.constants import DateStatus, MetricState, SourceStatus
 
 @dataclass
 class Metric:
-    """A score plus the state that explains it."""
-
     state: MetricState = MetricState.UNAVAILABLE
     value: float | None = None
 
@@ -41,20 +25,11 @@ class CorrespondenceInputs:
 
 @dataclass
 class Correspondence:
-    level: str  # STRONG | PLAUSIBLE | NONE | UNKNOWN
+    level: str
     basis: list[str] = field(default_factory=list)
 
 
 def assess_correspondence(inp: CorrespondenceInputs, t) -> Correspondence:
-    """Is the retrieved article plausibly THE report the claim is about?
-
-    Correspondence is a separate decision from headline equivalence: an
-    altered headline can still correspond to the report it distorts. A
-    shared topic, person or country is not enough - apart from a near-
-    identical headline/title (similarity >= `corr_headline_sim_alone`),
-    correspondence always needs lexical support: the claim's own keywords
-    in the source title, or in the source passages that discuss the claim.
-    """
     h = inp.headline_title_similarity.value if inp.headline_title_similarity.ok else None
     kt = inp.title_keyword_coverage.value if inp.title_keyword_coverage.ok else None
     kp = inp.passage_keyword_coverage.value if inp.passage_keyword_coverage.ok else None
@@ -84,7 +59,6 @@ def assess_correspondence(inp: CorrespondenceInputs, t) -> Correspondence:
             "the claim's own keywords are not sufficiently present in the retrieved article",
         ])
 
-    # No embedding similarity: lexical evidence alone must be strong.
     if kt is not None and kt >= t.corr_keyword_only_title:
         return Correspondence("PLAUSIBLE", ["strong title keyword coverage (similarity model unavailable)"])
     return Correspondence("NONE", ["weak keyword coverage and no similarity measurement"])
@@ -98,14 +72,6 @@ def decide_source(
     correspondence: Correspondence | None,
     blocked_match: str | None = None,
 ) -> tuple[SourceStatus, list[str]]:
-    """CONFIRMED needs a corresponding report; NOT_FOUND needs an ADEQUATE
-    search that came up without one; everything else is INCOMPLETE (a
-    failed search is never reported as a confident NOT_FOUND).
-
-    `blocked_match` names a search result whose title corresponds to the
-    claim better than anything that was read, but whose page could not be
-    fetched (typically an anti-bot wall). The likely report was never read,
-    so neither absence nor a weaker stand-in is reported: INCOMPLETE."""
     blocked = (
         [f"a search result matching the claim ({blocked_match}) could not be retrieved - "
          "the site blocked automated access"]
@@ -157,13 +123,11 @@ def search_adequate(
     min_calls: int,
     min_ratio: float,
 ) -> bool:
-    """`completed` = SUCCESS + SUCCESS_EMPTY + CACHED provider calls."""
     if attempted <= 0 or completed < min_calls:
         return False
     return (completed / attempted) >= min_ratio
 
 
 def correspondence_strength(values: list[float | None]) -> float:
-    """Mean of the available correspondence measurements (0.0 when none)."""
     present = [v for v in values if v is not None]
     return round(sum(present) / len(present), 3) if present else 0.0

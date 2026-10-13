@@ -16,12 +16,6 @@ if TYPE_CHECKING:
 
 
 class MultimodalAnalysis(UUIDMixin, TimestampMixin, ReprMixin, Base):
-    """DatabaseDescription.pdf Table 4.9 — multimodal_analysis.
-
-    Storage target for multimodal predictions, tied 1:1 to a `Submission`
-    row per the thesis ER diagram.
-    """
-
     __tablename__ = "multimodal_analysis"
 
     submission_id: Mapped[uuid.UUID] = mapped_column(

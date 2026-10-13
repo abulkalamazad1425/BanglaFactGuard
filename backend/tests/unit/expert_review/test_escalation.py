@@ -1,6 +1,3 @@
-"""Time/vote-limit escalation does not wait for a vote: the periodic sweep
-escalates once, and every active admin is told exactly once."""
-
 from __future__ import annotations
 
 import asyncio
@@ -34,14 +31,14 @@ async def claim(session, age_hours: float):
 async def test_the_time_limit_escalates_once_without_any_vote(session):
     await add_voting_config(session, max_review_hours=24)
     admin = await add_user(session, role="admin")
-    await add_user(session, role="admin", is_active=False)  # inactive admins are not notified
+    await add_user(session, role="admin", is_active=False)
     old, fresh = await claim(session, 25), await claim(session, 23)
     assert await sweep_review_limits(session) == 1 and await sweep_review_limits(session) == 0
     assert (old.status, fresh.status) == (SubmissionStatus.ESCALATED, SubmissionStatus.EXPERT_REVIEW)
     note = (await session.execute(select(Notification))).scalar_one()
     assert (note.user_id, note.link_url) == (admin.id, f"/admin/review-queue/{old.id}")
     assert note.body == "Expert reviewers are having difficulty deciding this claim: ঢাকায় আজ ভারী বৃষ্টিতে জলাবদ্ধতা,..."
-    assert await notify_admins_of_escalation(session, old) == 0  # a retry never duplicates it
+    assert await notify_admins_of_escalation(session, old) == 0
 
 
 async def test_without_configured_limits_nothing_is_ever_escalated(session):

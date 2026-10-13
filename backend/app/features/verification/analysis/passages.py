@@ -1,11 +1,3 @@
-"""Relevant-passage selection from a source article.
-
-A headline is never compared with the whole article body: a 2,000-word article
-is mostly text the headline says nothing about, so that similarity penalises an
-exact, supported headline. Instead the sentences that actually discuss the
-claim are selected (with surrounding context) and compared.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -17,9 +9,9 @@ from app.features.verification.analysis.text import light_stem, split_sentences
 @dataclass
 class Passage:
     text: str
-    score: float          # weighted claim-keyword coverage of the core sentences
-    first_sentence: int   # index of first sentence (inclusive) incl. context
-    last_sentence: int    # index of last sentence (inclusive) incl. context
+    score: float
+    first_sentence: int
+    last_sentence: int
     location: str = "body"
 
 def select_relevant_passages(
@@ -31,8 +23,6 @@ def select_relevant_passages(
     min_score: float = 0.25,
     max_chars: int = 600,
 ) -> list[Passage]:
-    """Top sentences by claim-keyword coverage, each widened by
-    `context_window` neighbouring sentences, overlapping windows merged."""
     if not article_body or not claim_text:
         return []
     sentences = split_sentences(article_body, min_len=10)
@@ -48,12 +38,12 @@ def select_relevant_passages(
         scored.append((w / total_w, idx))
 
     ranked = sorted((s for s in scored if s[0] >= min_score), key=lambda x: (-x[0], x[1]))
-    chosen: list[tuple[float, int, int]] = []  # (score, first, last)
+    chosen: list[tuple[float, int, int]] = []
     for score, idx in ranked:
         first, last = max(0, idx - context_window), min(len(sentences) - 1, idx + context_window)
         merged = False
         for i, (sc, f, l) in enumerate(chosen):
-            if not (last < f or first > l):  # overlap -> merge
+            if not (last < f or first > l):
                 chosen[i] = (max(sc, score), min(f, first), max(l, last))
                 merged = True
                 break

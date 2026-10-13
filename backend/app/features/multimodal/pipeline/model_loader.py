@@ -27,10 +27,6 @@ _LOAD_POOL = ThreadPoolExecutor(
 
 
 class MultimodalModelLoader:
-    """Owns one set of loaded weights. "Loaded" is per instance: a new
-    loader (e.g. after an app restart in the same process) loads its own
-    weights instead of reporting another instance's state."""
-
     def __init__(self) -> None:
         cfg = _SETTINGS.multimodal
         self._cfg = cfg

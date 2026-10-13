@@ -1,14 +1,3 @@
-"""Who may read a submission that has no published result yet.
-
-Completed results (in expert review, finalized, escalated) follow the existing
-public visibility policy (Fact Explorer already lists them). A submission that
-is still PENDING/PROCESSING, or FAILED, is the submitter's private working
-state — its image and extracted text are not public — so only the owner (and
-staff) may read it. Anonymous submissions (no owner) stay reachable by their
-unguessable id, matching existing anonymous behaviour; they are not promised
-an account-owned history.
-"""
-
 from __future__ import annotations
 
 from app.core.constants import SubmissionStatus

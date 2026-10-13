@@ -1,8 +1,3 @@
-"""Gemini is the only card reader: the original image and the active source
-catalogue go out; at most 9 requests in 3 batches; transient failures are
-retried, permanent ones and exhausted daily quotas stop at once; keys rotate
-when one reaches its limit."""
-
 from __future__ import annotations
 
 import base64
@@ -29,7 +24,7 @@ MULTI = GeminiSettings(api_key=KEYS[0], api_keys=KEYS[1:], model_name="gemini-te
 
 @pytest.fixture(autouse=True)
 def fresh_key_pools():
-    reset_key_pools()  # blocked keys are process-wide; isolate every test
+    reset_key_pools()
     yield
     reset_key_pools()
 
@@ -82,7 +77,7 @@ async def test_the_first_success_stops_the_loop(success_at):
     ({"candidates": [{"content": {"parts": [{"text": '{"headline": "x"}'}]}}]}, "malformed_response"),
     ({"candidates": [], "promptFeedback": {"blockReason": "SAFETY"}}, "malformed_response"),
     ({"candidates": [{"content": {"parts": [{"thought": True, "text": "thinking"}]}, "finishReason": "MAX_TOKENS"}]}, "malformed_response"),
-    (gemini_body(source="ittefaq.com"), "malformed_response"),  # an id outside the catalogue is never a source
+    (gemini_body(source="ittefaq.com"), "malformed_response"),
 ])
 async def test_each_transient_failure_is_retried(failure, outcome):
     gemini = Gemini(failure, gemini_body())
@@ -112,7 +107,7 @@ async def test_a_key_at_its_limit_hands_the_next_call_to_the_next_key_at_once(li
     result = await extract(gemini, MULTI, sleeps)
     assert result.succeeded and gemini.keys_used() == ["key-one", "key-two"] and sleeps.calls == []
     assert [a.key for a in result.attempts] == [1, 2]
-    assert not any(k in json.dumps([a.to_dict() for a in result.attempts]) for k in KEYS)  # keys are never recorded
+    assert not any(k in json.dumps([a.to_dict() for a in result.attempts]) for k in KEYS)
 
 
 async def test_spent_keys_stay_skipped_for_later_cards_and_other_errors_keep_the_key():
@@ -120,7 +115,7 @@ async def test_spent_keys_stay_skipped_for_later_cards_and_other_errors_keep_the
     assert (await extract(first, MULTI)).succeeded and first.keys_used() == KEYS[:3]
     second = Gemini(gemini_body())
     await extract(second, MULTI)
-    assert second.keys_used() == ["key-three"]  # never back to a spent key
+    assert second.keys_used() == ["key-three"]
     third = Gemini(*[httpx.Response(503)] * 12)
     assert len((await extract(third, MULTI)).attempts) == 9 and set(third.keys_used()) == {"key-three"}
 
@@ -132,7 +127,7 @@ async def test_rotation_stays_within_nine_requests_and_stops_when_every_key_is_s
 
     reset_key_pools()
     daily = Gemini(*[quota_429(DAILY) for _ in range(9)])
-    assert not (await extract(daily, MULTI)).succeeded and daily.keys_used() == KEYS  # 5 calls, not 9
+    assert not (await extract(daily, MULTI)).succeeded and daily.keys_used() == KEYS
     later = Gemini(gemini_body())
     result = await extract(later, MULTI)
     assert later.requests == [] and result.skipped_reason == "Every Gemini API key has reached its limit"

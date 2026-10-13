@@ -65,8 +65,6 @@ class VerificationService:
         self.http_client = http_client
         self.reuse = ResultReuseService(submission_repo, result_repo)
 
-    # ── synchronous run (also the body of the background job) ─────────────
-
     async def verify(
         self,
         request: VerificationRequest,
@@ -76,9 +74,6 @@ class VerificationService:
     ) -> VerificationResponse:
         log = logger.bind(claimed_source_text=request.claimed_source_text)
 
-        # An unusable source never becomes an unrestricted search: it is
-        # either verified against the active verified sources (Google only,
-        # domain-restricted) or, with the fallback disabled, rejected.
         resolution = await source_policy.resolve_source(request.claimed_source_text, self.source_repo)
         if resolution.is_fallback and not source_policy.fallback_enabled():
             raise SourceNotFoundError(request.claimed_source_text or "")
@@ -121,8 +116,6 @@ class VerificationService:
         return response
 
     async def run_for_submission(self, submission_id: uuid.UUID) -> VerificationResponse:
-        """Background-job entry point: everything comes from the stored
-        submission row, nothing from a request."""
         submission = await self.submission_repo.get_by_id(submission_id)
         request = VerificationRequest(
             headline=submission.headline or "",
@@ -141,7 +134,6 @@ class VerificationService:
         submitter_id: uuid.UUID | None,
         submission_id: uuid.UUID | None,
     ) -> Submission:
-        """The requester's own submission, with its automated result."""
         if not context.cache_hit:
             return await self.submission_repo.get_by_id(context.submission_id)
 
@@ -175,36 +167,18 @@ class VerificationService:
                 )
         return target
 
-    # ── asynchronous registration ─────────────────────────────────────────
-
     async def register_claim(
         self,
         request: VerificationRequest,
         *,
         submitter_id: uuid.UUID | None = None,
     ) -> tuple[uuid.UUID, SubmissionStatus, bool]:
-        """Accept a claim for background verification.
-
-        Returns ``(submission_id, status, served_from_cache)``. The submission
-        and its durable job row are committed together before returning, so an
-        accepted claim can never be lost or stranded.
-
-        A claim that was already checked is never verified again: if an
-        identical, complete verification still exists in the database the
-        requester gets their OWN submission carrying a copy of its automated
-        result (no job queued, no new evidence search). Reuse never shares a
-        submission across owners; only the same submitter's identical
-        in-flight claim is handed back. A deleted submission/result is gone
-        from the database and therefore never reused.
-        """
         resolution = await source_policy.resolve_source(request.claimed_source_text, self.source_repo)
         if resolution.is_fallback and not source_policy.fallback_enabled():
             raise SourceNotFoundError(request.claimed_source_text or "")
 
         scope = claim_scope_for(request.body_text)
         if resolution.is_fallback:
-            # Mode + verified-source scope are part of the identity, so this
-            # never shares a result with a claimed-source check.
             identity_source = source_policy.verified_identity_key(
                 await source_policy.load_verified_scope(self.source_repo)
             )
@@ -217,9 +191,6 @@ class VerificationService:
             body=request.body_text,
             published_date=request.published_date,
         )
-        # Serialise concurrent registrations of the same identity so two
-        # identical requests cannot both miss the lookups below and both
-        # enqueue a verification.
         await self._lock_identity(content_hash)
 
         found = await self.reuse.find_reusable(content_hash)
@@ -252,8 +223,6 @@ class VerificationService:
         await VerificationJobRepository(self.submission_repo.session).enqueue(
             submission.id, "SOURCE_BASED"
         )
-        # Commit now: the worker looks the rows up by id and the caller starts
-        # polling the moment the response lands.
         await self.submission_repo.session.commit()
         logger.info("claim_queued_for_verification", submission_id=str(submission.id))
         return submission.id, SubmissionStatus.PENDING, False
@@ -290,14 +259,10 @@ class VerificationService:
             )
         )
 
-    # ── read ──────────────────────────────────────────────────────────────
-
     async def get_result(self, submission_id: uuid.UUID) -> VerificationResponse | None:
         submission = await self.submission_repo.get_by_id_or_none(submission_id)
         if submission is None:
             return None
-        # The database row is the single source of truth - identical after
-        # Redis expiry, after navigating away, and via the cache fallback.
         return await load_verification_response(
             submission, result_repo=self.result_repo, article_repo=self.article_repo
         )

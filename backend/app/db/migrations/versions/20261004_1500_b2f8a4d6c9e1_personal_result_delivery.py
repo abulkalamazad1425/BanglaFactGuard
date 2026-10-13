@@ -1,4 +1,3 @@
-"""Uncalculated expert credibility and durable personal result delivery."""
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
@@ -10,8 +9,6 @@ depends_on = None
 
 
 def upgrade():
-    # Earlier voting code introduced ESCALATED without updating PostgreSQL's
-    # enum. Commit this additive change before queries use the new enum value.
     with op.get_context().autocommit_block():
         op.execute("ALTER TYPE submission_status_enum ADD VALUE IF NOT EXISTS 'ESCALATED'")
     op.alter_column('expert_profiles', 'credibility_score', existing_type=sa.Float(), nullable=True, server_default=None)
@@ -31,7 +28,6 @@ def upgrade():
     )
     op.create_index('ix_result_deliveries_email_status', 'result_deliveries', ['email_status'])
     op.create_index('ix_result_deliveries_created_at', 'result_deliveries', ['created_at'])
-    # Mark existing stages handled: deployment must not email historical results.
     for stage in ('preliminary', 'final'):
         condition = 'AND COALESCE(o.overall_verdict, v.overall_verdict, m.expert_overall_verdict) IS NOT NULL' if stage == 'final' else ''
         op.execute(sa.text(f"""INSERT INTO result_deliveries (submission_id, stage, email_status)
@@ -44,8 +40,6 @@ def upgrade():
 
 
 def downgrade():
-    # PostgreSQL enum values are intentionally retained on downgrade: removing
-    # ESCALATED would require rewriting existing submissions and their type.
     op.drop_table('result_deliveries')
     op.execute('UPDATE expert_profiles SET credibility_score = 0.5 WHERE credibility_score IS NULL')
     op.alter_column('expert_profiles', 'credibility_score', existing_type=sa.Float(), nullable=False)

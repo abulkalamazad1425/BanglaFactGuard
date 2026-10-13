@@ -1,6 +1,3 @@
-"""Source and Date decisions. A failed or inadequate search is never a
-confident NOT_FOUND."""
-
 from datetime import date
 
 import pytest
@@ -26,11 +23,11 @@ def m(v: float | None) -> Metric:
 
 
 @pytest.mark.parametrize("sim,title_kw,passage_kw,level", [
-    (0.90, None, None, "STRONG"),       # near-identical title on its own
-    (0.74, 0.57, None, "STRONG"),       # altered headline whose keywords are in the title
-    (0.60, None, 0.70, "PLAUSIBLE"),    # keyword support from the passages
-    (0.78, 0.20, 0.30, "NONE"),         # similar topic alone is not correspondence
-    (None, 0.80, None, "PLAUSIBLE"),    # no similarity model: strong title coverage
+    (0.90, None, None, "STRONG"),
+    (0.74, 0.57, None, "STRONG"),
+    (0.60, None, 0.70, "PLAUSIBLE"),
+    (0.78, 0.20, 0.30, "NONE"),
+    (None, 0.80, None, "PLAUSIBLE"),
     (None, 0.40, None, "NONE"),
     (None, None, None, "UNKNOWN"),
 ])

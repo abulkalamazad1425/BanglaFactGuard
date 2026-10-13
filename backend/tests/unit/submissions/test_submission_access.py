@@ -1,5 +1,3 @@
-"""Unpublished (pending/failed) submissions are private to their owner and staff."""
-
 import uuid
 from types import SimpleNamespace
 
@@ -18,7 +16,7 @@ def test_unpublished_work_is_private(status):
     owned = SimpleNamespace(status=status, submitter_id=OWNER.id)
     assert viewer_can_see(owned, OWNER) and viewer_can_see(owned, EXPERT)
     assert not viewer_can_see(owned, OTHER) and not viewer_can_see(owned, None)
-    assert viewer_can_see(SimpleNamespace(status=status, submitter_id=None), None)  # anonymous: id-only access
+    assert viewer_can_see(SimpleNamespace(status=status, submitter_id=None), None)
 
 
 @pytest.mark.parametrize("status", [SubmissionStatus.EXPERT_REVIEW, SubmissionStatus.FINALIZED, SubmissionStatus.ESCALATED])

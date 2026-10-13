@@ -15,16 +15,6 @@ import {
   PaginationComponent,
 } from '../../../shared/components/pagination/pagination.component';
 
-/**
- * My Submissions. Rows exist from the moment a submission is accepted —
- * including a photo card whose headline has not been extracted yet — and are
- * readable in every state (pending, processing, failed, complete). Only the
- * signed-in user's own submissions are listed (owner-only on the server).
- *
- * While any row is still pending/processing the list refreshes itself, but
- * only while this page is open and the tab is visible; leaving the page stops
- * the refresh and never affects the server-side jobs.
- */
 @Component({
   selector: 'app-submission-history',
   standalone: true,
@@ -43,7 +33,6 @@ export class SubmissionHistoryComponent implements OnInit, OnDestroy {
   readonly limit = PAGE_SIZE;
   readonly hasNext = signal(false);
 
-  /* ─── Search & filters (applied on the server, before pagination) ─── */
   query = '';
   readonly state = signal<MySubmissionState | ''>('');
   readonly type = signal<SubmissionType | ''>('');
@@ -93,7 +82,6 @@ export class SubmissionHistoryComponent implements OnInit, OnDestroy {
     this.load();
   }
 
-  /** Search as you type: ~300 ms after the last keystroke, first page. */
   onSearchInput(value: string): void {
     if (this.searchTimer) clearTimeout(this.searchTimer);
     this.searchTimer = setTimeout(() => {
@@ -125,9 +113,7 @@ export class SubmissionHistoryComponent implements OnInit, OnDestroy {
 
   load(silent = false): void {
     if (!silent) this.loading.set(true);
-    // A newer search or filter supersedes any request still in flight.
     this.request?.unsubscribe();
-    // One extra row tells whether another page exists.
     this.request = this.verificationSvc
       .getMySubmissions(this.limit + 1, this.offset(), {
         q: this.query,
@@ -171,8 +157,6 @@ export class SubmissionHistoryComponent implements OnInit, OnDestroy {
     this.load();
   }
 
-  /* ─── Row state helpers ─── */
-
   isRunning(s: SubmissionSummary): boolean {
     return s.status === 'PENDING' || s.status === 'PROCESSING';
   }
@@ -197,7 +181,6 @@ export class SubmissionHistoryComponent implements OnInit, OnDestroy {
         : 'Text & source';
   }
 
-  /** What to show where the headline would be — a pending photo card has none yet. */
   headlineText(s: SubmissionSummary): string {
     if (s.headline) return s.headline;
     if (s.submission_type === 'PHOTO_CARD') {

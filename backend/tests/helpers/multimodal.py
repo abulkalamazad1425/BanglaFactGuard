@@ -1,7 +1,3 @@
-"""A tiny stand-in for the loaded BanglaBERT + EfficientNet weights: real
-tensors and real preprocessing, but a few deterministic numbers instead of
-the trained networks. Says nothing about the trained model's accuracy."""
-
 from __future__ import annotations
 
 import io
@@ -25,11 +21,11 @@ class TinyLoader:
 
     @staticmethod
     def text_backbone(input_ids, attention_mask):
-        return torch.cat([input_ids.float(), attention_mask.float()], dim=1)  # (1, 8)
+        return torch.cat([input_ids.float(), attention_mask.float()], dim=1)
 
     @staticmethod
     def img_backbone(images):
-        return images.mean(dim=(2, 3))  # (1, 3): per-channel mean
+        return images.mean(dim=(2, 3))
 
     def classifier(self, img_feats, text_feats):
         self.classifier_inputs.append((img_feats.clone(), text_feats.clone()))

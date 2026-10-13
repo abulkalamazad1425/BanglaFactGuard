@@ -1,5 +1,3 @@
-"""S10: body scores are measurements only, and only for a claim with a body."""
-
 import pytest
 
 from app.core.constants import BodyComparisonStatus, ClaimScope, SourceStatus

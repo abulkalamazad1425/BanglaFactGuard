@@ -1,19 +1,3 @@
-"""A scripted stand-in for `playwright.async_api`, so browser-fallback logic
-runs without launching Chromium.
-
-`scripts[url]` describes one page:
-    contents  successive `page.content()` values (the last one repeats)
-    final     the URL the page ends on (a redirect)
-    late      the redirect only happens while waiting for it (`wait_for_url`)
-    crash     `goto` raises
-    hang      `goto` never returns until the driver is stopped (a dead browser)
-
-With a catch-all route installed (`context.route("**/*", ...)`), the redirect
-to `final` is offered to that handler as a main-frame navigation: right away
-when it is a server redirect (and `goto` then fails if the handler aborts
-it), or shortly after `goto` when it is `late` (the interstitial's JS hop).
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -47,7 +31,6 @@ class _Page:
         self.main_frame = types.SimpleNamespace(page=self)
 
     async def _offer(self, url: str) -> bool:
-        """Whether a catch-all route let the navigation through."""
         route = _Route(self, url)
         for handler in self.handlers:
             await handler(route)
@@ -90,11 +73,10 @@ class _Page:
 
 
 def install(monkeypatch, scripts: dict, opened: list | None = None, *, launch_error: Exception | None = None) -> list:
-    """Install the fake module; returns the list of URLs opened in pages."""
     opened = [] if opened is None else opened
 
-    handlers: list = []  # catch-all routes
-    hung: list = []  # gotos waiting on a dead browser
+    handlers: list = []
+    hung: list = []
 
     class Context:
         async def route(self, pattern, handler):
@@ -143,5 +125,4 @@ def install(monkeypatch, scripts: dict, opened: list | None = None, *, launch_er
 
 
 def uninstall(monkeypatch) -> None:
-    """Make `from playwright.async_api import ...` raise ImportError."""
     monkeypatch.setitem(sys.modules, "playwright.async_api", None)

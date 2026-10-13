@@ -18,7 +18,7 @@ def test_light_stem_strips_inflections_but_keeps_a_minimum_stem():
     assert light_stem("সেতুর") == "সেতু"
     assert light_stem("শিক্ষার্থীদের") == "শিক্ষার্থী"
     assert light_stem("ঢাকায়") == "ঢাকা"
-    assert light_stem("কে") == "কে"  # too short to strip
+    assert light_stem("কে") == "কে"
 
 
 def test_negation_detection_includes_fused_forms_but_not_lookalike_nouns():
@@ -37,10 +37,8 @@ def test_sentences_and_chunks_never_lose_text():
     text = " ".join(f"বাক্য নম্বর {i} এখানে দেওয়া হলো।" for i in range(400))
     chunks, truncated = chunk_text(text, max_chars=300, max_chunks=500)
     assert not truncated and all(len(c) <= 300 for c in chunks) and "399" in chunks[-1]
-    # one over-long sentence is split on whitespace, not dropped
     long_sentence = " ".join(["শব্দ"] * 200)
     chunks, _ = chunk_text(long_sentence, max_chars=100)
     assert " ".join(chunks) == long_sentence
-    # the safety cap is reported
     chunks, truncated = chunk_text(text, max_chars=60, max_chunks=5)
     assert truncated and len(chunks) == 5

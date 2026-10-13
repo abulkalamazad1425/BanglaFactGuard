@@ -1,6 +1,3 @@
-"""In-app notifications are written once per (user, type, link), with one
-wording for every preliminary result; a write failure never raises."""
-
 import uuid
 from unittest.mock import MagicMock
 
@@ -21,10 +18,8 @@ async def test_the_preliminary_notice_has_one_wording_and_is_written_once(sessio
     user = await add_user(session)
     sid = uuid.uuid4()
     assert await notify_preliminary_result(session, user_id=user.id, submission_id=sid, headline=HEADLINE)
-    # any later VERIFICATION_COMPLETE for the same submission is the same notice
     assert not await notify_once(session, user_id=user.id, notification_type="VERIFICATION_COMPLETE",
                                  link_url=f"/verify/{sid}", title="ignored", body="ignored", headline=HEADLINE)
-    # callers' own text never reaches the user for this type
     await notify_once(session, user_id=user.id, notification_type="VERIFICATION_COMPLETE", link_url="/verify/x",
                       title="Custom", body="Custom body", headline=None)
     rows = (await session.execute(select(Notification).order_by(Notification.link_url))).scalars().all()

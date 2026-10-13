@@ -1,7 +1,3 @@
-"""The single read path from the database to a VerificationResponse. The
-automated system never shows an overall verdict; experts' final decision
-does, and a reused copy follows its original live."""
-
 from __future__ import annotations
 
 import uuid
@@ -59,7 +55,7 @@ async def test_a_final_decision_is_shown_beside_the_unchanged_ai_findings(sessio
     assert (r.overall_verdict, r.is_finalized, r.review_pending, r.decided_by_admin) == (
         OverallVerdict.MISLEADING, True, False, True,
     )
-    assert r.content_status == r.ai_content_status == ContentStatus.MATCHED  # never replaced by a supplementary finding
+    assert r.content_status == r.ai_content_status == ContentStatus.MATCHED
 
 
 async def test_a_reused_copy_follows_its_original_review_live(session):
@@ -86,7 +82,7 @@ async def test_legacy_rows_never_expose_an_old_content_verdict_as_a_headline_ver
                                             analysis_details=legacy)
     r = await present(session, sub)
     assert r.legacy_result and r.content_status is None and r.ai_content_status is None and r.headline_status is None
-    assert r.claim_scope.value == "HEADLINE_ONLY"  # a photo card is always headline-only
+    assert r.claim_scope.value == "HEADLINE_ONLY"
     assert r.analysis.headline_alteration is None and r.analysis.body_similarity.jaccard.value == 0.5
 
 

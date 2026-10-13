@@ -14,11 +14,6 @@ import {
 
 type QueueState = 'all' | 'escalated' | 'review';
 
-/**
- * The review queue. Experts see open claims awaiting their vote (never
- * escalated ones). Admins use the same page at /admin/review-queue: escalated
- * claims — theirs to decide — come first, and open claims are view-only.
- */
 @Component({
   selector: 'app-expert-queue',
   standalone: true,
@@ -65,7 +60,6 @@ export class ExpertQueueComponent implements OnInit {
     this.load();
   }
 
-  /** Search as you type: ~300 ms after the last keystroke, first page. */
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
   onSearchInput(value: string): void {
     if (this.searchTimer) clearTimeout(this.searchTimer);
@@ -85,11 +79,9 @@ export class ExpertQueueComponent implements OnInit {
   private request?: Subscription;
 
   load(): void {
-    // A newer search supersedes any request still in flight.
     this.request?.unsubscribe();
     this.loading.set(true);
     this.request = this.expertSvc
-      // One extra row tells whether another page exists.
       .getQueue(this.limit + 1, this.offset(), this.query, this.isAdmin() ? this.state() : 'all')
       .subscribe({
         next: (rows) => {

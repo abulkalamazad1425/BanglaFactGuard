@@ -30,7 +30,7 @@ async def test_scores_pair_the_claim_with_each_article_and_the_model_loads_once(
     articles = [article("ক", "খ"), article("কক", None)]
     assert await CrossEncoderReranker().scores("দাবি", articles) == [3.0, 2.0]
     assert await CrossEncoderReranker().scores("দাবি", []) == []
-    assert FakeCrossEncoder.loads == 1  # shared process-wide
+    assert FakeCrossEncoder.loads == 1
     CrossEncoderReranker._model.fail = True
     assert await CrossEncoderReranker().scores("দাবি", articles) is None
 

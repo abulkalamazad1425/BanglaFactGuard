@@ -1,136 +1,147 @@
 # BanglaFactGuard — Browser Extension
 
-An English-language Chrome side panel built with **Preact + Vite**, styled to match the existing Angular website. The backend remains FastAPI. Read [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the detailed design and scope.
+This Chrome side panel (Manifest V3, Preact + Vite) lets you submit Bangla news claims without leaving the page you are reading. You can then track the results. It uses the same [FastAPI backend](../backend/README.md) and the same three methods as the [website](../frontend/README.md): **Text & source**, **Photo card** and **Text & image**. Its look matches the website. The interface is in English.
+
+Manifest version 1.0.3. Requires desktop Chrome 120 or newer.
 
 ## Features
 
-- Guest, registered-user, expert and admin access. Optional email/password sign-in using the existing API.
-- Text & source, Photo card, and Text & image submission.
-- **Both headline and body:** type, paste, select page text and press **Use selected text**, or right-click selected text and choose the headline/body action. Import offers replace or append and never submits automatically.
-- **Area screenshot:** press **Select screenshot area**, drag the rectangle on the current webpage, or press Escape to cancel. Preview the selected area, drag to crop further, apply/reset crop or remove. Image uploads support the same crop tools.
-- Persistent drafts, per-account local Activity, queued status, preliminary and expert-final summaries, notifications and unread badge.
-- ON/OFF switch pauses extension capture, submission, polling and new notifications. Server jobs already accepted keep running. Turning on resumes tracking.
-- **View details** opens the existing website at `/verify/{submission_id}` in a new tab.
+- **Three views:** Verify, Activity and Account, in a side panel next to the current tab.
+- **Text from the page.**
+  - Type or paste into the fields.
+  - Select text on the page and press **Use selected text** next to a field.
+  - Or right-click the selected text and choose **BanglaFactGuard: use as headline** or **… use as body text**.
+  - If the field already has text, you can **Replace** or **Append** it. Importing text never submits anything.
+- **Images.**
+  - Upload a PNG/JPEG/WebP/GIF up to 10 MB.
+  - Or press **Select screenshot area** and drag a rectangle on the page. Pressing Escape, resizing the window, or not finishing within 90 s cancels the selection. Very small drags are ignored.
+  - In the preview you can drag to crop further, then **Apply crop**, **Reset crop** (back to the selected area, never the whole page) or remove the image.
+- **Drafts are kept** per account. Text is stored in `chrome.storage.local` and images in IndexedDB, so they survive closing the panel.
+- **Activity** lists this installation's submissions for the signed-in account (or the guest). It has search (headline, type, result), 10 items per page, short result summaries, unread markers and **View details**, which opens the website report at `/verify/{id}`.
+- **Background tracking.** Results are checked in the background. A desktop notification and the toolbar badge (unread count, or `OFF`) appear for the preliminary result, the final expert verdict and failures.
+- **ON/OFF switch.** OFF pauses capture, selection, submission, polling and new notifications. Jobs the server has already accepted keep running. Turning it back ON picks up tracking again.
+- **Account.**
+  - Sign in with an existing website account. Registration is on the website.
+  - Experts and admins get an **Open workspace** link to `/expert` or `/admin` on the website.
+  - Admins also see **Connection settings**.
 
-## 1. Start the existing backend and website
+## Requirements
 
-Use your existing database, Redis, MinIO, Gemini and model configuration. This extension does not replace those services. From a terminal in the repository root:
+- A running backend (`http://localhost:8000/api/v1` by default) with its job worker turned on. The website (`http://localhost:4200`) is only needed for **View details** links.
+- The backend's own setup applies: PostgreSQL, Redis, MinIO and the models. Photo cards need Gemini, and Text & image needs the multimodal weights and MinIO. See [backend/README.md](../backend/README.md).
+- Node.js 22 to build.
 
-```powershell
-cd backend
-.\.venv\Scripts\python.exe -m alembic upgrade head
-.\.venv\Scripts\python.exe run.py
-```
-
-If the project's virtual environment has another name, activate/use that environment instead. The API should run at `http://localhost:8000/api/v1`. Existing installations should restart the backend to load the new multimodal background endpoint. Keep the verification worker enabled. Run the current backend migrations (`alembic upgrade head`) before restarting; the UX update adds personal result delivery and uncalculated expert credibility.
-
-In a separate terminal:
-
-```powershell
-cd frontend
-npm install
-npm start
-```
-
-Default website URL: `http://localhost:4200`. The extension can submit without the website tab being open; the website server is required for detail links. Multimodal model weights and MinIO are required for Text & image; photocard verification also needs the configured OCR/extraction services.
-
-## 2. Build the extension
-
-Node.js 22 LTS is recommended. In another terminal:
+## Build and install
 
 ```powershell
 cd extension
 npm ci
-npm run build
+npm run build        # writes the installable extension to extension/dist
 ```
 
-The installable folder is **`extension/dist`**. This folder contains `manifest.json`, the side-panel page, worker, icon and bundled scripts. A build was generated during implementation; rebuild after changing source files.
+1. Open `chrome://extensions` and turn on **Developer mode**.
+2. Click **Load unpacked** and select the **`extension/dist`** folder. Do not select `extension/` itself, and do not open `dist/index.html` as a file; the Chrome APIs only exist in the loaded extension.
+3. Pin **BanglaFactGuard — Browser Extension** from Chrome's Extensions menu.
+4. Open a normal news or social-media page and click the pinned icon. The side panel opens in that window.
 
-## 3. Load into local Chrome
+After editing source files, run `npm run build` again (or keep `npm run dev` running to rebuild on every change). Then click **Reload** on `chrome://extensions` and reopen the panel.
 
-1. Open Chrome and enter `chrome://extensions` in the address bar.
-2. Turn on **Developer mode** in the top-right corner.
-3. Click **Load unpacked**.
-4. Select this exact folder on this machine:
+## Using it
 
-   `E:\8th Sem\SPL3\Main\BanglaFactGuard\extension\dist`
+### Text & source
 
-5. Pin **BanglaFactGuard — Browser Extension** from Chrome's Extensions menu.
-6. Open a regular news or social-media webpage, then click the pinned icon. The side panel opens beside your page.
-7. Keep the switch **ON**. Use it as a guest, or open **Account** to sign in.
-8. Submit a small claim. Once accepted, you can close the panel. Watch Activity/the toolbar badge and Chrome desktop notifications for completion.
+Enter the headline (required, 5–2,000 characters).
 
-Do **not** select the `extension` source directory or open `dist/index.html` as a normal file. Chrome APIs are available only after loading the manifest as an extension. This is for desktop Chrome 120 or newer.
+- **Claimed source** is optional. Leave it empty to check the claim against all verified sources.
+- **Article text** is optional (up to 50,000 characters). If given, the result includes body similarity scores.
+- **Publication date** is optional.
 
-## 4. Daily use
+### Photo card
 
-### Text
-
-Choose **Text & source**. Enter headline and optional body using any of typing, normal Ctrl+C/Ctrl+V, or page selection. Each text field has its own selection button. The right-click menu also has separate headline and body entries. Confirm Replace/Append, choose the claimed publisher and optional date, then submit.
-
-### Photo card or screenshot
-
-Choose **Photo card**. Upload an image or click **Select screenshot area**. Drag on the page to select only the desired region. Very small drags are ignored; Escape, resize or the 90-second selection timeout cancels. The selected area appears in the panel. Drag on the preview and use **Apply crop** if needed. **Reset crop** returns to the selected area (never to the full webpage). Enter the claimed publisher/date and submit.
-
-Chrome's API captures the visible viewport internally; the worker immediately crops it locally. Only the selected region is persisted and uploaded. It does not capture the full scrolling page. Selecting text/regions on Chrome settings, the Web Store, some PDF viewers and other restricted pages is not supported; use paste or image upload instead. Click the extension toolbar icon on the intended tab if Chrome has not granted temporary access to it.
+Add only the image, by uploading it or selecting a screenshot area. The server reads the headline, the outlet and the printed date from the card; the form has no fields for them. The collapsible **Verified news sources** list shows which outlets the system recognises. If the card shows no recognised outlet, the headline is checked against all verified sources.
 
 ### Text & image
 
-Headline, body and image are required. Body must contain at least 10 non-whitespace characters. An image alone belongs in Photo card. Image uploads accept PNG/JPEG/WebP/GIF up to 10 MB; cropped output must also fit the limit.
+Article text (at least 10 characters) and an image are required. The headline is optional.
 
-## Notifications and result meaning
+### How screenshots work
 
-- Pending claims are checked roughly every 30 seconds in the background; browser scheduling may delay this. An open panel requests checks every 10 seconds, with pending work normally limited to its next scheduled check. **Refresh** explicitly checks sooner.
-- AI-complete claims are followed approximately every 5 minutes for expert finalization. Finalized/failed claims stop network polling.
-- A preliminary result, final expert verdict and failure are distinct notifications. Reading/dismissing a result does not stop tracking the later expert verdict.
-- Desktop alerts require Chrome and OS notification permissions and the extension to be ON. Browser closure, sleep, Do Not Disturb or disabling the extension can delay/suppress desktop alerts. Saved Activity and the unread badge remain the fallback. Reopening Chrome/turning ON catches up.
-- Notification clicks open the extension Activity page; **View details** opens the website. Website login is separate when a private pending result requires authentication.
-- Source not found is not automatically a fake verdict. Incomplete retrieval is shown as incomplete. Date mismatch does not imply a false story. Multimodal predictions are clearly preliminary; expert verdict is separate.
-- Photo card: submit only the image (upload or screenshot area). The server reads the headline, the outlet (one of the active verified outlets, listed in the collapsible "Recognised news outlets" section) and the printed date; there are no outlet or date fields.
-- Activity re-checks every saved item, finished ones included; a submission deleted on the server is removed from Activity together with its alert. Only the server's own "not found" answer for that submission triggers this - a wrong API address or an outage never deletes anything.
+Chrome's `captureVisibleTab` captures the visible part of the page. The worker crops it straight away to the rectangle you drew, adjusting for display scaling. Only that area is saved and uploaded; the full scrolling page is never captured.
 
-## Connection settings and permissions
+Chrome settings pages, the Web Store, some PDF viewers and other restricted pages do not allow selection or capture. On those pages, paste the text or upload an image instead.
 
-Account → **Connection settings** is visible only to a signed-in admin. Guests, registered users and experts cannot view this form or change either connection URL through extension messages. Saving revalidates the admin role with the current backend. ON/OFF and notification preferences remain available to everyone. Defaults are the local API and website URLs above. For deployment, an admin can enter the HTTPS API base (including `/api/v1`) and HTTPS website URL. Chrome asks for permission only for the selected API host. Plain HTTP is allowed only for localhost/127.0.0.1. Changing the API clears extension tracking and credentials so they are not sent to a different server; old server records are unaffected. For first-time deployment where localhost is unavailable, configure the default URLs in `src/shared.js` and the API host in `public/manifest.json` before building.
+## Results and notifications
 
-Permissions: sidePanel, activeTab, scripting, contextMenus, storage, alarms, notifications; localhost host access plus optional HTTPS API-host access. Content access occurs only after user action. No browsing history, clipboard-reading or all-site persistent content script is used. Scripts and styles are bundled locally; no remote font dependency.
+- **How often results are checked.** A Chrome alarm runs every 30 s:
+  - Pending submissions are checked every 30 s.
+  - Submissions in expert review are checked every 5 minutes, waiting for the final verdict.
+  - Finished submissions are checked every 10 minutes, so one deleted on the server disappears from Activity.
+  - Failed requests back off up to 5 minutes.
+- **While the panel is open and visible**, it asks for a check every 10 s, and **Refresh** checks immediately.
+- **Three kinds of notification:** the preliminary result, the final expert verdict, and a failure. Each is shown once. Reading the preliminary result does not stop tracking the final verdict.
+- **Clicking a notification** opens the extension's Activity page in a tab.
+- **When alerts may not appear.** Desktop alerts need the extension to be ON, notifications turned on in Account, and Chrome and OS notification permission. Closing Chrome, sleep, Do Not Disturb or disabling the extension can delay or block them. Activity and the badge still show the saved outcome, and tracking catches up when Chrome or the extension comes back.
+- **When an item is removed from Activity.** Only when the server answers "not found" for that specific submission. A wrong API address or an outage never removes anything.
+- **What the results mean.** They use the same labels as the website:
+  - *Found / Not found in claimed source* (or *in verified sources*);
+  - *Exact Matched / Meaning Preserved / Altered*;
+  - date *Matched / Mismatched / Could not be determined*;
+  - *Likely Fake / Likely Real* for Text & image.
 
-Tokens are stored locally with trusted-extension-only access; storage is **not encrypted**. Passwords are never persisted. Sign out on shared computers. Different accounts have separate drafts and local activity; guest submissions do not become account-owned after login. Guest records cannot be recovered from local history after uninstall/data clearing. Account history on the website remains available.
+  A source that was not found is not a fake verdict, an incomplete check is not a negative, and a date mismatch does not make a story false. The final verdict (*Real / Fake / Misleading / Altered*) always comes from expert review.
+
+## Accounts, settings and privacy
+
+- **Guests and accounts.** Guest activity belongs to this Chrome installation. Each account has its own drafts and Activity, and guest submissions do not move to an account when you sign in. Website and extension sign-ins are separate.
+- **Tokens.** Tokens are kept in `chrome.storage.local`, which only trusted extension pages can read. This storage is **not encrypted**. Passwords are never stored. An expired access token is refreshed automatically, and a temporary refresh failure keeps you signed in. Sign out on shared computers.
+- **Connection settings** (Account tab).
+  - **Who can change them.** Only a signed-in admin. Before saving, the worker re-checks with the current server (`/auth/me`) that the user is still an admin. Guests, users and experts cannot change the URLs, even through extension messages. Everyone can use ON/OFF and the notification setting.
+  - **Allowed addresses.** URLs must be HTTPS, or plain HTTP on `localhost`/`127.0.0.1`, with no credentials, query string or fragment. Chrome asks for host permission only for the API host you choose.
+  - **Changing the API address** clears all local tracking, drafts and credentials, so nothing is sent to the new server. Records on the old server are not affected.
+  - **First-time deployment without localhost.** Change `DEFAULTS` in `src/shared.js` (and `host_permissions` in `public/manifest.json` if needed) before building.
+- **Permissions:** `sidePanel`, `activeTab`, `scripting`, `contextMenus`, `storage`, `alarms`, `notifications`.
+  - Host access is limited to localhost; other HTTPS hosts are optional and requested when needed.
+  - Pages are accessed only after you click the toolbar icon or a menu item. There is no content script that runs on every site, no reading of browsing history or the clipboard, and no remote code. The page's CSP is `script-src 'self'`.
 
 ## Development and tests
 
 ```powershell
-cd extension
-npm test
+npm test             # node --test tests/*.test.mjs
 npm run build
-# Optional rebuild on source changes:
-npm run dev
+npm run dev          # vite build --watch
 ```
 
-After each build, click **Reload** for the extension on `chrome://extensions`, then reopen the side panel. There is no need to reinstall dependencies after ordinary edits.
+There are 34 tests, using Node's built-in runner with simulated Chrome APIs and `fake-indexeddb`:
 
-Backend tests:
+- **`tests/shared.test.mjs`** covers result summaries and labels, required fields for each method, capture and display-scaling maths, deletion detection, and Activity search and paging.
+- **`tests/background.test.mjs`** covers the service worker:
+  - polling, notification de-duplication, ON/OFF and restart recovery;
+  - account isolation;
+  - photo-card submission;
+  - blocking privileged messages from content scripts;
+  - page-access handling (Facebook, Chrome internal pages);
+  - the admin-only connection settings;
+  - token refresh.
 
-```powershell
-cd backend
-.\.venv\Scripts\python.exe -m pytest tests/unit/multimodal tests/unit/verification/test_jobs.py -q --no-cov
-```
+These tests do not replace a manual check in a real Chrome install for screenshots and OS notifications. Prettier settings are in `.prettierrc.json`.
 
-See [TESTING.md](TESTING.md) for verified behavior and the remaining installed-Chrome checklist.
+| File | Role |
+| --- | --- |
+| `public/manifest.json` | Manifest V3: permissions, side panel, service worker, icon |
+| `index.html`, `src/panel.jsx`, `src/style.css` | Side-panel UI (Verify / Activity / Account, forms, crop preview) |
+| `src/background.js` | Service worker: API calls and token refresh, submission, polling, notifications, badge, context menus, selection and capture, settings |
+| `src/capture.js` | The temporary on-page rectangle selector |
+| `src/shared.js` | Defaults, labels, validation, result summaries, crop maths, Activity search and paging |
+| `src/db.js` | IndexedDB store for draft images |
+| `vite.config.js` | Builds `panel.js` and `background.js` into `dist/` |
 
-## Limitations and troubleshooting
+## Troubleshooting
 
-- **Cannot reach server:** start backend, check API base URL and optional host permission. HTTPS deployments must expose the API with a valid certificate and appropriate network access.
-- **404 for `/multimodal/predict/async`:** restart the backend with this checkout. The existing synchronous endpoint remains available to the website.
-- **Model unavailable / processing failed:** check server model, image storage, Gemini and worker configuration. The extension does not run the ML pipeline itself.
-- **Expired session:** sign in again. Authenticated submission never silently becomes anonymous.
-- **Uncertain submission:** if a network connection fails before an acknowledgement, do not blindly resubmit. Check Activity and website history first. Existing APIs have no cross-request idempotency key; the extension prevents in-flight double clicks but cannot promise deduplication when an acknowledgement is lost.
-- **No desktop alert:** check Account notification preference, ON state, Chrome notification permission and OS notification settings. Check Activity for the actual server outcome.
-- **No selected text / capture:** use an ordinary HTTPS page, activate the intended tab and click the extension icon. Some frames/PDF viewers restrict selections; paste/upload is the fallback.
-- **Facebook screenshot / page access (v1.0.1):** Facebook is a normal supported website. After reloading the extension, close the old panel, activate the Facebook tab and click the pinned BanglaFactGuard toolbar icon to reopen it. Then choose Photo card → Select screenshot area. Merely keeping a panel open while moving to a different site does not grant temporary page access. Missing tab URL metadata now triggers an actual permission check rather than being mislabeled as a restricted page. Capture uses the panel's own Chrome window.
-- The extension Activity shows submissions made in this extension installation, not every historical website submission. Expert/admin moderation remains on the website.
-- Raw API/result errors may retain backend-provided wording; all extension-authored interface text is English.
-
-## File map
-
-`src/panel.jsx` — Preact UI/forms/crop preview; `src/style.css` — matching visual tokens; `src/background.js` — API/auth/tracking/notifications; `src/capture.js` — temporary page selection; `src/shared.js` — validation/result mapping/crop scaling; `src/db.js` — image drafts; `public/manifest.json` — Chrome permissions/entrypoints; `tests/` — automated tests.
+- **Cannot reach server:** start the backend and check the API address. A deployed API needs HTTPS with a valid certificate and an allowed host permission.
+- **Processing failed or model unavailable:** check the backend's models, MinIO, Gemini settings and job worker. The extension does not run any models itself.
+- **Session expired:** sign in again. A signed-in submission is never sent anonymously instead.
+- **Not sure whether a submission went through:** if the connection dropped before the server confirmed it, check Activity and *My Submissions* on the website before trying again. The extension prevents double clicks, but the API has no general idempotency key. If you resubmit an identical Text & source claim from the same account, you get your existing submission back.
+- **No selected text, or capture fails ("page access"):** go to the tab you want, click the pinned BanglaFactGuard toolbar icon (this gives temporary access to that site), then try again. Keeping the panel open while switching to another site does not give access to the new site. This includes Facebook, which works like any other site.
+- **No desktop alert:** check the ON switch, the notification setting in Account, and Chrome and OS notification permissions. Activity shows the actual outcome.
+- **Connection settings are missing:** they are shown only to admins.
+- **Activity shows only some submissions:** Activity lists submissions made from this installation. Your full history is under *My Submissions* on the website. Expert and admin work happens on the website.

@@ -58,24 +58,13 @@ _BOT_WALL_MARKERS = re.compile(
     re.I,
 )
 
-# Statuses an anti-bot layer returns for a page a browser can load fine.
 _RETRY_IN_BROWSER_STATUSES = frozenset({401, 403, 406, 429, 503})
 
-# Cloudflare's managed challenge on these outlets takes the best part of ten
-# seconds to hand over the real page; a shorter budget captures the
-# interstitial and the article is scored as if it had no content.
 _BOT_WALL_RETRIES = 5
 _BOT_WALL_WAIT_MS = 3000
 
-# Pages open in one shared browser context; a handful at a time keeps the
-# challenge wait overlapping without starving each page of CPU.
 _PLAYWRIGHT_CONCURRENCY = 4
 
-# A host whose challenge did not clear is left alone for a while. Re-opening
-# its pages in a browser, each reloaded several times, is exactly the traffic
-# that makes Cloudflare escalate from a passive check to a hard block for this
-# IP; backing off lets the IP's reputation recover. Process-wide; the browser
-# runs in its own thread on Windows, hence the lock.
 _WALL_COOLDOWN_S = 600.0
 _walled_until: dict[str, float] = {}
 _walled_lock = threading.Lock()
@@ -105,12 +94,6 @@ _SCRIPT_STYLE_RE = re.compile(
 
 
 def _visible_text_len(html: str) -> int:
-    """Length of the text a reader would actually see.
-
-    Stripping tags alone leaves the *contents* of <script>/<style> behind,
-    which on a challenge page runs to tens of thousands of characters and
-    makes an almost text-free interstitial look like a full article.
-    """
     without_code = _SCRIPT_STYLE_RE.sub(" ", html)
     return len(re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", without_code)).strip())
 
@@ -123,38 +106,18 @@ def _is_shell_html(html: str) -> bool:
 
 
 def _is_bot_wall(html: str) -> bool:
-    """Detect an anti-bot interstitial served with a 200.
-
-    Cloudflare leaves its challenge script on ordinary pages too, so the
-    marker alone is not enough — a real article would be re-fetched in a
-    browser for nothing. An interstitial also carries almost no text, so
-    require both signals.
-    """
     if not _BOT_WALL_MARKERS.search(html):
         return False
     return _visible_text_len(html) < 2000
 
 
 class _OriginBlocked(Exception):
-    """The origin refused the plain HTTP client, not the URL itself.
-
-    Several outlets (bd-pratidin, kalerkantho, jugantor) sit behind Cloudflare
-    bot protection that rejects httpx on its TLS fingerprint alone — the same
-    URL loads fine in a real browser. Treated as "retry in Playwright" rather
-    than a dead URL, which is what it looked like before.
-    """
-
     def __init__(self, status: int) -> None:
         super().__init__(f"origin blocked request (HTTP {status})")
         self.status = status
 
 
 class _RedirectRejected(Exception):
-    """The request ended on a host outside the claimed source's registered
-    domains/channels (open redirect, shortener, syndication partner). The page
-    is NOT evidence from the claimed source, so it is dropped - and it is a
-    rejected candidate, not a fetch failure."""
-
     def __init__(self, final_url: str) -> None:
         super().__init__(f"final URL left the claimed source: {final_url}")
         self.final_url = final_url
@@ -189,8 +152,6 @@ class EvidenceRetrievalStage:
         if context.is_verified_sources_mode:
             scope = context.verified_scope
             self._allowed = scope.all_domains if scope is not None else []
-            # An empty allowlist would mean "unrestricted" below - in this mode
-            # it means nothing is eligible, so nothing is fetched.
             candidates = [
                 c for c in candidates
                 if self._allowed and is_allowed_host(urlparse(c.url).hostname or "", self._allowed)
@@ -229,7 +190,6 @@ class EvidenceRetrievalStage:
                 else:
                     raw_html_cache[url] = result
             elif isinstance(result, _OriginBlocked):
-                # A browser can still load this — don't write the URL off.
                 shell_urls.append(url)
             else:
                 context.failed_extraction_urls.append(url)
@@ -336,22 +296,11 @@ class EvidenceRetrievalStage:
                 extra_http_headers={"Accept-Language": "bn-BD,bn;q=0.9,en;q=0.8"},
             )
 
-            # Only audio/video is blocked. Aborting images and fonts as well
-            # looked like a free bandwidth saving, but Cloudflare's managed
-            # challenge needs those assets to complete: with them blocked the
-            # challenge never cleared and every protected article came back
-            # as the "Just a moment..." page; with them allowed it cleared in
-            # about three seconds and returned the real article.
             await context_pw.route(
                 "**/*.{mp4,mp3,webm,ogg,avi,mov,m4a}",
                 lambda route: route.abort(),
             )
 
-            # Every candidate from a Cloudflare-protected outlet lands here,
-            # and each one now waits out a challenge — fetching them one
-            # after another put whole verifications into the minutes. Run a
-            # few at a time instead; the per-domain courtesy delay in tier 1
-            # still applies to the HTTP path.
             semaphore = asyncio.Semaphore(_PLAYWRIGHT_CONCURRENCY)
 
             async def fetch_one(url: str) -> tuple[str, str | None]:
@@ -373,9 +322,6 @@ class EvidenceRetrievalStage:
                             return url, _REJECTED
                         html = await page.content()
 
-                        # A Cloudflare interstitial clears itself after a few
-                        # seconds; grabbing the DOM too early captures the
-                        # "Just a moment..." page instead of the article.
                         if _is_bot_wall(html):
                             for _ in range(_BOT_WALL_RETRIES):
                                 await page.wait_for_timeout(_BOT_WALL_WAIT_MS)
