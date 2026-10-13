@@ -1,5 +1,3 @@
-"""A card's printed date is parsed, never guessed."""
-
 from datetime import date
 
 import pytest
@@ -15,7 +13,7 @@ from app.features.photocard.card_date import parse_card_date
     ("শনিবার, ০৪ অক্টোবর ২০২৫", date(2025, 10, 4)),
     ("October 5, 2026", date(2026, 10, 5)),
     ("5 Oct 2026", date(2026, 10, 5)),
-    ("০৫/১০/২০২৬", date(2026, 10, 5)),  # day first
+    ("০৫/১০/২০২৬", date(2026, 10, 5)),
     ("05.10.2026", date(2026, 10, 5)),
     ("2026-10-05", date(2026, 10, 5)),
 ])

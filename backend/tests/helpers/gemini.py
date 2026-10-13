@@ -1,5 +1,3 @@
-"""A scripted Gemini `generateContent` endpoint for photo-card extraction tests."""
-
 from __future__ import annotations
 
 import json
@@ -29,9 +27,6 @@ PER_MINUTE = "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
 
 
 class Gemini:
-    """Answers each request with the next scripted item (a body dict, an
-    httpx.Response or an exception to raise) and records every request."""
-
     def __init__(self, *responses) -> None:
         self.responses = list(responses)
         self.requests: list[httpx.Request] = []

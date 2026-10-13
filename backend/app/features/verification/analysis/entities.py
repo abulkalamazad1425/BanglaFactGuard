@@ -1,24 +1,9 @@
-"""Claim-entity coverage and conservative entity matching.
-
-Coverage is DIRECTIONAL: it asks whether the entities the claim names are
-present in the source evidence. Extra people/places/organisations in a long
-source article are not evidence that a headline was altered, so — unlike the
-helper this replaces — there is no penalty for evidence-only entities.
-
-Matching is deliberately conservative so different people are never merged:
-exact normalised key, a small curated alias table, unambiguous multi-token
-span containment, or literal presence in the evidence text. A single shared
-surname is reported as *ambiguous*, not matched.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 from app.features.verification.analysis.text import light_stem, tokenize
 
-# Equivalence classes of surface forms. Normalised at import with the same
-# pipeline as the compared text. Intentionally small and curated.
 _ALIAS_SETS: list[set[str]] = [
     {"ঢাকা", "dhaka"},
     {"বাংলাদেশ", "bangladesh"},
@@ -34,7 +19,6 @@ _ALIAS_SETS: list[set[str]] = [
 
 
 def entity_key(text: str) -> tuple[str, ...]:
-    """Normalised, stemmed token tuple used for every entity comparison."""
     return tuple(light_stem(t) for t in tokenize(text))
 
 
@@ -47,7 +31,7 @@ for _i, _set in enumerate(_ALIAS_SETS):
 @dataclass(frozen=True)
 class EntityMention:
     text: str
-    type: str  # PER | LOC | ORG
+    type: str
 
     @property
     def key(self) -> tuple[str, ...]:
@@ -57,7 +41,7 @@ class EntityMention:
 class EntityMatch:
     claimed: str
     type: str
-    status: str  # exact | alias | span | text | ambiguous | unmatched
+    status: str
     matched_to: str | None = None
 
     @property
@@ -75,7 +59,6 @@ def match_entity(
     evidence_mentions: list[EntityMention],
     evidence_token_keys: tuple[str, ...],
 ) -> EntityMatch:
-    """Match one claimed entity against evidence entities and evidence text."""
     ckey = claimed.key
     if not ckey:
         return EntityMatch(claimed.text, claimed.type, "unmatched")
@@ -94,7 +77,6 @@ def match_entity(
         if any(_ALIAS_INDEX.get(evk) == alias_id for evk in _windows(evidence_token_keys, 3)):
             return EntityMatch(claimed.text, claimed.type, "alias", None)
 
-    # Span containment between entity mentions.
     containing = [m for m, key in ev_keys if _contains(key, ckey) and key != ckey]
     contained = [m for m, key in ev_keys if _contains(ckey, key) and key != ckey]
     if len(ckey) >= 2 and containing:
@@ -103,8 +85,6 @@ def match_entity(
         hit = next(m for m in contained if len(m.key) >= 2)
         return EntityMatch(claimed.text, claimed.type, "span", hit.text)
 
-    # A bare shared token (e.g. a surname) that only occurs inside longer,
-    # distinct entities could name any of them: ambiguous, never matched.
     if len(ckey) == 1 and containing:
         return EntityMatch(
             claimed.text,
@@ -113,7 +93,6 @@ def match_entity(
             ", ".join(sorted({m.text for m in containing})),
         )
 
-    # Literal presence of the claimed token sequence in the evidence text.
     if _contains(evidence_token_keys, ckey):
         return EntityMatch(claimed.text, claimed.type, "text", None)
 
@@ -133,10 +112,7 @@ def _windows(tokens: tuple[str, ...], max_n: int):
             yield tokens[i : i + n]
 
 
-# ── grammatical role (surface case marking) ──────────────────────────────
-
 def mentions_in_sentence(sentence: str, mentions: list[EntityMention]) -> list[EntityMention]:
-    """Mentions whose normalised token sequence occurs in `sentence`."""
     stems = tuple(light_stem(t) for t in tokenize(sentence))
     out: list[EntityMention] = []
     seen: set[tuple[str, ...]] = set()

@@ -1,29 +1,3 @@
-"""S08 - Source correspondence: did the claimed outlet publish THIS report?
-
-Decides `source_status` (CONFIRMED / NOT_FOUND / INCOMPLETE) and selects the
-source article every later stage compares against. It is deliberately a
-different decision from headline equivalence (S09): an altered headline can
-still correspond to the very report it distorts, and a report about the same
-topic, person or country does not correspond merely because of that overlap
-(see `decisions.assess_correspondence`).
-
-Measurements (claim headline vs each ranked candidate, best rank first):
-  headline_title_similarity  LaBSE cosine of headline vs source title
-  title_keyword_coverage     share of the claim's keywords in the title
-  passage_keyword_coverage   share of the claim's keywords in the title plus
-                             the source passages that discuss them
-
-Every ranked candidate is measured, against each of its headline lines (the
-title and any kicker printed with it). The best correspondence level wins,
-ties going to the higher headline/title similarity, and that article - with
-the headline line the claim matched - becomes `top_article`. (Taking the
-first STRONG candidate in rank order let a re-worded copy of the story beat
-the article whose headline is the claim.)
-
-A failed or inadequate search is INCOMPLETE - never NOT_FOUND - and so is a
-search whose matching result could not be fetched (`_blocked_match`).
-"""
-
 from __future__ import annotations
 
 import re
@@ -110,12 +84,6 @@ class SourceCorrespondenceStage:
     async def _blocked_match(
         self, context: PipelineContext, thresholds, *, better_than: str | None
     ) -> str | None:
-        """A search result whose page was never read (fetch blocked or
-        extraction failed) but whose title corresponds to the claim better
-        than the best article that WAS read (`better_than`, None = nothing
-        read corresponds). Judged on the search title with the same rules as
-        a fetched article. Without this, a blocked exact report lost to a
-        weaker stand-in (false ALTERED) or to nothing (false NOT_FOUND)."""
         floor = _LEVEL_RANK.get(better_than, _LEVEL_RANK["NONE"]) if better_than else _LEVEL_RANK["NONE"]
         failed = {_strip_amp(u) for u in context.failed_extraction_urls}
         if not failed:
@@ -136,8 +104,6 @@ class SourceCorrespondenceStage:
     async def _measure(
         self, context: PipelineContext, article: RankedArticleSchema | None, title: str | None
     ) -> dict[str, MetricDetail]:
-        """Measure the claim against `title` (and, with an article, the body
-        passages that discuss the claim)."""
         headline = context.normalized_headline
         title = title or ""
         metrics: dict[str, MetricDetail] = {}
@@ -200,7 +166,6 @@ def _inputs(metrics: dict[str, MetricDetail]) -> CorrespondenceInputs:
 
 
 def _search_title(snippet: str) -> str:
-    """Google News titles end with " - <publisher>"; drop that suffix."""
     head, sep, _tail = snippet.rpartition(" - ")
     return (head if sep and head.strip() else snippet).strip()
 

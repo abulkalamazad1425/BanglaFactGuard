@@ -1,21 +1,3 @@
-"""Headline Alteration display status: Exact Matched / Meaning Preserved / Altered.
-
-Only the stored MATCHED verdict is split; nothing is re-compared and the
-ALTERED determination is passed through untouched, so an altered headline can
-never become Meaning Preserved here.
-
-Exactness comes from evidence, in this order:
-1. `verification_results.headline_exact_match` — written by S13 from the
-   comparator's own exact-match shortcut (`is_exact_match`).
-2. The stored Headline Alteration detail's `basis == "exact"`.
-3. For an older MATCHED row with neither, the stored claim headline and
-   source title are re-checked with the same `is_exact_match` normalisation
-   (NFC, zero-width characters removed, whitespace collapsed, one trailing
-   ।.!? removed — nothing else). Semantic similarity never counts.
-Without enough evidence a MATCHED row is shown as Meaning Preserved, never
-promoted to Exact Matched.
-"""
-
 from __future__ import annotations
 
 from app.core.constants import ContentStatus, HeadlineAlterationStatus
@@ -43,8 +25,6 @@ def derive_headline_status(
 
 
 def headline_status_for_result(result, *, claim_headline: str | None = None) -> HeadlineAlterationStatus | None:
-    """The display status for a stored VerificationResult (AI preliminary
-    finding). Legacy rows (no headline_check_status) have no headline verdict."""
     from app.features.verification.presenter import is_headline_result, parse_analysis
 
     if result is None or not is_headline_result(result):

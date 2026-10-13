@@ -1,6 +1,3 @@
-"""S11: the claimed day vs the report's datePublished day, only for a
-confirmed source; an unknown report date is INCOMPLETE, never MISMATCHED."""
-
 from datetime import date
 
 import pytest

@@ -38,10 +38,6 @@ class SourceNotFoundError(BanglaFactGuardError):
 
 
 class ImageStorageUnavailableError(BanglaFactGuardError):
-    """The card image could not be stored. A photo-card submission is only
-    acknowledged once its image bytes are durably stored (the background job
-    reads them back), so this is a 503 rather than an accepted submission."""
-
     http_status_code = 503
 
     def __init__(self) -> None:
@@ -51,10 +47,6 @@ class ImageStorageUnavailableError(BanglaFactGuardError):
 
 
 class PermanentJobError(BanglaFactGuardError):
-    """A background job failed in a way retrying cannot fix (unreadable
-    image, unresolvable source, ...). Carries a user-presentable reason that
-    is stored on the submission and shown on its result page."""
-
     http_status_code = 422
 
     def __init__(self, reason: str, details: dict[str, Any] | None = None) -> None:

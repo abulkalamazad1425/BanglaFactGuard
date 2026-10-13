@@ -1,14 +1,3 @@
-"""Cut over to the PDF schema: backfill legacy data into the new tables (reusing
-primary keys so existing /verify/{id} and /multimodal/predict/{id} links keep
-resolving), repoint verification_logs at submissions, add the multimodal
-dedup column, and seed default credibility weight tiers.
-
-Legacy tables (verified_claims, search_queries, retrieved_articles,
-verification_results, expert_reviews, credibility_scores,
-multimodal_predictions) are left untouched with their data — only read from,
-never modified or dropped. verified_sources is not touched at all.
-"""
-
 revision = "9ed4fe39e0e9"
 down_revision = "9624a66f7531"
 branch_labels = None
@@ -20,11 +9,6 @@ import sqlalchemy as sa
 
 def upgrade() -> None:
 
-    # ------------------------------------------------------------------
-    # 1. multimodal_analysis.is_duplicate_of_id — documented deviation from
-    #    the PDF schema (Table 4.9 has no dedup column); mirrors the existing
-    #    multimodal_predictions.is_duplicate_of_id mechanism.
-    # ------------------------------------------------------------------
     op.add_column(
         "multimodal_analysis",
         sa.Column(
@@ -48,9 +32,6 @@ def upgrade() -> None:
         ondelete="SET NULL",
     )
 
-    # ------------------------------------------------------------------
-    # 2. Backfill verified_claims -> submissions (same id reused).
-    # ------------------------------------------------------------------
     op.execute(
         """
         INSERT INTO submissions (
@@ -74,7 +55,6 @@ def upgrade() -> None:
         """
     )
 
-    # 3. search_queries -> source_evidence_queries (same enum types, same ids)
     op.execute(
         """
         INSERT INTO source_evidence_queries (
@@ -87,8 +67,6 @@ def upgrade() -> None:
         """
     )
 
-    # 4. retrieved_articles -> retrieved_articles_v2 (same ids, so
-    #    verification_results.top_article_id keeps resolving in step 5)
     op.execute(
         """
         INSERT INTO retrieved_articles_v2 (
@@ -103,7 +81,6 @@ def upgrade() -> None:
         """
     )
 
-    # 5. verification_results -> verification_results_v2 (same ids)
     op.execute(
         """
         INSERT INTO verification_results_v2 (
@@ -120,8 +97,6 @@ def upgrade() -> None:
         """
     )
 
-    # 6. credibility_scores -> expert_profiles (one-time sync for rows the
-    #    dual-write hasn't already covered)
     op.execute(
         """
         INSERT INTO expert_profiles (
@@ -139,9 +114,6 @@ def upgrade() -> None:
         """
     )
 
-    # 7. multimodal_predictions -> submissions (new id) + multimodal_analysis
-    #    (same id as multimodal_predictions, so /multimodal/predict/{id}
-    #    keeps resolving)
     op.execute(
         """
         WITH mapped AS (
@@ -179,11 +151,6 @@ def upgrade() -> None:
         """
     )
 
-    # ------------------------------------------------------------------
-    # 8. Repoint verification_logs at submissions (pipeline-internal
-    #    observability table, no PDF counterpart, actively written on every
-    #    run — safe to repoint because of the id-preserving backfill above).
-    # ------------------------------------------------------------------
     op.drop_constraint(
         "verification_logs_claim_id_fkey", "verification_logs", type_="foreignkey"
     )
@@ -206,10 +173,6 @@ def upgrade() -> None:
         'ALTER INDEX ix_verification_logs_claim_stage RENAME TO ix_verification_logs_submission_stage'
     )
 
-    # ------------------------------------------------------------------
-    # 9. Seed default credibility weight tiers so admin-configurable
-    #    weighted finalization works without manual setup first.
-    # ------------------------------------------------------------------
     op.execute(
         """
         INSERT INTO credibility_weight_tiers
@@ -253,8 +216,6 @@ def downgrade() -> None:
         ondelete="CASCADE",
     )
 
-    # Delete multimodal-derived submissions, then multimodal_analysis rows
-    # backfilled from multimodal_predictions.
     op.execute(
         """
         DELETE FROM submissions

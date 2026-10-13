@@ -133,18 +133,6 @@ class OverallVerdict(str, Enum):
 
 
 class ExpertVerdict(str, Enum):
-    """A human expert's own single-category judgment call on a claim.
-
-    Deliberately separate from the AI pipeline's (SourceStatus, ContentStatus,
-    DateStatus) triple: expert review is a credibility-weighted consensus vote
-    that predates and is independent of this task's 3-dimensional verdict
-    model, and collapsing three experts' votes across three independent axes
-    into one weighted consensus is a distinct, unspecified design problem.
-    This enum keeps that existing voting/credibility-scoring subsystem
-    working unchanged. It is never returned as "the verdict" from the
-    verification pipeline itself — see VerificationResponse.
-    """
-
     TRUE = "TRUE"
     FALSE = "FALSE"
     PARTIALLY_TRUE = "PARTIALLY_TRUE"
@@ -252,9 +240,6 @@ class MetricState(str, Enum):
 
 
 class SearchCallOutcome(str, Enum):
-    """Per provider-call accounting for S04 — the only honest basis for
-    deciding whether a search was adequate."""
-
     SUCCESS = "SUCCESS"
     SUCCESS_EMPTY = "SUCCESS_EMPTY"
     FAILED = "FAILED"
@@ -263,8 +248,6 @@ class SearchCallOutcome(str, Enum):
 
 
 class JobPhase(str, Enum):
-    """Fine-grained progress inside the public PENDING/PROCESSING lifecycle."""
-
     QUEUED = "QUEUED"
     EXTRACTING = "EXTRACTING"
     VERIFYING = "VERIFYING"
@@ -272,9 +255,6 @@ class JobPhase(str, Enum):
     FAILED = "FAILED"
 
 
-# Bumped whenever scoring/decision logic changes in a way that makes earlier
-# stored scores non-comparable. It is part of claim identity, so results
-# produced by older (defective) logic are never served as current.
 VERIFICATION_PIPELINE_VERSION: str = "v4.0-headline-title-body-scores"
 
 

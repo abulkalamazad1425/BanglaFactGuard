@@ -1,6 +1,3 @@
-"""S01: normalised claim, verification mode and the single claim identity.
-An unresolved source never silently runs an unrestricted search."""
-
 from datetime import date
 
 import pytest
@@ -34,8 +31,8 @@ async def test_claimed_source_claim_is_normalised_and_identified():
 
 
 @pytest.mark.parametrize("source,canonical", [
-    ("https://www.thedailystar.net/news/bangladesh-123", "thedailystar.net"),  # URL
-    ("কাস্টম পোর্টাল", "customportal.com"),                                    # registry alias
+    ("https://www.thedailystar.net/news/bangladesh-123", "thedailystar.net"),
+    ("কাস্টম পোর্টাল", "customportal.com"),
 ])
 async def test_source_resolution_paths(source, canonical):
     assert (await normalise(source=source)).normalized_source == canonical

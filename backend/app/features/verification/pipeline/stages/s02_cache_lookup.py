@@ -20,22 +20,6 @@ logger = structlog.get_logger(__name__)
 
 
 class CacheLookupStage:
-    """S02: reuse an earlier identical, complete verification.
-
-    Invariants:
-    * Redis stores only a pointer to the submission holding the result; the
-      database row is authoritative and is re-validated on every hit
-      (`reuse.result_is_reusable`), so a deleted or non-reusable result is
-      never served from a leftover pointer. The DB fallback applies the same
-      rules.
-    * A hit never changes `context.submission_id`: the caller's own submission
-      (owner, photo-card image, extraction record) stays the target and the
-      service layer copies the result onto it (`ResultReuseService`).
-    * A claim already checked is not re-run to look for newer evidence.
-
-    Identity = `context.content_hash` (`hashing.compute_claim_hash`).
-    """
-
     stage_id = PipelineStageID.S02_CACHE_LOOKUP
 
     def __init__(
@@ -123,9 +107,6 @@ class CacheLookupStage:
 
     @staticmethod
     def _populate(context: PipelineContext, source_submission_id: uuid.UUID, result) -> None:
-        """Mark the hit. The reused automated result itself is copied by the
-        service layer (`ResultReuseService.materialize`); nothing of it is
-        replayed into this context."""
         context.cache_hit = True
         context.reused_from_submission_id = source_submission_id
         context.source_status = SourceStatus(result.source_status)
@@ -137,8 +118,6 @@ class CacheLookupStage:
         submission_id: uuid.UUID,
         source_status: SourceStatus | None,
     ) -> None:
-        """Record the submission holding the latest complete result for this
-        identity. TTL is the shorter NOT_FOUND window when applicable."""
         from app.core.config import get_settings
 
         redis = get_settings().redis

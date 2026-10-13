@@ -1,6 +1,3 @@
-"""The durable queue: one job per submission, oldest first, crashed jobs
-reclaimed after a stale heartbeat, bounded retries."""
-
 from __future__ import annotations
 
 import uuid
@@ -19,7 +16,7 @@ async def enqueue(session, kind="SOURCE_BASED", *, status=None, locked_ago=None)
     session.add(sub)
     await session.flush()
     job = await VerificationJobRepository(session).enqueue(sub.id, kind, payload={"k": 1})
-    job.created_at = datetime(2026, 1, 1, tzinfo=timezone.utc) + timedelta(seconds=next(_created))  # queue order
+    job.created_at = datetime(2026, 1, 1, tzinfo=timezone.utc) + timedelta(seconds=next(_created))
     if status:
         job.status = status
     if locked_ago is not None:
@@ -46,7 +43,7 @@ async def test_claims_follow_lanes_and_reclaim_only_stale_running_jobs(session):
     first = await repo.claim_next("w" * 100, stale_after_s=120, exclude_kinds=("PHOTO_CARD",))
     assert first.id == stranded.id and first.attempts == 1 and len(first.locked_by) == 64
     assert (await repo.claim_next("w", stale_after_s=120)).id == text.id
-    assert await repo.claim_next("w", stale_after_s=120) is None  # `alive` is still heartbeating
+    assert await repo.claim_next("w", stale_after_s=120) is None
     assert alive.status == "RUNNING"
 
 
@@ -71,7 +68,7 @@ async def test_done_and_heartbeat(session):
     job = await enqueue(session, status="RUNNING", locked_ago=600)
     await repo.heartbeat(job.id)
     await session.refresh(job)
-    assert (await repo.claim_next("w", stale_after_s=120)) is None  # fresh heartbeat: not reclaimed
+    assert (await repo.claim_next("w", stale_after_s=120)) is None
     await repo.mark_done(job.id)
     await session.refresh(job)
     assert (job.status, job.locked_at) == ("DONE", None) and job.finished_at

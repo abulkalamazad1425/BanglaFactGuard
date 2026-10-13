@@ -18,8 +18,6 @@ _SETTINGS = get_settings()
 
 
 class MultimodalAnalysisRepository:
-    """Storage for multimodal analysis linked to submissions."""
-
     def __init__(self, db: AsyncSession) -> None:
         self._db = db
 
@@ -84,8 +82,6 @@ class MultimodalAnalysisRepository:
         return result.scalar_one_or_none()
 
     async def get_original(self, record: MultimodalAnalysis) -> MultimodalAnalysis | None:
-        """The analysis a reused copy was taken from — the one that carries the
-        expert decision. None for an original, or once the original is deleted."""
         if record.is_duplicate_of_id is None:
             return None
         result = await self._db.execute(

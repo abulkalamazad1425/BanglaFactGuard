@@ -13,13 +13,6 @@ logger = structlog.get_logger(__name__)
 
 
 class QueryGeneratorStage:
-    """Headline, all-keyword, first-3 and first-4 keyword searches; the headline
-    and all-keyword queries are repeated with the user date when one is given.
-
-    Every query is restricted to the resolved source. Body text is used only
-    for downstream content verification, never for evidence discovery.
-    """
-
     stage_id = PipelineStageID.S03_QUERY_GENERATOR
 
     async def execute(self, context: PipelineContext) -> PipelineContext:
@@ -33,7 +26,6 @@ class QueryGeneratorStage:
                 message="A normalized headline and selected source are required for search.",
             )
 
-        # Never interpret a site operator inside submitted text as a source.
         headline = re.sub(r"\bsite:\S+", "", headline, flags=re.IGNORECASE).strip()
         keywords = extract_headline_keywords(headline, top_n=8)
         context.claim_keywords = keywords
@@ -50,8 +42,6 @@ class QueryGeneratorStage:
 
         add(headline, QueryType.HEADLINE)
         add(keyword_text, QueryType.KEYWORDS)
-        # Shorter keyword queries (first 3 and first 4 keywords) when the
-        # headline has that many; duplicates of the full set are dropped.
         for n in (3, 4):
             if len(keywords) >= n:
                 add(" ".join(keywords[:n]), QueryType.KEYWORDS)
@@ -71,9 +61,6 @@ class QueryGeneratorStage:
         return context
 
     def _verified_sources_queries(self, context: PipelineContext) -> PipelineContext:
-        """Bounded phrasings without a site operator: S04 runs each one once
-        per group of verified domains (``site:a OR site:b ...``), never once
-        per source."""
         from app.core.config import get_settings
 
         headline = re.sub(r"\bsite:\S+", "", context.normalized_headline.strip(), flags=re.IGNORECASE).strip()
@@ -83,8 +70,6 @@ class QueryGeneratorStage:
             )
         scope = context.verified_scope
         if scope is None or scope.empty:
-            # No active verified source: nothing may be searched (never an
-            # unrestricted web search). The result is INCOMPLETE.
             context.claim_keywords = extract_headline_keywords(headline, top_n=8)
             context.search_queries = []
             raise QueryGenerationError(

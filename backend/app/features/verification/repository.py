@@ -49,7 +49,6 @@ class ResultRepository(BaseRepository[VerificationResult]):
             **(result.analysis_details or {}),
             "timings": timings.model_dump(mode="json"),
         }
-        # A reused result keeps its evidence, but reports THIS execution's time.
         result.avg_verification_time_ms = pipeline_ms
         await self.session.flush()
 
@@ -76,13 +75,6 @@ class ResultRepository(BaseRepository[VerificationResult]):
         analysis_details: dict | None = None,
         reused_from_submission_id: uuid.UUID | None = None,
     ) -> VerificationResult:
-        """Write the AUTOMATED snapshot for a submission.
-
-        Only automated columns are written here. Expert-finalized columns
-        (final_*, overall_verdict, finalized_at) belong to ExpertReviewService
-        and are never touched, and `ai_consensus_label` is no longer written
-        at all: the automated system casts no overall truth vote.
-        """
         existing = await self.get_by_submission_id(submission_id)
 
         fields = dict(

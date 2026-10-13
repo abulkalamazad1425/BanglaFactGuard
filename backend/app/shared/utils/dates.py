@@ -1,22 +1,14 @@
-"""Publication-date parsing with timezone provenance.
-
-Claimed and published dates are compared as calendar days in Asia/Dhaka, the
-timezone of the outlets and submitters. A `datePublished` of
-``2024-03-15T21:30:00+00:00`` is 16 March in Dhaka; truncating the string to
-its first ten characters (what a naive parser does) would call it 15 March.
-"""
-
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 
-try:  # tzdata may be absent on Windows
+try:
     from zoneinfo import ZoneInfo
 
     DHAKA_TZ = ZoneInfo("Asia/Dhaka")
-except Exception:  # pragma: no cover - fixed-offset fallback (no DST in BD since 2009)
+except Exception:  # pragma: no cover
     DHAKA_TZ = timezone(timedelta(hours=6), "Asia/Dhaka")
 
 _BANGLA_DIGITS = str.maketrans("০১২৩৪৫৬৭৮৯", "0123456789")
@@ -34,10 +26,10 @@ _TEXT_FORMATS = ("%B %d, %Y", "%d %B %Y", "%b %d, %Y", "%d %b %Y", "%d/%m/%Y", "
 
 @dataclass(frozen=True)
 class ParsedPublication:
-    local_date: date            # calendar day in Asia/Dhaka
-    published_at: datetime | None  # tz-aware (Asia/Dhaka) when a time was present
+    local_date: date
+    published_at: datetime | None
     has_time: bool
-    tz_assumed: bool            # True when the source string carried no UTC offset
+    tz_assumed: bool
 
 
 def _offset(token: str | None) -> timezone | None:
@@ -51,7 +43,6 @@ def _offset(token: str | None) -> timezone | None:
 
 
 def parse_publication(raw: str | None) -> ParsedPublication | None:
-    """Parse a publication timestamp/date string; None if unparseable."""
     if not raw:
         return None
     text = raw.strip().translate(_BANGLA_DIGITS)

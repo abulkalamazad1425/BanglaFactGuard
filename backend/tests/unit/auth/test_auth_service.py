@@ -1,7 +1,3 @@
-"""Accounts and sessions: strong passwords, no account enumeration, rotated
-refresh tokens with a short grace window, single-use reset codes, and every
-password change ending all sessions."""
-
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -80,7 +76,6 @@ async def test_refresh_rotates_with_a_grace_window_and_logout_revokes_at_once(au
     assert aware(record.expires_at) - datetime.now(timezone.utc) > timedelta(
         seconds=get_settings().auth.refresh_token_ttl_seconds - 60
     )
-    # the client never received `second`: retrying with the old token still works
     assert (await svc.refresh(first.refresh_token)).refresh_token
     old = await RefreshTokenRepository(session).get_valid_by_raw_token(first.refresh_token)
     assert aware(old.expires_at) <= datetime.now(timezone.utc) + timedelta(
@@ -92,7 +87,7 @@ async def test_refresh_rotates_with_a_grace_window_and_logout_revokes_at_once(au
         await svc.refresh(first.refresh_token)
 
     await svc.logout(second.refresh_token)
-    await svc.logout(second.refresh_token)  # already revoked: harmless
+    await svc.logout(second.refresh_token)
     with pytest.raises(TokenInvalidError):
         await svc.refresh(second.refresh_token)
 
@@ -123,9 +118,9 @@ async def test_password_reset_code_is_emailed_single_use_and_ends_every_session(
 
     await svc.confirm_password_reset("a@example.com", otp, "NewSecret1")
     await svc.login("a@example.com", "NewSecret1")
-    with pytest.raises(OtpInvalidError):  # single use
+    with pytest.raises(OtpInvalidError):
         await svc.confirm_password_reset("a@example.com", otp, "Another123")
-    with pytest.raises(TokenInvalidError):  # existing sessions ended
+    with pytest.raises(TokenInvalidError):
         await svc.refresh(tokens.refresh_token)
 
 

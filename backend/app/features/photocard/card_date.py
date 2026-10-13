@@ -1,20 +1,3 @@
-"""Deterministic parsing of the publication date printed on a photo card.
-
-Gemini transcribes the date exactly as printed (raw string); this module
-turns that string into a calendar date WITHOUT guessing:
-
-* day, month and year must all be visible - a date without a year (or a
-  relative date such as "২ ঘণ্টা আগে") is not a date;
-* Bangla and Latin digits, Bangla and English Gregorian month names, the
-  Bangla ordinal suffixes (১লা, ২রা, ৪ঠা, ৫ই, ২১শে) and numeric d/m/y or
-  y-m-d forms are understood; numeric dates are read day-first, the
-  convention of Bangladeshi outlets;
-* Bangla-calendar dates (বৈশাখ ...), two-digit years and strings carrying
-  two different dates are not parsed.
-
-Anything else returns ``None`` and the claim simply has no claimed date.
-"""
-
 from __future__ import annotations
 
 import re
@@ -62,8 +45,6 @@ def _safe(year: int, month: int, day: int) -> date | None:
 
 
 def parse_card_date(raw: str | None) -> date | None:
-    """The single calendar date in ``raw``, or None when there is none, it
-    is incomplete, or the string is ambiguous."""
     if not raw or not raw.strip():
         return None
     text = unicodedata.normalize("NFC", raw).translate(_BANGLA_DIGITS)

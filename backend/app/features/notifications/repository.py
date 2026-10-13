@@ -1,5 +1,3 @@
-"""In-app notification queries, always scoped to one recipient."""
-
 from __future__ import annotations
 
 import uuid
@@ -32,7 +30,6 @@ class NotificationRepository:
         return (await self.session.execute(stmt)).scalar_one()
 
     async def mark_read(self, user_id: uuid.UUID, notification_id: uuid.UUID) -> None:
-        """No-op for a notification that belongs to someone else."""
         await self.session.execute(
             update(Notification)
             .where(Notification.id == notification_id, Notification.user_id == user_id)

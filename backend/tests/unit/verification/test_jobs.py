@@ -1,6 +1,3 @@
-"""Background execution: idempotent job bodies, bounded retries with one
-failure notice, restart recovery, and photo cards in their own lane."""
-
 from __future__ import annotations
 
 import asyncio
@@ -56,10 +53,8 @@ async def wait_for(db, sid, status, tries=300):
     return job
 
 
-# ── execute_job ──────────────────────────────────────────────────────────
-
 async def test_job_bodies_are_idempotent_and_dispatched_by_kind(db, monkeypatch):
-    with pytest.raises(PermanentJobError):  # deleted before it ran
+    with pytest.raises(PermanentJobError):
         await execute_job(kind="SOURCE_BASED", submission_id=uuid.uuid4(), payload={}, deps=deps(), session_factory=db)
     async with db() as s:
         done, _ = await add_completed_submission(s, headline="h", submitter_id=None)
@@ -67,7 +62,7 @@ async def test_job_bodies_are_idempotent_and_dispatched_by_kind(db, monkeypatch)
     ran = AsyncMock()
     monkeypatch.setattr(jobs.VerificationService, "run_for_submission", ran)
     await execute_job(kind="SOURCE_BASED", submission_id=done.id, payload={}, deps=deps(), session_factory=db)
-    ran.assert_not_awaited()  # already in review: nothing re-runs
+    ran.assert_not_awaited()
 
     sid = await pending(db)
     await execute_job(kind="SOURCE_BASED", submission_id=sid, payload={}, deps=deps(), session_factory=db)
@@ -103,8 +98,6 @@ async def test_an_unresolvable_source_is_a_permanent_failure_and_rolls_back(db, 
         await execute_job(kind="SOURCE_BASED", submission_id=sid, payload={}, deps=deps(), session_factory=db)
 
 
-# ── the worker ───────────────────────────────────────────────────────────
-
 async def test_a_restarted_worker_recovers_queued_and_crashed_jobs_only(file_db):
     queued = await pending(file_db)
     stranded = await pending(file_db, status="RUNNING", locked_ago=600)
@@ -116,7 +109,7 @@ async def test_a_restarted_worker_recovers_queued_and_crashed_jobs_only(file_db)
 
     worker = VerificationJobWorker(deps(), session_factory=file_db, stale_after_s=120, poll_interval_s=0.05, runner=runner)
     worker.start()
-    worker.start()  # idempotent
+    worker.start()
     await wait_for(file_db, queued, "DONE")
     await wait_for(file_db, stranded, "DONE")
     await worker.stop()
@@ -151,7 +144,7 @@ async def test_failures_retry_boundedly_then_notify_the_owner_once(file_db, erro
 
 async def test_photo_cards_waiting_on_gemini_never_block_text_jobs(file_db):
     cards = [await pending(file_db, kind="PHOTO_CARD", queued_at=i) for i in range(3)]
-    text = await pending(file_db, queued_at=10)  # queued after the cards
+    text = await pending(file_db, queued_at=10)
     release = asyncio.Event()
     done: list[uuid.UUID] = []
 

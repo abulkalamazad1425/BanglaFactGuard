@@ -1,15 +1,3 @@
-"""User-facing labels for stored verification statuses.
-
-Stored enum values are unchanged (CONFIRMED / NOT_FOUND, MATCHED /
-MISMATCHED, FAKE / NON_FAKE, ...); this is the single backend mapping to the
-words users see. The website (`frontend/src/app/shared/utils/status-labels.ts`)
-and the extension (`extension/src/shared.js`) carry the same table.
-
-Source status answers one question: was a relevant article found in the
-outlet the claim names? "Found" never means the claim is true, and "Not
-Found" never means it is false.
-"""
-
 from __future__ import annotations
 
 from app.core.constants import (
@@ -56,8 +44,6 @@ OVERALL_LABELS: dict[OverallVerdict, str] = {
 
 
 def ai_decision_label(prediction: MultimodalPredictionLabel | str | None) -> str | None:
-    """`fake` -> Likely Fake; `non-fake` (or any non-fake class) -> Likely Real.
-    This is the model's preliminary call, never an expert verdict."""
     if prediction is None:
         return None
     value = getattr(prediction, "value", prediction)

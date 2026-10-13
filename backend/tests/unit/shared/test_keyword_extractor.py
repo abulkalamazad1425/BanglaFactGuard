@@ -14,7 +14,7 @@ def test_extractor_failure_falls_back_to_word_frequency(monkeypatch):
 
     monkeypatch.setattr(kx, "_get_yake_extractor", broken)
     keywords = kx.extract_keywords_yake("বন্যা বন্যা বন্যা কৃষক কৃষক এবং ফসল।", num_keywords=2)
-    assert keywords == ["বন্যা", "কৃষক"]  # most frequent first, stopwords dropped
+    assert keywords == ["বন্যা", "কৃষক"]
 
 
 def test_keyword_overlap_is_case_insensitive_jaccard():

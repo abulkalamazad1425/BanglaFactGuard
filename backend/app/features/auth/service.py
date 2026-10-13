@@ -122,10 +122,6 @@ class AuthService:
         if not user.is_active:
             raise InactiveAccountError()
 
-        # Rotation: the old token is not revoked outright but expires after a
-        # short grace window, so a client that never received the rotated pair
-        # (lost response, sleeping tab, concurrent tab) can still refresh
-        # instead of being logged out. Logout revokes immediately.
         grace_until = datetime.now(timezone.utc) + timedelta(
             seconds=get_settings().auth.refresh_rotation_grace_seconds
         )
@@ -145,11 +141,6 @@ class AuthService:
             logger.debug("logout_token_not_found_or_already_revoked")
 
     async def request_password_reset(self, email: str) -> str | None:
-        """
-        Issue a numeric OTP and email it to the user (req. 1.4: OTP through
-        Email service). Returns the raw OTP only for dev-console logging by
-        the caller — never exposed to the HTTP response.
-        """
         user = await self._users.get_by_email(email)
         if user is None:
             logger.debug("password_reset_email_not_found", email=email)
@@ -160,9 +151,6 @@ class AuthService:
             minutes=otp_settings.otp_ttl_minutes
         )
 
-        # token_hash carries a DB-level unique constraint; with a short
-        # numeric OTP a collision against any past row is rare but possible,
-        # so pre-check uniqueness rather than let the insert fail.
         raw_otp: str | None = None
         token_hash: str = ""
         for _ in range(5):

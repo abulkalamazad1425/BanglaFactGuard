@@ -1,6 +1,3 @@
-"""Public statistics, most-claimed sources and the Fact Explorer listing.
-An automated check never appears as a final verdict."""
-
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock

@@ -1,6 +1,3 @@
-"""Display split of a MATCHED headline into Exact Matched / Meaning Preserved,
-from stored evidence only. ALTERED passes through untouched."""
-
 from types import SimpleNamespace
 
 import pytest
@@ -19,11 +16,11 @@ M = ContentStatus.MATCHED
     (ContentStatus.ALTERED, dict(exact_match=True), H.ALTERED),
     (M, dict(exact_match=True), H.EXACT_MATCHED),
     (M, dict(basis="exact"), H.EXACT_MATCHED),
-    (M, dict(exact_match=False, claim_headline="ক খ", source_title="ক খ"), H.MEANING_PRESERVED),  # stored flag wins
-    (M, dict(claim_headline="ঢাকায়  বৃষ্টি।", source_title="ঢাকায় বৃষ্টি"), H.EXACT_MATCHED),     # legacy re-check
+    (M, dict(exact_match=False, claim_headline="ক খ", source_title="ক খ"), H.MEANING_PRESERVED),
+    (M, dict(claim_headline="ঢাকায়  বৃষ্টি।", source_title="ঢাকায় বৃষ্টি"), H.EXACT_MATCHED),
     (M, dict(claim_headline="ঢাকায় বৃষ্টি", source_title="ঢাকায়, বৃষ্টি"), H.MEANING_PRESERVED),
     (M, dict(basis="semantic_equivalence"), H.MEANING_PRESERVED),
-    (M, {}, H.MEANING_PRESERVED),                                                                  # no evidence
+    (M, {}, H.MEANING_PRESERVED),
     ("MATCHED", dict(exact_match=True), H.EXACT_MATCHED),
     (None, {}, None),
 ])

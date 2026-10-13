@@ -1,12 +1,3 @@
-"""Reference snapshot of every verified_sources record, including inactive sources.
-
-Synchronized from the database on 2026-10-03 (Asia/Dhaka), without modifying
-that table. Runtime source resolution continues to use SourceRepository.
-Domain keys map to canonical_name; name maps to display_name. Nullable values
-and ordered arrays are preserved exactly. SOURCE_RECORD_METADATA records the
-original IDs and timestamps for documentation; it is not runtime seed input.
-Never run the seed script to synchronize this file back into the live database.
-"""
 from typing import TypedDict
 
 

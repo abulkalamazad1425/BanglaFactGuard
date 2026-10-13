@@ -1,18 +1,3 @@
-"""Record photo-card extraction provenance on ocr_extractions.
-
-The unattended Gemini extraction flow (gemini_extractor.py) needs somewhere
-to record which extractor actually produced the final headline (Gemini vs
-the existing deterministic fallback), the Gemini model version used, any
-extraction-time warnings, and any image-detected source/date text — kept
-separately from the user's own claimed_source_text/published_date on
-submissions, since those user-provided values are the verification targets
-and must never be silently overwritten by what the card's own text implies.
-A conflict between the two is recorded in extraction_warnings, not resolved.
-
-No backfill: historical rows predate this flow and have nothing to recover
-for these columns; they read back as NULL.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Sequence

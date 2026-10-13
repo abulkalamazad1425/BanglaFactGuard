@@ -1,10 +1,3 @@
-"""Retire the legacy claim schema and use canonical submission table names.
-
-No writes or schema changes to verified_sources or credibility_weight_tiers.
-Destructive legacy-table removal requires a restorable backup. Operational
-data reset is a separate, explicit maintenance operation, not a startup task.
-"""
-
 from alembic import op
 import sqlalchemy as sa
 
@@ -21,7 +14,6 @@ def upgrade() -> None:
         "retrieved_articles", "verified_claims", "credibility_scores",
         "multimodal_predictions",
     ):
-        # Deliberately no CASCADE: unexpected external dependencies must stop us.
         op.drop_table(table)
 
     connection = op.get_bind()
@@ -29,7 +21,6 @@ def upgrade() -> None:
     for old in ("retrieved_articles_v2", "verification_results_v2", "expert_reviews_v2"):
         new = old.removesuffix("_v2")
         op.rename_table(old, new)
-        # Constraint-backed indexes are renamed with their constraints first.
         constraints = connection.execute(sa.text(
             "SELECT conname FROM pg_constraint WHERE conrelid = to_regclass(:table)"
         ), {"table": new}).scalars().all()

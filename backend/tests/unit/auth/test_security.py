@@ -1,5 +1,3 @@
-"""Password hashing, access tokens and the request-user dependencies."""
-
 from __future__ import annotations
 
 import uuid

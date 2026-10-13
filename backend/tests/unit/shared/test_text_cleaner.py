@@ -10,7 +10,7 @@ def test_extracted_text_loses_markup_boilerplate_and_extra_space():
     )
     text = clean_extracted_text(raw, min_length=10)
     assert "<" not in text and "আরও পড়ুন" not in text and "All rights reserved" not in text
-    assert "১২:৩০" not in text  # short metadata line dropped
+    assert "১২:৩০" not in text
     assert "& more" in text and "\n\n\n" not in text
     assert text.count(PARAGRAPH) == 2
 
@@ -28,5 +28,5 @@ def test_title_is_single_line_plain_text():
 def test_nli_truncation_prefers_a_sentence_boundary():
     text = "ক" * 70 + "। " + "খ" * 50
     assert truncate_for_nli(text, max_chars=100) == "ক" * 70 + "।"
-    assert truncate_for_nli("ক" * 200, max_chars=100) == "ক" * 100  # no boundary: hard cut
+    assert truncate_for_nli("ক" * 200, max_chars=100) == "ক" * 100
     assert truncate_for_nli("short", max_chars=100) == "short"

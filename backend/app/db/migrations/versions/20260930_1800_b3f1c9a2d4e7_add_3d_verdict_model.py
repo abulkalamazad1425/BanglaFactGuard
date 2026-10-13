@@ -1,23 +1,3 @@
-"""Replace the single TRUE/FALSE/PARTIALLY_TRUE/NOT_FOUND_IN_CLAIMED_SOURCE
-verdict with a 3-dimensional model on verification_results_v2:
-
-    source_status  (CONFIRMED | NOT_FOUND)
-    content_status (MATCHED | ALTERED, set only when source is CONFIRMED)
-    date_status    (MATCHED | MISMATCHED, set only when both dates are known)
-
-final_label is renamed to ai_consensus_label and kept: it now serves only as
-the single-category input the pre-existing expert-review weighted-consensus
-vote expects (see app/features/verification/verdict_compat.py), not as the
-verdict returned to end users. Existing rows are backfilled from their old
-final_label value so no verification history is lost; date_status cannot be
-backfilled (the source article's publication date was not persisted
-separately before this migration) and is left NULL for pre-existing rows.
-
-The legacy (pre-V2) verified_claims/verification_results/expert_reviews
-tables and their verification_label_enum type are untouched — expert review
-continues to use that enum for its own voting, independent of this change.
-"""
-
 revision = "b3f1c9a2d4e7"
 down_revision = "9ed4fe39e0e9"
 branch_labels = None
@@ -85,9 +65,6 @@ def upgrade() -> None:
         ),
     )
 
-    # Backfill from the old single-category label so existing rows still
-    # report a source/content verdict. Date comparison data did not exist
-    # before this migration, so date_status stays NULL for old rows.
     op.execute(
         """
         UPDATE verification_results_v2

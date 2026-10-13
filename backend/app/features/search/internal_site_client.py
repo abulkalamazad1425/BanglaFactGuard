@@ -27,19 +27,16 @@ _HEADERS = {
 
 _MAX_RESULTS = 15
 
-# Shorter tokens ("এই", "ও") match almost any headline and would let page
-# chrome pass the query-relevance check below.
 _MIN_TOKEN_CHARS = 3
 
 
 def _build_keyword_query(raw: str) -> str:
-    """Keep the complete headline/keyword query for the outlet's own search."""
     clean = re.sub(r"\bsite:\S+\s*", "", raw, flags=re.IGNORECASE)
     return re.sub(r"\s+", " ", clean).strip()
 
 
 class InternalSiteSearchError(Exception):
-    """The outlet's own search page could not be queried."""
+    pass
 
 
 class InternalSiteSearchClient:
@@ -82,9 +79,6 @@ class InternalSiteSearchClient:
             html = response.content.decode("utf-8", errors="replace")
         except Exception as exc:
             logger.warning("internal_site_search_failed", domain=domain, error=str(exc))
-            # Raise, don't return []: a failed request is not a successful
-            # empty search, and S04's outcome accounting must see the
-            # difference.
             raise InternalSiteSearchError(
                 f"internal site search failed for {domain}: {exc}"
             ) from exc
@@ -125,10 +119,6 @@ class InternalSiteSearchClient:
 
                 existing = index_by_url.get(full_url)
                 if existing is not None:
-                    # Result cards usually link the same article twice — once
-                    # from the thumbnail (no text) and once from the headline.
-                    # Keep whichever anchor actually carries the headline,
-                    # otherwise the title is lost for every result.
                     if len(link_text) > len(results[existing][1]):
                         results[existing] = (full_url, link_text)
                     continue
@@ -149,18 +139,10 @@ class InternalSiteSearchClient:
 
 
 def _visible_text(element) -> str:
-    """The element's text with the whitespace the page actually has, collapsed.
-
-    `get_text(strip=True)` strips every text node separately and joins them
-    with nothing, so a kicker span and the headline after it ("<span>মন্ত্রিসভার
-    বৈঠক</span> গ্রাম সরকার...") become one glued word ("বৈঠকগ্রাম"). No space is
-    inserted where the page has none.
-    """
     return " ".join(element.get_text().split())
 
 
 def _query_tokens(query: str) -> set[str]:
-    """Content words from the query, long enough to be worth matching on."""
     return {w for w in re.split(r"\s+", query) if len(w) >= _MIN_TOKEN_CHARS}
 
 
@@ -169,21 +151,6 @@ def _drop_if_query_independent(
     kw_query: str,
     domain: str | None,
 ) -> list[tuple[str, str]]:
-    """Discard a result set that is really just the page's own chrome.
-
-    Several Bangla outlets serve a `/search` page whose results are filled in
-    client-side (a Google CSE embed, or an XHR). A plain GET still returns a
-    full page of "latest news" links, and those links match the source's
-    `article_url_patterns` perfectly — so they were being accepted as search
-    hits. Because this client is the highest-priority provider, that quietly
-    pushed a handful of unrelated articles to the front of the evidence
-    budget and crowded out the real match from the other providers.
-
-    A genuine result set mentions the query somewhere; page chrome does not.
-    So require at least one result whose link text shares a content word with
-    the query, and keep only the results that do. If nothing matches, the
-    response carried no search results at all and is dropped entirely.
-    """
     tokens = _query_tokens(kw_query)
     if not tokens or not results:
         return results

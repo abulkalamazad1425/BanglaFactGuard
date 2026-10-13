@@ -14,14 +14,6 @@ def _now() -> datetime:
 
 
 class VerificationJobRepository:
-    """Queue operations for `verification_jobs`.
-
-    `claim_next` uses ``FOR UPDATE SKIP LOCKED`` so several workers (or
-    processes) never take the same job, and treats a RUNNING job whose
-    ``locked_at`` is older than ``stale_after`` as abandoned — that is how work
-    interrupted by a crash or restart is recovered.
-    """
-
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
@@ -35,7 +27,6 @@ class VerificationJobRepository:
     async def enqueue(
         self, submission_id: uuid.UUID, kind: str, *, payload: dict | None = None
     ) -> VerificationJob:
-        """Idempotent: one job per submission."""
         existing = await self.get_by_submission(submission_id)
         if existing is not None:
             return existing
@@ -59,8 +50,6 @@ class VerificationJobRepository:
         kinds: tuple[str, ...] | None = None,
         exclude_kinds: tuple[str, ...] | None = None,
     ) -> VerificationJob | None:
-        """The oldest claimable job, optionally restricted to (or excluding)
-        some job kinds - the worker runs one lane per kind group."""
         cutoff = _now() - timedelta(seconds=stale_after_s)
         conditions = [
             or_(
@@ -107,8 +96,6 @@ class VerificationJobRepository:
     async def release_or_fail(
         self, job_id: uuid.UUID, error: str, *, permanent: bool
     ) -> bool:
-        """Retry (back to QUEUED) unless permanent or out of attempts.
-        Returns True when the job is now terminally FAILED."""
         job = (
             await self.session.execute(
                 select(VerificationJob).where(VerificationJob.id == job_id).with_for_update()

@@ -115,8 +115,6 @@ class SourceRepository(BaseRepository[VerifiedSource]):
         limit: int = 50,
         offset: int = 0,
     ) -> tuple[list[VerifiedSource], int]:
-        """Sources matching `query` in the Bangla or English name, domain,
-        base URL or aliases (best matches first), with the matching total."""
         from sqlalchemy import String, func
 
         from app.shared.utils.keyword_search import KeywordSearch

@@ -1,10 +1,3 @@
-"""A real SQLite database for service/repository unit tests, plus row builders.
-
-Every table is created (Postgres-only types are rendered as JSON by the
-shims in tests/conftest.py). SQLite does not enforce FK cascades/SET NULL:
-tests that depend on them emulate them explicitly.
-"""
-
 from __future__ import annotations
 
 import uuid
@@ -34,9 +27,6 @@ from app.shared.utils.hashing import compute_claim_hash
 
 
 async def make_session_factory(path: str | None = None):
-    """File-backed when `path` is given (needed when a background worker and
-    the test use different sessions at once: each session gets its own
-    connection, as in production). In-memory otherwise."""
     if path:
         engine = create_async_engine(f"sqlite+aiosqlite:///{path}", connect_args={"timeout": 30})
     else:
@@ -53,7 +43,6 @@ async def make_session_factory(path: str | None = None):
 
 
 def store_vectors_as_json(monkeypatch) -> None:
-    """Let the multimodal embedding columns (Postgres ARRAY) hold lists on SQLite."""
     for name in ("text_embedding", "image_embedding", "combined_embedding"):
         monkeypatch.setattr(MultimodalAnalysis.__table__.c[name], "type", JSON())
 
@@ -110,7 +99,6 @@ async def add_completed_submission(
     date_status=None,
     **result_fields,
 ) -> tuple[Submission, VerificationResult]:
-    """A submission whose automated check is done (EXPERT_REVIEW) with its result."""
     scope = ClaimScope.HEADLINE_WITH_BODY if body else ClaimScope.HEADLINE_ONLY
     sub = Submission(
         id=uuid.uuid4(),
@@ -167,7 +155,6 @@ async def add_multimodal_submission(
     prediction: MultimodalPredictionLabel = MultimodalPredictionLabel.FAKE,
     **analysis_fields,
 ) -> tuple[Submission, MultimodalAnalysis]:
-    """A text-and-image submission with its stored AI prediction."""
     sub = Submission(
         id=uuid.uuid4(),
         submission_type=SubmissionType.MULTIMODAL,

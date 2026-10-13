@@ -95,7 +95,7 @@ async def verify_photocard_async(
 
     worker = getattr(http_request.app.state, "job_worker", None)
     if worker is not None:
-        worker.wake()  # the job is already durable; this only cuts latency
+        worker.wake()
     return service.accepted_response(submission)
 
 
@@ -115,7 +115,6 @@ async def get_photocard_result(
 ) -> PhotoCardResultResponse:
     result = await service.get_result(submission_id)
     submission = await service.submission_repo.get_by_id_or_none(submission_id)
-    # A pending/failed card is its submitter's private working state.
     if result is None or submission is None or not viewer_can_see(submission, current_user):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

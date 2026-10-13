@@ -1,6 +1,3 @@
-"""The automated result is written once per submission (upsert), and each
-execution's own timings are recorded on it."""
-
 from app.core.constants import ContentStatus, SourceStatus
 from app.features.verification.repository import ResultRepository
 from tests.helpers.db import add_completed_submission
@@ -20,4 +17,4 @@ async def test_upsert_keeps_one_row_and_timings_describe_this_execution(session)
                                                   "pipeline_ms": 42, "cache_hit": True}
     other, res = await add_completed_submission(session, headline="h2", submitter_id=None)
     await session.delete(res)
-    await repo.record_timings(other.id, stage_ms={}, pipeline_ms=1)  # nothing stored yet: no-op
+    await repo.record_timings(other.id, stage_ms={}, pipeline_ms=1)

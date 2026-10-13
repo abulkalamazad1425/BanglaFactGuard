@@ -1,5 +1,3 @@
-"""S03: source-restricted queries from the headline only (never the body)."""
-
 from datetime import date
 from unittest.mock import patch
 
@@ -39,9 +37,9 @@ async def test_headline_all_keywords_and_short_keyword_queries_restricted_to_the
 
 
 @pytest.mark.parametrize("keywords,extra", [
-    ([], None),                                   # only the headline query
+    ([], None),
     (["bridge", "river"], []),
-    (["bridge", "river", "city"], []),            # first 3 == all keywords: not repeated
+    (["bridge", "river", "city"], []),
     (["bridge", "river", "city", "opened", "minister"], ["bridge river city", "bridge river city opened"]),
 ])
 async def test_short_keyword_queries_only_when_available_and_never_duplicated(keywords, extra):
@@ -80,5 +78,5 @@ async def test_verified_sources_mode_has_bounded_queries_without_a_site_operator
         (" ".join(KEYWORDS), QueryType.KEYWORDS.value),
         (" ".join(KEYWORDS[:4]), QueryType.KEYWORDS.value),
     ]
-    with pytest.raises(QueryGenerationError):  # no active verified source: nothing may be searched
+    with pytest.raises(QueryGenerationError):
         await generate(verified_context())

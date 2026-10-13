@@ -102,7 +102,6 @@ async def _to_detail(
     storage: MultimodalStorageService,
 ) -> MultimodalPredictionDetail:
     submission = await submission_repo.get_by_id_or_none(record.submission_id)
-    # A reused copy shows its original's live review outcome.
     original = await MultimodalAnalysisRepository(submission_repo.session).get_original(record)
     return MultimodalPredictionDetail(
         prediction_id=str(record.id),

@@ -1,6 +1,3 @@
-"""Registry lookups by canonical name and the active/all listings. (The alias
-lookup uses Postgres JSONB containment and cannot run on SQLite.)"""
-
 from app.features.sources.repository import SourceRepository
 from tests.helpers.db import add_source
 

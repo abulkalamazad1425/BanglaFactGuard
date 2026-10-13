@@ -26,8 +26,6 @@ from app.shared.utils.keyword_search import KeywordSearch
 
 _VERIFIED_STATUSES = (SubmissionStatus.EXPERT_REVIEW, SubmissionStatus.FINALIZED)
 _IN_FLIGHT_STATUSES = (SubmissionStatus.PENDING, SubmissionStatus.PROCESSING)
-# Fact Explorer also lists ESCALATED claims: they stay "Under review" until an
-# admin decides. (Reuse candidates keep using _VERIFIED_STATUSES unchanged.)
 _EXPLORER_STATUSES = (*_VERIFIED_STATUSES, SubmissionStatus.ESCALATED)
 
 
@@ -39,10 +37,6 @@ class SubmissionRepository(BaseRepository[Submission]):
         super().__init__(session)
 
     async def get_by_id_locked(self, submission_id: uuid.UUID) -> Submission:
-        """Row-locks the submission for the rest of this transaction —
-        concurrent vote/finalize attempts on the same claim serialize on
-        this lock instead of racing, since a single request's session is
-        one transaction (committed when the request completes)."""
         from app.core.exceptions import RecordNotFoundError
 
         stmt = select(Submission).where(Submission.id == submission_id).with_for_update()
@@ -55,9 +49,6 @@ class SubmissionRepository(BaseRepository[Submission]):
     async def get_reusable_candidates(
         self, content_hash: str, *, limit: int = 5
     ) -> list[Submission]:
-        """Verified, non-duplicate submissions with this exact claim identity,
-        newest first. Callers still validate each one's result for
-        reusability and freshness."""
         stmt = (
             select(Submission)
             .where(
@@ -75,7 +66,6 @@ class SubmissionRepository(BaseRepository[Submission]):
     async def get_in_flight_by_content_hash(
         self, content_hash: str
     ) -> Submission | None:
-        """A submission for this claim that is queued or still running."""
         stmt = (
             select(Submission)
             .where(
@@ -109,7 +99,6 @@ class SubmissionRepository(BaseRepository[Submission]):
     async def mark_ai_done(self, submission_id: uuid.UUID) -> None:
         from sqlalchemy import update
 
-        # Also clears any failure left by an earlier, retried attempt.
         await self.session.execute(
             update(Submission)
             .where(Submission.id == submission_id)
@@ -125,9 +114,6 @@ class SubmissionRepository(BaseRepository[Submission]):
         await self.set_status(submission_id, SubmissionStatus.FINALIZED)
 
     async def escalate_if_open(self, submission_id: uuid.UUID) -> bool:
-        """EXPERT_REVIEW -> ESCALATED, only if the claim is still open. Returns
-        True only for the one transaction that performs the transition, so a
-        racing vote, edit or sweep can never escalate (or notify) twice."""
         from sqlalchemy import update
 
         res = await self.session.execute(
@@ -141,8 +127,6 @@ class SubmissionRepository(BaseRepository[Submission]):
     async def mark_failed(
         self, submission_id: uuid.UUID, reason: str | None = None
     ) -> bool:
-        """Terminal failure. Returns True only on the transition INTO failed,
-        so callers can emit the failure notification exactly once."""
         from sqlalchemy import update
 
         stmt = (
@@ -187,16 +171,6 @@ class SubmissionRepository(BaseRepository[Submission]):
         limit: int = 20,
         offset: int = 0,
     ) -> tuple[list[Submission], int]:
-        """Fact Explorer search — browse verified (EXPERT_REVIEW/FINALIZED)
-        submissions with optional filters. Returns (rows, total_count).
-
-        overall_verdict spans every submission type (its finalized value
-        lives on VerificationResult for SOURCE_BASED/PHOTO_CARD, and on
-        MultimodalAnalysis for MULTIMODAL) and only matches claims that have
-        actually been expert-finalized — a claim still under review doesn't
-        match any overall_verdict filter, even though its AI-implied value
-        may be shown on its own detail page.
-        """
         from app.features.multimodal.models import MultimodalAnalysis
         from app.features.verification.models import VerificationResult
 
@@ -205,8 +179,6 @@ class SubmissionRepository(BaseRepository[Submission]):
             Submission.duplicate_of_submission_id.is_(None),
         ]
 
-        # Keyword search: any keyword matches (OR); ranked by how many distinct
-        # keywords matched, then phrase/headline matches (see keyword_search).
         search = KeywordSearch(
             keyword, [Submission.headline, Submission.body_text], headline_column=Submission.headline
         )
@@ -221,7 +193,6 @@ class SubmissionRepository(BaseRepository[Submission]):
         if source_id is not None:
             conditions.append(Submission.claimed_source_id == source_id)
 
-        # Use the same effective decision for filtering and displayed results.
         overall = case(
             (Submission.submission_type == SubmissionType.MULTIMODAL, MultimodalAnalysis.expert_overall_verdict),
             else_=VerificationResult.overall_verdict,
@@ -283,7 +254,6 @@ class SubmissionRepository(BaseRepository[Submission]):
         return rows, total
 
     async def explorer_summary(self) -> dict[str, int]:
-        """All-time counts for exactly the public archive's eligible records."""
         from app.features.multimodal.models import MultimodalAnalysis
         from app.features.verification.models import VerificationResult
 

@@ -1,6 +1,3 @@
-"""Headline Alteration: claim headline vs source title ONLY. MATCHED always
-needs an exact match, the same words, or positive semantic evidence."""
-
 from __future__ import annotations
 
 import numpy as np
@@ -22,8 +19,6 @@ PARAPHRASE = ("বাংলাদেশ ব্যাংক নীতি সু�
 
 
 class FixedCosineEmbedder(FakeEmbedder):
-    """Every pair has the same cosine - isolates the NLI/rule logic."""
-
     def __init__(self, cosine: float) -> None:
         super().__init__()
         self.cosine = cosine
@@ -78,8 +73,7 @@ async def test_matched_needs_same_words_or_semantic_equivalence():
     nli = FakeNLI({(title, claim): ENTAILS})
     semantic = await comparator(nli).compare(claim, title)
     assert (semantic.verdict, semantic.basis) == (ContentStatus.MATCHED, "semantic_equivalence")
-    assert (title, claim) in nli.calls and (claim, title) in nli.calls  # both directions
-    # equivalence also needs the embedding to agree
+    assert (title, claim) in nli.calls and (claim, title) in nli.calls
     low_cosine = await comparator(nli, FixedCosineEmbedder(0.3)).compare(claim, title)
     assert low_cosine.verdict != ContentStatus.MATCHED
 
@@ -95,7 +89,6 @@ async def test_same_speaker_different_main_statement_is_altered(nli):
     r = await comparator(nli).compare(RONALDO_CLAIM, RONALDO_TITLE)
     assert r.verdict == ContentStatus.ALTERED and r.basis == "semantic_divergence"
     assert r.differences[0].kind == "main_point" and "প্রতীক" in r.reason
-    # medium entailment with a very high embedding similarity is still never MATCHED
     medium = FakeNLI({(RONALDO_TITLE, RONALDO_CLAIM): NLIScoresSchema(entailment=0.6, contradiction=0.1, neutral=0.3)})
     assert (await comparator(medium, FixedCosineEmbedder(0.97)).compare(RONALDO_CLAIM, RONALDO_TITLE)).verdict is None
 
@@ -105,9 +98,9 @@ async def test_a_material_difference_is_altered_even_when_the_model_entails():
     nli = FakeNLI({(title, claim): ENTAILS})
     r = await comparator(nli).compare(claim, title)
     assert (r.verdict, r.basis) == (ContentStatus.ALTERED, "material_difference")
-    assert r.semantic.available and nli.calls  # the semantic assessment still ran
+    assert r.semantic.available and nli.calls
     down = await comparator(FakeNLI(available=False)).compare(claim, title)
-    assert down.verdict == ContentStatus.ALTERED  # a concrete difference needs no model
+    assert down.verdict == ContentStatus.ALTERED
 
 
 async def test_entities_are_compared_only_when_ner_is_usable():

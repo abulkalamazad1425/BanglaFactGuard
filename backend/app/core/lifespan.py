@@ -107,9 +107,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         log.warning("photocard_bucket_ensure_failed", error=str(exc))
     app.state.photocard_storage = photocard_storage
 
-    # Durable job worker: drains verification_jobs (text + photo-card). Jobs
-    # accepted before a restart, or left RUNNING by a crashed process, are
-    # picked up here once their heartbeat is stale.
     app.state.job_worker = None
     if _SETTINGS.jobs.enabled:
         from app.features.verification.jobs import JobDeps, VerificationJobWorker
@@ -131,7 +128,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.result_delivery_worker = ResultDeliveryWorker()
     app.state.result_delivery_worker.start()
 
-    # Time-based escalation must not wait for a new vote or a page visit.
     from app.features.expert_review.escalation import EscalationWorker
     app.state.escalation_worker = EscalationWorker()
     app.state.escalation_worker.start()
@@ -147,9 +143,5 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await app.state.escalation_worker.stop()
     await app.state.http_client.aclose()
     await redis_client.aclose()
-    # After every worker has stopped (they open sessions). The engine stays
-    # usable: a later startup in the same process gets a fresh pool. The
-    # module-level thread pools are deliberately not shut down - they are
-    # reused by a later startup and are joined at interpreter exit.
     await close_engine()
     log.info("bangla_fact_guard_shutdown_complete")

@@ -1,35 +1,3 @@
-"""Gemini-only photo-card extraction: ocr_extractions -> photocard_extractions.
-
-Photo cards are now submitted as an image only. Gemini reads the headline,
-identifies the claimed outlet among the active verified sources and reads the
-printed date; those values are stored ONCE, on the submission itself
-(headline, claimed_source_id / claimed_source_text, published_date). There is
-no OCR path any more.
-
-1. The table is renamed to ``photocard_extractions`` (its primary key,
-   foreign key and indexes are renamed with it).
-2. OCR-specific and duplicate columns are dropped: raw_extracted_text,
-   confirmed_text, ocr_confidence (+ its CHECK), ocr_engine, is_confirmed,
-   fallback_used, extraction_warnings, extractor_used, detected_source_text,
-   detected_date_text.
-3. extraction_model_version -> model_version, extraction_attempts -> attempts.
-4. New: status (PENDING | SUCCEEDED | API_FAILED | INVALID_CONTENT, and FAILED
-   for legacy OCR-era failures) and failure_code.
-
-Existing rows: status is derived from the old provenance (extractor_used set
--> SUCCEEDED; ocr_engine 'pending' -> PENDING; otherwise FAILED). Every dropped
-non-empty value is preserved verbatim under ``extraction_details -> 'legacy'``
-so nothing recorded earlier is lost. Legacy submissions keep the claimed
-source/date their submitter typed - those were the claim at the time.
-
-Downgrade restores the old table name and columns, refilling them from
-``extraction_details -> 'legacy'`` where available.
-
-Revision ID: e5c9a3f7b1d2
-Revises: d4b8e1f7a2c5
-Create Date: 2026-10-06 18:00:00
-"""
-
 from __future__ import annotations
 
 import sqlalchemy as sa
@@ -74,7 +42,6 @@ def upgrade() -> None:
     op.alter_column("photocard_extractions", "extraction_attempts", new_column_name="attempts",
                     comment="Gemini requests made for this card (first request included, at most 9).")
 
-    # Status from the old provenance; dropped values preserved under 'legacy'.
     op.execute("""
         UPDATE photocard_extractions SET
           status = CASE

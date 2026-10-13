@@ -1,11 +1,3 @@
-"""Deterministic stand-ins for the ML services, used by stage/orchestration tests.
-
-These fakes make decision logic testable; they say NOTHING about the accuracy
-of LaBSE, the NER checkpoint or the NLI model. The "embedding" is a hashed
-bag-of-stems vector (identical text -> 1.0, unrelated text -> ~0). The NLI
-fake returns uninformative scores unless a pair is explicitly scripted.
-"""
-
 from __future__ import annotations
 
 import zlib
@@ -66,9 +58,6 @@ class FakeEmbedder:
 
 
 class FakeNLI:
-    """`scripted[(premise, hypothesis)]` wins; identical texts entail;
-    everything else is uninformative. `available=False` -> None."""
-
     def __init__(self, scripted: dict | None = None, *, default: NLIScoresSchema = UNINFORMATIVE,
                  available: bool = True) -> None:
         self.scripted = scripted or {}
@@ -88,8 +77,6 @@ class FakeNLI:
 
 
 class FakeNER:
-    """Detects any of `known` whose text occurs in the input."""
-
     def __init__(self, known: list[EntityMention] | None = None, *, available: bool = True) -> None:
         self.known = known or []
         self.available = available
@@ -157,7 +144,6 @@ async def run_analysis(
     embedder: FakeEmbedder | None = None,
     nli: FakeNLI | None = None,
 ) -> PipelineContext:
-    """S08 -> S12 (everything after retrieval except persistence) over fakes."""
     embedder = embedder or FakeEmbedder()
     nli = nli or FakeNLI()
     ner = ner or FakeNER()
@@ -170,7 +156,6 @@ async def run_analysis(
 
 
 def source_record(canonical: str = "prothomalo.com", *, active: bool = True, **fields):
-    """A verified_sources row as the pipeline reads it."""
     values = dict(
         id=None, canonical_name=canonical, display_name=fields.pop("display_name", canonical),
         display_name_en=None, base_url=f"https://www.{canonical}", aliases=[], is_active=active,
@@ -182,8 +167,6 @@ def source_record(canonical: str = "prothomalo.com", *, active: bool = True, **f
 
 
 class FakeSourceRepo:
-    """In-memory SourceRepository: canonical names, then aliases of active sources."""
-
     def __init__(self, *records) -> None:
         self.records = list(records)
 

@@ -14,14 +14,6 @@ logger = structlog.get_logger(__name__)
 
 
 class EmailService:
-    """
-    Thin SMTP wrapper for transactional email (currently: password-reset OTPs).
-
-    When `EMAIL_SMTP_HOST` is unset, no real email is sent — the OTP is
-    logged instead so the flow stays testable in local/dev environments
-    without SMTP credentials.
-    """
-
     def __init__(self) -> None:
         self._settings = get_settings().email
 
@@ -48,11 +40,6 @@ class EmailService:
         try:
             await asyncio.to_thread(self._send_sync, to_email, subject, body)
         except Exception as exc:
-            # Never let an SMTP-layer failure (bad credentials, network
-            # timeout, provider outage) bubble up as an unhandled 500 —
-            # surface it as a clean, typed domain error instead. Log the OTP
-            # here too so it's still recoverable from the console even
-            # though delivery failed.
             logger.error(
                 "otp_email_send_failed", to=to_email, otp=otp, error=str(exc)
             )
@@ -79,9 +66,6 @@ class EmailService:
         msg["From"] = f"{settings.from_name} <{settings.from_address}>"
         msg["To"] = to_email
 
-        # Gmail (and other providers) display app passwords grouped with
-        # spaces for readability — strip stray whitespace defensively so a
-        # copy-pasted credential doesn't silently fail SMTP AUTH.
         smtp_user = settings.smtp_user.strip()
         smtp_password = settings.smtp_password.replace(" ", "").strip()
 

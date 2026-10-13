@@ -1,18 +1,3 @@
-"""S13 - Result persistence, cache pointer and result delivery.
-
-Responsibilities carried over from the former persistence stage:
-  * idempotent re-run: a submission already in expert review keeps its saved
-    automated result and is not notified twice;
-  * retrieved articles (the selected source first) and search queries;
-  * the automated result row (verdicts, statuses, correspondence
-    measurements, full `analysis_details`);
-  * hand-off to expert review (every automated result enters the queue) and
-    the DONE phase;
-  * the Redis claim pointer, only for a reusable (complete, current) result;
-  * the submitter notification (`notify_preliminary_result`, never duplicated).
-All writes share the caller's session/transaction; the job commits it.
-"""
-
 from __future__ import annotations
 
 import uuid
@@ -113,8 +98,6 @@ class ResultPersistenceStage:
                     error=context.stage_errors.get(stage),
                 )
 
-            # Every automated result enters expert review. No automated
-            # overall verdict is derived or stored.
             await self.submission_repo.mark_ai_done(submission.id)
             await self.submission_repo.set_phase(submission.id, JobPhase.DONE.value)
 
@@ -160,9 +143,6 @@ class ResultPersistenceStage:
         )
 
     async def _upsert_submission(self, context: PipelineContext) -> tuple[Submission, bool]:
-        """(submission, already_done). Persists onto the submission this run
-        was started for; a submission that merely shares an identity hash is
-        never adopted (submissions carry owner/type/image provenance)."""
         existing = None
         if context.submission_id:
             existing = await self.submission_repo.get_by_id_or_none(context.submission_id)
@@ -193,7 +173,6 @@ class ResultPersistenceStage:
         return created, False
 
     async def _increment_submitter_total_submissions(self, submitter_id: uuid.UUID) -> None:
-        """users.total_submissions cached counter - best effort only."""
         try:
             from app.features.auth.repository import UserRepository
 
@@ -202,9 +181,6 @@ class ResultPersistenceStage:
             logger.warning("s13_total_submissions_increment_failed", error=str(exc))
 
     async def _persist_articles(self, context: PipelineContext, submission_id: uuid.UUID) -> uuid.UUID | None:
-        """Ranked articles; returns the DB id of the SELECTED source article
-        (S08's choice). It is stored as `top_article_id`, which the result
-        page and the expert view show first."""
         if not context.ranked_articles:
             return None
         selected_url = context.top_article.url if context.top_article else None

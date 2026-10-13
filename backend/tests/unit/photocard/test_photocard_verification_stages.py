@@ -1,6 +1,3 @@
-"""A photo card runs the same S01-S13 stages as a text claim; only its
-normaliser (headline only, its own result identity) differs."""
-
 from __future__ import annotations
 
 from datetime import date
@@ -52,8 +49,6 @@ async def test_the_card_identity_is_headline_only_and_never_a_text_claims():
 
 @pytest.mark.parametrize("configured", [LABSE, LEGACY_EMBEDDING_SETTING])
 def test_the_persisted_card_identity_is_stable(monkeypatch, configured):
-    """Golden value: these hashes are stored and reused. The embedding setting's
-    rename (to the model that always ran) and the Gemini settings never change it."""
     monkeypatch.setattr(get_settings().ml, "embedding_model_name", configured)
     monkeypatch.setattr(get_settings().gemini, "model_name", "different-hosted-model")
     headline, source, published = GOLDEN

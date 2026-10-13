@@ -1,6 +1,3 @@
-"""S13: store the automated result once, hand it to expert review, notify the
-submitter once, and cache a pointer only for a settled result."""
-
 from __future__ import annotations
 
 import json
@@ -65,7 +62,7 @@ async def test_a_new_claim_is_stored_completely_and_enters_expert_review(session
     assert (res.source_status, res.content_status, res.headline_check_status) == (
         SourceStatus.CONFIRMED, ContentStatus.MATCHED, "COMPLETED",
     )
-    assert res.overall_verdict is None and res.ai_consensus_label is None  # no automated truth vote
+    assert res.overall_verdict is None and res.ai_consensus_label is None
     assert res.headline_exact_match is True and res.body_comparison_status == "SKIPPED"
     assert res.claim_scope == "HEADLINE_ONLY" and res.pipeline_version == VERIFICATION_PIPELINE_VERSION
     assert res.headline_keyword_coverage == 1.0 and res.analysis_details["headline_alteration"]["source_title"] == HEADLINE

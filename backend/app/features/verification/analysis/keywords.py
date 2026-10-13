@@ -1,15 +1,3 @@
-"""Directional keyword coverage: do the CLAIM's keywords occur in the EVIDENCE?
-
-Why not compare two keyword lists: independently extracted lists (e.g. YAKE
-top-N of the headline vs. of a long article) can miss each other entirely, so
-a headline that matches its own article word-for-word could score 0.
-
-This module instead takes every content word of the claim, applies the same
-normalisation/tokenisation/stemming to the evidence text, and checks
-membership directly. Coverage = matched claim weight / applicable claim
-weight (directional; extra evidence words never reduce it).
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -25,8 +13,6 @@ from app.features.verification.analysis.text import (
 )
 
 _WEIGHT_CONTENT = 1.0
-# Meaning-bearing units weigh more: dropping a negation or number changes the
-# claim's truth conditions far more than dropping an adjective.
 _WEIGHT_MEANING = 1.5
 
 
@@ -34,7 +20,7 @@ _WEIGHT_MEANING = 1.5
 class KeywordUnit:
     text: str
     weight: float
-    kind: str  # content | number | negation | qualifier
+    kind: str
 
 @dataclass
 class KeywordCoverage:
@@ -46,7 +32,6 @@ class KeywordCoverage:
     reason: str | None = None
 
 def extract_claim_units(text: str) -> list[KeywordUnit]:
-    """Deterministic keyword units for a claim: every content word once."""
     seen: set[str] = set()
     units: list[KeywordUnit] = []
     for tok in content_tokens(text):
@@ -71,8 +56,6 @@ def evidence_keys(evidence_text: str) -> set[str]:
     for i, tok in enumerate(toks):
         keys.add(tok)
         keys.add(light_stem(tok))
-        # Compound written as two words in one text and one in the other
-        # (প্রধান মন্ত্রী / প্রধানমন্ত্রী): index adjacent concatenations too.
         if i + 1 < len(toks):
             joined = tok + toks[i + 1]
             keys.add(joined)
@@ -81,11 +64,6 @@ def evidence_keys(evidence_text: str) -> set[str]:
 
 
 def keyword_coverage(claim_text: str, evidence_text: str) -> KeywordCoverage:
-    """Weighted fraction of the claim's keyword units found in the evidence.
-
-    States: COMPUTED (value may be a genuine 0.0), EMPTY (claim yielded no
-    applicable units), UNAVAILABLE (no evidence text / utility failure).
-    """
     try:
         units = extract_claim_units(claim_text)
         if not units:
@@ -116,7 +94,7 @@ def keyword_coverage(claim_text: str, evidence_text: str) -> KeywordCoverage:
             matched=matched,
             unmatched=unmatched,
         )
-    except Exception as exc:  # utility failure must be distinguishable from zero
+    except Exception as exc:
         return KeywordCoverage(
             MetricState.UNAVAILABLE, None, reason=f"keyword utility failed: {exc}"
         )

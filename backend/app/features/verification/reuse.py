@@ -1,28 +1,3 @@
-"""Reuse of an earlier identical verification — without sharing submissions.
-
-Verification *work* is reusable; a *submission* is not. A requester always
-keeps their own submission row (owner, type, photo-card image, extraction record,
-metadata). When an identical, fresh, complete verification exists, its
-automated result is copied onto the requester's submission, which is linked to
-the original through `duplicate_of_submission_id` /
-`verification_results.reused_from_submission_id`.
-
-Expert state is NOT copied: it is read through from the original at display
-time (see presenter), so there is one source of truth for review outcomes and
-a later finalization of the original is reflected on every copy.
-
-Reusable means: still in the database (a deleted submission takes its result
-with it, so it can never be reused), produced by the current pipeline version
-(so a result from older logic is never served as a result of the current
-logic), an original computation rather than a copy of another result (a copy
-must not keep a deleted original alive), and no incomplete dimension (an
-incomplete check is never a settled answer): the source check completed, a
-confirmed source has a headline verdict, the date check is not INCOMPLETE and
-claim-body scores are not UNAVAILABLE. There is no age limit: a claim that
-was already checked is answered with its saved result and is never re-run to
-look for newer evidence.
-"""
-
 from __future__ import annotations
 
 import uuid
@@ -47,16 +22,12 @@ from app.features.verification.repository import ResultRepository
 logger = structlog.get_logger(__name__)
 
 
-# analysis_details key marking a copied result (see `materialize`). It
-# outlives `reused_from_submission_id`, which is SET NULL when the original
-# submission is deleted.
 REUSED_FROM_KEY = "reused_from_submission_id"
 
 
 def result_is_reusable(
     result: VerificationResult | None, *, now: datetime | None = None
 ) -> tuple[bool, str]:
-    """(reusable, reason). The reason is logged; it never reaches users."""
     if result is None or result.source_status is None:
         return False, "no_result"
     if result.pipeline_version != VERIFICATION_PIPELINE_VERSION:
@@ -104,7 +75,6 @@ class ResultReuseService:
         source_result: VerificationResult,
         target: Submission,
     ) -> VerificationResult:
-        """Copy the automated snapshot onto `target` (idempotent)."""
         existing = await self.result_repo.get_by_submission_id(target.id)
         if existing is not None and existing.source_status is not None:
             return existing

@@ -52,8 +52,6 @@ class ArticleExtractorStage:
         source_config = getattr(context, "source_config", None)
 
         def outlet_for(url: str) -> tuple[str | None, dict | None]:
-            # Verified-sources mode: each article is extracted with ITS
-            # publisher's selectors, not one claimed-source configuration.
             if context.is_verified_sources_mode and context.verified_scope is not None:
                 pub = context.verified_scope.publisher_for_url(url)
                 return (pub.domains[0], pub.config) if pub and pub.domains else (None, None)
@@ -128,12 +126,6 @@ class ArticleExtractorStage:
         except Exception:
             soup = BeautifulSoup(html, "html.parser")
 
-        # datePublished, with provenance and tz handling, found independently
-        # of body extraction. (Previously the date was only looked for on the
-        # fallback paths, so a page whose title/body came from site selectors
-        # returned early with no date at all - and the date check could only
-        # ever report INCOMPLETE for it.) dateModified and crawl dates are
-        # never used.
         published = self._find_publication(soup, config)
 
         if config:
@@ -286,9 +278,6 @@ class ArticleExtractorStage:
         )
 
     def _find_publication(self, soup, config) -> tuple[ParsedPublication | None, str | None]:
-        """(parsed publication, provenance label). Priority: the outlet's own
-        date selectors, JSON-LD datePublished, publication meta tags,
-        <time itemprop=datePublished>."""
         if config:
             for sel in config.get("date_selectors", []):
                 el = self._safe_select_one(soup, sel)
@@ -395,9 +384,6 @@ class ArticleExtractorStage:
             if meta:
                 title = meta.title or None
                 author = meta.author or None
-            # meta.date is deliberately ignored: trafilatura returns the most
-            # recent date it finds (often dateModified), and publication date
-            # is only ever taken from datePublished sources (_find_publication).
             return title, body, author
         except Exception as exc:
             logger.debug("s06_trafilatura_failed", url=url[:80], error=str(exc))
@@ -484,7 +470,6 @@ class ArticleExtractorStage:
 
 
 def _iter_ld_items(data):
-    """Yield every dict in a JSON-LD payload, including @graph members."""
     stack = [data]
     while stack:
         cur = stack.pop()
@@ -502,11 +487,6 @@ _KICKER_MAX_CHARS = 200
 
 
 def _headline_variants(soup: BeautifulSoup, title: str | None) -> list[str]:
-    """Headline lines printed next to the title: a kicker/shoulder heading
-    immediately before or after the page's <h1> (e.g. Manab Zamin shows
-    "প্রধানমন্ত্রীর সঙ্গে আবরার ফাহাদের পরিবারের সাক্ষাৎ" above the <h1>
-    "রায় দ্রুত কার্যকরের দাবি", and its homepage shows only the former).
-    Returns each such line alone and joined to the title."""
     if not title:
         return []
     h1 = None

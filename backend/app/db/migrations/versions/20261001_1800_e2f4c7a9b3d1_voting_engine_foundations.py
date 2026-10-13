@@ -1,35 +1,3 @@
-"""Phase 1/2 foundations for the full voting engine spec:
-
-verification_results_v2:
-    Adds final_source_status / final_content_status / final_date_status /
-    finalized_at. Before this migration, ExpertReviewService._finalize_submission
-    overwrote source_status/content_status/date_status directly with the
-    expert consensus, destroying the AI's original call — there is no way to
-    recover that lost original value for already-finalized rows, but a check
-    confirmed zero SOURCE_BASED/PHOTO_CARD submissions have been finalized
-    under the old code (the only 5 existing FINALIZED rows are pre-existing
-    MULTIMODAL ones, whose prediction field was never touched), so no
-    backfill is needed. Going forward, source_status/content_status/
-    date_status are an immutable AI snapshot and final_* holds the expert
-    consensus once reached.
-
-multimodal_analysis:
-    Adds finalized_at (expert_overall_verdict already existed, decoupled
-    correctly from the start — multimodal's `prediction` column was never
-    overwritten).
-
-voting_config:
-    Adds activation_threshold_votes (N), verified_threshold (T), lead_margin,
-    max_review_votes, max_review_hours, max_tier_weight — replacing the
-    hard-coded weight-activation cutoff (previously: only an expert's very
-    first vote got neutral weight) and the simple-majority finalize check
-    with the full T/M/margin engine.
-
-audit_log:
-    New append-only table for vote casts/edits, finalizations, escalations,
-    and admin config changes.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -45,7 +13,6 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    # ─── verification_results_v2 ───────────────────────────────────────
     op.add_column(
         "verification_results_v2",
         sa.Column(
@@ -75,13 +42,11 @@ def upgrade() -> None:
         sa.Column("finalized_at", sa.DateTime(timezone=True), nullable=True),
     )
 
-    # ─── multimodal_analysis ────────────────────────────────────────────
     op.add_column(
         "multimodal_analysis",
         sa.Column("finalized_at", sa.DateTime(timezone=True), nullable=True),
     )
 
-    # ─── voting_config ──────────────────────────────────────────────────
     op.add_column(
         "voting_config",
         sa.Column(
@@ -124,7 +89,6 @@ def upgrade() -> None:
         "ck_voting_config_lead_margin_nonneg", "voting_config", "lead_margin >= 0"
     )
 
-    # ─── audit_log ──────────────────────────────────────────────────────
     op.create_table(
         "audit_log",
         sa.Column("actor_id", sa.UUID(), nullable=True),

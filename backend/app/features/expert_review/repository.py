@@ -12,8 +12,6 @@ logger = logging.getLogger(__name__)
 
 
 class ExpertProfileRepository(BaseRepository[ExpertProfile]):
-    """Storage for current expert credibility and review statistics."""
-
     model_class = ExpertProfile
 
     async def get_by_user_id(self, user_id: uuid.UUID) -> ExpertProfile | None:
@@ -25,7 +23,7 @@ class ExpertProfileRepository(BaseRepository[ExpertProfile]):
         self,
         user_id: uuid.UUID,
         *,
-        initial_score: float | None = None,  # Legacy caller compatibility; never used to seed a score.
+        initial_score: float | None = None,
         area_of_expertise: str = "General",
     ) -> ExpertProfile:
         existing = await self.get_by_user_id(user_id)
@@ -45,11 +43,6 @@ class ExpertProfileRepository(BaseRepository[ExpertProfile]):
         return record
 
     async def finalized_vote_counts(self, reviewer_id: uuid.UUID) -> tuple[int, int]:
-        """(votes, correct) for one expert, counted from the data itself: only
-        votes on claims whose final decision is complete (FINALIZED, by expert
-        consensus or an administrator), and correct when the vote equals that
-        final overall verdict. Votes on claims still in review or escalated do
-        not count yet, and a deleted claim's votes no longer count at all."""
         from app.core.constants import SubmissionStatus
         from app.features.multimodal.models import MultimodalAnalysis
         from app.features.submissions.models import Submission
@@ -74,9 +67,6 @@ class ExpertProfileRepository(BaseRepository[ExpertProfile]):
         return int(total or 0), int(correct or 0)
 
     async def refresh_stats(self, profile: ExpertProfile, activation_threshold: int) -> ExpertProfile:
-        """Re-derive a profile's counters from `finalized_vote_counts`. The
-        accuracy score exists only once N (`activation_threshold`) finalized
-        votes are reached."""
         total, correct = await self.finalized_vote_counts(profile.user_id)
         return await self.update(
             profile,
@@ -103,10 +93,6 @@ class CredibilityWeightTierRepository(BaseRepository[CredibilityWeightTier]):
     async def resolve_tier_for_accuracy(
         self, accuracy_pct: float
     ) -> CredibilityWeightTier | None:
-        """Find the active tier whose [min_accuracy_pct, max_accuracy_pct] range
-        (inclusive both ends) contains the given accuracy percentage. Used by
-        ExpertReviewService to derive each expert's voting weight — this is the
-        admin-configurable replacement for the old hardcoded credibility deltas."""
         tiers = await self.get_active_tiers()
         for tier in tiers:
             if tier.min_accuracy_pct <= accuracy_pct <= tier.max_accuracy_pct:
@@ -178,10 +164,6 @@ class ExpertReviewRepository(BaseRepository[ExpertReview]):
         return list(result.scalars().all())
 
 class VotingConfigRepository(BaseRepository[VotingConfig]):
-    """Single-row admin-configurable voting parameters — the oldest row is
-    always the one in effect, so there is no fixed min-votes-to-finalize
-    setting any more."""
-
     model_class = VotingConfig
 
     async def get_or_create(self) -> VotingConfig:

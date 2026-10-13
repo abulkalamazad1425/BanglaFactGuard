@@ -1,6 +1,3 @@
-"""S09: claim headline vs the selected source TITLE. The source body can
-never change the verdict, and a missing comparison is never a verdict."""
-
 from __future__ import annotations
 
 from app.core.constants import ContentStatus, HeadlineCheckStatus, PipelineStageID, SourceStatus

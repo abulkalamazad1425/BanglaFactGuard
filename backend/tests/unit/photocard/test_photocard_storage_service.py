@@ -1,6 +1,3 @@
-"""Card images under their own prefix; storage trouble is reported (False /
-None), never raised - the caller decides what it means."""
-
 from __future__ import annotations
 
 import uuid

@@ -1,6 +1,3 @@
-"""Backbone features for duplicate detection: a submission is a duplicate only
-when text, image AND combined similarity all clear their thresholds."""
-
 import numpy as np
 import pytest
 
@@ -43,5 +40,5 @@ async def test_features_come_from_both_backbones_and_an_unreadable_image_does_no
     extractor = X(TinyLoader())
     text, red, combined = await extractor.extract_all_embeddings("শিরোনাম ও বিবরণ", png((255, 0, 0)))
     assert text.shape == (8,) and red.shape == (3,) and combined.shape == (11,) and red[0] > red[1]
-    _, blank, _ = await extractor.extract_all_embeddings("x", b"not-an-image")  # a blank image stands in
+    _, blank, _ = await extractor.extract_all_embeddings("x", b"not-an-image")
     assert blank.shape == (3,) and not np.allclose(blank, red)

@@ -1,31 +1,3 @@
-"""Deterministic, quotable differences between a claim headline and a source title.
-
-Every rule here looks for ONE concrete kind of meaning change and, when it
-fires, returns the claim text and source text that show it. A rule never
-fires on a mere absence of overlap: "these share few words" is not a
-material difference, it is something the semantic assessment in
-`headline_comparison.py` has to judge.
-
-Rules (all applied to the headline and the title only — never a body):
-
-  numbers         a claimed number/quantity the title does not state, or a
-                  different value for the same referent (৫ জন -> ১০ জন)
-  date            a claimed date word (month, weekday, আজ/গতকাল...) the
-                  title does not carry, or a different one
-  negation        the claim negates what the title affirms, or the reverse
-  modality        completed event vs plan/possibility/future
-  scope           a conflicting quantifier (সব vs কিছু, অন্তত vs সর্বোচ্চ)
-  subject_object  who did what to whom is reversed
-  attribution     the title reports an allegation/claim; the headline
-                  states it as fact
-  denial          the title disputes/denies; the headline does not
-  entity          the headline names a person/place/organisation the title
-                  does not (only when NER is usable)
-
-All text is compared through the same Bangla normalisation and light
-stemming (`analysis/text.py`) on both sides.
-"""
-
 from __future__ import annotations
 
 import re
@@ -56,15 +28,12 @@ def _n(text: str) -> str:
 
 
 def _norm_words(*words: str) -> frozenset[str]:
-    """Word lists in exactly the form `tokenize` produces for compared text."""
     return frozenset(t for w in words for t in tokenize(w))
 
 
 def _any_of(*words: str) -> str:
     return "(?:" + "|".join(re.escape(_n(w)) for w in words) + ")"
 
-
-# ── content words ────────────────────────────────────────────────────────
 
 def content_units(text: str):
     return [u for u in extract_claim_units(text) if u.kind == "content"]
@@ -77,22 +46,16 @@ def coverage(units, keys: set[str]) -> float:
 
 
 def unmatched_content(claim: str, source: str) -> list[str]:
-    """Claim content words (stem-aware) that do not occur in the source."""
     keys = evidence_keys(source)
     return [u.text for u in extract_claim_units(claim) if not ({u.text, light_stem(u.text)} & keys)]
 
 
 def same_word_sequence(a: str, b: str) -> bool:
-    """Same words in the same order — only punctuation/spacing differs."""
     ta, tb = tokenize(a), tokenize(b)
     return bool(ta) and ta == tb
 
 
-# ── negation, modality, scope, attribution ───────────────────────────────
-
 _NEGATION_WORDS = _norm_words("না", "নি", "নেই", "নয়", "নয়", "নন", "নাই", "নাকচ", "not", "no", "never")
-# Fused verb negation (হয়নি, করেনি, দেননি, যায়নি). The letter before নি must
-# be এ-কার, য় or ন, so nouns such as পানি, জানি, কোম্পানি do not match.
 _FUSED_NEGATION_RE = re.compile(
     "^.+(?:" + "|".join(re.escape(_n(s)) for s in ("ে", "য়", "য়", "ন")) + ")" + re.escape(_n("নি")) + "$"
 )
@@ -104,13 +67,10 @@ _PLAN_WORDS = _norm_words(
 _COMPLETED_WORDS = _norm_words("হলো", "হল", "করল", "দিল", "গেল", "ঘটল", "বলল", "হয়েছিল", "মারা", "পাস")
 _COMPLETED_ENDINGS = tuple(_n(s) for s in ("েছে", "েছেন", "েছিল", "েছিলেন", "েছিলো", "লেন"))
 _FUTURE_ENDINGS = tuple(_n(s) for s in ("বে", "বেন", "বো"))
-# Words ending like a future verb that are not one: ভালোভাবে, জবাবে, হিসেবে, তবে.
 _NOT_FUTURE_ENDINGS = tuple(_n(s) for s in ("ভাবে", "জবাবে", "হিসেবে", "হিসাবে"))
 _NOT_FUTURE_WORDS = _norm_words("তবে", "কবে", "সবে", "যবে")
 _DENIAL_WORDS = _norm_words("গুজব", "মিথ্যা", "ভুয়া", "অসত্য", "বানোয়াট", "ভিত্তিহীন")
 _DENIAL_RE = re.compile(_any_of("সত্য", "সঠিক") + r"\s+" + _any_of("নয়", "নয়", "না"))
-# An allegation/claim FRAME ("অভিযোগ করেছে", "বলে দাবি", "অভিযোগ:"), not the
-# bare noun - দাবি alone also means "demand" (শিক্ষার্থীদের দাবি মেনে নিল সরকার).
 _ALLEGATION_SOURCE_RE = re.compile(
     _any_of("দাবি", "অভিযোগ") + r"\s+" + _any_of("কর", "তোল", "তুল", "জানা", "উঠেছে", "ওঠে")
     + "|" + _any_of("বলে") + r"\s+" + _any_of("দাবি", "অভিযোগ")
@@ -127,20 +87,16 @@ CLAUSE_ALIGN = 0.6
 
 def _is_negation(tok: str, prev: str = "") -> bool:
     if tok in _NEGATION_WORDS:
-        return not (tok == _n("না") and prev == _n("কি"))  # কি না = "whether"
+        return not (tok == _n("না") and prev == _n("কি"))
     return len(tok) >= 4 and bool(_FUSED_NEGATION_RE.match(tok))
 
 
 def polarity(text: str) -> bool:
-    """True when the text is negated (an odd number of negations)."""
     toks = tokenize(text)
     return sum(_is_negation(t, toks[i - 1] if i else "") for i, t in enumerate(toks)) % 2 == 1
 
 
 def _same_predicate(a: str, b: str) -> bool:
-    """A fused negation hides its verb (কমায়নি). Only compare polarity when
-    the other side uses the same verb root (কমিয়েছে), so 'did not raise' is
-    never read as the negation of 'reduced'."""
     for x, y in ((a, b), (b, a)):
         other = tokenize(y)
         for tok in tokenize(x):
@@ -161,7 +117,6 @@ def _is_future(tok: str) -> bool:
 
 
 def modality(text: str) -> str:
-    """COMPLETED | NOT_COMPLETED (planned, possible, future) | UNKNOWN."""
     toks = tokenize(text)
     if any(t in _PLAN_WORDS or _is_future(t) for t in toks):
         return "NOT_COMPLETED"
@@ -189,9 +144,6 @@ def _clauses(text: str) -> list[str]:
 
 
 def _clause_alignment(claim: str, source: str):
-    """Pair each claim clause with the source clause that discusses it:
-    (claim_clause, source_clause, ambiguous). `ambiguous` when equally
-    aligned source clauses disagree in polarity or modality."""
     src = _clauses(source)
     src_keys = [evidence_keys(s) for s in src]
     aligned = []
@@ -209,10 +161,6 @@ def _clause_alignment(claim: str, source: str):
     return aligned
 
 
-# ── subject / object roles ───────────────────────────────────────────────
-# Object-case endings (X-কে, X-দের/-দেরকে as accusative) versus a bare
-# or nominative-plural (X-রা, X-গণ) form of the same word. A role swap needs
-# a flip in BOTH directions, so a single genitive "-দের" cannot fire it.
 _OBJECT_ENDINGS = tuple(_n(s) for s in ("দেরকে", "কে", "দের"))
 _SUBJECT_ENDINGS = tuple(_n(s) for s in ("েরা", "রা", "গণ"))
 
@@ -237,8 +185,6 @@ def _roles(text: str) -> dict[str, str]:
 
 
 def role_swap(claim: str, source: str) -> tuple[str, str] | None:
-    """(word that became the object, word that became the subject) when the
-    headline reverses who did what to whom relative to the title."""
     rc, rs = _roles(claim), _roles(source)
     to_object = [k for k in rc if k in rs and rc[k] == "object" and rs[k] == "subject"]
     to_subject = [k for k in rc if k in rs and rc[k] == "subject" and rs[k] == "object"]
@@ -246,8 +192,6 @@ def role_swap(claim: str, source: str) -> tuple[str, str] | None:
         return to_object[0], to_subject[0]
     return None
 
-
-# ── numbers and dates ────────────────────────────────────────────────────
 
 _MAGNITUDES = {_n("শত"): 100, _n("হাজার"): 1_000, _n("লাখ"): 100_000, _n("লক্ষ"): 100_000, _n("কোটি"): 10_000_000}
 _NUMBER_WORDS = {
@@ -295,7 +239,6 @@ def _role_in(tokens: list[str]) -> list[str]:
 
 
 def quantities(text: str) -> list[Quantity]:
-    """Numbers with unit and (when clear) referent: ৫ জন নিহত, ২০ শতাংশ."""
     norm = _n(text)
     for word, value in _NUMBER_WORDS.items():
         norm = re.sub(r"(?<!\S)" + re.escape(word) + r"(?=\s)", str(value), norm)
@@ -357,8 +300,6 @@ def date_words(text: str) -> set[str]:
     return {_DATE_WORDS[light_stem(t)] for t in tokenize(text) if light_stem(t) in _DATE_WORDS}
 
 
-# ── the rules ────────────────────────────────────────────────────────────
-
 def find_material_differences(
     claim: str,
     source: str,
@@ -367,13 +308,11 @@ def find_material_differences(
     source_mentions: list[EntityMention] | None = None,
     ner_available: bool = False,
 ) -> list[MaterialDifference]:
-    """Every concrete meaning change between `claim` and `source`."""
     found: list[MaterialDifference] = []
 
     def add(kind: str, detail: str, claim_text: str = claim, source_text: str = source, **meta: str) -> None:
         found.append(MaterialDifference(kind, detail, claim_text, source_text, dict(meta)))
 
-    # numbers
     sq = quantities(source)
     for q in quantities(claim):
         if any(_same_value(q, e) and _compatible(q, e) for e in sq):
@@ -389,7 +328,6 @@ def find_material_differences(
             add("numbers", f"The headline states {claimed}, which the source title does not state.",
                 claim_text=claimed)
 
-    # dates
     cd, sd = date_words(claim), date_words(source)
     extra = cd - sd
     if extra:
@@ -401,7 +339,6 @@ def find_material_differences(
             add("date", f"The headline adds a date ({', '.join(sorted(extra))}) the source title does not state.",
                 claim_text=", ".join(sorted(extra)))
 
-    # negation / modality / scope on aligned clauses
     for cc, sc, ambiguous in _clause_alignment(claim, source):
         if ambiguous:
             continue
@@ -417,13 +354,11 @@ def find_material_differences(
             add("scope", f"The quantifier differs (headline: {', '.join(sorted(qualifier_groups(cc)))}; "
                 f"source title: {', '.join(sorted(qualifier_groups(sc)))}).", claim_text=cc, source_text=sc)
 
-    # subject / object
     swap = role_swap(claim, source)
     if swap:
         add("subject_object", f"Who did what to whom is reversed: '{swap[0]}' and '{swap[1]}' exchange roles "
             "relative to the source title.", a=swap[0], b=swap[1])
 
-    # attribution / denial
     if _ALLEGATION_SOURCE_RE.search(_n(source)) and not _ALLEGATION_CLAIM_RE.search(_n(claim)):
         add("attribution", "The source title reports this as someone's claim or allegation; the headline "
             "states it as established fact.")
@@ -432,7 +367,6 @@ def find_material_differences(
     ):
         add("denial", "The source title disputes or denies this; the headline does not.")
 
-    # named entities
     if ner_available and claim_mentions:
         src_mentions = source_mentions or []
         src_keys = tuple(light_stem(t) for t in tokenize(source))

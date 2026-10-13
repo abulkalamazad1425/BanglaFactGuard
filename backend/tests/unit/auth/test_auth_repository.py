@@ -1,5 +1,3 @@
-"""Token lookups only ever return a live token; role listings for admin pages."""
-
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone

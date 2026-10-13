@@ -1,7 +1,3 @@
-"""Google News search: one site operator, a date window only where it helps,
-and publisher links resolved from Google's redirects. A browser that cannot
-run makes the call FAIL (-> INCOMPLETE), never look like an empty search."""
-
 from __future__ import annotations
 
 from datetime import date, timedelta
@@ -53,12 +49,12 @@ async def test_query_and_date_window(monkeypatch):
     query, window = gn.calls[0]
     assert query == "site:prothomalo.com সেতু" and set(window) == {"from_", "to_"}
     await c.search_entries("site:prothomalo.com সেতু", domain="prothomalo.com", published_date=date(2020, 1, 1))
-    assert gn.calls[1] == ("site:prothomalo.com সেতু", {})  # no duplicate operator, no window for old stories
+    assert gn.calls[1] == ("site:prothomalo.com সেতু", {})
     with pytest.raises(PyGoogleNewsError):
         await client(monkeypatch, FakeGoogleNews(error=RuntimeError("rate limited"))).search_entries("q")
     monkeypatch.setattr(pgn, "_FEED_TIMEOUT_S", 0.1)
     monkeypatch.setattr(gn, "search", lambda *a, **k: __import__("time").sleep(0.5))
-    with pytest.raises(PyGoogleNewsError, match="timed out"):  # the feed fetch has no timeout of its own
+    with pytest.raises(PyGoogleNewsError, match="timed out"):
         await c.search_entries("q")
 
 
@@ -71,9 +67,9 @@ async def test_redirects_are_resolved_once_and_unresolvable_ones_fail_the_call(m
 
     gn = FakeGoogleNews([{"link": WRAPPED, "title": "a"}, {"link": WRAPPED, "title": "a"}, {"link": OTHER, "title": "b"}])
     c = client(monkeypatch, gn, resolver)
-    assert await c.search_entries("q") == [(FINAL, "a"), (FINAL, "a"), (OTHER, "b")]  # partial resolution is fine
+    assert await c.search_entries("q") == [(FINAL, "a"), (FINAL, "a"), (OTHER, "b")]
     assert await c.search_entries("q2") == [(FINAL, "a"), (FINAL, "a"), (OTHER, "b")]
-    assert calls == [[WRAPPED, OTHER], [OTHER]]  # resolved once, failures never cached
+    assert calls == [[WRAPPED, OTHER], [OTHER]]
 
     async def browser_down(urls):
         return {}
@@ -90,9 +86,9 @@ async def test_the_browser_captures_the_publisher_hop_and_a_failed_launch_is_ret
     monkeypatch.setattr(pgn, "_REDIRECT_WAIT_S", 0.2)
     server = "https://news.google.com/rss/articles/server"
     scripts = {
-        WRAPPED: {"late": True, "final": FINAL + "?__cf_chl_rt_tk=abc&id=1"},  # the interstitial's JS hop
-        server: {"final": FINAL},                             # a 302: aborting it fails goto
-        OTHER: {"late": True},                                # never leaves Google
+        WRAPPED: {"late": True, "final": FINAL + "?__cf_chl_rt_tk=abc&id=1"},
+        server: {"final": FINAL},
+        OTHER: {"late": True},
         "https://news.google.com/rss/articles/crash": {"crash": True},
     }
     fake_playwright.install(monkeypatch, scripts)
@@ -100,8 +96,6 @@ async def test_the_browser_captures_the_publisher_hop_and_a_failed_launch_is_ret
     assert resolved == {WRAPPED: FINAL + "?id=1", server: FINAL, OTHER: OTHER,
                         "https://news.google.com/rss/articles/crash": "https://news.google.com/rss/articles/crash"}
 
-    # A dead browser never answers: the session deadline returns what was
-    # resolved instead of holding the claim at "processing" forever.
     monkeypatch.setattr(pgn, "_SESSION_DEADLINE_S", 0.5)
     hung = "https://news.google.com/rss/articles/hung"
     fake_playwright.install(monkeypatch, {WRAPPED: scripts[WRAPPED], hung: {"hang": True}})

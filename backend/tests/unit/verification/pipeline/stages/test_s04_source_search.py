@@ -1,6 +1,3 @@
-"""S04: per-call outcome accounting (a failed search is never an empty one),
-domain restriction, de-duplication and the verified-sources search."""
-
 from __future__ import annotations
 
 from datetime import date
@@ -73,20 +70,20 @@ async def test_both_providers_get_every_keyword_and_only_date_bound_queries_get_
         assert second.kwargs["published_date"] == date(2026, 10, 4)
         assert first.kwargs["domain"] == "prothomalo.com"
     assert google.search_entries.call_args_list[0].args[0].startswith("site:prothomalo.com ")
-    assert not internal.search_entries.call_args_list[0].args[0].startswith("site:")  # the outlet's own search
+    assert not internal.search_entries.call_args_list[0].args[0].startswith("site:")
 
 
 async def test_candidates_are_on_domain_articles_deduplicated_and_cached():
     google = provider([
-        ("https://evil.example/news/a-long-article-1234", "x"),        # off domain
-        ("https://www.prothomalo.com/tag/dhaka", "x"),                  # not an article
-        (URL + "?utm_source=fb", "t"), (URL + "/amp", "t"),             # same article twice
+        ("https://evil.example/news/a-long-article-1234", "x"),
+        ("https://www.prothomalo.com/tag/dhaka", "x"),
+        (URL + "?utm_source=fb", "t"), (URL + "/amp", "t"),
     ])
     internal = provider([(URL, "t")])
     c = cache()
     out = await search(ctx(), google, internal, c)
     assert [x.url for x in out.candidate_urls] == [URL]
-    assert out.candidate_urls[0].search_provider == SearchProvider.INTERNAL_SITE  # outlet's own result preferred
+    assert out.candidate_urls[0].search_provider == SearchProvider.INTERNAL_SITE
     assert c.set_search_result.await_count == 4
 
 
@@ -102,7 +99,7 @@ async def test_missing_queries_or_source_dispatch_nothing():
     google = provider()
     no_queries = ctx()
     no_queries.search_queries = []
-    for c in (ctx(source=None), no_queries):  # never an unrestricted search
+    for c in (ctx(source=None), no_queries):
         out = await search(c, google, provider())
         assert out.stage_errors and out.candidate_urls == []
     google.search_entries.assert_not_called()
@@ -123,10 +120,10 @@ async def test_verified_sources_search_is_google_only_grouped_and_allowlisted(mo
 
     monkeypatch.setattr(get_settings().search, "fallback_domain_group_size", 2)
     google = provider([
-        ("https://www.jugantor.com.evil.net/national/123456", HEADLINE),   # deceptive host
-        ("https://www.unknown-news.com/national/123456", HEADLINE),       # off the list
-        ("https://www.samakal.com/national/999999", "চট্টগ্রাম বন্দরে জাহাজ ভিড়েছে - সমকাল"),  # irrelevant
-        ("https://www.samakal.com/national/888888", None),                 # untitled: kept, last
+        ("https://www.jugantor.com.evil.net/national/123456", HEADLINE),
+        ("https://www.unknown-news.com/national/123456", HEADLINE),
+        ("https://www.samakal.com/national/999999", "চট্টগ্রাম বন্দরে জাহাজ ভিড়েছে - সমকাল"),
+        ("https://www.samakal.com/national/888888", None),
         ("https://www.jugantor.com/national/123456", f"{HEADLINE} - যুগান্তর"),
     ])
     internal = provider()

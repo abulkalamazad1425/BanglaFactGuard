@@ -1,14 +1,3 @@
-"""Add DatabaseDescription.pdf schema — submissions, source_evidence_queries,
-retrieved_articles_v2, ocr_extractions, multimodal_analysis, verification_results_v2,
-credibility_weight_tiers, expert_profiles, expert_reviews_v2, and additive columns
-on users.
-
-Additive-only migration: every table here is new. The `_v2` suffix on
-retrieved_articles/verification_results/expert_reviews avoids colliding with the
-legacy tables of the same (unsuffixed) name, which the live verification pipeline
-keeps using untouched. Nothing in `verified_sources` is touched by this migration.
-"""
-
 revision = "9624a66f7531"
 down_revision = "140d46863ca2"
 branch_labels = None
@@ -208,11 +197,6 @@ def upgrade() -> None:
     op.create_check_constraint(
         "ck_users_role_valid", "users", "role IN ('user', 'expert', 'admin')"
     )
-    # NOTE: autogenerate also proposed dropping the server_default on
-    # verified_sources.search_language / verified_sources.js_rendered (pre-existing
-    # drift between the ORM's client-side `default=` and the DB's server_default from
-    # migration 140d46863ca2 — unrelated to this change). verified_sources must not be
-    # touched by this migration, so those two op.alter_column calls were removed.
 
 
 def downgrade() -> None:
@@ -262,10 +246,6 @@ def downgrade() -> None:
     op.drop_table('expert_profiles')
     op.drop_index(op.f('ix_credibility_weight_tiers_created_at'), table_name='credibility_weight_tiers')
     op.drop_table('credibility_weight_tiers')
-    # op.drop_table() does not drop the native enum types it depends on — drop the
-    # 3 enum types introduced by this migration explicitly (the 4 reused enum
-    # types — verification_label_enum, query_type_enum, search_provider_enum,
-    # extraction_method_enum — were created by earlier migrations and are left alone).
     postgresql.ENUM(name='submission_type_enum').drop(op.get_bind(), checkfirst=True)
     postgresql.ENUM(name='submission_status_enum').drop(op.get_bind(), checkfirst=True)
     postgresql.ENUM(name='multimodal_prediction_enum').drop(op.get_bind(), checkfirst=True)

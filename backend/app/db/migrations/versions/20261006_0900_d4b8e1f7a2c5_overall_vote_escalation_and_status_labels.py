@@ -1,31 +1,3 @@
-"""Overall-vote-only decisions, admin escalation, headline status backfill.
-
-1. voting_config.max_tier_weight is dropped — the Max Tier Weight Cap no
-   longer exists anywhere (UI, validation, weighting).
-2. expert_reviews.is_admin_decision (default false): marks an
-   administrator's final decision on an ESCALATED claim.
-3. submissions.escalated_at: when expert review escalated the claim. Rows
-   already ESCALATED get their last update time as a best estimate.
-4. verification_results.headline_exact_match is backfilled for MATCHED rows
-   where it is NULL, so they can be shown as Exact Matched / Meaning
-   Preserved. Exactness is decided only from stored text with the same
-   normalisation as the comparator's exact-match shortcut (NFC, zero-width
-   characters removed, whitespace collapsed, one trailing ।.!? removed).
-   When the stored claim headline or source title is missing, the row stays
-   NULL (displayed as Meaning Preserved) — never promoted to an exact match.
-   ALTERED rows are not touched.
-5. Existing preliminary-result notifications that still carry the generic
-   "Your automatic check is complete. View your result." text get the claim
-   headline's first five words instead (with "..." only when longer).
-
-Downgrade restores the schema; the backfilled flags and rewritten
-notification text are kept (they are correct under the old schema too).
-
-Revision ID: d4b8e1f7a2c5
-Revises: c7e2a9d4f1b3
-Create Date: 2026-10-06 09:00:00
-"""
-
 from __future__ import annotations
 
 import json
@@ -46,7 +18,6 @@ _TRAILING_TERMINATOR_RE = re.compile(r"\s*[।.!?]$")
 
 
 def _exact_key(text: str) -> str:
-    # Frozen copy of analysis/headline_comparison.exact_match_key at this revision.
     t = unicodedata.normalize("NFC", text or "")
     t = _ZERO_WIDTH_RE.sub("", t)
     t = re.sub(r"\s+", " ", t).strip()
@@ -84,7 +55,7 @@ def _backfill_exact_match(bind) -> None:
             claim = detail.get("claim_headline") or headline
             title = detail.get("source_title") or article_title
             if not claim or not title:
-                continue  # not enough evidence: stays NULL (Meaning Preserved)
+                continue
             key = _exact_key(claim)
             exact = bool(key) and key == _exact_key(title)
         bind.execute(

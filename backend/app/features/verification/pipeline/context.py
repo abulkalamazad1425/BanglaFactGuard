@@ -19,18 +19,6 @@ from app.features.verification.schemas import AnalysisDetails
 
 @dataclass
 class PipelineContext:
-    """Shared state passed through the verification stages.
-
-    Each decision has its own owner:
-      S08 source correspondence  -> source_status, analysis.metrics/search/source_basis
-      S09 headline alteration    -> content_status (MATCHED | ALTERED | None),
-                                    headline_check_status, analysis.headline_alteration
-      S10 body similarity        -> analysis.body_similarity (measurements only)
-      S11 date verification      -> date_status, analysis.date
-      S12 result assembly        -> confidence, reasoning, analysis bookkeeping
-      S13 result persistence     -> result_id, persisted
-    """
-
     request_id: uuid.UUID = field(default_factory=uuid.uuid4)
     submission_id: uuid.UUID | None = None
     submitter_id: uuid.UUID | None = None
@@ -46,17 +34,11 @@ class PipelineContext:
     source_config: dict | None = None
     content_hash: str | None = None
 
-    # Verification mode (see verification/source_policy.py). CLAIMED_SOURCE
-    # is the original single-outlet path; VERIFIED_SOURCES searches only the
-    # active verified publishers in `verified_scope` (Google only).
     verification_mode: str = "CLAIMED_SOURCE"
     source_resolution_reason: str | None = None
-    verified_scope: Any = None  # source_policy.VerifiedScope
+    verified_scope: Any = None
 
     cache_hit: bool = False
-    # The earlier submission whose automated result is being reused (S02).
-    # The service layer materialises a result copy for the requester's own
-    # submission; the pipeline itself never repoints `submission_id`.
     reused_from_submission_id: uuid.UUID | None = None
 
     search_queries: list[tuple[str, str]] = field(default_factory=list)
@@ -65,10 +47,6 @@ class PipelineContext:
     candidate_urls: list[CandidateArticleSchema] = field(default_factory=list)
     search_provider_used: str | None = None
 
-    # Per provider-call outcome accounting (S04), which is what separates
-    # "the search ran cleanly and found nothing" (NOT_FOUND) from "the search
-    # itself failed" (INCOMPLETE). `search_attempted` counts calls actually
-    # issued or served from cache; unconfigured providers are `search_skipped`.
     search_attempted: int = 0
     search_errors: int = 0
     search_success: int = 0
@@ -83,14 +61,12 @@ class PipelineContext:
     extraction_attempted: int = 0
     extraction_errors: int = 0
 
-    # S05 -> S06 hand-off: raw HTML of each successfully fetched candidate URL.
     fetched_html: dict[str, str] = field(default_factory=dict)
     extracted_articles: list[RankedArticleSchema] = field(default_factory=list)
     failed_extraction_urls: list[str] = field(default_factory=list)
     ranked_articles: list[RankedArticleSchema] = field(default_factory=list)
     top_article: RankedArticleSchema | None = None
 
-    # Everything persisted in verification_results.analysis_details.
     analysis: AnalysisDetails = field(default_factory=AnalysisDetails)
 
     source_status: SourceStatus | None = None
@@ -113,7 +89,6 @@ class PipelineContext:
         return self.verification_mode == "VERIFIED_SOURCES"
 
     def publisher_for_url(self, url: str | None) -> str | None:
-        """Canonical name of the publisher an evidence URL belongs to."""
         if not url:
             return None
         if self.is_verified_sources_mode:
@@ -131,8 +106,6 @@ class PipelineContext:
 
     @property
     def retrieval_failed(self) -> bool:
-        """Candidates existed but every page fetch / extraction failed, so the
-        evidence could not be retrieved (as opposed to not existing)."""
         if self.fetch_attempted > 0 and self.fetch_errors >= self.fetch_attempted:
             return True
         if self.extraction_attempted > 0 and self.extraction_errors >= self.extraction_attempted:
@@ -182,14 +155,6 @@ def build_context(
     claim_scope: ClaimScope | None = None,
     source_resolution_reason: str | None = None,
 ) -> PipelineContext:
-    """Build the pipeline's starting state for one verification run.
-
-    `claim_scope` controls what the pipeline treats as "the claim" (see
-    `ClaimScope`). When not given explicitly it is inferred from whether
-    `news_body` was supplied - the right default for a SOURCE_BASED text
-    claim. Photo-card callers must pass `claim_scope=ClaimScope.HEADLINE_ONLY`
-    and no `news_body`: a photo card is verified on its headline alone.
-    """
     resolved_scope = claim_scope or (
         ClaimScope.HEADLINE_WITH_BODY
         if news_body and news_body.strip()

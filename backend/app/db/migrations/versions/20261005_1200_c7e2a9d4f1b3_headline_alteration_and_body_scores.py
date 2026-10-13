@@ -1,29 +1,3 @@
-"""Headline Alteration + body similarity scores; Gemini-first photo-card extraction.
-
-1. Purges every submission and the data that exists only because of a
-   submission: verification results/jobs, retrieved articles, search queries,
-   OCR/extraction records, expert reviews, multimodal analyses, result
-   deliveries and the submission notifications. Results computed by the old
-   comparison logic must not survive as if they were Headline Alteration
-   results. Users, verified sources, voting configuration, credibility
-   tiers, expert profiles, tokens and every other table are NOT touched.
-2. content_status_enum loses INCOMPLETE: the headline verdict is only
-   MATCHED or ALTERED (a missing verdict is NULL + headline_check_status).
-3. verification_results: drops the retired score columns (semantic/entity/
-   contradiction/keyword/numerical/body/passage scores, manipulation_flags)
-   and adds headline_check_status, headline_exact_match,
-   body_comparison_status.
-4. ocr_extractions: adds extraction_attempts, fallback_used,
-   extraction_details; widens detected_source_text/detected_date_text to TEXT
-   so raw extracted values are never truncated.
-
-Downgrade restores the schema only; purged data cannot be restored.
-
-Revision ID: c7e2a9d4f1b3
-Revises: b2f8a4d6c9e1
-Create Date: 2026-10-05 12:00:00
-"""
-
 from __future__ import annotations
 
 import sqlalchemy as sa

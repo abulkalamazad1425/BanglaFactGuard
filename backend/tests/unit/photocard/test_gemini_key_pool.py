@@ -1,6 +1,3 @@
-"""Key rotation: a key that reached its limit is skipped (by later cards too)
-until it resets; a long block is never waited for."""
-
 import httpx
 
 from app.features.photocard.gemini_key_pool import (
@@ -32,14 +29,14 @@ def test_keys_rotate_and_blocked_keys_are_skipped_until_they_reset():
     pool = GeminiKeyPool(["a", "b", "c"], clock=lambda: now[0])
     assert pool.acquire() == 0
     pool.block(0, 30)
-    assert pool.acquire() == 1 and pool.has_free_key()  # the next call goes to the next key
+    assert pool.acquire() == 1 and pool.has_free_key()
     pool.block(1, 3600)
     pool.block(2, 3600)
-    assert pool.acquire() == 0  # 30 s is short enough to wait for with the normal backoff
+    assert pool.acquire() == 0
     pool.block(0, 3600)
-    assert pool.acquire() is None and not pool.has_free_key()  # nothing worth waiting for
+    assert pool.acquire() is None and not pool.has_free_key()
     now[0] = 4000
-    assert pool.acquire() == 1  # all reset: the cycle continues after the last blocked key
+    assert pool.acquire() == 1
 
 
 def test_pools_are_shared_per_key_set_until_reset():

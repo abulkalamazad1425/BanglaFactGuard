@@ -1,7 +1,3 @@
-"""Text-and-image claims: accepted durably before acknowledgement, predicted
-once (backbones run once, a near-identical upload reuses the earlier
-prediction), and a retried job never predicts twice."""
-
 from __future__ import annotations
 
 import uuid
@@ -55,7 +51,7 @@ async def test_a_fresh_prediction_runs_the_backbones_once_and_goes_to_expert_rev
     user = await add_user(session, total_submissions=0)
     svc = service(session)
     response = await predict(svc, submitter_id=user.id)
-    svc._engine.predict.assert_not_awaited()  # the classifier reuses the extractor's features
+    svc._engine.predict.assert_not_awaited()
     text_arg, img_arg = svc._engine.predict_from_features.await_args.args
     assert text_arg is TEXT and img_arg is IMAGE
     assert (response.prediction, response.is_cached, response.similarity_scores) == (MultimodalPredictionLabel.FAKE, False, None)
@@ -72,12 +68,12 @@ async def test_a_near_identical_upload_reuses_the_earlier_prediction(session):
     again._engine.predict_from_features.assert_not_awaited()
     assert cached.is_cached and cached.original_id == first.prediction_id and cached.prediction == first.prediction
     assert set(cached.similarity_scores) == {"text_similarity", "image_similarity", "combined_similarity"}
-    assert cached.submission_id != first.submission_id  # still the requester's own submission
+    assert cached.submission_id != first.submission_id
     copy = await session.get(Submission, uuid.UUID(cached.submission_id))
-    assert str(copy.duplicate_of_submission_id) == first.submission_id  # kept out of Fact Explorer and the queues
+    assert str(copy.duplicate_of_submission_id) == first.submission_id
     original = await session.get(MultimodalAnalysis, uuid.UUID(first.prediction_id))
     original.expert_overall_verdict = OverallVerdict.FAKE
-    third = await predict(service(session))  # may match the copy: always linked to the original
+    third = await predict(service(session))
     assert third.original_id == first.prediction_id and third.expert_overall_verdict == OverallVerdict.FAKE
     assert str((await session.get(Submission, uuid.UUID(third.submission_id))).duplicate_of_submission_id) == first.submission_id
     other_image = await predict(service(session, image=np.eye(1792, dtype=np.float32)[0]))
@@ -89,7 +85,7 @@ async def test_acceptance_stores_the_image_submission_and_job_together(db, sessi
     row = await svc.accept_upload(headline="Claim", body_text="Body of the claim", image_bytes=b"image",
                                   original_filename="card.png", submitter_id=None)
     assert (row.status, row.processing_phase) == (SubmissionStatus.PENDING, "QUEUED")
-    async with db() as fresh:  # committed before the 202 goes out
+    async with db() as fresh:
         job = await VerificationJobRepository(fresh).get_by_submission(row.id)
     assert job.kind == "MULTIMODAL" and job.payload == {"image_key": f"multimodal/{row.id}/card.png", "filename": "card.png"}
     svc._storage.delete_image.assert_not_awaited()
@@ -113,9 +109,9 @@ async def test_processing_a_queued_upload_is_idempotent(session):
                                   submitter_id=user.id)
     payload = {"image_key": f"multimodal/{row.id}/card.png", "filename": "card.png"}
     await svc.process_queued(row, payload)
-    await svc.process_queued(row, payload)  # a retried job
-    svc._storage.read_image.assert_awaited_once_with(payload["image_key"])  # the saved image, read once
-    svc._storage.upload_image.assert_awaited_once()  # never uploaded again
+    await svc.process_queued(row, payload)
+    svc._storage.read_image.assert_awaited_once_with(payload["image_key"])
+    svc._storage.upload_image.assert_awaited_once()
     assert svc._engine.predict_from_features.await_count == 1
     assert (await session.get(Submission, row.id)).status == SubmissionStatus.EXPERT_REVIEW
     assert (await session.execute(select(func.count()).select_from(MultimodalAnalysis))).scalar_one() == 1

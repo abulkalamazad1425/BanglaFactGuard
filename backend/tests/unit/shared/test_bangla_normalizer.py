@@ -14,11 +14,11 @@ def test_text_normalisation_removes_invisible_chars_and_unifies_punctuation_and_
 
 
 @pytest.mark.parametrize("raw,expected", [
-    ("প্রথম আলো", "prothomalo.com"),             # exact alias
-    ("Prothom Alo", "prothomalo.com"),           # case-insensitive alias
-    ("যুগান্তর অনলাইন", "jugantor.com"),          # alias prefix
-    ("আজকের দৈনিক কালের কণ্ঠ", "kalerkantho.com"),  # alias contained
-    ("www.example-news.com", "www.example-news.com"),  # bare domain kept
+    ("প্রথম আলো", "prothomalo.com"),
+    ("Prothom Alo", "prothomalo.com"),
+    ("যুগান্তর অনলাইন", "jugantor.com"),
+    ("আজকের দৈনিক কালের কণ্ঠ", "kalerkantho.com"),
+    ("www.example-news.com", "www.example-news.com"),
     ("অচেনা পত্রিকা", None),
     ("", None),
 ])

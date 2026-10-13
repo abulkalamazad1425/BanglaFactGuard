@@ -1,6 +1,3 @@
-"""Classifier output -> label and confidences; reusing the extractor's
-features gives exactly the full forward pass."""
-
 import pytest
 
 from app.core.exceptions import InferenceError
@@ -25,7 +22,7 @@ async def test_reusing_extracted_features_matches_the_full_forward_pass():
     await MultimodalInferenceEngine(loader).predict_from_features(text, img)
     (full_img, full_text), (reused_img, reused_text) = loader.classifier_inputs
     assert full_img.allclose(reused_img) and full_text.allclose(reused_text)
-    await MultimodalInferenceEngine(loader).predict(body, b"not-an-image")  # decode fallback, not an error
+    await MultimodalInferenceEngine(loader).predict(body, b"not-an-image")
 
 
 async def test_a_model_failure_is_an_inference_error():

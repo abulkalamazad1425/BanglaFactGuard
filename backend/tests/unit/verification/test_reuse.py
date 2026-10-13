@@ -1,6 +1,3 @@
-"""Verification work is reusable; a submission is not. Only a settled,
-current, original result is reused - copied onto the requester's own row."""
-
 from __future__ import annotations
 
 import uuid
@@ -34,7 +31,7 @@ async def test_reusability_rules(session, fields, reason):
     _, result = await add_completed_submission(session, headline="h", submitter_id=None, **fields)
     if reason == "no_headline_verdict":
         result.content_status = None
-    result.created_at = datetime.now(timezone.utc) - timedelta(days=400)  # there is no age limit
+    result.created_at = datetime.now(timezone.utc) - timedelta(days=400)
     assert result_is_reusable(result) == (reason == "reusable", reason)
     assert result_is_reusable(None) == (False, "no_result")
 

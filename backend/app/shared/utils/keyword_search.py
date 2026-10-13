@@ -1,16 +1,3 @@
-"""Keyword search for the application's own lists (Fact Explorer, expert
-queue, review history) - not the verification evidence search.
-
-A query is split into unique, meaningful keywords (Bangla/English, Unicode
-NFC, whitespace/punctuation separated, stopwords dropped). An item matches
-when ANY keyword appears in any searched column (OR), so a three-word query
-also returns partial matches. Ranking: more distinct keywords matched first
-(a word repeated in the text never counts twice); ties prefer an exact phrase
-match, then keywords found in the headline; the caller's existing ordering
-and a stable id tie-break follow. Values are always bound parameters and
-`%`/`_`/`\\` are escaped, so the query is never interpreted as a pattern.
-"""
-
 from __future__ import annotations
 
 import re
@@ -32,7 +19,6 @@ def normalize_query(text: str | None) -> str:
 
 
 def split_keywords(text: str | None) -> list[str]:
-    """Unique meaningful keywords, in query order."""
     out: list[str] = []
     seen: set[str] = set()
     for token in _SPLIT_RE.split(normalize_query(text)):
@@ -54,14 +40,10 @@ def escape_like(term: str) -> str:
     return term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
-# য় ড় ঢ় have precomposed code points (U+09DF, U+09DC, U+09DD) that are
-# Unicode composition exclusions: NFC always splits them into letter + nukta.
-# Stored text keeps whichever form was typed, so a term is matched in both.
 _NUKTA_PRECOMPOSED = {"য়": "য়", "ড়": "ড়", "ঢ়": "ঢ়"}
 
 
 def spellings(term: str) -> list[str]:
-    """The term as typed in NFC, plus its precomposed-nukta spelling if different."""
     nfc = unicodedata.normalize("NFC", term)
     composed = nfc
     for split, joined in _NUKTA_PRECOMPOSED.items():
@@ -74,12 +56,8 @@ def _contains(column, term: str) -> ColumnElement[bool]:
 
 
 class KeywordSearch:
-    """`condition` filters (OR of keywords over the columns, or None when the
-    query has no usable keyword); `order_by` ranks matches."""
-
     def __init__(self, query: str | None, columns: list, *, headline_column=None) -> None:
         self.phrase = normalize_query(query)
-        # A query made only of stopwords still searches for what was typed.
         self.keywords = split_keywords(query) or ([self.phrase] if self.phrase else [])
         self.columns = list(columns)
         self.headline_column = headline_column

@@ -1,5 +1,3 @@
-"""Publication dates are calendar days in Asia/Dhaka, with timezone provenance."""
-
 from datetime import date
 
 import pytest
@@ -21,10 +19,10 @@ def test_offsetless_timestamp_assumes_dhaka_and_says_so():
 
 @pytest.mark.parametrize("raw,expected", [
     ("2026-03-15", date(2026, 3, 15)),
-    ("১৫ মার্চ ২০২৬", date(2026, 3, 15)),     # Bangla digits and month
+    ("১৫ মার্চ ২০২৬", date(2026, 3, 15)),
     ("March 15, 2026", date(2026, 3, 15)),
     ("15/03/2026", date(2026, 3, 15)),
-    ("2026-02-30", None),                    # impossible day
+    ("2026-02-30", None),
     ("not a date", None),
     (None, None),
 ])

@@ -1,22 +1,3 @@
-"""Photo-card claim extraction - Gemini only, no OCR, no fallback.
-
-    original image + active verified sources (with aliases)
-        -> Gemini (<= 9 requests in 3 batches of 3, 10 s pause between batches)
-        -> every request failed               -> API_FAILED       (verification never runs)
-        -> success, but no usable headline    -> INVALID_CONTENT  (no retry, verification never runs)
-        -> success with headline + source     -> SUCCEEDED (claimed-source verification)
-        -> success with headline, but the
-           outlet is missing, unrecognised
-           or inactive                        -> SUCCEEDED (verified-sources verification;
-                                                 the raw outlet text is kept as provenance only)
-
-On success the extracted values ARE the claim: the headline is the claimed
-text, the identified verified source is the claimed news outlet and the
-printed date (when one is fully visible and parses) is the claimed
-publication date. A missing or unparseable date is not a failure - the claim
-simply has no date; nothing is defaulted or guessed.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -47,7 +28,6 @@ STATUS_SUCCEEDED = "SUCCEEDED"
 STATUS_API_FAILED = "API_FAILED"
 STATUS_INVALID_CONTENT = "INVALID_CONTENT"
 
-# User-facing reasons (also stored as the submission's failure_reason).
 API_FAILURE_MESSAGE = (
     "Sorry for the temporary inconvenience. Information cannot be collected from the "
     "photo card right now. Please submit it again after a while."
@@ -64,11 +44,9 @@ INVALID_CONTENT_MESSAGE = (
 
 @dataclass
 class CardExtraction:
-    status: str  # SUCCEEDED | API_FAILED | INVALID_CONTENT
+    status: str
     headline: str | None = None
     source: VerifiedSource | None = None
-    # Why there is no usable source (SOURCE_NOT_DETECTED / SOURCE_UNRECOGNIZED /
-    # SOURCE_INACTIVE) and the outlet text visible on the card, if any.
     source_reason: str | None = None
     raw_source_text: str | None = None
     published_date: date | None = None
@@ -154,7 +132,6 @@ class PhotocardClaimExtractor:
         details["response"] = f.model_dump(mode="json")
         headline = _usable_headline(f.present("headline"))
         canonical = f.identified_source()
-        # Only a source that is still active right now is accepted.
         source = by_canonical.get(canonical) if canonical else None
         source_reason = None
         if source is not None:
@@ -172,8 +149,6 @@ class PhotocardClaimExtractor:
         details["source_reason"] = None if source is not None else source_reason
 
         if headline is not None and source is None and source_policy.fallback_enabled():
-            # A readable headline is enough: the claim is checked against the
-            # active verified sources. Nothing is guessed about the outlet.
             raw_date = f.present("date")
             published = parse_card_date(raw_date)
             details["date_parsed"] = published.isoformat() if published else None

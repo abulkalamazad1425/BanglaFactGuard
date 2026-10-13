@@ -1,7 +1,3 @@
-"""Claim registration and verification: a checked claim is never re-run,
-every requester gets their own submission, and an unresolved source never
-runs an unrestricted search."""
-
 from __future__ import annotations
 
 from datetime import date
@@ -33,8 +29,6 @@ HEADLINE = "প্রধান উপদেষ্টা ঢাকায় ন�
 
 
 class Analysis:
-    """S03-S12 stand-in: the claimed outlet carries the exact report."""
-
     stage_id = PipelineStageID.S08_SOURCE_CORRESPONDENCE
 
     async def execute(self, ctx):
@@ -81,8 +75,6 @@ async def session(session):
     return session
 
 
-# ── synchronous verification ─────────────────────────────────────────────
-
 async def test_a_claim_is_verified_once_and_each_requester_gets_their_own_copy(session):
     owner, other = await add_user(session), await add_user(session)
     svc = service(session)
@@ -93,7 +85,7 @@ async def test_a_claim_is_verified_once_and_each_requester_gets_their_own_copy(s
 
     second = await svc.verify(req(published_date=date(2026, 6, 7)), submitter_id=other.id)
     assert second.cached and second.analysis.timings.cache_hit
-    assert set(second.analysis.timings.stage_ms) == {"s01_normalizer", "s02_cache_lookup"}  # nothing re-ran
+    assert set(second.analysis.timings.stage_ms) == {"s01_normalizer", "s02_cache_lookup"}
     mine = await SubmissionRepository(session).get_by_id(second.submission_id)
     assert (mine.submitter_id, mine.duplicate_of_submission_id) == (other.id, first.submission_id)
     for key in ("source_status", "content_status", "headline_check_status", "claim_scope"):
@@ -105,22 +97,20 @@ async def test_a_claim_is_verified_once_and_each_requester_gets_their_own_copy(s
 async def test_a_queued_submission_is_verified_from_its_stored_row(session):
     owner = await add_user(session)
     svc = service(session)
-    await svc.verify(req(), submitter_id=None)  # an earlier identical claim
+    await svc.verify(req(), submitter_id=None)
     sid, *_ = await svc.register_claim(req(body_text="ভিন্ন বডি"), submitter_id=owner.id)
     queued = await SubmissionRepository(session).get_by_id(sid)
-    queued.body_text = None  # now identical to the earlier claim
+    queued.body_text = None
     response = await svc.run_for_submission(sid)
-    assert response.submission_id == sid and response.cached  # the queued row itself carries the copy
+    assert response.submission_id == sid and response.cached
     notes = (await session.execute(select(Notification).where(Notification.user_id == owner.id))).scalars().all()
     assert [n.link_url for n in notes] == [f"/verify/{sid}"]
 
 
-# ── asynchronous registration ────────────────────────────────────────────
-
 async def test_registration_commits_the_submission_and_its_job_with_the_pipeline_identity(db, session):
     sid, status, cached = await service(session).register_claim(req(body_text="বডি  টেক্সট", published_date=date(2026, 6, 7)))
     assert (status, cached) == (SubmissionStatus.PENDING, False)
-    async with db() as fresh:  # committed: a new session sees both rows
+    async with db() as fresh:
         sub = await SubmissionRepository(fresh).get_by_id(sid)
         job = await VerificationJobRepository(fresh).get_by_submission(sid)
     assert (sub.processing_phase, job.status, job.kind) == ("QUEUED", "QUEUED", "SOURCE_BASED")
@@ -159,7 +149,7 @@ async def test_an_unsettled_or_deleted_result_is_verified_afresh(session, prior)
         session, headline=HEADLINE, submitter_id=owner.id,
         source_status=SourceStatus.INCOMPLETE if prior == "incomplete" else SourceStatus.CONFIRMED,
     )
-    if prior == "deleted":  # Postgres cascades; emulated on SQLite
+    if prior == "deleted":
         await session.execute(delete(VerificationResult).where(VerificationResult.submission_id == orig.id))
         await session.execute(delete(Submission).where(Submission.id == orig.id))
     await session.commit()

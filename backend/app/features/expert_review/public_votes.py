@@ -1,5 +1,3 @@
-"""Public reviewer votes and justifications, shown only after a claim's final decision."""
-
 from __future__ import annotations
 
 import uuid
@@ -51,8 +49,6 @@ async def _final_verdict(session: AsyncSession, origin: Submission):
 async def load_public_voting_details(
     session: AsyncSession, submission: Submission
 ) -> PublicVotingDetails | None:
-    """None unless the claim (or, for a reused copy, the original it reads its
-    review from) has a final decision."""
     origin = submission
     if submission.duplicate_of_submission_id:
         origin = await session.get(Submission, submission.duplicate_of_submission_id) or submission

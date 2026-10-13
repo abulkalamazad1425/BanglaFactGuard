@@ -44,7 +44,6 @@ async def get_submission(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"error": "not_found", "submission_id": str(submission_id)},
         )
-    # Pending/failed submissions are the submitter's private working state.
     if not viewer_can_see(submission, current_user):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

@@ -1,48 +1,3 @@
-"""Headline Alteration: the claim headline vs. the selected source TITLE only.
-
-The same comparison runs for a photo-card headline, a headline-only text
-claim and a headline + body text claim. The source article's body, its
-passages, any body similarity and any body-derived NLI are never inputs.
-
-Decision procedure
-------------------
-1. No title (or no headline)  -> status SOURCE_TITLE_MISSING, no verdict.
-2. Exact match                -> MATCHED immediately; nothing else runs.
-   Exact-match normalisation is deliberately limited (`exact_match_key`):
-   Unicode NFC, zero-width characters removed, runs of whitespace collapsed
-   to one space, and a single trailing sentence terminator (। . ! ?)
-   removed. Names, numbers, negation, quotes and every internal punctuation
-   mark are kept, so no meaningful change can become an exact match.
-3. Otherwise BOTH assessments always run:
-   a. deterministic material-difference rules (`material_differences.py`:
-      numbers, dates, negation, modality, scope, subject-object roles,
-      attribution, denial, named entities);
-   b. semantic assessment with the local multilingual NLI model in both
-      directions (title => headline is the decisive one) plus the LaBSE
-      embedding cosine as a second, supporting signal.
-4. Verdict:
-   * any material difference                          -> ALTERED
-   * same words in the same order (punctuation-only)  -> MATCHED
-   * semantic equivalence established                 -> MATCHED
-       (title entails the headline >= ENTAIL_MATCH, contradiction <=
-        CONTRADICTION_MAX_FOR_MATCH, embedding cosine >= COSINE_MIN_FOR_MATCH)
-   * semantic divergence established                  -> ALTERED ("main_point")
-       (title contradicts the headline >= CONTRADICTION_ALTERED, or entails
-        it < ENTAIL_DIVERGENT while the headline carries content the title
-        does not)
-   * semantic model unavailable                       -> MODEL_UNAVAILABLE, no verdict
-   * otherwise                                        -> UNDETERMINED, no verdict
-
-"No conflict was found" is never a reason for MATCHED: MATCHED always needs
-an exact match, an identical word sequence, or positive semantic evidence.
-
-Thresholds were checked against the deployed local models (mDeBERTa-v3
-XNLI, LaBSE) on Bangla headline pairs: every faithful paraphrase/reordering
-had title=>headline entailment >= 0.88; every meaning change had <= 0.32
-except a subject-object swap (0.98), which the deterministic role rule
-catches. They are NOT a validated accuracy claim.
-"""
-
 from __future__ import annotations
 
 import re
@@ -70,16 +25,13 @@ CONTRADICTION_MAX_FOR_MATCH = 0.20
 COSINE_MIN_FOR_MATCH = 0.70
 CONTRADICTION_ALTERED = 0.70
 ENTAIL_DIVERGENT = 0.50
-NLI_MAX_CHARS = 300  # NLIService truncates hypotheses beyond this
+NLI_MAX_CHARS = 300
 
 _ZERO_WIDTH_RE = re.compile("[​⁠﻿]")
 _TRAILING_TERMINATOR_RE = re.compile(r"\s*[।.!?]$")
 
 
 def exact_match_key(text: str) -> str:
-    """The ONLY normalisation applied before the exact-match shortcut (see
-    module docstring). Internal punctuation, quotes, digits and words are
-    untouched."""
     t = unicodedata.normalize("NFC", text or "")
     t = _ZERO_WIDTH_RE.sub("", t)
     t = re.sub(r"\s+", " ", t).strip()
@@ -128,23 +80,17 @@ class SemanticAssessment:
 
 @dataclass
 class HeadlineComparison:
-    """Outcome of one headline-vs-title comparison. `verdict` is MATCHED,
-    ALTERED or None; `status` explains a missing verdict."""
-
     status: HeadlineCheckStatus
     verdict: ContentStatus | None
     reason: str
     exact_match: bool = False
-    basis: str = "none"  # exact | same_words | semantic_equivalence | material_difference | semantic_divergence | none
+    basis: str = "none"
     differences: list[MaterialDifference] = field(default_factory=list)
     semantic: SemanticAssessment | None = None
     ner_available: bool = False
 
 
 class HeadlineComparator:
-    """Compares a claim headline with a source title using the already-loaded
-    local NLI, embedding and NER services (no third-party API)."""
-
     def __init__(self, nli_service, embedding_service, ner_service=None) -> None:
         self.nli = nli_service
         self.embedder = embedding_service
@@ -184,8 +130,6 @@ class HeadlineComparator:
             ner_available=ner_ok,
         )
         return result
-
-    # ── decision ─────────────────────────────────────────────────────────
 
     @staticmethod
     def _decide(
@@ -252,8 +196,6 @@ class HeadlineComparator:
             f"(title-to-headline entailment {entail:.2f}, contradiction {contra:.2f}); no verdict was reached.",
             semantic=semantic,
         )
-
-    # ── model calls ──────────────────────────────────────────────────────
 
     async def _semantic(self, headline: str, title: str) -> SemanticAssessment:
         if self.nli is None:

@@ -1,9 +1,3 @@
-"""Shared Bangla text normalisation, tokenisation and light stemming.
-
-One normalisation for BOTH sides of every comparison (claim and evidence);
-inconsistent normalisation is what makes identical strings fail to match.
-"""
-
 from __future__ import annotations
 
 import re
@@ -11,21 +5,13 @@ import unicodedata
 
 from app.shared.utils.bangla_normalizer import normalize_bangla_digits, normalize_bangla_text
 
-# Bengali block U+0980-09FF (letters, vowel signs, digits) plus ASCII
-# alphanumerics. `\w` alone is NOT enough: Bengali vowel signs are category
-# Mc/Mn and are not \w, so it would split words at every matra.
 _TOKEN_RE = re.compile(r"[ঀ-৿0-9A-Za-z]+(?:[.,][0-9]+)*")
 
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[।.!?‼])\s+|\n+")
 
-# Words that carry meaning in a claim even though retrieval treats them as
-# stopwords — they must survive stopword filtering in content checks.
 NEGATION_WORDS: frozenset[str] = frozenset(
     {"না", "নি", "নেই", "নয়", "নন", "নাই", "not", "no", "never", "নাকচ"}
 )
-# Fused Bangla negation: হয়নি, করেনি, যায়নি, দেননি, পারেননি …  The text before
-# "নি" must end in a vowel sign / য় / ন so that nouns like খনি, ধ্বনি, অগ্নি
-# do not match.
 _FUSED_NEGATION_RE = re.compile(r"^.{1,}(?:ে|া|ন|য়|য়)নি$")
 
 QUALIFIER_GROUPS: dict[str, frozenset[str]] = {
@@ -42,7 +28,6 @@ QUALIFIER_GROUPS: dict[str, frozenset[str]] = {
 }
 QUALIFIER_WORDS: frozenset[str] = frozenset().union(*QUALIFIER_GROUPS.values())
 
-# Bangla function words excluded from content-token sets.
 STOPWORDS: frozenset[str] = frozenset(
     {
         "এই", "এ", "ও", "এবং", "কিন্তু", "তবে", "যে", "যা", "তা", "তার", "আর",
@@ -66,7 +51,6 @@ _MIN_STEM = 3
 
 
 def normalize_for_match(text: str) -> str:
-    """NFC, Bangla punctuation/zero-width cleanup, digits -> ASCII, casefold."""
     if not text:
         return ""
     t = normalize_bangla_text(text)
@@ -77,21 +61,14 @@ def normalize_for_match(text: str) -> str:
 
 
 def tokenize(text: str) -> list[str]:
-    """Normalised tokens in order (no stopword removal)."""
     return _TOKEN_RE.findall(normalize_for_match(text))
 
 
 def light_stem(token: str) -> str:
-    """Conservative inflection stripping, applied identically to both sides.
-
-    Strips case/plural markers only while at least _MIN_STEM code points
-    remain. This is for *matching* only; it is not linguistic stemming.
-    """
     t = token
     changed = True
     while changed and len(t) > _MIN_STEM:
         changed = False
-        # possessive -র after a vowel sign (সেতুর -> সেতু, মন্ত্রীর -> মন্ত্রী)
         if t.endswith("র") and len(t) - 1 >= _MIN_STEM and t[-2] in "িীুূোৌ":
             t = t[:-1]
             changed = True
@@ -121,9 +98,6 @@ def is_number_token(token: str) -> bool:
 
 
 def content_tokens(text: str) -> list[str]:
-    """Tokens that carry claim content: stopwords dropped, but negation and
-    qualifier words are RETAINED (they are meaning-bearing in content checks
-    even though retrieval would filter them)."""
     out: list[str] = []
     for tok in tokenize(text):
         if is_negation_token(tok) or is_qualifier_token(tok) or is_number_token(tok):
@@ -141,18 +115,10 @@ def split_sentences(text: str, *, min_len: int = 8) -> list[str]:
 
 
 def chunk_text(text: str, *, max_chars: int = 450, max_chunks: int = 120) -> tuple[list[str], bool]:
-    """Group consecutive sentences into chunks of at most `max_chars`.
-
-    Nothing is dropped for being long: a long body becomes many chunks.
-    Returns (chunks, truncated) where `truncated` is True only if the
-    `max_chunks` safety cap had to drop trailing text — callers must then
-    treat the body comparison as partial.
-    """
     sentences = split_sentences(text, min_len=1)
     chunks: list[str] = []
     cur = ""
     for sent in sentences:
-        # A single over-long sentence is split on whitespace so no text is lost.
         while len(sent) > max_chars:
             cut = sent.rfind(" ", 0, max_chars)
             cut = cut if cut > 0 else max_chars

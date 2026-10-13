@@ -1,6 +1,3 @@
-"""Verified-source management: create/update/delete, active-only listing and
-keyword search with a matching total."""
-
 import pytest
 
 from app.core.exceptions import DuplicateRecordError, RecordNotFoundError
@@ -38,7 +35,7 @@ async def test_listing_and_search_respect_activity_and_report_matching_totals(se
     assert (every.total, every.pages, len(every.items)) == (3, 2, 2)
     assert (await svc.list_sources(include_inactive=True, size=2, page=2)).items[0].canonical_name == "prothomalo.com"
 
-    for q in ("ডেইলি", "daily star"):  # Bangla name or alias
+    for q in ("ডেইলি", "daily star"):
         res = await svc.list_sources(include_inactive=True, q=q)
         assert res.total == 1 and res.items[0].id == star.id
     assert (await svc.list_sources(include_inactive=True, q="যুগান্তর")).total == 1

@@ -1,38 +1,3 @@
-"""Gemini extraction of headline / claimed source / published date from the
-ORIGINAL photo-card image. Gemini is the only extractor: there is no OCR and
-no fallback.
-
-* The original uploaded image bytes are sent (no preprocessing).
-* The prompt carries the catalogue of currently ACTIVE verified sources with
-  their known aliases. Gemini must pick the outlet whose name, logo or alias
-  is visibly shown on the card and return its canonical id - the response
-  schema restricts the value to exactly those ids. It must not pick a source
-  just because it is listed; when the card does not show enough evidence it
-  reports the source as not identified.
-* Headline and date are TRANSCRIBED only: no paraphrase, correction,
-  expansion, translation or update; the date as printed, never inferred.
-  Text in the image is data, never instructions.
-* Attempts are made in batches (see `GeminiSettings`): up to
-  ``attempts_per_batch`` requests, a ``batch_pause_seconds`` pause when the
-  whole batch failed, up to ``batches`` batches - at most 9 requests with the
-  defaults, the first one included. The first successful response stops the
-  loop. Retried: timeouts, network errors, HTTP 429/5xx and malformed or
-  schema-invalid responses. A permanent request error (HTTP 400/401/403/404 -
-  bad key, unknown model, rejected request) stops immediately because
-  retrying cannot succeed. Calls go through the shared httpx client, which
-  is configured without transport retries, so no SDK/transport layer adds
-  hidden attempts on top of this loop.
-* Several API keys (GEMINI_API_KEY, GEMINI_API_KEY1, ...) are used in a
-  cycle. When a request answers that the key's limit is reached (HTTP 429),
-  that key is set aside until its limit resets and the NEXT request goes out
-  at once with the next available key. This does not add requests: every
-  call still counts towards the same 9. When every key is out of its daily
-  limit the loop stops - waiting cannot help within this card's budget.
-* A successful response is returned as-is even when the headline or source
-  is missing: that is a property of the card, not a request failure, and is
-  never retried (the caller rejects the card).
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -72,11 +37,11 @@ _PERMANENT_STATUS_CODES = frozenset({400, 401, 403, 404})
 class GeminiAttempt:
     number: int
     batch: int
-    outcome: str  # success | timeout | network_error | http_error | permanent_error | quota_exhausted | malformed_response
+    outcome: str
     detail: str | None = None
     status_code: int | None = None
     duration_ms: int = 0
-    key: int | None = None  # 1-based position of the API key used (never the key itself)
+    key: int | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -102,7 +67,7 @@ class _AttemptFailed(Exception):
                  limit_seconds: float | None = None):
         super().__init__(detail)
         self.outcome, self.detail, self.status_code, self.permanent = outcome, detail, status_code, permanent
-        self.limit_seconds = limit_seconds  # set when THIS key hit its limit
+        self.limit_seconds = limit_seconds
 
 
 def detect_mime_type(image_bytes: bytes) -> str:
@@ -116,7 +81,6 @@ def detect_mime_type(image_bytes: bytes) -> str:
 
 
 def _response_text(body: dict) -> str:
-    """The JSON text of the first candidate, skipping 'thought' parts."""
     candidates = body.get("candidates") or []
     if not candidates:
         reason = (body.get("promptFeedback") or {}).get("blockReason")
@@ -137,7 +101,6 @@ async def extract_with_gemini(
     settings: GeminiSettings,
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
 ) -> GeminiExtractionOutcome:
-    """Up to ``settings.max_requests`` (<= 9) requests in batches. Never raises."""
     if not settings.is_configured:
         return GeminiExtractionOutcome(model=None, skipped_reason="Gemini API key is not configured")
 
@@ -185,8 +148,6 @@ async def extract_with_gemini(
                 logger.warning("gemini_extraction_attempt_failed", **attempt.to_dict(),
                                max_requests=per_batch * batches)
                 if exc.limit_seconds is not None:
-                    # This key reached its limit: set it aside and make the
-                    # next call at once with the next key, when one is free.
                     pool.block(key_index, exc.limit_seconds)
                     if pool.has_free_key():
                         continue
@@ -228,8 +189,6 @@ async def _attempt(
         raise _AttemptFailed("network_error", f"Gemini request failed: {exc}") from exc
 
     if response.status_code == 429:
-        # This key reached a limit. A daily limit cannot recover within this
-        # card, so it is final unless another key is free.
         daily, seconds = limit_info(response)
         raise _AttemptFailed(
             "quota_exhausted" if daily else "http_error",
@@ -251,8 +210,6 @@ async def _attempt(
     except (ValueError, TypeError, KeyError, ValidationError) as exc:
         raise _AttemptFailed("malformed_response", f"invalid structured response: {str(exc)[:200]}") from exc
 
-    # The schema enum already restricts the id; anything else is a schema
-    # violation (malformed), never an accepted source.
     identified = fields.identified_source()
     if identified is not None and identified not in allowed:
         raise _AttemptFailed("malformed_response", f"source id {identified[:60]!r} is not in the offered catalogue")
